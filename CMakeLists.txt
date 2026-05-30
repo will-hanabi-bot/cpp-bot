@@ -15,7 +15,10 @@ include(cmake/deps.cmake)
 
 # --- Core library: basics, conventions, endgame -------------------------
 add_library(hanabi_core STATIC
-  src/basics/placeholder.cpp
+  src/basics/identity_set.cpp
+  src/basics/action.cpp
+  src/basics/card.cpp
+  src/basics/variant.cpp
 )
 target_include_directories(hanabi_core PUBLIC include)
 target_link_libraries(hanabi_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog)
@@ -30,6 +33,10 @@ include(GoogleTest)
 
 add_executable(hanabi_tests
   tests/test_smoke.cpp
+  tests/test_basics/test_identity_set.cpp
+  tests/test_basics/test_clue.cpp
+  tests/test_basics/test_action.cpp
+  tests/test_basics/test_variants.cpp
 )
 target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
 hanabi_set_warnings(hanabi_tests)
