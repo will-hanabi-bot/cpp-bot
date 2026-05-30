@@ -15,7 +15,7 @@
 
 namespace hanabi {
 
-class State;
+struct State;
 
 enum class FinesseKind : std::uint8_t {
   TRUE_K,           // "True" — kind=true; named TRUE_K to avoid the macro.

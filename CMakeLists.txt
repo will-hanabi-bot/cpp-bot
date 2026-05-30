@@ -15,14 +15,19 @@ include(cmake/deps.cmake)
 
 # --- Core library: basics, conventions, endgame -------------------------
 add_library(hanabi_core STATIC
-  src/basics/identity_set.cpp
   src/basics/action.cpp
   src/basics/card.cpp
+  src/basics/clue_result.cpp
+  src/basics/connection.cpp
+  src/basics/eval.cpp
+  src/basics/fix.cpp
   src/basics/game.cpp
+  src/basics/identity_set.cpp
   src/basics/options.cpp
   src/basics/player.cpp
   src/basics/player_elim.cpp
   src/basics/player_game.cpp
+  src/basics/sarcastic.cpp
   src/basics/state.cpp
   src/basics/variant.cpp
 )
