@@ -9,6 +9,7 @@
 #include <string>
 
 #include "hanabi/net/auth.h"
+#include "hanabi/net/commands.h"
 #include "hanabi/net/ws_transport.h"
 #include "hanabi/settings.h"
 
@@ -33,14 +34,20 @@ int main(int argc, char** argv) {
     std::string cookie = hanabi::net::login(config.login_url(), config.username,
                                               config.password);
 
+    // Forward-declare client so the transport's on_message lambda can capture
+    // it (then we'll construct client after the transport is in place).
+    hanabi::net::BotClient* client_ptr = nullptr;
     hanabi::net::BotTransport transport(
         config.ws_url(), cookie,
-        [](const std::string& command, const nlohmann::json& payload) {
-          // Minimal dispatch: log the command + first 200 chars of the payload.
+        [&client_ptr](const std::string& command, const nlohmann::json& payload) {
+          // Lightweight per-message log so the user can see what's happening.
           std::string body = payload.dump();
           if (body.size() > 200) body = body.substr(0, 200) + "...";
           std::cerr << "<- " << command << " " << body << "\n";
+          if (client_ptr) client_ptr->handle_message(command, payload);
         });
+    hanabi::net::BotClient client(transport, config);
+    client_ptr = &client;
     g_transport = &transport;
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);

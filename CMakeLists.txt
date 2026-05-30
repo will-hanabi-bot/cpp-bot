@@ -41,6 +41,7 @@ add_library(hanabi_core STATIC
   src/endgame/winnable.cpp
   src/net/auth.cpp
   src/net/codec.cpp
+  src/net/commands.cpp
   src/net/notes.cpp
   src/net/ws_transport.cpp
   src/settings.cpp
@@ -72,6 +73,7 @@ add_executable(hanabi_tests
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_net/test_codec.cpp
+  tests/test_net/test_commands.cpp
 )
 target_include_directories(hanabi_tests PRIVATE tests)
 target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
