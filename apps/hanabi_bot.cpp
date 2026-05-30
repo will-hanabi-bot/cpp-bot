@@ -1,10 +1,8 @@
 // Entry point for the hanabi bot.
-// Phase 6 scope: parses argv, loads .env, logs into hanab.live, opens a
-// WebSocket, and dispatches incoming messages. Convention logic (Phase 4
-// tail) and full chat-command dispatch (Phase 6 tail) are stubbed - this
-// binary verifies the wire connection works end-to-end.
-#include <atomic>
-#include <csignal>
+// Parses argv, loads .env, logs into hanab.live, opens a WebSocket, and
+// dispatches incoming messages via net::BotClient. Signal handling lives
+// inside BotTransport (boost::asio::signal_set), which can safely shut down
+// the live socket to unblock the receive loop on Ctrl+C.
 #include <iostream>
 #include <string>
 
@@ -12,17 +10,6 @@
 #include "hanabi/net/commands.h"
 #include "hanabi/net/ws_transport.h"
 #include "hanabi/settings.h"
-
-namespace {
-
-hanabi::net::BotTransport* g_transport = nullptr;
-
-void handle_signal(int /*sig*/) {
-  std::cerr << "\nstop requested\n";
-  if (g_transport) g_transport->stop();
-}
-
-}  // namespace
 
 int main(int argc, char** argv) {
   try {
@@ -40,7 +27,6 @@ int main(int argc, char** argv) {
     hanabi::net::BotTransport transport(
         config.ws_url(), cookie,
         [&client_ptr](const std::string& command, const nlohmann::json& payload) {
-          // Lightweight per-message log so the user can see what's happening.
           std::string body = payload.dump();
           if (body.size() > 200) body = body.substr(0, 200) + "...";
           std::cerr << "<- " << command << " " << body << "\n";
@@ -48,9 +34,6 @@ int main(int argc, char** argv) {
         });
     hanabi::net::BotClient client(transport, config);
     client_ptr = &client;
-    g_transport = &transport;
-    std::signal(SIGINT, handle_signal);
-    std::signal(SIGTERM, handle_signal);
 
     bool clean = transport.run();
     return clean ? 0 : 1;

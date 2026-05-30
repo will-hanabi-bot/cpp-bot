@@ -7,6 +7,7 @@
 #include <boost/asio/connect.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/signal_set.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core.hpp>
@@ -120,6 +121,47 @@ bool BotTransport::run_one_connection() {
 
   std::atomic<bool> conn_stopped{false};
 
+  // shutdown_socket() unblocks a pending blocking read by tearing down the
+  // underlying TCP socket. It's safe to call from another thread (asio
+  // socket ops are documented thread-safe for this purpose). Called from
+  // the signal-handling thread below; also from the receive-loop cleanup
+  // path when the receive loop notices stop_ on its own.
+  auto shutdown_socket = [&]() {
+    boost::system::error_code ec;
+    if (ws_tls) {
+      auto& sock = beast::get_lowest_layer(*ws_tls).socket();
+      sock.shutdown(tcp::socket::shutdown_both, ec);
+      sock.close(ec);
+    } else {
+      auto& sock = beast::get_lowest_layer(*ws_plain).socket();
+      sock.shutdown(tcp::socket::shutdown_both, ec);
+      sock.close(ec);
+    }
+  };
+
+  // Background io_context hosts an asio::signal_set that converts SIGINT /
+  // SIGTERM into a socket shutdown (which makes the blocking ws read return).
+  // boost::asio::signal_set is the correct way to handle signals in an asio
+  // program - the signal is delivered via the io_context, not via the
+  // (async-signal-unsafe) C-handler path, so it's safe to call non-trivial
+  // socket operations from the handler.
+  asio::io_context signal_ioc;
+  asio::signal_set signals(signal_ioc, SIGINT, SIGTERM);
+  signals.async_wait([&](const boost::system::error_code& ec, int /*sig*/) {
+    if (ec) return;  // canceled on clean shutdown
+    std::cerr << "\nstop requested\n";
+    stop_.store(true);
+    queue_cv_.notify_all();
+    shutdown_socket();
+  });
+  std::thread signal_thread([&signal_ioc]() {
+    try {
+      signal_ioc.run();
+    } catch (const std::exception& e) {
+      std::cerr << "signal thread: " << e.what() << "\n";
+    }
+  });
+
   auto write_one = [&](const std::string& msg) {
     if (ws_tls) ws_tls->write(asio::buffer(msg));
     else ws_plain->write(asio::buffer(msg));
@@ -176,6 +218,16 @@ bool BotTransport::run_one_connection() {
   queue_cv_.notify_all();
   if (sender.joinable()) sender.join();
   close_socket();
+
+  // Tear down the signal handler: cancel the pending wait (so signal_ioc.run()
+  // returns), stop the io_context, and join the thread.
+  {
+    boost::system::error_code ec;
+    signals.cancel(ec);
+  }
+  signal_ioc.stop();
+  if (signal_thread.joinable()) signal_thread.join();
+
   return !stop_.load();  // return true if the disconnect was unexpected
 }
 
