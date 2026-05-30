@@ -69,6 +69,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_state.cpp
   tests/test_basics/test_game.cpp
   tests/test_reactor/test_reactive_table.cpp
+  tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_net/test_codec.cpp
 )
@@ -81,3 +82,7 @@ gtest_discover_tests(hanabi_tests)
 add_executable(hanabi_bot apps/hanabi_bot.cpp)
 target_link_libraries(hanabi_bot PRIVATE hanabi_core)
 hanabi_set_warnings(hanabi_bot)
+
+add_executable(bench_endgame apps/bench_endgame.cpp)
+target_link_libraries(bench_endgame PRIVATE hanabi_core)
+hanabi_set_warnings(bench_endgame)
