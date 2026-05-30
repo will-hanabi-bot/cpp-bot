@@ -52,6 +52,7 @@ class BotClient {
   void on_table_gone(const nlohmann::json& data);
   void on_table_start(const nlohmann::json& data);
   void on_init(const nlohmann::json& data);
+  void on_game_action_list(const nlohmann::json& data);
   void on_game_over(const nlohmann::json& data);
 
   // --- Outbound chat commands ---
