@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "hanabi/basics/player_elim.h"
+
 namespace hanabi {
 namespace {
 
@@ -397,11 +399,93 @@ void Game::handle_action(const Action& action) {
       action);
 }
 
-// --- Elim stub (real impl arrives with player_elim in Phase 2b) -----------
+// --- Empathy elim (port of game.py:613-710) -------------------------------
 
-void Game::elim(std::optional<int>) {
-  // Stub: just clear dirty so dependent helpers don't spin.
-  for (auto& p : players) p.dirty.clear();
+void Game::elim(std::optional<int> except_) {
+  // Step 1: pre-elim cleanup.
+  for (const auto& hand : state.hands) {
+    for (int order : hand) {
+      const Thought& thought = common.thoughts[order];
+      if (thought.inferred.is_empty() && !thought.reset) {
+        with_thought(order, [](const Thought& t) { return t.reset_inferences(); });
+        with_meta(order, [](ConvData& m) {
+          m.status = CardStatus::NONE;
+          m.by = std::nullopt;
+        });
+      }
+      const Thought& updated = common.thoughts[order];
+      if (updated.info_lock && updated.info_lock->is_empty()) {
+        with_thought(order, [](const Thought& t) {
+          Thought out = t;
+          out.info_lock = std::nullopt;
+          return out;
+        });
+      }
+    }
+  }
+
+  // Step 2: card_elim + (optional) good_touch_elim on common.
+  auto [resets, new_common] = card_elim(std::move(common), state);
+  if (good_touch) {
+    auto [gt_resets, gt_common] = good_touch_elim(std::move(new_common), *this, except_);
+    new_common = std::move(gt_common);
+    for (int o : gt_resets) resets.insert(o);
+  }
+  common = std::move(new_common);
+  for (int order : resets) {
+    if (meta[order].status == CardStatus::CALLED_TO_PLAY) {
+      with_meta(order, [](ConvData& m) {
+        m.status = CardStatus::NONE;
+        m.by = std::nullopt;
+      });
+    }
+  }
+
+  // Step 3: refresh_links + refresh_play_links + update_hypo_stacks on common.
+  auto [sarcastics, post_links] = refresh_links(std::move(common), *this);
+  post_links = refresh_play_links(std::move(post_links), *this);
+  common = std::move(post_links);
+  common = common.update_hypo_stacks(*this);
+  for (int order : sarcastics) {
+    with_meta(order, [](ConvData& m) { m.status = CardStatus::SARCASTIC; });
+  }
+
+  // Step 4: sync each per-player perspective from common, re-run elim per-player.
+  for (size_t pi = 0; pi < players.size(); ++pi) {
+    Player p = players[pi];
+    for (int o : common.dirty) {
+      Thought& t = p.thoughts[o];
+      const Thought& c_t = common.thoughts[o];
+      IdentitySet new_inferred =
+          c_t.inferred.intersect(t.possible).when_empty(t.possible);
+      std::optional<IdentitySet> new_info_lock;
+      if (c_t.info_lock) {
+        IdentitySet ids = c_t.info_lock->intersect(t.possible);
+        if (!ids.is_empty()) new_info_lock = ids;
+      }
+      t.possible = c_t.possible;
+      t.inferred = new_inferred;
+      t.info_lock = new_info_lock;
+      t.reset = c_t.reset;
+    }
+    p.links = common.links;
+    p.play_links = common.play_links;
+    p.dirty = common.dirty;
+
+    auto [_, after_card] = card_elim(std::move(p), state);
+    p = std::move(after_card);
+    if (good_touch) {
+      auto [_unused, after_gt] = good_touch_elim(std::move(p), *this, except_);
+      p = std::move(after_gt);
+    }
+    auto [_s, after_refresh] = refresh_links(std::move(p), *this);
+    p = std::move(after_refresh);
+    p = refresh_play_links(std::move(p), *this);
+    p = p.update_hypo_stacks(*this);
+    p.dirty.clear();
+    players[pi] = std::move(p);
+  }
+
   common.dirty.clear();
 }
 

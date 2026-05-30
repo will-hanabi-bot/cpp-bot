@@ -21,6 +21,8 @@ add_library(hanabi_core STATIC
   src/basics/game.cpp
   src/basics/options.cpp
   src/basics/player.cpp
+  src/basics/player_elim.cpp
+  src/basics/player_game.cpp
   src/basics/state.cpp
   src/basics/variant.cpp
 )
