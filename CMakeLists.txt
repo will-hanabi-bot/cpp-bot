@@ -15,6 +15,8 @@ include(cmake/deps.cmake)
 
 # --- Core library: basics, conventions, endgame -------------------------
 find_package(OpenSSL REQUIRED)
+# Boost 1.90+ provides asio/beast as header-only; use the headers target.
+find_package(Boost CONFIG REQUIRED)
 
 add_library(hanabi_core STATIC
   src/basics/action.cpp
@@ -40,12 +42,13 @@ add_library(hanabi_core STATIC
   src/net/auth.cpp
   src/net/codec.cpp
   src/net/notes.cpp
+  src/net/ws_transport.cpp
   src/settings.cpp
 )
 target_include_directories(hanabi_core PUBLIC include)
 target_include_directories(hanabi_core PRIVATE ${cpp_httplib_SOURCE_DIR})
 target_link_libraries(hanabi_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog
-                                          OpenSSL::SSL OpenSSL::Crypto)
+                                          OpenSSL::SSL OpenSSL::Crypto Boost::headers)
 target_compile_definitions(hanabi_core PUBLIC
   HANABI_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
 )
@@ -73,3 +76,8 @@ target_include_directories(hanabi_tests PRIVATE tests)
 target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
 hanabi_set_warnings(hanabi_tests)
 gtest_discover_tests(hanabi_tests)
+
+# --- Apps ----------------------------------------------------------------
+add_executable(hanabi_bot apps/hanabi_bot.cpp)
+target_link_libraries(hanabi_bot PRIVATE hanabi_core)
+hanabi_set_warnings(hanabi_bot)
