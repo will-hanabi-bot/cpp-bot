@@ -18,7 +18,9 @@ add_library(hanabi_core STATIC
   src/basics/identity_set.cpp
   src/basics/action.cpp
   src/basics/card.cpp
+  src/basics/game.cpp
   src/basics/options.cpp
+  src/basics/player.cpp
   src/basics/state.cpp
   src/basics/variant.cpp
 )
@@ -40,6 +42,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_action.cpp
   tests/test_basics/test_variants.cpp
   tests/test_basics/test_state.cpp
+  tests/test_basics/test_game.cpp
 )
 target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
 hanabi_set_warnings(hanabi_tests)
