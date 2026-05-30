@@ -1,6 +1,7 @@
 build/
 build-*/
 .cache/
+logs/
 compile_commands.json
 .vscode/
 .idea/
