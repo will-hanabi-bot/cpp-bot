@@ -160,7 +160,25 @@ class Game {
     if (move_history.empty()) return std::nullopt;
     return move_history.back();
   }
-  bool in_endgame() const { return state.pace() < state.num_players; }
+  bool in_endgame() const;  // reactor variant overrides via field; see game.cpp
+
+  // --- Reactor convention helpers (live on Game so state_eval can use them) ---
+
+  // The discard candidate for `player_index`: priority is CalledToDiscard, then
+  // newest-unclued-NONE filtered by zcs_turn.
+  std::optional<int> chop(int player_index) const;
+
+  // Whether Bob (next player after current) has permission to discard.
+  bool has_ptd() const;
+
+  // Enumerate clue candidates the giver could give. With the reactor
+  // interpret_* hooks stubbed, this returns the unranked set of valid clues
+  // (faithful to the structure but not the heuristic ranking). The endgame
+  // solver only needs the enumeration, not the ordering.
+  std::vector<PerformAction> find_all_clues(int giver) const;
+
+  // Returns one discard candidate: trash head, else chop, else locked_discard.
+  std::vector<PerformAction> find_all_discards(int player_index) const;
 };
 
 }  // namespace hanabi

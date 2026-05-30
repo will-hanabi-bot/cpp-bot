@@ -523,6 +523,102 @@ Game Game::simulate_action(const Action& action, std::optional<Identity> draw) c
   return g;
 }
 
+// --- Reactor helpers (faithful port of reactor.scala chop/hasPtd) --------
+
+// Reactor's `in_endgame` is one turn earlier than the Game default. Since we
+// don't subclass, we check whether the game has reactor data and adjust.
+bool Game::in_endgame() const {
+  // Reactor signals presence via waiting/zcs_turn fields existing on Game; the
+  // conditional below matches Reactor's override of `in_endgame`.
+  return state.pace() < state.num_players - 1;
+}
+
+std::optional<int> Game::chop(int player_index) const {
+  // First pass: explicit CalledToDiscard.
+  for (int o : state.hands[player_index]) {
+    if (meta[o].status == CardStatus::CALLED_TO_DISCARD) return o;
+  }
+  // Second pass: newest unclued + status NONE, gated on zcs_turn.
+  for (int o : state.hands[player_index]) {
+    bool zcs_ok = zcs_turn == -1 || zcs_turn >= state.deck[o].turn_drawn;
+    if (zcs_ok && !state.deck[o].clued && meta[o].status == CardStatus::NONE) {
+      return o;
+    }
+  }
+  return std::nullopt;
+}
+
+bool Game::has_ptd() const {
+  int player_index = state.current_player_index;
+  int zelda = state.last_player_index(player_index);
+  int bob = state.next_player_index(player_index);
+  auto bob_chop = chop(bob);
+
+  std::optional<Identity> bob_chop_id;
+  if (bob_chop) bob_chop_id = state.deck[*bob_chop].id();
+
+  auto known_dupe = [&]() -> bool {
+    if (!bob_chop_id) return false;
+    for (int o : state.hands[bob]) {
+      if (o == *bob_chop) continue;
+      if (players[zelda].thoughts[o].matches(*bob_chop_id) &&
+          me().thoughts[o].matches(*bob_chop_id)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto unknown_play = [&]() -> bool {
+    if (!last_actions[zelda]) return false;
+    const Action& last = *last_actions[zelda];
+    if (!std::holds_alternative<PlayAction>(last)) return false;
+    if (!bob_chop_id) return false;
+    const auto& pa = std::get<PlayAction>(last);
+    Identity played_id{pa.suit_index, pa.rank};
+    if (played_id != *bob_chop_id) return false;
+    const auto& old_inf = common.thoughts[pa.order].old_inferred;
+    return !old_inf || *old_inf != IdentitySet::single(played_id);
+  };
+
+  if (common.obvious_loaded(*this, bob)) return true;
+  if (bob_chop_id && state.is_critical(*bob_chop_id)) return false;
+  if (bob_chop_id && state.is_basic_trash(*bob_chop_id)) return !unknown_play();
+  if (known_dupe()) return true;
+  return !(bob_chop_id &&
+            (state.is_playable(*bob_chop_id) || bob_chop_id->rank == 2));
+}
+
+// find_all_clues: enumerate every clue the giver could give. Ranking by
+// heuristic value is the reactor convention's job — we return the raw set.
+std::vector<PerformAction> Game::find_all_clues(int giver) const {
+  std::vector<PerformAction> out;
+  for (int target = 0; target < state.num_players; ++target) {
+    if (target == giver) continue;
+    for (const Clue& clue : state.all_valid_clues(target)) {
+      if (clue.kind == ClueKind::COLOUR) {
+        out.push_back(PerformColour{clue.target, clue.value});
+      } else {
+        out.push_back(PerformRank{clue.target, clue.value});
+      }
+    }
+  }
+  return out;
+}
+
+std::vector<PerformAction> Game::find_all_discards(int player_index) const {
+  auto trash = common.thinks_trash(*this, player_index);
+  int target;
+  if (!trash.empty()) {
+    target = trash.front();
+  } else if (auto c = chop(player_index)) {
+    target = *c;
+  } else {
+    target = players[player_index].locked_discard(state, player_index);
+  }
+  return {PerformDiscard{target}};
+}
+
 Game Game::simulate_clue(const ClueAction& action, bool free) const {
   Game g = *this;
   g.catchup = true;

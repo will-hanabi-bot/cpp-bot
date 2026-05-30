@@ -1,0 +1,527 @@
+#include "hanabi/conventions/reactor/state_eval.h"
+
+#include <algorithm>
+#include <variant>
+
+#include "hanabi/basics/card.h"
+#include "hanabi/basics/clue_result.h"
+#include "hanabi/basics/eval.h"
+#include "hanabi/basics/game.h"
+#include "hanabi/basics/interp.h"
+#include "hanabi/basics/player.h"
+#include "hanabi/basics/state.h"
+#include "hanabi/basics/variant.h"
+
+namespace hanabi::reactor {
+namespace {
+
+// Forward declarations.
+double force_clue_inner(const Game& orig, const Game& game, int offset);
+
+}  // namespace
+
+// --- get_result ----------------------------------------------------------
+
+double get_result(const Game& game, const Game& hypo, const ClueAction& action) {
+  const State& state = game.state;
+  const Player& common = game.common;
+  const auto& meta = game.meta;
+
+  auto [new_touched, fill, elim] =
+      elim_result(game, hypo, hypo.state.hands[action.target], action.list_);
+  auto [bad_touch, trash, _] = bad_touch_result(game, hypo, action);
+  auto [_blind_plays, playables] = playables_result(game, hypo);
+
+  int revealed_trash = 0;
+  for (int o : hypo.common.thinks_trash(hypo, action.target)) {
+    if (!hypo.state.deck[o].clued) continue;
+    auto game_trash = common.thinks_trash(game, action.target);
+    if (std::find(game_trash.begin(), game_trash.end(), o) == game_trash.end()) {
+      ++revealed_trash;
+    }
+  }
+
+  std::vector<int> new_playables;
+  for (const auto& hand : state.hands) {
+    for (int o : hand) {
+      if (meta[o].status != CardStatus::CALLED_TO_PLAY &&
+          hypo.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+        new_playables.push_back(o);
+      }
+    }
+  }
+
+  for (int o : new_playables) {
+    bool ok = hypo.me().hypo_plays.count(o) > 0;
+    if (!ok && game.in_endgame()) {
+      auto id = state.deck[o].id();
+      ok = id && state.is_playable(*id);
+    }
+    if (!ok) return -100.0;
+  }
+
+  auto move = hypo.last_move();
+  auto move_is = [&](ClueInterp ci) {
+    return move && std::holds_alternative<ClueInterp>(*move) &&
+            std::get<ClueInterp>(*move) == ci;
+  };
+
+  if (move_is(ClueInterp::PLAY) && playables.empty() && !game.in_endgame()) return -100.0;
+  if (move_is(ClueInterp::REVEAL) && playables.empty() && !trash.empty()) {
+    bool all_clued = true;
+    for (int o : trash) {
+      if (!state.deck[o].clued) {
+        all_clued = false;
+        break;
+      }
+    }
+    if (all_clued) return -100.0;
+  }
+  if (!move_is(ClueInterp::REACTIVE) && !bad_touch.empty()) {
+    bool all_in_bad = true;
+    for (int o : new_touched) {
+      if (std::find(bad_touch.begin(), bad_touch.end(), o) == bad_touch.end()) {
+        all_in_bad = false;
+        break;
+      }
+    }
+    if (all_in_bad && playables.empty()) return -100.0;
+  }
+
+  int duped_playables = 0;
+  for (int p : hypo.me().hypo_plays) {
+    if (state.deck[p].clued) continue;
+    bool dup = false;
+    for (const auto& hand : state.hands) {
+      for (int o : hand) {
+        if (o == p) continue;
+        if (game.is_touched(o) && state.deck[o].matches(state.deck[p])) {
+          dup = true;
+          break;
+        }
+      }
+      if (dup) break;
+    }
+    if (dup) ++duped_playables;
+  }
+
+  int new_touched_count = static_cast<int>(new_touched.size());
+  int bad_count = static_cast<int>(bad_touch.size());
+  double good_touch;
+  if (bad_count > new_touched_count) {
+    good_touch = -static_cast<double>(bad_count);
+  } else {
+    static constexpr double table[] = {0.0, 0.125, 0.25, 0.35, 0.45, 0.55};
+    int delta = std::min(new_touched_count - bad_count, 5);
+    good_touch = table[delta];
+  }
+
+  int untouched_plays = 0;
+  for (int o : playables) {
+    if (!hypo.state.deck[o].clued) ++untouched_plays;
+  }
+
+  double value =
+      good_touch + (static_cast<double>(playables.size()) - 2.0 * duped_playables) +
+      0.2 * untouched_plays +
+      (game.in_endgame() ? 0.01 : 0.05) * revealed_trash +
+      (game.in_endgame() ? 0.1 : 0.05) * static_cast<double>(fill.size()) +
+      (game.in_endgame() ? 0.05 : 0.02) * static_cast<double>(elim.size()) +
+      -0.1 * bad_count;
+
+  if (move_is(ClueInterp::MISTAKE)) return value - 10.0;
+  if (move_is(ClueInterp::FIX)) return value + 1.0;
+  return value;
+}
+
+namespace {
+
+double force_clue_inner(const Game& orig, const Game& game, int offset) {
+  const State& state = game.state;
+  int giver = (state.our_player_index + offset) % state.num_players;
+  int bob = state.next_player_index(giver);
+
+  if (bob == state.our_player_index) {
+    Game next = game;
+    --next.state.clue_tokens;
+    return advance(orig, next, offset + 1) + 1.0;
+  }
+
+  auto advance_fn = [&](const Game& g) { return advance(orig, g, offset + 1); };
+  return force_clue(game, giver, advance_fn, /*only=*/bob) + 0.5;
+}
+
+}  // namespace
+
+// --- advance -------------------------------------------------------------
+
+double advance(const Game& orig, const Game& game, int offset) {
+  const State& state = game.state;
+  const Player& common = game.common;
+  const auto& meta = game.meta;
+  int player_index = (state.our_player_index + offset) % state.num_players;
+  const Player& player = game.players[player_index];
+
+  int bob = state.next_player_index(player_index);
+  auto bob_chop = (state.num_players != 2) ? game.chop(bob) : std::nullopt;
+  (void)bob_chop;
+
+  std::vector<int> trash = player.thinks_trash(game, player_index);
+  std::optional<int> urgent_dc;
+  for (int o : trash) {
+    if (meta[o].urgent) {
+      urgent_dc = o;
+      break;
+    }
+  }
+  std::vector<int> all_playables = player.obvious_playables(game, player_index);
+
+  if (player_index == state.our_player_index ||
+      (state.endgame_turns && *state.endgame_turns == 0)) {
+    return eval_game(orig, game);
+  }
+
+  if (!urgent_dc && !all_playables.empty()) {
+    std::optional<int> urgent_play;
+    for (int o : all_playables) {
+      if (meta[o].urgent) {
+        urgent_play = o;
+        break;
+      }
+    }
+    std::vector<int> playables;
+    if (urgent_play) {
+      playables.push_back(*urgent_play);
+    } else {
+      for (int o : all_playables) {
+        bool dominated = false;
+        for (int p : all_playables) {
+          if (p > o && common.thoughts[p].possible == common.thoughts[o].possible) {
+            dominated = true;
+            break;
+          }
+        }
+        if (!dominated) playables.push_back(o);
+      }
+    }
+
+    bool strike = false;
+    std::vector<double> play_values;
+    for (int order : playables) {
+      auto id = state.deck[order].id();
+      Action act;
+      if (!id) {
+        act = PlayAction{player_index, order, -1, -1};
+      } else if (state.is_playable(*id)) {
+        act = PlayAction{player_index, order, id->suit_index, id->rank};
+      } else {
+        act = DiscardAction{player_index, order, id->suit_index, id->rank, true};
+      }
+      Game advanced = game.simulate(act);
+      if (advanced.state.strikes > game.state.strikes) strike = true;
+      play_values.push_back(advance(orig, advanced, offset + 1));
+    }
+
+    if (strike) {
+      return *std::min_element(play_values.begin(), play_values.end());
+    }
+    double best_play = *std::max_element(play_values.begin(), play_values.end());
+    return std::max(best_play, force_clue_inner(orig, game, offset));
+  }
+
+  if (player.obvious_locked(game, player_index)) {
+    if (!state.can_clue()) {
+      int locked_dc = player.locked_discard(state, player_index);
+      auto id = state.deck[locked_dc].id();
+      Action act = id ? Action{DiscardAction{player_index, locked_dc, id->suit_index,
+                                                id->rank, false}}
+                       : Action{DiscardAction{player_index, locked_dc, -1, -1, false}};
+      return advance(orig, game.simulate(act), offset + 1);
+    }
+    return force_clue_inner(orig, game, offset);
+  }
+
+  if (state.clue_tokens == 8) return force_clue_inner(orig, game, offset);
+
+  if (urgent_dc) {
+    auto id = state.deck[*urgent_dc].id();
+    Action act = id ? Action{DiscardAction{player_index, *urgent_dc, id->suit_index,
+                                              id->rank, false}}
+                     : Action{DiscardAction{player_index, *urgent_dc, -1, -1, false}};
+    return advance(orig, game.simulate(act), offset + 1);
+  }
+
+  auto try_discard = [&](int order) {
+    auto id = state.deck[order].id();
+    Action act = id ? Action{DiscardAction{player_index, order, id->suit_index,
+                                              id->rank, false}}
+                     : Action{DiscardAction{player_index, order, -1, -1, false}};
+    double dc_value = advance(orig, game.simulate(act), offset + 1);
+    if (state.clue_tokens < 2) return dc_value;
+    double clue_value = force_clue_inner(orig, game, offset);
+    double clue_prob;
+    if (offset == 1) {
+      if (common.obvious_loaded(game, bob)) {
+        clue_prob = 0.2;
+      } else if (bob_chop) {
+        auto bob_chop_id = state.deck[*bob_chop].id();
+        clue_prob = (bob_chop_id && state.is_basic_trash(*bob_chop_id)) ? 0.2 : 0.7;
+      } else {
+        clue_prob = 0.5;
+      }
+    } else {
+      clue_prob = 0.8;
+    }
+    if (clue_value < dc_value) return dc_value;
+    return clue_prob * clue_value + (1.0 - clue_prob) * dc_value;
+  };
+
+  int order;
+  if (urgent_dc) {
+    order = *urgent_dc;
+  } else if (!trash.empty()) {
+    order = trash.front();
+  } else {
+    Game check_game = game;
+    check_game.state.current_player_index = player_index;
+    if (offset == 1 && !check_game.has_ptd()) {
+      return force_clue_inner(orig, game, offset);
+    }
+    auto chop = game.chop(player_index);
+    if (chop) {
+      order = *chop;
+    } else {
+      // Defensive fallback.
+      order = player.locked_discard(state, player_index);
+    }
+  }
+  return try_discard(order);
+}
+
+// --- eval_action ---------------------------------------------------------
+
+double eval_action(const Game& game, const Action& action) {
+  const State& state = game.state;
+  Game hypo_game = game.simulate(action);
+
+  bool mistake = false;
+  if (std::holds_alternative<ClueAction>(action)) {
+    auto m = hypo_game.last_move();
+    if (m && std::holds_alternative<ClueInterp>(*m) &&
+        std::get<ClueInterp>(*m) == ClueInterp::MISTAKE) {
+      mistake = true;
+    }
+  } else if (std::holds_alternative<DiscardAction>(action)) {
+    auto m = hypo_game.last_move();
+    if (m && std::holds_alternative<DiscardInterp>(*m) &&
+        std::get<DiscardInterp>(*m) == DiscardInterp::MISTAKE) {
+      mistake = true;
+    }
+  }
+  if (mistake) return -100.0;
+
+  double value = 0.0;
+  if (std::holds_alternative<ClueAction>(action)) {
+    const auto& ca = std::get<ClueAction>(action);
+    auto playables_us = game.me().obvious_playables(game, state.our_player_index);
+    double mult = playables_us.empty() ? 0.5 : (game.in_endgame() ? 0.1 : 0.25);
+    double result = get_result(game, hypo_game, ca);
+    value = result * (result > 0 ? mult : 1.0) - 0.5;
+  } else if (std::holds_alternative<PlayAction>(action)) {
+    const auto& pa = std::get<PlayAction>(action);
+    std::optional<Identity> id;
+    if (pa.suit_index != -1) id = Identity(pa.suit_index, pa.rank);
+    bool unknown_dupe = false;
+    if (id && !game.in_endgame()) {
+      auto matches = visible_find(state, game.me(), *id, /*exclude_order=*/pa.order);
+      for (int o : matches) {
+        if (game.is_touched(o) && !hypo_game.common.order_trash(hypo_game, o)) {
+          unknown_dupe = true;
+          break;
+        }
+      }
+    }
+    if (unknown_dupe) value = -0.25;
+    else if (!id) value = 1.5;
+    else value = 0.02 * (5 - id->rank);
+  } else if (std::holds_alternative<DiscardAction>(action)) {
+    const auto& da = std::get<DiscardAction>(action);
+    std::optional<Identity> id;
+    if (da.suit_index != -1) id = Identity(da.suit_index, da.rank);
+    bool is_trash = game.me().order_kt(game, da.order) ||
+                     game.meta[da.order].status == CardStatus::CALLED_TO_DISCARD;
+    auto chop = game.chop(state.holder_of(da.order));
+    if (game.in_endgame()) value = -1.0;
+    else if (is_trash) value = 0.0;
+    else if (chop && *chop == da.order) value = -0.25;
+    else if (!id) value = -1.5;
+    else value = -0.5;
+  }
+
+  if (value == -100.0) return -100.0;
+  return value + advance(game, hypo_game, 1);
+}
+
+// --- eval_state ----------------------------------------------------------
+
+double eval_state(const State& state, bool in_endgame) {
+  int num_suits = static_cast<int>(state.variant->suits.size());
+  double score_val =
+      std::min(state.score(), 2 * num_suits) * 0.5 + state.score();
+  double clue_val;
+  if (in_endgame || state.clue_tokens == 0 || !state.can_clue()) {
+    clue_val = 0.0;
+  } else if (state.clue_tokens > 6) {
+    clue_val = 3.0 + (state.clue_tokens - 6) * 0.25;
+  } else {
+    clue_val = state.clue_tokens / 2.0;
+  }
+
+  int score_loss = num_suits * 5 - state.max_score();
+  double dc_crit_val = -20.0 * score_loss;
+
+  double strikes_val;
+  switch (state.strikes) {
+    case 1: strikes_val = -1.5; break;
+    case 2: strikes_val = -3.5; break;
+    case 3: strikes_val = -100.0; break;
+    default: strikes_val = 0.0; break;
+  }
+  return score_val + clue_val + dc_crit_val + strikes_val;
+}
+
+// --- eval_game -----------------------------------------------------------
+
+double eval_game(const Game& orig, const Game& game) {
+  const State& state = game.state;
+  if (state.score() == orig.state.max_score()) return 100.0;
+
+  bool in_endgame = orig.in_endgame() ||
+                     orig.state.rem_score() <
+                         static_cast<int>(state.variant->suits.size());
+  double state_val = eval_state(state, in_endgame);
+
+  double future_val = 0.0;
+  for (const auto& hand : state.hands) {
+    for (int order : hand) {
+      CardStatus status = game.meta[order].status;
+      if (status == CardStatus::CALLED_TO_PLAY) {
+        auto id = game.me().thoughts[order].id(/*infer=*/true);
+        if (!id) future_val += 0.4;
+        else if (state.is_basic_trash(*id)) future_val -= 1.5;
+        else if (id->rank == 5) future_val += 0.8;
+        else future_val += 0.4;
+      } else if (status == CardStatus::CALLED_TO_DISCARD) {
+        auto by = game.meta[order].by;
+        if (!by) continue;
+        auto id = state.deck[order].id();
+        if (!id) {
+          if (*by != state.our_player_index) {
+            // future_val += 0
+          } else {
+            future_val += 0.3;
+          }
+        } else if (state.is_basic_trash(*id)) {
+          future_val += 0.3;
+        } else if (game.me().is_sieved(game, *id, order)) {
+          future_val += 0.2;
+        } else if (state.is_critical(*id)) {
+          future_val -= (5 - state.playable_away(*id)) * 10.0;
+        } else if (*by != state.our_player_index) {
+          // future_val += 0
+        } else {
+          future_val -= (5 - state.playable_away(*id)) * 0.5;
+        }
+      }
+    }
+  }
+
+  double bdr_val = 0.0;
+  for (Identity id : state.variant->all_ids()) {
+    const auto& discarded = state.discard_stacks[id.suit_index][id.rank - 1];
+    if (state.is_basic_trash(id) || id.rank == 5 || discarded.empty()) continue;
+    std::optional<int> duplicate;
+    for (const auto& hand : state.hands) {
+      for (int o : hand) {
+        if (state.deck[o].matches(id) ||
+            (game.me().thoughts[o].matches(id, /*infer=*/true) && game.meta[o].focused)) {
+          duplicate = o;
+          break;
+        }
+      }
+      if (duplicate) break;
+    }
+    bool duplicated = duplicate.has_value();
+    if (!duplicated) {
+      bool all_dups = !discarded.empty();
+      for (int o : discarded) {
+        if (game.meta[o].status != CardStatus::CALLED_TO_DISCARD) {
+          all_dups = false;
+          break;
+        }
+        if (!game.meta[o].by) {
+          all_dups = false;
+          break;
+        }
+        if (*game.meta[o].by == state.our_player_index) {
+          all_dups = false;
+          break;
+        }
+        bool any_in_us = false;
+        for (int o2 : orig.state.our_hand()) {
+          if (game.me().thoughts[o2].possible.contains(id)) {
+            any_in_us = true;
+            break;
+          }
+        }
+        if (!any_in_us) {
+          all_dups = false;
+          break;
+        }
+      }
+      if (all_dups) duplicated = true;
+    }
+    if (duplicated) continue;
+    if (id.rank == 1) bdr_val -= static_cast<double>(discarded.size()) * discarded.size();
+    else if (id.rank == 2) bdr_val -= 3.0;
+    else if (id.rank == 3) bdr_val -= 1.5;
+    else bdr_val -= 0.5;
+  }
+  bdr_val *= 2.5;
+
+  int locked_count = 0;
+  for (int i = 0; i < state.num_players; ++i) {
+    if (game.common.thinks_locked(game, i)) ++locked_count;
+  }
+  double lock_penalty;
+  switch (locked_count) {
+    case 0: lock_penalty = 0.0; break;
+    case 1: lock_penalty = -1.0; break;
+    case 2: lock_penalty = -3.0; break;
+    default: lock_penalty = -10.0; break;
+  }
+
+  double endgame_penalty = 0.0;
+  if (orig.state.endgame_turns) {
+    int turns = *orig.state.endgame_turns;
+    std::vector<int> stacks = orig.state.play_stacks;
+    for (int i = 0; i < turns; ++i) {
+      int player_index = (orig.state.current_player_index + i + 1) % state.num_players;
+      for (int o : orig.state.hands[player_index]) {
+        auto pid = orig.state.deck[o].id();
+        if (!pid) continue;
+        if (orig.state.is_playable(*pid)) {
+          stacks[pid->suit_index] = pid->rank;
+          break;
+        }
+      }
+    }
+    int stacks_sum = 0;
+    for (int v : stacks) stacks_sum += v;
+    endgame_penalty = (stacks_sum - state.max_score()) * 5.0;
+  }
+
+  return state_val + future_val + bdr_val + lock_penalty + endgame_penalty;
+}
+
+}  // namespace hanabi::reactor
