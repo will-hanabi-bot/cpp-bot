@@ -75,6 +75,16 @@ void BotClient::on_welcome(const json& data) {
 
 void BotClient::on_error(const json& data) {
   std::cerr << "server error: " << data.dump() << "\n";
+  // If the server tells us another login took over our account, do NOT
+  // reconnect - that would just kick out whoever just logged in, and we'd
+  // bounce back and forth forever. Tell the transport to exit cleanly so
+  // the user can investigate (stale bot process, browser tab, etc.).
+  std::string err_msg = data.value("error", "");
+  if (err_msg.find("logged on from somewhere else") != std::string::npos) {
+    std::cerr << "another session took over this account - exiting "
+                  "(check for other running bot processes or browser tabs)\n";
+    transport_.stop();
+  }
 }
 
 void BotClient::on_warning(const json& data) {

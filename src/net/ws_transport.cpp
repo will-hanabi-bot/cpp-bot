@@ -237,7 +237,6 @@ bool BotTransport::run() {
     bool unexpected_disconnect = false;
     try {
       unexpected_disconnect = run_one_connection();
-      attempt = 0;  // clean close resets backoff
     } catch (const std::exception& e) {
       if (attempt >= max_retries_) {
         std::cerr << "WS giving up after " << attempt << " retries: " << e.what() << "\n";
@@ -251,6 +250,14 @@ bool BotTransport::run() {
       continue;
     }
     if (!unexpected_disconnect) break;
+    if (stop_.load()) break;
+    // run_one_connection returned (didn't throw) with "unexpected disconnect"
+    // — the receive loop saw the connection drop and exited cleanly. Always
+    // wait at least 1 second before reconnecting so we don't hammer the
+    // server, and don't race with whatever just kicked us off.
+    std::cerr << "WS connection dropped; reconnecting in 1s\n";
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    attempt = 0;  // clean (non-exception) close resets backoff
   }
   return true;
 }
