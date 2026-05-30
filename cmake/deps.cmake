@@ -27,4 +27,12 @@ FetchContent_Declare(
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(nlohmann_json spdlog googletest)
+# cpp-httplib for HTTP/HTTPS login (Phase 6).
+FetchContent_Declare(
+  cpp_httplib
+  GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+  GIT_TAG v0.18.7
+  GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(nlohmann_json spdlog googletest cpp_httplib)

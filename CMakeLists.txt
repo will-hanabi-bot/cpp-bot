@@ -14,6 +14,8 @@ include(cmake/warnings.cmake)
 include(cmake/deps.cmake)
 
 # --- Core library: basics, conventions, endgame -------------------------
+find_package(OpenSSL REQUIRED)
+
 add_library(hanabi_core STATIC
   src/basics/action.cpp
   src/basics/card.cpp
@@ -35,9 +37,15 @@ add_library(hanabi_core STATIC
   src/endgame/helper.cpp
   src/endgame/solver.cpp
   src/endgame/winnable.cpp
+  src/net/auth.cpp
+  src/net/codec.cpp
+  src/net/notes.cpp
+  src/settings.cpp
 )
 target_include_directories(hanabi_core PUBLIC include)
-target_link_libraries(hanabi_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog)
+target_include_directories(hanabi_core PRIVATE ${cpp_httplib_SOURCE_DIR})
+target_link_libraries(hanabi_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog
+                                          OpenSSL::SSL OpenSSL::Crypto)
 target_compile_definitions(hanabi_core PUBLIC
   HANABI_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
 )
@@ -59,6 +67,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_game.cpp
   tests/test_reactor/test_reactive_table.cpp
   tests/test_endgame/test_solver_smoke.cpp
+  tests/test_net/test_codec.cpp
 )
 target_include_directories(hanabi_tests PRIVATE tests)
 target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
