@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "hanabi/basics/action.h"
+#include "hanabi/basics/options.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/reactive_table.h"
@@ -53,13 +54,12 @@ void BotClient::handle_message(const std::string& command, const json& payload) 
     else if (command == "tableGone") on_table_gone(payload);
     else if (command == "tableStart") on_table_start(payload);
     else if (command == "init") on_init(payload);
+    else if (command == "gameAction") on_game_action(payload);
     else if (command == "gameActionList") on_game_action_list(payload);
+    else if (command == "connected") on_connected(payload);
     else if (command == "gameOver") on_game_over(payload);
-    // Game-tick events (gameAction, connected, clock, user, databaseID,
-    // noteListPlayer, voteChange, spectators) are deliberately not handled
-    // - they're informational and don't require a response. The bot won't
-    // take turns until the full reactor convention port is complete; on its
-    // turn the server will eventually time it out.
+    // Other game-tick events (clock, user, databaseID, noteListPlayer,
+    // voteChange, spectators) are informational and don't require a response.
   } catch (const std::exception& e) {
     std::cerr << "!! handler for " << command << " raised: " << e.what() << "\n";
   }
@@ -190,25 +190,121 @@ void BotClient::on_table_start(const json& data) {
 void BotClient::on_init(const json& data) {
   int tid = data.value("tableID", -1);
   if (tid == -1) return;
-  // Stub: until the reactor convention port is complete we don't build a
-  // Game object here. We just mark the table as in-progress so /leaveall
-  // chooses tableUnattend, and request the action list so the server
-  // doesn't block.
   bool is_replay = data.value("replay", false);
   if (!is_replay) games_in_progress_.insert(tid);
+
+  // Build a fresh Game for this table.
+  std::vector<std::string> names;
+  for (const auto& n : data.at("playerNames")) names.push_back(n.get<std::string>());
+  int our_idx = data.value("ourPlayerIndex", 0);
+  std::string variant_name = "No Variant";
+  TableOptions table_opts;
+  if (data.contains("options") && data["options"].is_object()) {
+    table_opts = TableOptions::from_json(data["options"]);
+    variant_name = data["options"].value("variantName", "No Variant");
+  } else {
+    table_opts.num_players = static_cast<int>(names.size());
+    table_opts.variant_name = variant_name;
+  }
+
+  const Variant* variant = nullptr;
+  try {
+    variant = &get_variant(variant_name);
+  } catch (const std::exception& e) {
+    std::cerr << "unknown variant '" << variant_name << "': " << e.what() << "\n";
+    return;
+  }
+
+  State s = State::create(std::move(names), our_idx, *variant, std::move(table_opts));
+  auto game = std::make_unique<Game>(Game::create(tid, std::move(s)));
+  game->in_progress = !is_replay;
+  game->catchup = true;
+  games_[tid] = std::move(game);
+  action_time_[tid] = false;
+  everyone_connected_[tid] = false;
   transport_.queue_send("getGameInfo2", json{{"tableID", tid}});
 }
 
-void BotClient::on_game_action_list(const json& data) {
-  // The server has sent us the full action history for this table; the
-  // Python bot replays it through its Reactor here. We can't do the replay
-  // yet (the reactor convention port isn't complete), but we MUST send
-  // "loaded" so the server unblocks the rest of the players. Without this
-  // ack, `connected` reports us as offline and the game never starts from
-  // anyone's POV.
+void BotClient::on_game_action(const json& data) {
   int tid = data.value("tableID", -1);
   if (tid == -1) return;
+  apply_action(tid, data.at("action"));
+  maybe_take_turn(tid);
+}
+
+void BotClient::on_game_action_list(const json& data) {
+  int tid = data.value("tableID", -1);
+  if (tid == -1) return;
+  if (data.contains("list") && data["list"].is_array()) {
+    for (const auto& raw : data["list"]) apply_action(tid, raw);
+  }
+  // Done loading. Exit catchup mode and check if it's our turn.
+  auto it = games_.find(tid);
+  if (it != games_.end()) {
+    Game& g = *it->second;
+    g.catchup = false;
+    bool our_turn = g.state.current_player_index == g.state.our_player_index;
+    action_time_[tid] = our_turn;
+  }
   transport_.queue_send("loaded", json{{"tableID", tid}});
+  maybe_take_turn(tid);
+}
+
+void BotClient::on_connected(const json& data) {
+  int tid = data.value("tableID", -1);
+  if (tid == -1) return;
+  bool all_connected = true;
+  if (data.contains("list") && data["list"].is_array()) {
+    for (const auto& v : data["list"]) {
+      if (!v.is_boolean() || !v.get<bool>()) {
+        all_connected = false;
+        break;
+      }
+    }
+  }
+  everyone_connected_[tid] = all_connected;
+  maybe_take_turn(tid);
+}
+
+void BotClient::apply_action(int table_id, const json& raw_action) {
+  auto it = games_.find(table_id);
+  if (it == games_.end()) return;
+  auto act = action_from_json(raw_action);
+  if (!act) return;
+  try {
+    it->second->handle_action(*act);
+  } catch (const std::exception& e) {
+    std::cerr << "!! handle_action failed at table " << table_id << ": " << e.what()
+              << "\n";
+    return;
+  }
+  if (std::holds_alternative<TurnAction>(*act)) {
+    const auto& ta = std::get<TurnAction>(*act);
+    bool our_turn = ta.current_player_index == it->second->state.our_player_index;
+    action_time_[table_id] = our_turn;
+  }
+}
+
+void BotClient::maybe_take_turn(int table_id) {
+  auto it = games_.find(table_id);
+  if (it == games_.end()) return;
+  Game& g = *it->second;
+  bool everyone = everyone_connected_[table_id];
+  bool action_time = action_time_[table_id];
+  if (g.catchup || !g.in_progress || !everyone || !action_time) return;
+  if (g.state.current_player_index != g.state.our_player_index) return;
+
+  PerformAction perform;
+  try {
+    perform = g.take_action();
+  } catch (const std::exception& e) {
+    std::cerr << "!! take_action failed for table " << table_id << ": " << e.what()
+              << "\n";
+    return;
+  }
+  std::cerr << "-> action " << hanabi::to_json(perform, table_id).dump() << "\n";
+  transport_.queue_send("action", hanabi::to_json(perform, table_id));
+  action_time_[table_id] = false;
 }
 
 void BotClient::on_game_over(const json& data) {

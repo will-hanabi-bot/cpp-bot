@@ -143,6 +143,17 @@ class Game {
   void with_thought(int order, const std::function<Thought(const Thought&)>& f);
   void with_id(int order, Identity id);
 
+  // Append (or overwrite the latest) interpretation entry in move_history.
+  // Port of game.py:274 with_move.
+  void with_move(const Interp& interp, bool overwrite = false);
+
+  // Clear the urgent flag on any card the current player was supposed to act
+  // on but didn't (restoring old_inferred). Port of reactor.scala check_missed.
+  void check_missed(int player_index, int action_order);
+
+  // Reset the zcs_turn marker (zero-clue-starved tracking).
+  void reset_zcs() { zcs_turn = -1; }
+
   // --- Status predicates ---
   bool is_touched(int order) const;
   bool is_blind_playing(int order) const;
@@ -179,6 +190,10 @@ class Game {
 
   // Returns one discard candidate: trash head, else chop, else locked_discard.
   std::vector<PerformAction> find_all_discards(int player_index) const;
+
+  // Pick the bot's action. The main decision function - port of reactor.scala
+  // take_action. Invokes the endgame solver in the endgame.
+  PerformAction take_action() const;
 };
 
 }  // namespace hanabi

@@ -154,4 +154,32 @@ bool rainbow_mismatch(const Game& game, const ClueAction& action, Identity id,
   return false;
 }
 
+std::vector<int> connectable_simple(const Game& game, const Player& player,
+                                       int start, int target,
+                                       std::optional<Identity> id) {
+  const State& state = game.state;
+
+  if (id && state.is_playable(*id)) return {99};
+  if (start == target) return player.obvious_playables(game, target);
+  if (state.ended()) return {};
+
+  int next_player_index = state.next_player_index(start);
+  auto playables = player.obvious_playables(game, start);
+
+  for (int order : playables) {
+    auto play_id = player.thoughts[order].id(/*infer=*/true);
+    if (!play_id) continue;
+    Game new_game = game;
+    if (new_game.state.current_player_index != start) {
+      new_game = new_game.simulate_action(TurnAction{state.turn_count, start});
+    }
+    new_game = new_game.simulate_action(
+        PlayAction{start, order, play_id->suit_index, play_id->rank});
+    auto result = connectable_simple(new_game, player, next_player_index, target, id);
+    if (!result.empty()) return result;
+  }
+
+  return connectable_simple(game, player, next_player_index, target, id);
+}
+
 }  // namespace hanabi

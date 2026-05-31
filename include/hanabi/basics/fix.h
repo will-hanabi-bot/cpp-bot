@@ -4,7 +4,6 @@
 // Fix-clue detection: was the given clue a "fix" (resetting a previously-clued
 // card or revealing a duplicate). Also distribution_clue and rainbow_mismatch.
 //
-// DEFERRED: connectable_simple (uses game.simulate, Stage 6 territory).
 #pragma once
 
 #include <optional>
@@ -17,6 +16,7 @@
 namespace hanabi {
 
 class Game;
+struct Player;
 struct ClueAction;
 
 struct FixResultNormal {
@@ -42,5 +42,12 @@ std::optional<IdentitySet> distribution_clue(const Game& prev, const Game& game,
 
 bool rainbow_mismatch(const Game& game, const ClueAction& action, Identity id,
                        int prompt);
+
+// If id is given, returns a non-empty list iff it can be made playable by
+// `target`'s turn. Otherwise returns the orders that would be playable in
+// target's hand by their turn. Port of fix.scala lines 55-78.
+std::vector<int> connectable_simple(const Game& game, const Player& player,
+                                       int start, int target,
+                                       std::optional<Identity> id = std::nullopt);
 
 }  // namespace hanabi

@@ -34,6 +34,9 @@ add_library(hanabi_core STATIC
   src/basics/sarcastic.cpp
   src/basics/state.cpp
   src/basics/variant.cpp
+  src/conventions/reactor/interpret_clue.cpp
+  src/conventions/reactor/interpret_reaction.cpp
+  src/conventions/reactor/interpret_reactive.cpp
   src/conventions/reactor/reactive_table.cpp
   src/conventions/reactor/state_eval.cpp
   src/endgame/helper.cpp

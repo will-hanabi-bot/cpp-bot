@@ -12,6 +12,7 @@
 // land once the reactor convention port is complete.
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -19,6 +20,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "hanabi/basics/game.h"
 #include "hanabi/net/ws_transport.h"
 #include "hanabi/settings.h"
 
@@ -41,6 +43,11 @@ class BotClient {
   // Table IDs we've received an `init` for and haven't yet gotten `gameOver` for.
   // Used by /leaveall to pick tableLeave (pregame) vs tableUnattend (in game).
   std::unordered_set<int> games_in_progress_;
+  // Per-table Game instance and turn-tracking flags.
+  // unique_ptr so Game's address is stable across map rehashes (Game is large).
+  std::unordered_map<int, std::unique_ptr<Game>> games_;
+  std::unordered_map<int, bool> action_time_;
+  std::unordered_map<int, bool> everyone_connected_;
 
   // --- Inbound handlers ---
   void on_welcome(const nlohmann::json& data);
@@ -52,8 +59,15 @@ class BotClient {
   void on_table_gone(const nlohmann::json& data);
   void on_table_start(const nlohmann::json& data);
   void on_init(const nlohmann::json& data);
+  void on_game_action(const nlohmann::json& data);
   void on_game_action_list(const nlohmann::json& data);
+  void on_connected(const nlohmann::json& data);
   void on_game_over(const nlohmann::json& data);
+
+  // Apply an inbound action through the game; updates per-table action_time.
+  void apply_action(int table_id, const nlohmann::json& raw_action);
+  // Check the gating conditions and queue an action if it's our turn.
+  void maybe_take_turn(int table_id);
 
   // --- Outbound chat commands ---
   void chat_reply(const std::string& message, const std::string& who);
