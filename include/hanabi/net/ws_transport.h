@@ -1,26 +1,31 @@
 // Port of python-bot/src/hanabi_bot/net/ws_transport.py.
-// WebSocket transport using boost::beast.
+// WebSocket transport using boost::beast in async mode.
 //
-// Threading model (faithful port of the Python async loop):
-// - A receive thread reads frames, decodes, and dispatches to on_message.
-// - A send thread drains an outbound queue with 500 ms spacing.
-// - The main thread calls run() which blocks until stop() is called,
-//   handling reconnect with exponential backoff.
+// All SSL stream operations run on a single io_context (a single thread),
+// which is the only thread-safe way to use SSL with boost::asio - concurrent
+// SSL_read/SSL_write from different threads corrupts the cipher state machine
+// and produces "bad record mac" errors.
+//
+// Architecture:
+// - One io_context (ioc_) runs on the thread that calls run().
+// - async_read continuously pumps frames into on_message_.
+// - queue_send posts a message to the io_context's queue; a chained
+//   async_write drains it with 500 ms spacing via an asio::steady_timer.
+// - asio::signal_set on the same io_context handles SIGINT / SIGTERM.
 #pragma once
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <deque>
 #include <functional>
-#include <mutex>
 #include <string>
 
 #include <nlohmann/json.hpp>
 
 namespace hanabi::net {
 
-using OnMessageFn = std::function<void(const std::string& command, const nlohmann::json& payload)>;
+using OnMessageFn = std::function<void(const std::string& command,
+                                          const nlohmann::json& payload)>;
 
 class BotTransport {
  public:
@@ -29,11 +34,11 @@ class BotTransport {
                 int max_retries = 5);
   ~BotTransport();
 
-  // Enqueue an outbound message. Thread-safe.
+  // Enqueue an outbound message. Thread-safe (posts to the io_context).
   void queue_send(const std::string& command,
                     const nlohmann::json& payload = nlohmann::json::value_t::null);
 
-  // Request stop. Causes run() to return once the current operation completes.
+  // Request stop. Thread-safe; causes run() to return cleanly.
   void stop();
 
   // Run the transport with reconnect/backoff. Blocks until stop() or
@@ -46,12 +51,15 @@ class BotTransport {
   OnMessageFn on_message_;
   std::chrono::milliseconds send_interval_;
   int max_retries_;
-
-  std::mutex queue_mu_;
-  std::condition_variable queue_cv_;
-  std::deque<std::string> queue_;
   std::atomic<bool> stop_{false};
 
+  // The session impl lives in ws_transport.cpp - we use the pimpl idiom so
+  // we don't have to drag boost/asio headers into a public header.
+ public:
+  struct Session;  // public so queue_send / stop helpers in ws_transport.cpp
+                   // can name it through a shared_ptr.
+
+ private:
   bool run_one_connection();
 };
 
