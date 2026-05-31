@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <sstream>
 
 #include "hanabi/basics/card.h"
@@ -279,6 +280,7 @@ Fraction EndgameSolver::action_winrate(const Game& game, const std::vector<GameA
   int next_player = game.state.next_player_index(player_turn);
   Fraction total(0);
   for (const auto& arr : arrs) {
+    if (past_deadline_local(deadline)) break;
     if (arr.drew && std::find(winnable_draws.begin(), winnable_draws.end(), *arr.drew) ==
                          winnable_draws.end() &&
         !winnable_draws.empty()) {
@@ -303,6 +305,12 @@ std::vector<std::pair<PerformAction, Fraction>> EndgameSolver::optimize_full(
   const auto& [undrawn, drawn] = arrs;
   std::vector<std::pair<PerformAction, Fraction>> result;
   for (const auto& act : actions) {
+    if (past_deadline_local(deadline)) {
+      // Fill remaining actions with 0 winrate so the caller still gets
+      // a valid (sorted) list rather than hanging.
+      result.emplace_back(act.first, Fraction(0));
+      continue;
+    }
     const auto& arr_list = is_clue(act.first) ? undrawn : drawn;
     Fraction wr = action_winrate(game, arr_list, act, player_turn, deadline);
     result.emplace_back(act.first, wr);
@@ -349,6 +357,7 @@ WinnableResult EndgameSolver::optimize(
     Fraction winrate(0);
     Fraction rem_prob(1);
     for (const auto& arr : arr_list) {
+      if (past_deadline_local(deadline)) break;  // check inside arr loop too
       if (winrate + rem_prob < best_winrate) break;
       rem_prob = rem_prob - arr.prob;
       if (arr.drew && std::find(winnable_draws.begin(), winnable_draws.end(), *arr.drew) ==
@@ -401,6 +410,10 @@ WinnableResult EndgameSolver::winnable(const Game& game, int player_turn,
                                           std::optional<double> deadline, int depth) {
   const State& state = game.state;
   if (past_deadline_local(deadline)) return WinnableResult{{}, Fraction(0), "timeout"};
+  // Safety: cap recursion depth. Without this cap a pathological branch
+  // can outrun the deadline check between simulate_actions (each of which
+  // can take 10-50ms due to the convention pipeline + elim() chain).
+  if (depth > 20) return WinnableResult{{}, Fraction(0), "depth limit"};
 
   auto trivial = trivially_winnable(game, player_turn);
   if (trivial.found) {
@@ -720,6 +733,7 @@ SolveResult EndgameSolver::solve(const Game& game,
   };
   std::vector<Hypo> hypos;
   for (const auto& arr : arrs) {
+    if (past_deadline_local(deadline)) break;
     Game hypo_game = assumed_game;
     for (size_t i = 0; i < arr.ids.size(); ++i) {
       hypo_game.with_id(unknown_own[i], arr.ids[i]);
