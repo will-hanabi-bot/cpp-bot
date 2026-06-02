@@ -23,14 +23,22 @@ void target_i_play(const Game& prev, Game& game, const ReactorWC& wc,
 // elim_* helpers - after a reactive interpretation, eliminate
 // (play|trash) ids from earlier slots in the receiver's hand. Mutate game's
 // common+meta. target_slot is 1-indexed (use len(receiver_hand)+1 to mean
-// "process all slots").
-void elim_play_play(Game& game, const std::vector<int>& receiver_hand,
+// "process all slots"). prev_state is the state at the time of the original
+// clue (pre-react-action) — the play/discard that triggers react_play has
+// already mutated game.state, but the elim_* helpers should reason from the
+// pre-action playable/trash sets and reacter's then-hand. (Mirrors Python's
+// elim_*(state=prev.state, common=game.common, ...) signature.)
+void elim_play_play(const State& prev_state, Game& game,
+                     const std::vector<int>& receiver_hand,
                      int reacter, int focus_slot, int target_slot);
-void elim_play_dc(Game& game, const std::vector<int>& receiver_hand,
+void elim_play_dc(const State& prev_state, Game& game,
+                   const std::vector<int>& receiver_hand,
                    int reacter, int focus_slot, int target_slot);
-void elim_dc_play(Game& game, const std::vector<int>& receiver_hand,
+void elim_dc_play(const State& prev_state, Game& game,
+                   const std::vector<int>& receiver_hand,
                    int reacter, int focus_slot, int target_slot);
-void elim_dc_dc(Game& game, const std::vector<int>& receiver_hand,
+void elim_dc_dc(const State& prev_state, Game& game,
+                 const std::vector<int>& receiver_hand,
                  int reacter, int focus_slot, int target_slot);
 
 // Top-level: handle a play/discard while a waiting reactive connection is active.

@@ -119,6 +119,14 @@ struct BotTransport::Session : std::enable_shared_from_this<Session> {
         if (ec != websocket::error::closed && ec != asio::error::operation_aborted) {
           std::cerr << "ws recv error: " << ec.message() << "\n";
         }
+        // Cancel the remaining async ops so ioc.run() can return and the
+        // outer run() loop reaches the reconnect path. Without this the
+        // signal_set keeps the io_context alive forever — the bot would
+        // hang silently after the server closes our socket.
+        boost::system::error_code cec;
+        signals.cancel(cec);
+        write_timer.cancel();
+        shutdown_socket(ws);
         return;
       }
       std::string frame = beast::buffers_to_string(buffer.data());

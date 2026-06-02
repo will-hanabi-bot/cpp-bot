@@ -1,6 +1,7 @@
 #include "hanabi/basics/game.h"
 
 #include <algorithm>
+#include <iostream>
 #include <stdexcept>
 
 #include "hanabi/basics/fix.h"
@@ -313,7 +314,12 @@ std::vector<int> Game::filter_playables(const Player&, int,
   return orders;
 }
 
-bool Game::valid_arr(Identity, int) const { return true; }
+bool Game::valid_arr(Identity id, int order) const {
+  // Reactor: respect info_lock when assigning identities to unknown cards.
+  // Port of conventions/reactor/reactor.py: Reactor.valid_arr.
+  const auto& lock = me().thoughts[order].info_lock;
+  return !lock || lock->contains(id);
+}
 
 double Game::eval_action(const Action&) const { return 0.0; }
 
@@ -890,18 +896,81 @@ bool Game::has_ptd() const {
             (state.is_playable(*bob_chop_id) || bob_chop_id->rank == 2));
 }
 
-// find_all_clues: enumerate every clue the giver could give. Ranking by
-// heuristic value is the reactor convention's job — we return the raw set.
+// find_all_clues: enumerate clue candidates, filtering out mistakes and
+// useless duplicates. Mirrors reactor.py find_all_clues — we evaluate each
+// candidate by simulating it, drop MISTAKE interpretations, and rank
+// surviving useful clues by get_result score. At most one representative
+// "useless" clue is included so the solver still has a stall option.
 std::vector<PerformAction> Game::find_all_clues(int giver) const {
   std::vector<PerformAction> out;
+  bool added_useless_clue = false;
+  std::vector<std::pair<Clue, double>> scored;
+
   for (int target = 0; target < state.num_players; ++target) {
     if (target == giver) continue;
     for (const Clue& clue : state.all_valid_clues(target)) {
-      if (clue.kind == ClueKind::COLOUR) {
-        out.push_back(PerformColour{clue.target, clue.value});
-      } else {
-        out.push_back(PerformRank{clue.target, clue.value});
+      auto list_orders =
+          state.clue_touched(state.hands[target], clue.kind, clue.value);
+
+      // Only touches previously-clued trash — useless.
+      bool all_trash_touch = !list_orders.empty();
+      for (int o : list_orders) {
+        if (!state.deck[o].clued) { all_trash_touch = false; break; }
+        auto id = state.deck[o].id();
+        if (!id || !state.is_basic_trash(*id)) { all_trash_touch = false; break; }
       }
+      if (all_trash_touch) {
+        if (added_useless_clue) continue;
+        added_useless_clue = true;
+        scored.emplace_back(clue, 0.0);
+        continue;
+      }
+
+      ClueAction action{giver, clue.target, list_orders, clue.base()};
+      Game hypo = simulate_clue(action);
+      auto last = hypo.last_move();
+      if (last && std::holds_alternative<ClueInterp>(*last) &&
+          std::get<ClueInterp>(*last) == ClueInterp::MISTAKE) {
+        continue;
+      }
+
+      double clue_result = hanabi::reactor::get_result(*this, hypo, action);
+      bool reactive_move =
+          last && std::holds_alternative<ClueInterp>(*last) &&
+          std::get<ClueInterp>(*last) == ClueInterp::REACTIVE;
+      bool hypo_score_up = hypo.common.hypo_score() > common.hypo_score();
+      bool shrunk_possible = false;
+      for (int o : state.hands[clue.target]) {
+        auto did = state.deck[o].id();
+        bool useful_card = !did || state.is_useful(*did);
+        bool clued_in_hypo = hypo.state.deck[o].clued;
+        bool shrunk = hypo.common.thoughts[o].possible.length() <
+                      common.thoughts[o].possible.length();
+        if (useful_card && clued_in_hypo && shrunk) {
+          shrunk_possible = true;
+          break;
+        }
+      }
+      bool useful = clue_result > -1.0 &&
+                    (reactive_move || hypo_score_up || shrunk_possible);
+
+      if (useful) {
+        scored.emplace_back(clue, clue_result);
+      } else if (!added_useless_clue) {
+        added_useless_clue = true;
+        scored.emplace_back(clue, 0.0);
+      }
+      // else: skip; redundant useless clue
+    }
+  }
+
+  std::stable_sort(scored.begin(), scored.end(),
+                    [](const auto& a, const auto& b) { return a.second > b.second; });
+  for (const auto& [clue, _] : scored) {
+    if (clue.kind == ClueKind::COLOUR) {
+      out.push_back(PerformColour{clue.target, clue.value});
+    } else {
+      out.push_back(PerformRank{clue.target, clue.value});
     }
   }
   return out;
@@ -987,7 +1056,7 @@ PerformAction Game::take_action() const {
     if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
       return result.action;
     }
-    // Solver bailed or winrate < 1%; fall through to heuristic.
+    // Solver returned no winning action or winrate < 1%; fall through to heuristic.
   }
 
   if (urgent_action) return *urgent_action;

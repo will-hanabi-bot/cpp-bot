@@ -1,6 +1,8 @@
 #include "hanabi/basics/state.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 
 namespace hanabi {

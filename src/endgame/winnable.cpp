@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
+#include <iostream>
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"

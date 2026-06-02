@@ -48,6 +48,10 @@ class BotClient {
   std::unordered_map<int, std::unique_ptr<Game>> games_;
   std::unordered_map<int, bool> action_time_;
   std::unordered_map<int, bool> everyone_connected_;
+  // Per-table per-card-order accumulated note text (mirrors Python's
+  // game.notes). compute_note_segments returns deltas; we append to the
+  // full string here and re-send it on each change.
+  std::unordered_map<int, std::unordered_map<int, std::string>> notes_;
 
   // --- Inbound handlers ---
   void on_welcome(const nlohmann::json& data);

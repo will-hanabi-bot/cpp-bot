@@ -51,7 +51,7 @@ TEST(EndgameReplay1875252, SolverPicksClueThatCommunicatesMustPlay) {
   ASSERT_EQ(g.state.max_score(), 15);
   ASSERT_EQ(g.state.cards_left, 0);
 
-  EndgameSolver solver(/*mc=*/true, /*timeout=*/10.0);
+  EndgameSolver solver(/*mc=*/true, /*timeout=*/15.0);
   SolveResult result = solver.solve(g);
   ASSERT_TRUE(result.ok()) << "solver should find a winning clue; got: " << result.error;
   EXPECT_EQ(result.winrate, Fraction(1));

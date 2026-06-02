@@ -102,23 +102,23 @@ void target_i_play(const Game& /*prev*/, Game& game, const ReactorWC& wc,
 
 // --- elim helpers --------------------------------------------------------
 
-void elim_play_play(Game& game, const std::vector<int>& receiver_hand,
+void elim_play_play(const State& prev_state, Game& game,
+                     const std::vector<int>& receiver_hand,
                      int reacter, int focus_slot, int target_slot) {
-  const State& state = game.state;
-  int hand_size = kHandSize[state.num_players];
+  int hand_size = kHandSize[prev_state.num_players];
   for (int i = 0; i < target_slot - 1; ++i) {
     if (i >= static_cast<int>(receiver_hand.size())) break;
     int receive_order = receiver_hand[i];
     CardStatus status = game.meta[receive_order].status;
     int react_slot = calc_slot(focus_slot, i + 1, hand_size);
     if (status == CardStatus::CALLED_TO_PLAY || status == CardStatus::CALLED_TO_DISCARD) continue;
-    if (react_slot < 1 || react_slot > static_cast<int>(state.hands[reacter].size())) continue;
-    int react_order = state.hands[reacter][react_slot - 1];
-    IdentitySet intersect = game.common.thoughts[react_order].possible.intersect(state.playable_set);
+    if (react_slot < 1 || react_slot > static_cast<int>(prev_state.hands[reacter].size())) continue;
+    int react_order = prev_state.hands[reacter][react_slot - 1];
+    IdentitySet intersect = game.common.thoughts[react_order].possible.intersect(prev_state.playable_set);
     if (intersect.length() == 0) continue;
     if (intersect.length() == 1) {
       Identity id = intersect.head();
-      IdentitySet ps = state.playable_set;
+      IdentitySet ps = prev_state.playable_set;
       game.with_thought(receive_order, [&](const Thought& t) {
         Thought out = t;
         out.inferred = t.inferred.filter(
@@ -126,7 +126,7 @@ void elim_play_play(Game& game, const std::vector<int>& receiver_hand,
         return out;
       });
     } else {
-      IdentitySet ps = state.playable_set;
+      IdentitySet ps = prev_state.playable_set;
       game.with_thought(receive_order, [&](const Thought& t) {
         Thought out = t;
         out.inferred = t.inferred.difference(ps);
@@ -137,12 +137,12 @@ void elim_play_play(Game& game, const std::vector<int>& receiver_hand,
   }
 }
 
-void elim_play_dc(Game& game, const std::vector<int>& receiver_hand,
+void elim_play_dc(const State& prev_state, Game& game,
+                   const std::vector<int>& receiver_hand,
                    int reacter, int focus_slot, int target_slot) {
-  const State& state = game.state;
-  int hand_size = kHandSize[state.num_players];
+  int hand_size = kHandSize[prev_state.num_players];
   // First run elim_play_play across all slots.
-  elim_play_play(game, receiver_hand, reacter, focus_slot,
+  elim_play_play(prev_state, game, receiver_hand, reacter, focus_slot,
                   static_cast<int>(receiver_hand.size()) + 1);
 
   for (int i = 0; i < target_slot - 1; ++i) {
@@ -155,16 +155,16 @@ void elim_play_dc(Game& game, const std::vector<int>& receiver_hand,
                           : -1;
     bool skip = status == CardStatus::CALLED_TO_PLAY ||
                 status == CardStatus::CALLED_TO_DISCARD ||
-                (target_card != -1 && state.deck[target_card].clued &&
-                  !state.deck[receive_order].clued);
+                (target_card != -1 && prev_state.deck[target_card].clued &&
+                  !prev_state.deck[receive_order].clued);
     if (skip) continue;
-    if (react_slot < 1 || react_slot > static_cast<int>(state.hands[reacter].size())) continue;
-    int react_order = state.hands[reacter][react_slot - 1];
+    if (react_slot < 1 || react_slot > static_cast<int>(prev_state.hands[reacter].size())) continue;
+    int react_order = prev_state.hands[reacter][react_slot - 1];
     bool can_elim = game.meta[react_order].status != CardStatus::CALLED_TO_PLAY &&
                      game.common.thoughts[react_order].possible.exists(
-                         [&](Identity i) { return state.is_playable(i); });
+                         [&](Identity i) { return prev_state.is_playable(i); });
     if (can_elim) {
-      IdentitySet ts = state.trash_set;
+      IdentitySet ts = prev_state.trash_set;
       game.with_thought(receive_order, [&](const Thought& t) {
         Thought out = t;
         out.inferred = t.inferred.difference(ts);
@@ -174,21 +174,21 @@ void elim_play_dc(Game& game, const std::vector<int>& receiver_hand,
   }
 }
 
-void elim_dc_play(Game& game, const std::vector<int>& receiver_hand,
+void elim_dc_play(const State& prev_state, Game& game,
+                   const std::vector<int>& receiver_hand,
                    int reacter, int focus_slot, int target_slot) {
-  const State& state = game.state;
-  int hand_size = kHandSize[state.num_players];
+  int hand_size = kHandSize[prev_state.num_players];
   for (int i = 0; i < target_slot - 1; ++i) {
     if (i >= static_cast<int>(receiver_hand.size())) break;
     int receive_order = receiver_hand[i];
     CardStatus status = game.meta[receive_order].status;
     int react_slot = calc_slot(focus_slot, i + 1, hand_size);
     if (status == CardStatus::CALLED_TO_PLAY || status == CardStatus::CALLED_TO_DISCARD) continue;
-    if (react_slot < 1 || react_slot > static_cast<int>(state.hands[reacter].size())) continue;
-    int react_order = state.hands[reacter][react_slot - 1];
+    if (react_slot < 1 || react_slot > static_cast<int>(prev_state.hands[reacter].size())) continue;
+    int react_order = prev_state.hands[reacter][react_slot - 1];
     if (!game.common.thoughts[react_order].possible.forall(
-            [&](Identity i) { return state.is_critical(i); })) {
-      IdentitySet ps = state.playable_set;
+            [&](Identity i) { return prev_state.is_critical(i); })) {
+      IdentitySet ps = prev_state.playable_set;
       game.with_thought(receive_order, [&](const Thought& t) {
         Thought out = t;
         out.inferred = t.inferred.difference(ps);
@@ -199,12 +199,12 @@ void elim_dc_play(Game& game, const std::vector<int>& receiver_hand,
   }
 }
 
-void elim_dc_dc(Game& game, const std::vector<int>& receiver_hand,
+void elim_dc_dc(const State& prev_state, Game& game,
+                 const std::vector<int>& receiver_hand,
                  int reacter, int focus_slot, int target_slot) {
-  const State& state = game.state;
-  int hand_size = kHandSize[state.num_players];
+  int hand_size = kHandSize[prev_state.num_players];
   // First run elim_play_play across all slots.
-  elim_play_play(game, receiver_hand, reacter, focus_slot,
+  elim_play_play(prev_state, game, receiver_hand, reacter, focus_slot,
                   static_cast<int>(receiver_hand.size()) + 1);
   for (int i = 0; i < target_slot - 1; ++i) {
     if (i >= static_cast<int>(receiver_hand.size())) break;
@@ -216,16 +216,16 @@ void elim_dc_dc(Game& game, const std::vector<int>& receiver_hand,
                           : -1;
     bool skip = status == CardStatus::CALLED_TO_PLAY ||
                 status == CardStatus::CALLED_TO_DISCARD ||
-                (target_card != -1 && state.deck[target_card].clued &&
-                  !state.deck[receive_order].clued);
+                (target_card != -1 && prev_state.deck[target_card].clued &&
+                  !prev_state.deck[receive_order].clued);
     if (skip) continue;
-    if (react_slot < 1 || react_slot > static_cast<int>(state.hands[reacter].size())) continue;
-    int react_order = state.hands[reacter][react_slot - 1];
+    if (react_slot < 1 || react_slot > static_cast<int>(prev_state.hands[reacter].size())) continue;
+    int react_order = prev_state.hands[reacter][react_slot - 1];
     if (game.common.thoughts[react_order].possible.forall(
-            [&](Identity i) { return state.is_critical(i); })) {
+            [&](Identity i) { return prev_state.is_critical(i); })) {
       continue;
     }
-    IdentitySet ts = state.trash_set;
+    IdentitySet ts = prev_state.trash_set;
     game.with_thought(receive_order, [&](const Thought& t) {
       Thought out = t;
       out.inferred = t.inferred.difference(ts);
@@ -278,10 +278,10 @@ void react_discard(const Game& prev, Game& game, int player_index, int order,
   (void)react_slot;
   if (wc.clue.kind == ClueKind::COLOUR) {
     target_i_play(prev, game, wc, target_slot);
-    elim_dc_play(game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
+    elim_dc_play(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   } else {
     target_i_discard(prev, game, wc, target_slot);
-    elim_dc_dc(game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
+    elim_dc_dc(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   }
   game.with_move(DiscardInterp::NONE);
 }
@@ -308,10 +308,10 @@ void react_play(const Game& prev, Game& game, int player_index, int order,
   (void)react_slot;
   if (wc.clue.kind == ClueKind::RANK) {
     target_i_play(prev, game, wc, target_slot);
-    elim_play_play(game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
+    elim_play_play(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   } else {
     target_i_discard(prev, game, wc, target_slot);
-    elim_play_dc(game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
+    elim_play_dc(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   }
 }
 

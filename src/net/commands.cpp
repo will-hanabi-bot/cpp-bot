@@ -10,6 +10,7 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/reactive_table.h"
+#include "hanabi/net/notes.h"
 
 namespace hanabi::net {
 
@@ -271,12 +272,31 @@ void BotClient::apply_action(int table_id, const json& raw_action) {
   if (it == games_.end()) return;
   auto act = action_from_json(raw_action);
   if (!act) return;
+  Game prev = *it->second;
   try {
     it->second->handle_action(*act);
   } catch (const std::exception& e) {
     std::cerr << "!! handle_action failed at table " << table_id << ": " << e.what()
               << "\n";
     return;
+  }
+  // Note-worthy state changes (CALLED_TO_PLAY/_DISCARD transitions and
+  // inferred-set narrowing while called-to-play) — accumulate and send.
+  auto segments = compute_note_segments(prev, *it->second);
+  if (!segments.empty()) {
+    auto& table_notes = notes_[table_id];
+    bool send_now = !it->second->catchup && it->second->in_progress;
+    for (const auto& [order, seg] : segments) {
+      auto existing = table_notes.find(order);
+      std::string full = existing != table_notes.end()
+                              ? existing->second + " | " + seg
+                              : seg;
+      table_notes[order] = full;
+      if (send_now) {
+        transport_.queue_send(
+            "note", json{{"tableID", table_id}, {"order", order}, {"note", full}});
+      }
+    }
   }
   if (std::holds_alternative<TurnAction>(*act)) {
     const auto& ta = std::get<TurnAction>(*act);

@@ -35,16 +35,19 @@ struct Fraction {
   static constexpr Fraction zero() { return Fraction(0); }
   static constexpr Fraction one() { return Fraction(1); }
 
-  // Operators: no normalization on intermediate ops (cheap path); compare ops
-  // cross-multiply, which avoids reducing as well.
-  constexpr Fraction operator+(Fraction o) const {
-    return Fraction::raw(num * o.den + o.num * den, den * o.den);
+  // All arithmetic ops normalize via the validating ctor so the invariant
+  // den > 0 (and gcd(|num|,den) = 1) holds end-to-end. The earlier "lazy
+  // reduce" scheme caused int64 overflow during deep accumulation chains
+  // (arrangement.prob * many factors, then sum across arrangements) — the
+  // overflowed denominator could wrap to 0 and trip the assert below.
+  Fraction operator+(Fraction o) const {
+    return Fraction(num * o.den + o.num * den, den * o.den);
   }
-  constexpr Fraction operator-(Fraction o) const {
-    return Fraction::raw(num * o.den - o.num * den, den * o.den);
+  Fraction operator-(Fraction o) const {
+    return Fraction(num * o.den - o.num * den, den * o.den);
   }
-  constexpr Fraction operator*(Fraction o) const {
-    return Fraction::raw(num * o.num, den * o.den);
+  Fraction operator*(Fraction o) const {
+    return Fraction(num * o.num, den * o.den);
   }
   Fraction operator/(Fraction o) const {
     if (o.num == 0) throw std::invalid_argument("Fraction division by zero");
@@ -56,7 +59,7 @@ struct Fraction {
   Fraction& operator/=(Fraction o) { return *this = *this / o; }
   constexpr Fraction operator-() const { return Fraction::raw(-num, den); }
 
-  // Cross-multiply comparisons. den > 0 always, so signs are preserved.
+  // Cross-multiply comparisons. den > 0 always.
   constexpr bool operator==(Fraction o) const { return num * o.den == o.num * den; }
   constexpr bool operator!=(Fraction o) const { return !(*this == o); }
   constexpr bool operator<(Fraction o) const { return num * o.den < o.num * den; }
