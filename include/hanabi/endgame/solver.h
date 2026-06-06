@@ -73,7 +73,7 @@ class EndgameSolver {
   std::vector<std::pair<PerformAction, Fraction>> optimize_full(
       const Game& game, const std::pair<std::vector<GameArr>, std::vector<GameArr>>& arrs,
       const std::vector<ActionEntry>& actions, int player_turn,
-      std::optional<double> deadline);
+      std::optional<double> deadline, bool single_hypo);
   WinnableResult optimize(const Game& game,
                             const std::pair<std::vector<GameArr>, std::vector<GameArr>>& arrs,
                             const std::vector<ActionEntry>& actions, int player_turn,

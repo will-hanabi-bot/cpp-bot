@@ -377,9 +377,11 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
   if (clue.kind == ClueKind::RANK && !newly_touched.empty()) {
     bool trash_push = true;
     bool playable_rank = true;
-    int num_suits = static_cast<int>(state.variant->suits.size());
-    for (int s = 0; s < num_suits; ++s) {
-      Identity id(s, clue.value);
+    // Iterate every identity the clue can actually touch (rank == clue.value,
+    // plus pinkish/omni/brownish/special-rank ids per the variant). Looking
+    // only at Identity(s, clue.value) would miss e.g. rank-5 cards under
+    // Pink-Fives and falsely conclude trash_push.
+    for (Identity id : state.variant->touch_possibilities(clue.kind, clue.value)) {
       bool basic = state.is_basic_trash(id);
       if (!basic) trash_push = false;
       if (!basic && !state.is_playable(id)) playable_rank = false;
@@ -422,9 +424,11 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
           });
 
       if (!unnecessary_focus) {
-        int rv = clue.value;
+        // `inferred` has already been intersected with the clue's touch set
+        // by on_clue, so checking is_playable alone covers e.g. (R,5) under
+        // Pink-Fives where the touched playable doesn't equal clue.value.
         IdentitySet new_inferred = game.common.thoughts[focus].inferred.filter(
-            [&, rv](Identity i) { return state.is_playable(i) && i.rank == rv; });
+            [&](Identity i) { return state.is_playable(i); });
         game.with_thought(focus, [&](const Thought& t) {
           Thought out = t;
           out.inferred = new_inferred;
@@ -740,12 +744,12 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   int focus_slot = reactive_focus(state, receiver, action);
   ReactorWC wc{giver, reacter, receiver, state.hands[receiver],
                 to_clue(clue, receiver), focus_slot, /*inverted=*/false,
-                state.turn_count};
+                state.turn_count, /*all_plays=*/game.all_plays};
   game.waiting.clear();
   game.waiting.push_back(std::move(wc));
 
   if (receiver == state.our_player_index) return ClueInterp::REACTIVE;
-  if (clue.kind == ClueKind::COLOUR) {
+  if (clue.kind == ClueKind::COLOUR && !game.all_plays) {
     return interpret_reactive_colour(prev, game, action, focus_slot, reacter,
                                         looks_stable);
   }

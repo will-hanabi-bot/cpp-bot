@@ -107,8 +107,12 @@ std::vector<int> reactive_value_table(const Variant& variant, int hand_size) {
   return result;
 }
 
-std::string format_reactive_settings(const Variant& variant, int hand_size) {
-  std::string odd;
+std::string format_reactive_settings(const Variant& variant, int hand_size,
+                                        bool all_plays) {
+  // "odd" half = the color-clue slot ruleset (rainbow color → slot, else
+  // focus slot). "even" half = the rank-clue slot ruleset (pinkish rank →
+  // slot, else focus slot).
+  std::string colour_half;
   if (is_rainbowy(variant)) {
     auto table = reactive_value_table(variant, hand_size);
     std::vector<Suit> colourable = variant.colourable_suits();
@@ -122,30 +126,36 @@ std::string format_reactive_settings(const Variant& variant, int hand_size) {
       }
       slot_to_suit[table[i]] = abbrev;
     }
-    odd = "{";
+    colour_half = "{";
     for (int slot = 1; slot <= hand_size; ++slot) {
-      if (slot > 1) odd += ", ";
+      if (slot > 1) colour_half += ", ";
       auto it = slot_to_suit.find(slot);
-      odd += (it != slot_to_suit.end()) ? it->second : "-";
+      colour_half += (it != slot_to_suit.end()) ? it->second : "-";
     }
-    odd += "}";
+    colour_half += "}";
   } else {
-    odd = "{slot focus}";
+    colour_half = "{slot focus}";
   }
 
-  std::string even;
+  std::string rank_half;
   if (is_pinkish(variant)) {
-    even = "{";
+    rank_half = "{";
     for (int rank = 1; rank <= hand_size; ++rank) {
-      if (rank > 1) even += ", ";
-      even += rank_blocked(variant, rank) ? "-" : std::to_string(rank);
+      if (rank > 1) rank_half += ", ";
+      rank_half += rank_blocked(variant, rank) ? "-" : std::to_string(rank);
     }
-    even += "}";
+    rank_half += "}";
   } else {
-    even = "{slot focus}";
+    rank_half = "{slot focus}";
   }
 
-  return "odd plays: " + odd + ", even plays: " + even;
+  if (all_plays) {
+    // Both halves are now under "even plays:". Collapse a redundant
+    // "{slot focus} + {slot focus}" to a single "{slot focus}".
+    if (rank_half == colour_half) return "even plays: " + rank_half;
+    return "even plays: " + rank_half + " + " + colour_half;
+  }
+  return "odd plays: " + colour_half + ", even plays: " + rank_half;
 }
 
 }  // namespace hanabi::reactor

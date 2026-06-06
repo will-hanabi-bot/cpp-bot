@@ -207,7 +207,14 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
                       prev.state.clue_tokens == 0);
 
   if (!waiting.empty()) {
-    react_discard(prev, *this, action.player_index_v, action.order, waiting.front());
+    bool rewound =
+        react_discard(prev, *this, action.player_index_v, action.order, waiting.front());
+    if (rewound) {
+      // The rewind already replayed the action end-to-end (including
+      // with_move + elim + reset_zcs); doing it again here would
+      // double-record into move_history.
+      return;
+    }
   } else if (useful_dc && id) {
     DiscardResult dc_result = interpret_useful_dc(*this, action);
     if (std::holds_alternative<DiscardResultNone>(dc_result)) {
@@ -251,10 +258,16 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
 
 void Game::interpret_play(const Game& prev, const PlayAction& action) {
   using namespace hanabi::reactor;
-  // reinterp_play (rewind support) isn't ported; skip it for now.
+  // reinterp_play (gentleman's-discard reinterp) isn't ported; skip it for now.
   check_missed(action.player_index_v, action.order);
   if (!waiting.empty()) {
-    react_play(prev, *this, action.player_index_v, action.order, waiting.front());
+    bool rewound =
+        react_play(prev, *this, action.player_index_v, action.order, waiting.front());
+    if (rewound) {
+      // The rewind already replayed the action end-to-end (including
+      // with_move + elim); skip the post-react bookkeeping.
+      return;
+    }
   }
   with_move(PlayInterp::NONE, /*overwrite=*/true);
   elim();
@@ -796,6 +809,83 @@ void Game::elim(std::optional<int> except_) {
   common.dirty.clear();
 }
 
+// --- Rewind ---------------------------------------------------------------
+
+Game Game::rewind(int turn, const Action& new_action) const {
+  const int n_turns = static_cast<int>(state.action_list.size());
+  if (turn < 1 || turn > n_turns + 1) {
+    throw std::invalid_argument("rewind: invalid turn");
+  }
+  // Refuse to re-rewind to the same (turn, action) pair — that would loop.
+  if (turn < n_turns) {
+    for (const auto& a : state.action_list[turn]) {
+      if (a == new_action) {
+        throw std::invalid_argument("rewind: action was already rewound");
+      }
+    }
+  }
+  if (rewind_depth > 4) {
+    throw std::runtime_error("rewind depth went too deep");
+  }
+
+  // Save the action_list before we tear `state` down; handle_action below
+  // will rebuild action_list naturally on the way back through.
+  std::vector<std::vector<Action>> saved = state.action_list;
+
+  // Reset to the base snapshot (post-initial-deal state).
+  Game ng = *this;
+  ng.state = base.state;
+  ng.meta = base.meta;
+  ng.players = base.players;
+  ng.common = base.common;
+  ng.last_actions.assign(base.state.num_players, std::nullopt);
+  ng.move_history.clear();
+  ng.queued_cmds.clear();
+  ng.waiting.clear();
+  ng.next_interp = std::nullopt;
+  ng.catchup = true;
+  ng.rewind_depth = rewind_depth + 1;
+
+  auto replay_turn = [&](const std::vector<Action>& turn_actions) {
+    for (const auto& a : turn_actions) {
+      // Skip a re-deal of a card the base already has in hand (mirrors the
+      // Python special-case for already-dealt DrawActions).
+      if (std::holds_alternative<DrawAction>(a)) {
+        const auto& da = std::get<DrawAction>(a);
+        const auto& hand = ng.state.hands[da.player_index_v];
+        if (std::find(hand.begin(), hand.end(), da.order) != hand.end()) {
+          continue;
+        }
+      }
+      ng.handle_action(a);
+    }
+  };
+
+  for (int t = 0; t < turn && t < static_cast<int>(saved.size()); ++t) {
+    replay_turn(saved[t]);
+  }
+  ng.handle_action(new_action);
+  for (int t = turn; t < static_cast<int>(saved.size()); ++t) {
+    replay_turn(saved[t]);
+  }
+
+  // Re-fill any deck slots whose identity got lost during the replay (e.g.,
+  // our own hand drew with -1/-1 on the first pass; the saved deck still
+  // knows the true identity from the live game's perspective).
+  for (size_t o = 0;
+       o < ng.state.deck.size() && o < state.deck.size(); ++o) {
+    if (!ng.state.deck[o].id() && state.deck[o].id()) {
+      ng.state.deck[o].suit_index = state.deck[o].suit_index;
+      ng.state.deck[o].rank = state.deck[o].rank;
+    }
+  }
+
+  ng.catchup = catchup;
+  ng.notes = notes;
+  ng.rewind_depth = rewind_depth;
+  return ng;
+}
+
 // --- Simulation ------------------------------------------------------------
 
 Game Game::simulate_action(const Action& action, std::optional<Identity> draw) const {
@@ -1051,7 +1141,12 @@ PerformAction Game::take_action() const {
 
   // --- Endgame solver fork ---
   if (s.rem_score() <= static_cast<int>(s.variant->suits.size()) + 1) {
-    hanabi::endgame::EndgameSolver solver(/*mc=*/true, /*timeout=*/30.0);
+    // 6 s is enough budget for the solver to find a near-optimal action in
+    // the positions we've seen on hanab.live (the deeper search rarely
+    // changes the picked action) while keeping per-turn compute well under
+    // the server's per-turn clock allowance. The solver gracefully returns
+    // its best-found result on timeout.
+    hanabi::endgame::EndgameSolver solver(/*mc=*/true, /*timeout=*/6.0);
     auto result = solver.solve(*this);
     if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
       return result.action;

@@ -301,11 +301,12 @@ Fraction EndgameSolver::action_winrate(const Game& game, const std::vector<GameA
 std::vector<std::pair<PerformAction, Fraction>> EndgameSolver::optimize_full(
     const Game& game, const std::pair<std::vector<GameArr>, std::vector<GameArr>>& arrs,
     const std::vector<ActionEntry>& actions, int player_turn,
-    std::optional<double> deadline) {
+    std::optional<double> deadline, bool single_hypo) {
   const auto& [undrawn, drawn] = arrs;
   std::vector<std::pair<PerformAction, Fraction>> result;
+  bool stop = false;
   for (const auto& act : actions) {
-    if (past_deadline_local(deadline)) {
+    if (stop || past_deadline_local(deadline)) {
       // Fill remaining actions with 0 winrate so the caller still gets
       // a valid (sorted) list rather than hanging.
       result.emplace_back(act.first, Fraction(0));
@@ -314,6 +315,11 @@ std::vector<std::pair<PerformAction, Fraction>> EndgameSolver::optimize_full(
     const auto& arr_list = is_clue(act.first) ? undrawn : drawn;
     Fraction wr = action_winrate(game, arr_list, act, player_turn, deadline);
     result.emplace_back(act.first, wr);
+    // When only one arrangement-hypo is in play, an action that already wins
+    // 100% of the time is optimal — remaining actions can at best tie. Skip
+    // their evaluation (each call into action_winrate recurses through
+    // winnable() over all draws, so this typically saves seconds).
+    if (single_hypo && wr == Fraction(1)) stop = true;
   }
   std::sort(result.begin(), result.end(),
              [](const auto& a, const auto& b) { return a.second > b.second; });
@@ -790,8 +796,11 @@ SolveResult EndgameSolver::solve(const Game& game,
 
   if (hypos.empty()) return SolveResult{PerformPlay{0}, Fraction(0), "no hypotheses"};
   const auto& first = hypos.front();
+  // With a single hypo, optimize_full can short-circuit once it sees a
+  // winrate-1 action — the iterative cross-hypo refinement below is a no-op.
+  bool single_hypo = hypos.size() == 1;
   auto initial = optimize_full(first.game, first.game_arrs, first.actions,
-                                  state.our_player_index, deadline);
+                                  state.our_player_index, deadline, single_hypo);
   for (auto& [_, w] : initial) w = w * first.prob;
 
   // Append missing actions.

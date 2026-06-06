@@ -41,11 +41,15 @@ void elim_dc_dc(const State& prev_state, Game& game,
                  const std::vector<int>& receiver_hand,
                  int reacter, int focus_slot, int target_slot);
 
-// Top-level: handle a play/discard while a waiting reactive connection is active.
-// Mutates game with the resolved interpretation.
-void react_discard(const Game& prev, Game& game, int player_index, int order,
+// Top-level: handle a play/discard while a waiting reactive connection is
+// active. Mutates game with the resolved interpretation. Returns true if a
+// rewind (re-interpret prior clue as reactive) occurred — in that case the
+// caller must NOT do any further work on the current action, because the
+// rewind's replay already handled it end-to-end (including with_move and
+// elim); calling with_move again would double-record into move_history.
+bool react_discard(const Game& prev, Game& game, int player_index, int order,
                     const ReactorWC& wc);
-void react_play(const Game& prev, Game& game, int player_index, int order,
+bool react_play(const Game& prev, Game& game, int player_index, int order,
                  const ReactorWC& wc);
 
 }  // namespace hanabi::reactor

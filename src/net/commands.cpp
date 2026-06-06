@@ -5,6 +5,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <boost/asio/post.hpp>
+
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/options.h"
 #include "hanabi/basics/state.h"
@@ -42,7 +44,21 @@ std::string replace_all(std::string s, const std::string& from, const std::strin
 }  // namespace
 
 BotClient::BotClient(BotTransport& transport, const BotConfig& config)
-    : transport_(transport), config_(config) {}
+    : transport_(transport), config_(config) {
+  // Keep the compute io_context alive even when its queue is momentarily
+  // empty, and run it on a dedicated thread so long take_action calls don't
+  // block the network io_context.
+  compute_guard_.emplace(boost::asio::make_work_guard(compute_ioc_));
+  compute_thread_ = std::thread([this]() { compute_ioc_.run(); });
+}
+
+BotClient::~BotClient() {
+  // Let any in-flight compute drain (the result will be queue_send'd, which
+  // is a no-op once the transport's session is torn down), then stop the
+  // io_context so the worker thread can exit.
+  compute_guard_.reset();
+  if (compute_thread_.joinable()) compute_thread_.join();
+}
 
 void BotClient::handle_message(const std::string& command, const json& payload) {
   try {
@@ -71,6 +87,18 @@ void BotClient::handle_message(const std::string& command, const json& payload) 
 void BotClient::on_welcome(const json& data) {
   username_ = data.value("username", "");
   std::cerr << "welcomed as \"" << username_ << "\"\n";
+  // Resume any in-progress games the server still seats us at (mirrors
+  // hanab.live's "Resume" button: command_table_reattend.go). Without this
+  // the server holds our seat across a reconnect but no gameAction updates
+  // flow through, so the game appears abandoned to our partner.
+  if (data.contains("playingAtTables") && data["playingAtTables"].is_array()) {
+    for (const auto& tid_json : data["playingAtTables"]) {
+      if (!tid_json.is_number_integer()) continue;
+      int tid = tid_json.get<int>();
+      std::cerr << "reattending in-progress table " << tid << "\n";
+      transport_.queue_send("tableReattend", json{{"tableID", tid}});
+    }
+  }
   if (config_.bot_to_join && *config_.bot_to_join == "create") {
     chat_create_table();
   }
@@ -115,6 +143,10 @@ void BotClient::on_chat(const json& data) {
   }
   if (cmd == "settings") {
     chat_settings(room);
+    return;
+  }
+  if (cmd == "allplays") {
+    chat_allplays(args, data, room);
     return;
   }
 
@@ -220,6 +252,7 @@ void BotClient::on_init(const json& data) {
   auto game = std::make_unique<Game>(Game::create(tid, std::move(s)));
   game->in_progress = !is_replay;
   game->catchup = true;
+  game->all_plays = all_plays_mode_;
   games_[tid] = std::move(game);
   action_time_[tid] = false;
   everyone_connected_[tid] = false;
@@ -314,17 +347,32 @@ void BotClient::maybe_take_turn(int table_id) {
   if (g.catchup || !g.in_progress || !everyone || !action_time) return;
   if (g.state.current_player_index != g.state.our_player_index) return;
 
-  PerformAction perform;
-  try {
-    perform = g.take_action();
-  } catch (const std::exception& e) {
-    std::cerr << "!! take_action failed for table " << table_id << ": " << e.what()
-              << "\n";
-    return;
-  }
-  std::cerr << "-> action " << hanabi::to_json(perform, table_id).dump() << "\n";
-  transport_.queue_send("action", hanabi::to_json(perform, table_id));
+  // Snapshot the game so the worker doesn't observe incremental mutations
+  // from the network thread (notes_, lobby chat, etc. can still arrive while
+  // we compute). Since it's our turn, no further gameAction for this table
+  // will land until we send our action, so the snapshot is exactly what
+  // a synchronous take_action would have seen.
+  Game snapshot = g;
+  // Clear action_time_ before posting so any duplicate trigger (e.g. a
+  // gameActionList that re-fires maybe_take_turn) won't post a second job.
   action_time_[table_id] = false;
+
+  boost::asio::post(compute_ioc_,
+                    [this, table_id, snapshot = std::move(snapshot)]() mutable {
+                      PerformAction perform;
+                      try {
+                        perform = snapshot.take_action();
+                      } catch (const std::exception& e) {
+                        std::cerr << "!! take_action failed for table "
+                                  << table_id << ": " << e.what() << "\n";
+                        return;
+                      }
+                      std::cerr << "-> action "
+                                << hanabi::to_json(perform, table_id).dump()
+                                << "\n";
+                      transport_.queue_send(
+                          "action", hanabi::to_json(perform, table_id));
+                    });
 }
 
 void BotClient::on_game_over(const json& data) {
@@ -482,10 +530,54 @@ void BotClient::chat_settings(const std::string& room) {
   }
   hand_size = kHandSize[num_players];
 
-  std::string msg = hanabi::reactor::format_reactive_settings(*variant, hand_size);
+  // Prefer the active game's flag (so the report matches what the bot is
+  // actually doing at this table). Fall back to the bot-wide setting if no
+  // game exists for this table yet (e.g., between init events).
+  bool all_plays = all_plays_mode_;
+  auto game_it = games_.find(*tid);
+  if (game_it != games_.end() && game_it->second) all_plays = game_it->second->all_plays;
+
+  std::string msg = hanabi::reactor::format_reactive_settings(*variant, hand_size, all_plays);
   transport_.queue_send(
       "chat",
       json{{"msg", msg}, {"recipient", ""}, {"room", "table" + std::to_string(*tid)}});
+}
+
+void BotClient::chat_allplays(const std::vector<std::string>& args, const json& data,
+                                  const std::string& room) {
+  std::string sender = data.value("who", "");
+  bool in_pm = data.value("recipient", "") == username_;
+
+  auto reply = [&](const std::string& text) {
+    if (in_pm) {
+      chat_reply(text, sender);
+    } else {
+      transport_.queue_send(
+          "chat", json{{"msg", text}, {"recipient", ""}, {"room", room}});
+    }
+  };
+
+  if (args.size() < 2) {
+    reply(std::string("allplays is ") + (all_plays_mode_ ? "on" : "off"));
+    return;
+  }
+  const std::string& arg = args[1];
+  bool turning_on;
+  if (arg == "on" || arg == "true" || arg == "1") {
+    turning_on = true;
+  } else if (arg == "off" || arg == "false" || arg == "0") {
+    turning_on = false;
+  } else {
+    reply("usage: /allplays on|off");
+    return;
+  }
+
+  all_plays_mode_ = turning_on;
+  for (auto& [tid, game] : games_) {
+    if (game) game->all_plays = turning_on;
+    (void)tid;
+  }
+  reply(std::string("allplays is now ") + (turning_on ? "on" : "off"));
 }
 
 }  // namespace hanabi::net

@@ -20,6 +20,10 @@ inline constexpr std::array<const char*, 6> kVanillaOrder = {
 std::vector<int> reactive_value_table(const Variant& variant, int hand_size);
 
 // Format the variant's reactive-clue table for the /settings chat command.
-std::string format_reactive_settings(const Variant& variant, int hand_size);
+// When all_plays is true, both color and rank clues are interpreted as
+// play+play; the output collapses to a single "even plays:" line that
+// concatenates the rank and color slot mappings.
+std::string format_reactive_settings(const Variant& variant, int hand_size,
+                                       bool all_plays = false);
 
 }  // namespace hanabi::reactor

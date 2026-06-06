@@ -15,9 +15,13 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
+#include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
 #include <nlohmann/json.hpp>
 
 #include "hanabi/basics/game.h"
@@ -29,6 +33,7 @@ namespace hanabi::net {
 class BotClient {
  public:
   BotClient(BotTransport& transport, const BotConfig& config);
+  ~BotClient();
 
   // Top-level dispatcher: routes a decoded message to the appropriate handler.
   void handle_message(const std::string& command, const nlohmann::json& payload);
@@ -52,6 +57,25 @@ class BotClient {
   // game.notes). compute_note_segments returns deltas; we append to the
   // full string here and re-send it on each change.
   std::unordered_map<int, std::unordered_map<int, std::string>> notes_;
+
+  // Reactor /allplays toggle. Defaults to false (standard convention). When
+  // set via "/allplays on" in chat, propagated into every active Game's
+  // all_plays field; new games inherit it at on_init.
+  bool all_plays_mode_ = false;
+
+  // Dedicated compute thread for take_action. Without this, the long-running
+  // endgame solver blocks the network io_context (held by BotTransport), the
+  // server's WS heartbeat goes unanswered, and the connection is closed (the
+  // "ws recv error: End of file" we'd see whenever the solver ran > ~PongWait
+  // seconds). The compute thread takes a snapshot of the Game, runs
+  // take_action on it, and uses transport_.queue_send (already thread-safe)
+  // to send the result. Re-entry is gated by action_time_ — we clear it
+  // before posting and the next TurnAction reasserts it once we've acted.
+  boost::asio::io_context compute_ioc_;
+  std::optional<boost::asio::executor_work_guard<
+      boost::asio::io_context::executor_type>>
+      compute_guard_;
+  std::thread compute_thread_;
 
   // --- Inbound handlers ---
   void on_welcome(const nlohmann::json& data);
@@ -82,6 +106,8 @@ class BotClient {
   void chat_terminate(std::optional<int> table_id);
   void chat_leaveall(const std::string& room);
   void chat_settings(const std::string& room);
+  void chat_allplays(const std::vector<std::string>& args, const nlohmann::json& data,
+                       const std::string& room);
 
   // Helper: for commands that work from PM or a table room, pick the target table.
   std::optional<int> resolve_target_table(const std::string& room) const;

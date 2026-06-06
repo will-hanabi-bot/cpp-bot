@@ -62,7 +62,16 @@ inline void apply_orig_action(Game& g, const OrigAction& action,
     int my_order = ctx.orig_to_my_order[orig_order];
     auto [suit, rank] = ctx.deck[orig_order];
     if (action.type == 0) {
-      g.handle_action(PlayAction{pi, my_order, suit, rank});
+      // The hanab.live export records misplays as "play actions" too; the
+      // server detects the failure from deck identity vs play_stack. Mirror
+      // that here so play_stacks don't get regressed by an unconditional
+      // PlayAction.
+      bool playable = g.state.play_stacks[suit] + 1 == rank;
+      if (playable) {
+        g.handle_action(PlayAction{pi, my_order, suit, rank});
+      } else {
+        g.handle_action(DiscardAction{pi, my_order, suit, rank, /*failed=*/true});
+      }
     } else {
       g.handle_action(DiscardAction{pi, my_order, suit, rank, false});
     }

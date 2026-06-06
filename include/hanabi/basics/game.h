@@ -51,6 +51,10 @@ struct ReactorWC {
   int focus_slot = 0;
   bool inverted = false;
   int turn = 0;
+  // Snapshot of Game::all_plays at the time the WC was created. When true,
+  // the reaction (play or discard by the reacter) is interpreted as
+  // play+play regardless of clue.kind — see interpret_reaction.cpp.
+  bool all_plays = false;
 
   bool operator==(const ReactorWC&) const = default;
 };
@@ -86,6 +90,11 @@ class Game {
   int rewind_depth = 0;
   bool in_progress = true;
   bool good_touch = false;
+  // Reactor /allplays toggle. When true, every reactive clue (color or rank)
+  // is interpreted as play+play; both the receiver and the reacter end up
+  // CALLED_TO_PLAY. When false (default), color clues are play+dc and rank
+  // clues are play+play (standard Reactor convention).
+  bool all_plays = false;
 
   // Reactor-specific (used in Phase 4).
   std::vector<ReactorWC> waiting;
@@ -125,6 +134,14 @@ class Game {
 
   // Top-level dispatcher. Mutates self.
   void handle_action(const Action& action);
+
+  // Reset state to `base`, then replay action_list with `new_action`
+  // inserted at the start of turn `turn`. Used by the convention layer to
+  // re-interpret an earlier clue when a reaction event reveals the prior
+  // stable interpretation was wrong (port of Python's Game.rewind).
+  // `new_action` is typically an InterpAction(ClueInterp::REACTIVE) which
+  // forces the next clue handler to take the reactive path.
+  Game rewind(int turn, const Action& new_action) const;
 
   // --- Empathy elimination (real impl in Phase 2b once player_elim lands) ---
   // For now this is a stub that just clears `dirty` so things compile.

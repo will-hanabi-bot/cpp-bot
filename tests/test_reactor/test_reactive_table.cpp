@@ -5,6 +5,7 @@
 #include "hanabi/conventions/reactor/reactive_table.h"
 
 using namespace hanabi;
+using hanabi::reactor::format_reactive_settings;
 using hanabi::reactor::reactive_value_table;
 
 namespace {
@@ -62,4 +63,59 @@ TEST(ReactiveTable, FourPlayerHandSizeMod) {
 TEST(ReactiveTable, FourPlayerSpecialsWrapToOne) {
   Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Pink"}, "t6");
   EXPECT_EQ(reactive_value_table(v, 4), (std::vector<int>{1, 2, 3, 4, 1}));
+}
+
+// --- format_reactive_settings: /allplays on/off output --------------------
+
+TEST(ReactiveTableSettings, VanillaOff) {
+  Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Purple"}, "tv");
+  EXPECT_EQ(format_reactive_settings(v, 5, /*all_plays=*/false),
+             "odd plays: {slot focus}, even plays: {slot focus}");
+}
+
+TEST(ReactiveTableSettings, VanillaOnCollapsed) {
+  Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Purple"}, "tv2");
+  // Both halves are {slot focus} → collapse to one.
+  EXPECT_EQ(format_reactive_settings(v, 5, /*all_plays=*/true),
+             "even plays: {slot focus}");
+}
+
+TEST(ReactiveTableSettings, RainbowyOff) {
+  Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Purple"}, "tr1");
+  v.rainbow_s = true;
+  EXPECT_EQ(format_reactive_settings(v, 5, /*all_plays=*/false),
+             "odd plays: {r, y, g, b, p}, even plays: {slot focus}");
+}
+
+TEST(ReactiveTableSettings, RainbowyOnCombined) {
+  Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Purple"}, "tr2");
+  v.rainbow_s = true;
+  EXPECT_EQ(format_reactive_settings(v, 5, /*all_plays=*/true),
+             "even plays: {slot focus} + {r, y, g, b, p}");
+}
+
+TEST(ReactiveTableSettings, PinkishOff) {
+  // Special rank 3 is blocked under a pinkish flag → that rank renders as '-'.
+  Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Purple"}, "tp1");
+  v.pink_s = true;
+  v.special_rank = 3;
+  EXPECT_EQ(format_reactive_settings(v, 5, /*all_plays=*/false),
+             "odd plays: {slot focus}, even plays: {1, 2, -, 4, 5}");
+}
+
+TEST(ReactiveTableSettings, PinkishOnCombined) {
+  Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Purple"}, "tp2");
+  v.pink_s = true;
+  v.special_rank = 3;
+  EXPECT_EQ(format_reactive_settings(v, 5, /*all_plays=*/true),
+             "even plays: {1, 2, -, 4, 5} + {slot focus}");
+}
+
+TEST(ReactiveTableSettings, RainbowAndPinkishOn) {
+  Variant v = make_variant({"Red", "Yellow", "Green", "Blue", "Purple"}, "trp");
+  v.rainbow_s = true;
+  v.pink_s = true;
+  v.special_rank = 3;
+  EXPECT_EQ(format_reactive_settings(v, 5, /*all_plays=*/true),
+             "even plays: {1, 2, -, 4, 5} + {r, y, g, b, p}");
 }

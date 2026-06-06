@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "hanabi/basics/action.h"
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/clue.h"
 #include "hanabi/basics/interp.h"
@@ -82,12 +83,19 @@ void target_i_play(const Game& /*prev*/, Game& game, const ReactorWC& wc,
     }
   }
   IdentitySet new_inferred = game.common.thoughts[order].inferred.intersect(self_playables);
+  // If the intersection is empty there's no identity we can plausibly call
+  // playable here (the convention's earlier narrowing of `inferred` —
+  // typically via an info_lock left over from an older target_play — has
+  // no overlap with the current playable_set). Setting CALLED_TO_PLAY in
+  // that state is unsafe: the next update_turn would immediately reset
+  // it (common.inferred ∩ playable_set is empty), producing a stale
+  // "[f] ... | [reset]" pair in the note diff. Leave the card alone.
+  if (new_inferred.is_empty()) return;
   game.with_thought(order, [&](const Thought& t) {
     Thought out = t;
     out.old_inferred = t.inferred;
     out.inferred = new_inferred;
-    out.info_lock = new_inferred.non_empty() ? std::optional<IdentitySet>{new_inferred}
-                                                : std::nullopt;
+    out.info_lock = std::optional<IdentitySet>{new_inferred};
     return out;
   });
   int turn = state.turn_count;
@@ -236,11 +244,11 @@ void elim_dc_dc(const State& prev_state, Game& game,
 
 // --- react_discard / react_play -----------------------------------------
 
-void react_discard(const Game& prev, Game& game, int player_index, int order,
+bool react_discard(const Game& prev, Game& game, int player_index, int order,
                     const ReactorWC& wc) {
   if (player_index != wc.reacter) {
     game.with_move(DiscardInterp::NONE);
-    return;
+    return false;
   }
 
   if (wc.inverted) {
@@ -260,22 +268,39 @@ void react_discard(const Game& prev, Game& game, int player_index, int order,
       }
     }
     if (unnatural) {
-      // The Python tries to game.rewind() here to replay with REACTIVE.
-      // rewind isn't ported yet - fall through to "no interpretation".
+      // The reacter's discard does not match what a stable interpretation
+      // of the previous clue predicted — rewind and re-interpret that clue
+      // as reactive. If the rewind succeeds, the replayed game has already
+      // processed the current discard end-to-end (with_move + elim included)
+      // so we must NOT call with_move again here.
+      try {
+        Game rewound =
+            game.rewind(wc.turn, InterpAction{ClueInterp::REACTIVE});
+        game = std::move(rewound);
+        return true;
+      } catch (const std::exception&) {
+        // Rewind couldn't proceed (depth limit, etc.); leave game alone.
+      }
       game.with_move(DiscardInterp::NONE);
-      return;
+      return false;
     }
     game.with_move(DiscardInterp::NONE);
-    return;
+    return false;
   }
 
   auto slots = calc_target_slot(prev, game, order, wc);
   if (!slots) {
     game.with_move(DiscardInterp::NONE);
-    return;
+    return false;
   }
   auto [react_slot, target_slot] = *slots;
   (void)react_slot;
+  if (wc.all_plays) {
+    // /allplays on set up a play+play expectation; the reacter discarding
+    // instead is a convention deviation. Don't apply any further marks.
+    game.with_move(DiscardInterp::NONE);
+    return false;
+  }
   if (wc.clue.kind == ClueKind::COLOUR) {
     target_i_play(prev, game, wc, target_slot);
     elim_dc_play(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
@@ -284,11 +309,12 @@ void react_discard(const Game& prev, Game& game, int player_index, int order,
     elim_dc_dc(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   }
   game.with_move(DiscardInterp::NONE);
+  return false;
 }
 
-void react_play(const Game& prev, Game& game, int player_index, int order,
+bool react_play(const Game& prev, Game& game, int player_index, int order,
                  const ReactorWC& wc) {
-  if (player_index != wc.reacter) return;
+  if (player_index != wc.reacter) return false;
 
   if (wc.inverted) {
     auto known_playables = prev.common.obvious_playables(prev, wc.reacter);
@@ -297,22 +323,39 @@ void react_play(const Game& prev, Game& game, int player_index, int order,
     }
     bool ok = std::find(known_playables.begin(), known_playables.end(), order) !=
               known_playables.end();
-    (void)ok;
-    // rewind not ported; just continue.
-    return;
+    if (!ok) {
+      // The reacter played an unexpected card (one we hadn't already
+      // identified as a known play). Under response-inversion, that's the
+      // signal that the prior clue should be interpreted reactively rather
+      // than stably — rewind to that turn and re-interpret. On success the
+      // replay already handled the current play, so signal the caller to
+      // skip its remaining post-react work (with_move, elim).
+      try {
+        Game rewound =
+            game.rewind(wc.turn, InterpAction{ClueInterp::REACTIVE});
+        game = std::move(rewound);
+        return true;
+      } catch (const std::exception&) {
+        // Depth limit or other failure: keep the stable interpretation.
+      }
+    }
+    return false;
   }
 
   auto slots = calc_target_slot(prev, game, order, wc);
-  if (!slots) return;
+  if (!slots) return false;
   auto [react_slot, target_slot] = *slots;
   (void)react_slot;
-  if (wc.clue.kind == ClueKind::RANK) {
+  // /allplays promotes COLOR reactives to play+play, matching the standard
+  // RANK behavior (target_i_play + elim_play_play).
+  if (wc.all_plays || wc.clue.kind == ClueKind::RANK) {
     target_i_play(prev, game, wc, target_slot);
     elim_play_play(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   } else {
     target_i_discard(prev, game, wc, target_slot);
     elim_play_dc(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   }
+  return false;
 }
 
 }  // namespace hanabi::reactor
