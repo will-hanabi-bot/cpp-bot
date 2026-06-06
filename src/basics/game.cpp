@@ -1211,6 +1211,23 @@ PerformAction Game::take_action() const {
       }
       if (!same_focused_dup) playable_orders.push_back(order);
     }
+    // Queue-order honoring: when several plays sit in the queue,
+    // prefer the ones whose inferred identity is a *definite* singleton
+    // playable on the current play stacks. Otherwise the bot can pick an
+    // ambiguous CTP card ahead of an empathy-locked prerequisite (e.g. a
+    // reactive-pushed slot inferred as {b2, n3} ranked ahead of the
+    // already-empathy-known b2 sitting in a later slot — playing the
+    // ambiguous one risks misplaying b3 onto a blue stack still at 1).
+    if (playable_orders.size() > 1) {
+      std::vector<int> definite;
+      for (int o : playable_orders) {
+        auto id = m.thoughts[o].id(/*infer=*/true);
+        if (id && s.is_playable(*id)) definite.push_back(o);
+      }
+      if (!definite.empty() && definite.size() < playable_orders.size()) {
+        playable_orders = std::move(definite);
+      }
+    }
   } else {
     playable_orders = m.thinks_playables(*this, s.our_player_index);
   }

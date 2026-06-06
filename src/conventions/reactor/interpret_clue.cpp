@@ -35,6 +35,53 @@ bool contains(const std::vector<int>& v, int x) {
   return std::find(v.begin(), v.end(), x) != v.end();
 }
 
+// Pink-promise: in a pinkish variant a rank clue that touches the receiver's
+// chop (rightmost unclued card) promises that the chop has that rank. Two
+// substitutions apply when the natural rank clue for the special rank is
+// unavailable (pink_s makes rank-K clue not touch rank-K cards):
+//   pink_s + special_rank=5: rank-4 promises rank-5
+//   pink_s + special_rank=1: rank-2 promises rank-1
+// Returns true when the giver can see that the chop's rank cannot satisfy
+// the promise — i.e., the clue is illegal.
+bool violates_pink_promise(const Game& prev, const ClueAction& action) {
+  if (action.clue.kind != ClueKind::RANK) return false;
+
+  const State& state = prev.state;
+  const Variant& v = *state.variant;
+
+  bool pinkish = v.pink_s;
+  for (const Suit& s : v.suits) {
+    if (s.suit_type.pinkish) { pinkish = true; break; }
+  }
+  if (!pinkish) return false;
+
+  // Chop = rightmost (oldest, last vector index) unclued card before the
+  // clue lands.
+  std::optional<int> chop;
+  for (auto it = state.hands[action.target].rbegin();
+        it != state.hands[action.target].rend(); ++it) {
+    if (!state.deck[*it].clued) { chop = *it; break; }
+  }
+  if (!chop) return false;
+
+  // Promise only applies when the chop itself is touched.
+  if (!contains(action.list_, *chop)) return false;
+
+  // Promised ranks (set, to handle pink_s substitutions where a clue can
+  // legitimately call either the spoken rank or the special rank).
+  std::vector<int> promised{action.clue.value};
+  if (v.pink_s && v.special_rank) {
+    int sr = *v.special_rank;
+    if (sr == 5 && action.clue.value == 4) promised.push_back(5);
+    else if (sr == 1 && action.clue.value == 2) promised.push_back(1);
+  }
+
+  auto chop_id = state.deck[*chop].id();
+  if (!chop_id) return false;  // observer's own hand — can't verify
+  return std::find(promised.begin(), promised.end(), chop_id->rank) ==
+         promised.end();
+}
+
 }  // namespace
 
 // --- _reactive_focus -----------------------------------------------------
@@ -372,6 +419,15 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
   std::vector<int> newly_touched;
   for (int o : list_) {
     if (!prev.state.deck[o].clued) newly_touched.push_back(o);
+  }
+
+  // Pink-promise gate: in pinkish variants a rank clue that newly touches
+  // the chop "promises" the chop's rank. If we can see the chop and it
+  // doesn't match, the clue is illegal — short-circuit to MISTAKE before
+  // running any of the trash_push / playable_rank / ref_play / ref_discard
+  // branches (each of which would otherwise stamp a partial interpretation).
+  if (!newly_touched.empty() && violates_pink_promise(prev, action)) {
+    return std::nullopt;
   }
 
   if (clue.kind == ClueKind::RANK && !newly_touched.empty()) {
