@@ -112,6 +112,108 @@ TEST(Game, FailedDiscardIncrementsStrikes) {
   EXPECT_EQ(g.state.strikes, 1);
 }
 
+// Boundary parser tests: hanab.live's server reports actions outcome-
+// oriented, but the engine's `on_play`/`on_discard` are button-oriented and
+// invert play↔discard for inverted (Orange / Dark Orange) suits. The
+// `orient_action_for_engine` helper bridges the two. Smoke-test the
+// end-to-end flow so a future re-introduction of the parser bug is caught.
+
+namespace {
+
+Game make_three_player_orange_game() {
+  const Variant& v = get_variant("Orange (3 Suits)");
+  TableOptions opts;
+  opts.num_players = 3;
+  opts.variant_name = "Orange (3 Suits)";
+  State s = State::create({"Alice", "Bob", "Cathy"}, /*our_player_index=*/0, v,
+                            std::move(opts));
+  return Game::create(/*table_id=*/0, std::move(s));
+}
+
+void deal_orange_starting_hands(Game& g) {
+  // Deal 15 cards so each player has 5; only the orange cards matter for
+  // the assertions below.
+  int order = 0;
+  for (int p = 0; p < 3; ++p) {
+    for (int slot = 0; slot < 5; ++slot) {
+      // Alice (p=0) holds orange-1 at slot 0 (newest) and orange-2 at
+      // slot 1; rest are filler red.
+      Identity id =
+          (p == 0 && slot == 0) ? Identity(2, 1)
+          : (p == 0 && slot == 1) ? Identity(2, 2)
+          : Identity(0, 1);
+      g.handle_action(DrawAction{p, order, id.suit_index, id.rank});
+      ++order;
+    }
+  }
+}
+
+}  // namespace
+
+TEST(OrangeBoundary, OutcomeOrientedPlayAdvancesOrangeStack) {
+  Game g = make_three_player_orange_game();
+  deal_orange_starting_hands(g);
+  // Server says "play" on Alice's orange-1: outcome=play stack. The helper
+  // converts to DiscardAction(failed=false); the engine's on_discard for
+  // an inverted suit advances the stack.
+  const int order = g.state.hands[0][3];  // orange-1 at hand index 3 (slot 4 after deal)
+  // Actually deal order: round 0: p0=0, p1=1, p2=2; round 1: 3,4,5; ...
+  // p0 cards: orders 0,3,6,9,12. Most-recent-first: [12,9,6,3,0]. orange-1
+  // is at the order-0 slot (the OLDEST one, slot 5). hands[0][4] = order 0.
+  (void)order;
+  const int orange1_order = g.state.hands[0][4];
+  ASSERT_EQ(g.state.deck[orange1_order].suit_index, 2);
+  ASSERT_EQ(g.state.deck[orange1_order].rank, 1);
+
+  Action act = PlayAction{0, orange1_order, 2, 1};
+  act = orient_action_for_engine(std::move(act), *g.state.variant);
+  g.handle_action(act);
+
+  // Orange stack advanced; orange-1 is on the play stack (not discard pile).
+  EXPECT_EQ(g.state.play_stacks[2], 1);
+  EXPECT_TRUE(g.state.discard_stacks[2][0].empty());
+}
+
+TEST(OrangeBoundary, OutcomeOrientedDiscardCleanGoesToDiscardPile) {
+  Game g = make_three_player_orange_game();
+  deal_orange_starting_hands(g);
+  g.state.clue_tokens = 5;
+  // Server says "discard" failed=false on Alice's orange-2: outcome=discard
+  // pile (clean — a voluntary loss). The helper converts to PlayAction;
+  // engine's on_play for an inverted suit sends to discard pile + regains
+  // a clue.
+  // p0 cards by order: 0=o1, 3=o2, 6=r1, 9=r1, 12=r1. orange-2 is order 3.
+  const int orange2_order = g.state.hands[0][3];
+  ASSERT_EQ(g.state.deck[orange2_order].suit_index, 2);
+  ASSERT_EQ(g.state.deck[orange2_order].rank, 2);
+
+  Action act = DiscardAction{0, orange2_order, 2, 2, /*failed=*/false};
+  act = orient_action_for_engine(std::move(act), *g.state.variant);
+  g.handle_action(act);
+
+  // Orange stack stayed at 0, card in discard pile, +1 clue, no strike.
+  EXPECT_EQ(g.state.play_stacks[2], 0);
+  EXPECT_FALSE(g.state.discard_stacks[2][1].empty());
+  EXPECT_EQ(g.state.clue_tokens, 6);
+  EXPECT_EQ(g.state.strikes, 0);
+}
+
+TEST(OrangeBoundary, OutcomeOrientedDiscardFailedStillStrikes) {
+  Game g = make_three_player_orange_game();
+  deal_orange_starting_hands(g);
+  // Server says "discard" failed=true on Alice's orange-2 (orange stack=0,
+  // so o2 isn't playable). The helper leaves DiscardAction(failed=true)
+  // alone; engine's on_discard inverts to a misplay strike.
+  const int orange2_order = g.state.hands[0][3];
+
+  Action act = DiscardAction{0, orange2_order, 2, 2, /*failed=*/true};
+  act = orient_action_for_engine(std::move(act), *g.state.variant);
+  g.handle_action(act);
+
+  EXPECT_EQ(g.state.strikes, 1);
+  EXPECT_EQ(g.state.play_stacks[2], 0);
+}
+
 TEST(Game, ClueActionMarksTouchedAndDecrementsTokens) {
   Game g = make_three_player_game();
   std::vector<Identity> deck;

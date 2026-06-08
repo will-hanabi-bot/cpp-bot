@@ -212,6 +212,111 @@ TEST(Variants, MuddyRainbowBrownishAndRainbowish) {
   }
 }
 
+// --- Funnels ---
+
+TEST(Variants, FunnelsFlagParsed) {
+  const Variant& v = get_variant("Funnels (5 Suits)");
+  EXPECT_TRUE(v.funnels);
+  EXPECT_FALSE(v.chimneys);
+}
+
+TEST(Variants, FunnelsNormalSuitTouchesRankLeqClueValue) {
+  // Funnels: rank-K clue touches all ranks ≤ K in non-pinkish, non-brownish
+  // suits.
+  const Variant& v = get_variant("Funnels (5 Suits)");
+  for (int clue_rank = 1; clue_rank <= 5; ++clue_rank) {
+    for (int actual_rank = 1; actual_rank <= 5; ++actual_rank) {
+      bool expected = actual_rank <= clue_rank;
+      EXPECT_EQ(v.id_touched(Identity(0, actual_rank), ClueKind::RANK, clue_rank),
+                expected)
+          << "Funnels rank-" << clue_rank << " on rank-" << actual_rank;
+    }
+  }
+}
+
+TEST(Variants, FunnelsColourClueUnchanged) {
+  // Funnels affects only rank clues. Colour clues still touch a single suit.
+  const Variant& v = get_variant("Funnels (5 Suits)");
+  for (int rank = 1; rank <= 5; ++rank) {
+    EXPECT_TRUE(v.id_touched(Identity(0, rank), ClueKind::COLOUR, 0));
+    EXPECT_FALSE(v.id_touched(Identity(1, rank), ClueKind::COLOUR, 0));
+  }
+}
+
+TEST(Variants, FunnelsPinkSuitKeepsPinkishRule) {
+  // In "Funnels & Pink (5 Suits)" the Pink suit is still touched by every
+  // rank clue (pinkish rule wins; funnels rule applies to other suits).
+  const Variant& v = get_variant("Funnels & Pink (5 Suits)");
+  const int pink_index = 4;
+  for (int clue_rank = 1; clue_rank <= 5; ++clue_rank) {
+    for (int actual_rank = 1; actual_rank <= 5; ++actual_rank) {
+      EXPECT_TRUE(v.id_touched(Identity(pink_index, actual_rank), ClueKind::RANK,
+                                clue_rank));
+    }
+  }
+  // Normal suit still follows the funnels rule.
+  for (int clue_rank = 1; clue_rank <= 5; ++clue_rank) {
+    for (int actual_rank = 1; actual_rank <= 5; ++actual_rank) {
+      bool expected = actual_rank <= clue_rank;
+      EXPECT_EQ(v.id_touched(Identity(0, actual_rank), ClueKind::RANK, clue_rank),
+                expected);
+    }
+  }
+}
+
+TEST(Variants, FunnelsBrownSuitKeepsBrownishRule) {
+  // In "Funnels & Brown (5 Suits)" the Brown suit is never touched by any
+  // rank clue (brownish rule wins; funnels rule applies to other suits).
+  const Variant& v = get_variant("Funnels & Brown (5 Suits)");
+  const int brown_index = 4;
+  for (int clue_rank = 1; clue_rank <= 5; ++clue_rank) {
+    for (int actual_rank = 1; actual_rank <= 5; ++actual_rank) {
+      EXPECT_FALSE(v.id_touched(Identity(brown_index, actual_rank), ClueKind::RANK,
+                                 clue_rank));
+    }
+  }
+}
+
+// --- Chimneys ---
+
+TEST(Variants, ChimneysFlagParsed) {
+  const Variant& v = get_variant("Chimneys (5 Suits)");
+  EXPECT_FALSE(v.funnels);
+  EXPECT_TRUE(v.chimneys);
+}
+
+TEST(Variants, ChimneysNormalSuitTouchesRankGeqClueValue) {
+  // Chimneys: rank-K clue touches all ranks ≥ K in non-pinkish, non-brownish
+  // suits.
+  const Variant& v = get_variant("Chimneys (5 Suits)");
+  for (int clue_rank = 1; clue_rank <= 5; ++clue_rank) {
+    for (int actual_rank = 1; actual_rank <= 5; ++actual_rank) {
+      bool expected = actual_rank >= clue_rank;
+      EXPECT_EQ(v.id_touched(Identity(0, actual_rank), ClueKind::RANK, clue_rank),
+                expected)
+          << "Chimneys rank-" << clue_rank << " on rank-" << actual_rank;
+    }
+  }
+}
+
+TEST(Variants, ChimneysPinkSuitKeepsPinkishRule) {
+  const Variant& v = get_variant("Chimneys & Pink (5 Suits)");
+  const int pink_index = 4;
+  for (int clue_rank = 1; clue_rank <= 5; ++clue_rank) {
+    for (int actual_rank = 1; actual_rank <= 5; ++actual_rank) {
+      EXPECT_TRUE(v.id_touched(Identity(pink_index, actual_rank), ClueKind::RANK,
+                                clue_rank));
+    }
+  }
+  for (int clue_rank = 1; clue_rank <= 5; ++clue_rank) {
+    for (int actual_rank = 1; actual_rank <= 5; ++actual_rank) {
+      bool expected = actual_rank >= clue_rank;
+      EXPECT_EQ(v.id_touched(Identity(0, actual_rank), ClueKind::RANK, clue_rank),
+                expected);
+    }
+  }
+}
+
 // --- Dark Rainbow ---
 
 TEST(Variants, DarkRainbowDarkAndRainbowish) {

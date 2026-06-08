@@ -18,6 +18,22 @@ namespace {
 // Forward declarations.
 double force_clue_inner(const Game& orig, const Game& game, int offset);
 
+bool identity_called_to_play_elsewhere(const Game& game, Identity id,
+                                       int exclude_order) {
+  const State& s = game.state;
+  for (const auto& hand : s.hands) {
+    for (int o : hand) {
+      if (o == exclude_order) continue;
+      if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      auto cid = game.me().thoughts[o].id(/*infer=*/true);
+      if (cid && *cid == id) return true;
+      auto did = s.deck[o].id();
+      if (did && *did == id) return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 // --- get_result ----------------------------------------------------------
@@ -136,6 +152,23 @@ double get_result(const Game& game, const Game& hypo, const ClueAction& action) 
 
 namespace {
 
+// Build a DiscardAction for a known order in advance()'s simulation. For
+// inverted (Orange / Dark Orange) suits the engine's `on_discard` runs the
+// orange game-rule: failed=false advances the stack (via `with_play`),
+// failed=true strikes. If we hard-code `failed=false` for non-playable
+// inverted cards, `with_play` jumps the play stack to the (non-playable)
+// rank — corrupting the simulated state. So inverted + !playable must
+// use failed=true.
+DiscardAction make_discard_for_simulation(const State& state, int player_index,
+                                            int order) {
+  auto id = state.deck[order].id();
+  if (!id) return DiscardAction{player_index, order, -1, -1, /*failed=*/false};
+  bool inverted = state.variant->suits[id->suit_index].suit_type.inverted;
+  bool playable = state.is_playable(*id);
+  bool failed = inverted && !playable;
+  return DiscardAction{player_index, order, id->suit_index, id->rank, failed};
+}
+
 double force_clue_inner(const Game& orig, const Game& game, int offset) {
   const State& state = game.state;
   int giver = (state.our_player_index + offset) % state.num_players;
@@ -232,10 +265,7 @@ double advance(const Game& orig, const Game& game, int offset) {
   if (player.obvious_locked(game, player_index)) {
     if (!state.can_clue()) {
       int locked_dc = player.locked_discard(state, player_index);
-      auto id = state.deck[locked_dc].id();
-      Action act = id ? Action{DiscardAction{player_index, locked_dc, id->suit_index,
-                                                id->rank, false}}
-                       : Action{DiscardAction{player_index, locked_dc, -1, -1, false}};
+      Action act{make_discard_for_simulation(state, player_index, locked_dc)};
       return advance(orig, game.simulate(act), offset + 1);
     }
     return force_clue_inner(orig, game, offset);
@@ -244,18 +274,12 @@ double advance(const Game& orig, const Game& game, int offset) {
   if (state.clue_tokens == 8) return force_clue_inner(orig, game, offset);
 
   if (urgent_dc) {
-    auto id = state.deck[*urgent_dc].id();
-    Action act = id ? Action{DiscardAction{player_index, *urgent_dc, id->suit_index,
-                                              id->rank, false}}
-                     : Action{DiscardAction{player_index, *urgent_dc, -1, -1, false}};
+    Action act{make_discard_for_simulation(state, player_index, *urgent_dc)};
     return advance(orig, game.simulate(act), offset + 1);
   }
 
   auto try_discard = [&](int order) {
-    auto id = state.deck[order].id();
-    Action act = id ? Action{DiscardAction{player_index, order, id->suit_index,
-                                              id->rank, false}}
-                     : Action{DiscardAction{player_index, order, -1, -1, false}};
+    Action act{make_discard_for_simulation(state, player_index, order)};
     double dc_value = advance(orig, game.simulate(act), offset + 1);
     if (state.clue_tokens < 2) return dc_value;
     double clue_value = force_clue_inner(orig, game, offset);
@@ -356,6 +380,20 @@ double eval_action(const Game& game, const Action& action) {
     else if (chop && *chop == da.order) value = -0.25;
     else if (!id) value = -1.5;
     else value = -0.5;
+
+    if (!game.in_endgame()) {
+      const Player& m = game.me();
+      for (int o : m.obvious_playables(game, state.our_player_index)) {
+        // If this discard IS the play (inverted-suit game-rule), don't
+        // penalize — PerformDiscard{o} dispatches the play onto the stack.
+        if (o == da.order) continue;
+        auto pid = m.thoughts[o].id(/*infer=*/true);
+        if (!pid || !state.is_playable(*pid)) continue;
+        if (identity_called_to_play_elsewhere(game, *pid, o)) continue;
+        value -= 10.0;
+        break;
+      }
+    }
   }
 
   if (value == -100.0) return -100.0;

@@ -13,6 +13,7 @@
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/reactive_table.h"
 #include "hanabi/net/notes.h"
+#include "hanabi/version.h"
 
 namespace hanabi::net {
 
@@ -149,6 +150,10 @@ void BotClient::on_chat(const json& data) {
     chat_allplays(args, data, room);
     return;
   }
+  if (cmd == "getversion") {
+    chat_version(data, room);
+    return;
+  }
 
   // Remaining commands are PM-only (matches Python).
   if (!in_pm) return;
@@ -279,6 +284,15 @@ void BotClient::on_game_action_list(const json& data) {
     g.catchup = false;
     bool our_turn = g.state.current_player_index == g.state.our_player_index;
     action_time_[tid] = our_turn;
+    // Publish the bot's build version as the first note on card order 0
+    // so observers can verify which build is running. Seed notes_ too so
+    // subsequent convention-driven notes get prepended onto this string.
+    if (g.in_progress) {
+      std::string version_note = std::string("bot ") + kBotVersion;
+      notes_[tid][0] = version_note;
+      transport_.queue_send(
+          "note", json{{"tableID", tid}, {"order", 0}, {"note", version_note}});
+    }
   }
   transport_.queue_send("loaded", json{{"tableID", tid}});
   maybe_take_turn(tid);
@@ -305,6 +319,11 @@ void BotClient::apply_action(int table_id, const json& raw_action) {
   if (it == games_.end()) return;
   auto act = action_from_json(raw_action);
   if (!act) return;
+  // The server reports actions outcome-oriented (e.g. orange-discard-on-
+  // playable comes through as "play"). The engine's `on_play`/`on_discard`
+  // are button-oriented, so for inverted suits we have to flip the action
+  // type before dispatch.
+  act = orient_action_for_engine(*act, *it->second->state.variant);
   Game prev = *it->second;
   try {
     it->second->handle_action(*act);
@@ -578,6 +597,18 @@ void BotClient::chat_allplays(const std::vector<std::string>& args, const json& 
     (void)tid;
   }
   reply(std::string("allplays is now ") + (turning_on ? "on" : "off"));
+}
+
+void BotClient::chat_version(const json& data, const std::string& room) {
+  std::string sender = data.value("who", "");
+  bool in_pm = data.value("recipient", "") == username_;
+  std::string text = username_ + ": " + kBotVersion;
+  if (in_pm) {
+    chat_reply(text, sender);
+  } else {
+    transport_.queue_send(
+        "chat", json{{"msg", text}, {"recipient", ""}, {"room", room}});
+  }
 }
 
 }  // namespace hanabi::net

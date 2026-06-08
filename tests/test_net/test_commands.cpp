@@ -113,6 +113,26 @@ TEST(Commands, ChatSettingsForKnownTable) {
       {{"msg", "/settings"}, {"recipient", "TestBot"}, {"room", ""}, {"who", "Alice"}}));
 }
 
+TEST(Commands, ChatGetVersionInPm) {
+  BotConfig cfg = make_config();
+  BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});
+  BotClient client(transport, cfg);
+  client.handle_message("welcome", {{"username", "TestBot"}});
+  EXPECT_NO_THROW(client.handle_message(
+      "chat",
+      {{"msg", "/getversion"}, {"recipient", "TestBot"}, {"room", ""}, {"who", "Alice"}}));
+}
+
+TEST(Commands, ChatGetVersionInRoom) {
+  BotConfig cfg = make_config();
+  BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});
+  BotClient client(transport, cfg);
+  client.handle_message("welcome", {{"username", "TestBot"}});
+  EXPECT_NO_THROW(client.handle_message(
+      "chat",
+      {{"msg", "/getversion"}, {"recipient", ""}, {"room", "table42"}, {"who", "Alice"}}));
+}
+
 TEST(Commands, TableListIngestsArrayPayload) {
   BotConfig cfg = make_config();
   BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});

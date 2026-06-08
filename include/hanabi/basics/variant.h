@@ -28,6 +28,7 @@ struct SuitType {
   bool dark = false;
   bool prism = false;
   bool muddy = false;
+  bool inverted = false;
 
   static SuitType of_name(std::string_view name);
 
@@ -58,6 +59,11 @@ struct Variant {
   bool brown_s = false;
   bool deceptive_s = false;
   bool scarce_ones = false;
+  // Funnels: rank-K clue touches all cards of rank ≤ K in non-pinkish,
+  // non-brownish suits. Chimneys: same but rank ≥ K. Pink/brown suits
+  // still follow their own touch rules inside these variants.
+  bool funnels = false;
+  bool chimneys = false;
 
   // Convenience: dereference colourable_suit_indices into actual Suit refs.
   std::vector<Suit> colourable_suits() const;

@@ -18,6 +18,75 @@ bool contains(const std::vector<int>& v, int x) {
   return std::find(v.begin(), v.end(), x) != v.end();
 }
 
+// Reactor + inverted (Orange / Dark Orange) suits: when the receiver's
+// reactive target is on an inverted suit, the reacter must invert their
+// physical action (play↔discard) so that the receiver's standard reading
+// of (clue kind + reacter action) ends up calling them to perform the
+// physical action that *advances* the orange stack (or sends the orange
+// card to the discard pile, depending on play_target vs dc_target). This
+// helper reads the giver-visible identity of the target order.
+bool target_is_inverted(const State& state, int target_order) {
+  int suit_index = state.deck[target_order].suit_index;
+  if (suit_index < 0) return false;
+  return state.variant->suits[suit_index].suit_type.inverted;
+}
+
+// For an inverted-suit (Orange / Dark Orange) reacter card, the convention's
+// reacter call has these outcomes via the game-rule inversion:
+//   * target_play(orange) ⇒ on the reacter's turn the bot would issue
+//     PerformPlay, which the inversion turns into "discard the orange" —
+//     the orange card goes to the discard pile with no stack progress.
+//     Always a losing convention path.
+//   * target_discard(orange) ⇒ PerformDiscard, which the inversion turns
+//     into "play attempt" — if the orange is currently playable this
+//     advances the orange stack (the intended outcome); otherwise it is
+//     a misplay strike.
+// The receiver-orange swap may toggle play↔discard for some
+// clue/target combinations; this helper answers the post-swap question of
+// whether we are about to take a losing path on an inverted reacter card.
+bool would_lose_inverted_reacter(const State& state, int react_order,
+                                  bool receiver_target_inverted,
+                                  bool standard_is_target_play) {
+  int suit_index = state.deck[react_order].suit_index;
+  if (suit_index < 0) return false;
+  if (!state.variant->suits[suit_index].suit_type.inverted) return false;
+  // The receiver-orange swap toggles play↔discard. After the swap, we end
+  // up calling target_play iff (standard_is_target_play XOR
+  // receiver_target_inverted) is false.
+  const bool final_is_target_play = standard_is_target_play
+                                       ? !receiver_target_inverted
+                                       : receiver_target_inverted;
+  if (final_is_target_play) return true;
+  // target_discard on an orange reacter card: physical discard maps to a
+  // play attempt under the game-rule inversion. Safe only when the orange
+  // is currently playable on the orange stack — otherwise it is a misplay
+  // strike, so reject.
+  auto id = state.deck[react_order].id();
+  if (!id) return false;
+  return !state.is_playable(*id);
+}
+
+// Narrow `thought.possible` by visibility — drop any identity whose
+// total copies (base_count + visible-in-other-hands) already equal the
+// variant's card count, since those copies are accounted for elsewhere
+// and the card we're checking can't be that identity. This anticipates
+// the post-clue elim's visibility step so the convention rejects react
+// candidates whose narrowed inferred would be elim'd away afterward.
+IdentitySet effective_possible_for(const State& state, const Thought& thought,
+                                    int self_order) {
+  return thought.possible.filter([&](Identity id) {
+    int seen = state.base_count[id.to_ord()];
+    for (const auto& hand : state.hands) {
+      for (int o : hand) {
+        if (o == self_order) continue;
+        auto did = state.deck[o].id();
+        if (did && *did == id) ++seen;
+      }
+    }
+    return seen < state.card_count[id.to_ord()];
+  });
+}
+
 struct ReactiveContext {
   std::vector<std::pair<int, Identity>> possible_conns;
   std::vector<int> known_plays;
@@ -128,12 +197,28 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
             [&](Identity i) { return state.is_critical(i); })) {
       continue;
     }
+    // Skip this play-target if the resulting convention call would be
+    // target_play on an inverted-suit reacter card — that path would
+    // PerformPlay the orange and dump it to the discard pile via the
+    // game-rule inversion (no stack advance, orange copy lost). Try the
+    // next target instead.
+    if (would_lose_inverted_reacter(state, react_order,
+                                       target_is_inverted(state, _target),
+                                       /*standard_is_target_play=*/false)) {
+      continue;
+    }
     game.with_thought(react_order, [](const Thought& t) {
       Thought out = t;
       out.old_inferred = t.inferred;
       return out;
     });
-    auto interp = target_discard(game, action, react_order, /*urgent=*/true);
+    // Inverted-suit target: swap reacter's intended physical action so the
+    // receiver's standard (clue kind + reacter action) reading ends up
+    // calling them to perform the orange-aware action.
+    auto interp = target_is_inverted(state, _target)
+                       ? target_play(game, action, react_order, /*urgent=*/true,
+                                        /*stable=*/false)
+                       : target_discard(game, action, react_order, /*urgent=*/true);
     if (!interp) return std::nullopt;
     return ClueInterp::REACTIVE;
   }
@@ -236,12 +321,25 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
       return false;
     });
     if (!ok) continue;
+    // Skip this dc-target if it would resolve to target_play on an
+    // inverted-suit reacter (orange would go to discard pile, lost).
+    if (would_lose_inverted_reacter(state, react_order,
+                                       target_is_inverted(state, target),
+                                       /*standard_is_target_play=*/true)) {
+      continue;
+    }
     game.with_thought(react_order, [](const Thought& t) {
       Thought out = t;
       out.old_inferred = t.inferred;
       return out;
     });
-    auto interp = target_play(game, action, react_order, /*urgent=*/true, /*stable=*/false);
+    // Inverted-suit dc-target: swap reacter intent to keep the receiver's
+    // physical action consistent with sending the orange card to the
+    // discard pile (which is what the convention's "dc target" implies).
+    auto interp = target_is_inverted(state, target)
+                       ? target_discard(game, action, react_order, /*urgent=*/true)
+                       : target_play(game, action, react_order, /*urgent=*/true,
+                                        /*stable=*/false);
     if (!interp) return std::nullopt;
     return ClueInterp::REACTIVE;
   }
@@ -292,7 +390,10 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
     int react_order = state.hands[reacter][react_slot - 1];
     auto prev_plays = prev.common.obvious_playables(prev, reacter);
     if (contains(prev_plays, react_order)) continue;
-    bool ok = game.common.thoughts[react_order].possible.exists([&](Identity i) {
+    IdentitySet effective_possible =
+        effective_possible_for(game.state, game.common.thoughts[react_order],
+                               react_order);
+    bool ok = effective_possible.exists([&](Identity i) {
       if (state.playable_set.contains(i)) return true;
       for (const auto& [_, c] : ctx.possible_conns) {
         if (c == i) return true;
@@ -300,7 +401,21 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
       return false;
     });
     if (!ok) continue;
-    auto interp = target_play(game, action, react_order, /*urgent=*/true, /*stable=*/false);
+    // Skip this rank play-target if it would resolve to target_play on an
+    // inverted-suit reacter (orange goes to discard pile, lost).
+    if (would_lose_inverted_reacter(state, react_order,
+                                       target_is_inverted(state, target),
+                                       /*standard_is_target_play=*/true)) {
+      continue;
+    }
+    // Inverted-suit play-target on a rank clue: swap reacter intent to
+    // discard so the receiver reads (rank + reacter discards) →
+    // target_i_discard on the orange target, whose physical discard
+    // advances the orange stack via the game-rule inversion.
+    auto interp = target_is_inverted(state, target)
+                       ? target_discard(game, action, react_order, /*urgent=*/true)
+                       : target_play(game, action, react_order, /*urgent=*/true,
+                                        /*stable=*/false);
     if (!interp) return std::nullopt;
     auto target_id = state.deck[target].id();
     if (target_id) {
@@ -347,7 +462,10 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
     if (!deck_id) continue;
     auto prev_id = deck_id->prev();
     if (!prev_id) continue;
-    bool ok = game.common.thoughts[react_order].possible.exists([&](Identity i) {
+    IdentitySet effective_possible =
+        effective_possible_for(game.state, game.common.thoughts[react_order],
+                               react_order);
+    bool ok = effective_possible.exists([&](Identity i) {
       if (state.playable_set.contains(i)) return true;
       for (const auto& [_, c] : ctx.possible_conns) {
         if (c == i) return true;
@@ -355,13 +473,26 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
       return false;
     });
     if (!ok) continue;
-    if (!game.common.thoughts[react_order].possible.contains(*prev_id)) continue;
+    if (!effective_possible.contains(*prev_id)) continue;
+    // Skip this finesse if it would resolve to target_play on an
+    // inverted-suit reacter (orange goes to discard pile, lost).
+    if (would_lose_inverted_reacter(state, react_order,
+                                       target_is_inverted(state, receive_order),
+                                       /*standard_is_target_play=*/true)) {
+      continue;
+    }
     game.with_thought(react_order, [](const Thought& t) {
       Thought out = t;
       out.old_inferred = t.inferred;
       return out;
     });
-    auto interp = target_play(game, action, react_order, /*urgent=*/true, /*stable=*/false);
+    // Inverted-suit finesse target: swap reacter intent so the receiver
+    // ends up performing the physical action that advances the orange
+    // stack on the finessed orange card.
+    auto interp = target_is_inverted(state, receive_order)
+                       ? target_discard(game, action, react_order, /*urgent=*/true)
+                       : target_play(game, action, react_order, /*urgent=*/true,
+                                        /*stable=*/false);
     if (!interp) return std::nullopt;
     Identity pi = *prev_id;
     game.with_thought(react_order, [pi](const Thought& t) {
@@ -372,7 +503,71 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
     return ClueInterp::REACTIVE;
   }
 
-  return std::nullopt;
+  // Chop-save fallback. If no play_target / finesse worked and the
+  // receiver's chop is an inverted-suit (orange) card, encode the rank
+  // reactive as "receiver PerformPlay's chop (= orange game-rule discard
+  // pile, a clean voluntary loss that avoids the misplay strike that
+  // would come from BOB PerformDiscard'ing a non-playable orange chop).
+  // Reacter does PerformPlay → CTP on reacter, mirroring the convention
+  // "rank + reacter plays = receiver plays."
+  std::optional<int> receiver_chop;
+  for (int o : state.hands[receiver]) {
+    if (!state.deck[o].clued && game.meta[o].status == CardStatus::NONE) {
+      receiver_chop = o;
+      break;
+    }
+  }
+  if (!receiver_chop) return std::nullopt;
+  auto chop_id = state.deck[*receiver_chop].id();
+  if (!chop_id ||
+      !state.variant->suits[chop_id->suit_index].suit_type.inverted) {
+    // Only the orange (inverted) case is encoded as a chop-save here.
+    // Non-orange chops would require a target_discard on the reacter,
+    // which is unsafe without a critical-check from the giver's POV
+    // that the observer can't perform on their own card. Bail.
+    return std::nullopt;
+  }
+  int chop_index = -1;
+  for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
+    if (state.hands[receiver][i] == *receiver_chop) {
+      chop_index = static_cast<int>(i);
+      break;
+    }
+  }
+  if (chop_index < 0) return std::nullopt;
+  int chop_target_slot = chop_index + 1;
+  int chop_react_slot = calc_slot(focus_slot, chop_target_slot, hand_size);
+  if (chop_react_slot < 1 ||
+      chop_react_slot > static_cast<int>(state.hands[reacter].size())) {
+    return std::nullopt;
+  }
+  int chop_react_order = state.hands[reacter][chop_react_slot - 1];
+  auto chop_prev_plays = prev.common.obvious_playables(prev, reacter);
+  if (contains(chop_prev_plays, chop_react_order)) return std::nullopt;
+  IdentitySet chop_effective =
+      effective_possible_for(game.state,
+                              game.common.thoughts[chop_react_order],
+                              chop_react_order);
+  bool chop_has_playable = chop_effective.exists([&](Identity i) {
+    if (state.playable_set.contains(i)) return true;
+    for (const auto& [_, c] : ctx.possible_conns) {
+      if (c == i) return true;
+    }
+    return false;
+  });
+  if (!chop_has_playable) return std::nullopt;
+  // Don't choose a reacter whose own physical play would lose an
+  // inverted card (orange PerformPlay = discard pile).
+  if (would_lose_inverted_reacter(state, chop_react_order,
+                                     /*receiver_target_inverted=*/true,
+                                     /*standard_is_target_play=*/false)) {
+    return std::nullopt;
+  }
+  auto chop_interp =
+      target_play(game, action, chop_react_order, /*urgent=*/true,
+                  /*stable=*/false);
+  if (!chop_interp) return std::nullopt;
+  return ClueInterp::REACTIVE;
 }
 
 }  // namespace hanabi::reactor

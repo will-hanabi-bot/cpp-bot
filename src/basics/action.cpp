@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+#include "hanabi/basics/variant.h"
+
 namespace hanabi {
 
 // --- Inbound from_json -------------------------------------------------
@@ -49,6 +51,24 @@ StrikeAction StrikeAction::from_json(const nlohmann::json& obj) {
 
 GameOverAction GameOverAction::from_json(const nlohmann::json& obj) {
   return {obj.at("endCondition").get<int>(), obj.at("playerIndex").get<int>()};
+}
+
+Action orient_action_for_engine(Action act, const Variant& variant) {
+  if (auto* p = std::get_if<PlayAction>(&act)) {
+    if (p->suit_index >= 0 &&
+        p->suit_index < static_cast<int>(variant.suits.size()) &&
+        variant.suits[p->suit_index].suit_type.inverted) {
+      return DiscardAction{p->player_index_v, p->order, p->suit_index,
+                            p->rank, /*failed=*/false};
+    }
+  } else if (auto* d = std::get_if<DiscardAction>(&act)) {
+    if (d->suit_index >= 0 &&
+        d->suit_index < static_cast<int>(variant.suits.size()) &&
+        variant.suits[d->suit_index].suit_type.inverted && !d->failed) {
+      return PlayAction{d->player_index_v, d->order, d->suit_index, d->rank};
+    }
+  }
+  return act;
 }
 
 std::optional<Action> action_from_json(const nlohmann::json& obj) {

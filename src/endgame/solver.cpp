@@ -27,6 +27,13 @@ bool past_deadline_local(std::optional<double> deadline) {
 
 bool perform_eq(const PerformAction& a, const PerformAction& b) { return a == b; }
 
+// True iff this PerformAction is a play (as opposed to a clue or discard).
+// Used to break winrate ties — when several candidates produce the same
+// winrate, the user prefers the one that plays a card.
+bool is_play_perform(const PerformAction& p) {
+  return std::holds_alternative<PerformPlay>(p);
+}
+
 }  // namespace
 
 // --- perform_to_action (public, used by winnable.cpp's advance_game) ----
@@ -322,7 +329,11 @@ std::vector<std::pair<PerformAction, Fraction>> EndgameSolver::optimize_full(
     if (single_hypo && wr == Fraction(1)) stop = true;
   }
   std::sort(result.begin(), result.end(),
-             [](const auto& a, const auto& b) { return a.second > b.second; });
+             [](const auto& a, const auto& b) {
+               if (a.second != b.second) return a.second > b.second;
+               // Tie-break: prefer a play over a non-play at the same winrate.
+               return is_play_perform(a.first) && !is_play_perform(b.first);
+             });
   return result;
 }
 
@@ -344,7 +355,11 @@ WinnableResult EndgameSolver::optimize(
                  auto wb = cached_winrate(depth, b.first);
                  Fraction fa = wa.value_or(Fraction(-1));
                  Fraction fb = wb.value_or(Fraction(-1));
-                 return fa > fb;
+                 if (fa != fb) return fa > fb;
+                 // Tie-break: a play comes before a non-play. Ensures the
+                 // 100%-winrate early-exits surface a play first when one
+                 // is available.
+                 return is_play_perform(a.first) && !is_play_perform(b.first);
                });
   }
 
@@ -406,6 +421,10 @@ WinnableResult EndgameSolver::optimize(
   }
 
   if (best_actions.empty()) return WinnableResult{{}, Fraction(0), "no winning actions"};
+  // Bubble any play to the front so callers that take actions.front() get
+  // the play when the best winrate ties between a play and a non-play.
+  std::stable_partition(best_actions.begin(), best_actions.end(),
+                         [](const PerformAction& p) { return is_play_perform(p); });
   return WinnableResult{std::move(best_actions), best_winrate, ""};
 }
 
@@ -820,6 +839,15 @@ SolveResult EndgameSolver::solve(const Game& game,
   }
 
   if (hypos.size() > 1) {
+    // Per the user's directive: evaluate plays first so the multi-hypo
+    // early-exit on a 100% candidate fires on a play if any play wins
+    // 100%. With pure winrate-desc ordering, a non-play that wins 100%
+    // in the first hypo would short-circuit the loop before any play is
+    // tried even if that play also wins 100% across all hypos.
+    std::stable_partition(initial.begin(), initial.end(),
+                            [](const auto& kv) {
+                              return is_play_perform(kv.first);
+                            });
     auto best = initial.front();
     for (auto& [action, winrate] : initial) {
       if (past_deadline_local(deadline)) break;
@@ -851,7 +879,10 @@ SolveResult EndgameSolver::solve(const Game& game,
         best = {action, cur};
         break;
       }
-      if (cur > best.second) best = {action, cur};
+      bool better = cur > best.second ||
+                    (cur == best.second && is_play_perform(action) &&
+                      !is_play_perform(best.first));
+      if (better) best = {action, cur};
     }
     if (best.second == Fraction(0)) {
       return SolveResult{best.first, Fraction(0), "no winning actions"};

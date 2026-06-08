@@ -74,6 +74,8 @@ add_executable(hanabi_tests
   tests/test_basics/test_game.cpp
   tests/test_reactor/test_reactive_table.cpp
   tests/test_reactor/test_allplays.cpp
+  tests/test_reactor/test_orange.cpp
+  tests/test_reactor/test_discard_penalty.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_replay_1874799.cpp
   tests/test_endgame/test_replay_1875252.cpp
@@ -86,6 +88,18 @@ add_executable(hanabi_tests
   tests/test_endgame/test_replay_1883183.cpp
   tests/test_endgame/test_replay_1883510.cpp
   tests/test_endgame/test_replay_1883535.cpp
+  tests/test_endgame/test_replay_1883650.cpp
+  tests/test_endgame/test_replay_1883676.cpp
+  tests/test_endgame/test_replay_1883728.cpp
+  tests/test_endgame/test_replay_1884033.cpp
+  tests/test_endgame/test_replay_1884157.cpp
+  tests/test_endgame/test_replay_1884192.cpp
+  tests/test_endgame/test_replay_1884348.cpp
+  tests/test_endgame/test_replay_1884355.cpp
+  tests/test_endgame/test_replay_1884410.cpp
+  tests/test_endgame/test_replay_1884469.cpp
+  tests/test_endgame/test_replay_1885375.cpp
+  tests/test_endgame/test_replay_1885467.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp

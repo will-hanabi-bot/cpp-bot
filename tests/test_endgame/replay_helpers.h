@@ -61,20 +61,36 @@ inline void apply_orig_action(Game& g, const OrigAction& action,
     int orig_order = action.target;
     int my_order = ctx.orig_to_my_order[orig_order];
     auto [suit, rank] = ctx.deck[orig_order];
+    const bool inverted = g.state.variant->suits[suit].suit_type.inverted;
+    const bool playable = g.state.play_stacks[suit] + 1 == rank;
+    // Hanab.live's export is OUTCOME-oriented: type=0 = card landed on a
+    // play stack, type=1 = card landed in the discard pile. We build the
+    // outcome-shaped action, then `orient_action_for_engine` flips it
+    // into the engine's button-oriented shape for inverted (Orange /
+    // Dark Orange) suits (the engine's `on_play`/`on_discard` invert the
+    // effect for inverted-suit cards, so we have to compensate). The
+    // failed flag for type=1 follows: misplay = card was non-playable AND
+    // the action's button caused a misplay outcome — i.e., DISCARD on a
+    // non-playable inverted-suit card (PLAY on non-playable inverted
+    // wouldn't strike, it'd just go to the discard pile). For type=1 +
+    // non-inverted + non-playable we conservatively treat as a clean
+    // discard (the common case — chop-discarding a trash card).
+    Action act;
     if (action.type == 0) {
-      // The hanab.live export records misplays as "play actions" too; the
-      // server detects the failure from deck identity vs play_stack. Mirror
-      // that here so play_stacks don't get regressed by an unconditional
-      // PlayAction.
-      bool playable = g.state.play_stacks[suit] + 1 == rank;
-      if (playable) {
-        g.handle_action(PlayAction{pi, my_order, suit, rank});
+      if (!playable && !inverted) {
+        // Non-inverted Play of a non-playable card: misplay. (Inverted
+        // type=0 always implies playable, so this branch only catches
+        // non-inverted edge cases.)
+        act = DiscardAction{pi, my_order, suit, rank, /*failed=*/true};
       } else {
-        g.handle_action(DiscardAction{pi, my_order, suit, rank, /*failed=*/true});
+        act = PlayAction{pi, my_order, suit, rank};
       }
     } else {
-      g.handle_action(DiscardAction{pi, my_order, suit, rank, false});
+      act = DiscardAction{pi, my_order, suit, rank,
+                            /*failed=*/inverted && !playable};
     }
+    act = orient_action_for_engine(std::move(act), *g.state.variant);
+    g.handle_action(act);
     int new_my_order = g.state.next_card_order;
     if (new_my_order < static_cast<int>(ctx.deck.size())) {
       auto [d_suit, d_rank] = ctx.deck[new_my_order];

@@ -68,7 +68,8 @@ char pick_short(const std::string& sname,
 Variant make_variant(int id, std::string name, std::vector<std::string> suit_names,
                      std::optional<int> critical_rank, bool clue_starved,
                      std::optional<int> special_rank, bool rainbow_s, bool white_s,
-                     bool pink_s, bool brown_s, bool deceptive_s, bool scarce_ones) {
+                     bool pink_s, bool brown_s, bool deceptive_s, bool scarce_ones,
+                     bool funnels, bool chimneys) {
   const auto& catalog = load_suit_catalog();
   Variant v;
   v.id = id;
@@ -82,6 +83,8 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
   v.brown_s = brown_s;
   v.deceptive_s = deceptive_s;
   v.scarce_ones = scarce_ones;
+  v.funnels = funnels;
+  v.chimneys = chimneys;
   v.suits.reserve(suit_names.size());
   v.short_forms.reserve(suit_names.size());
 
@@ -117,6 +120,7 @@ SuitType SuitType::of_name(std::string_view name) {
   st.dark = contains_any(name, {"Black", "Dark", "Gray", "Cocoa"});
   st.prism = name.find("Prism") != std::string_view::npos;
   st.muddy = contains_any(name, {"Muddy", "Cocoa"});
+  st.inverted = name.find("Orange") != std::string_view::npos;
   return st;
 }
 
@@ -181,6 +185,11 @@ bool Variant::id_touched(Identity id, ClueKind kind, int value) const {
       return (id.suit_index % 4) + offset == value;
     }
   }
+  // Funnels / Chimneys apply only to non-pinkish, non-brownish suits
+  // (those branches returned above). Pink/brown keep their own rules
+  // even inside a funnels/chimneys variant.
+  if (funnels) return rank <= value;
+  if (chimneys) return rank >= value;
   return rank == value;
 }
 
@@ -205,7 +214,12 @@ const std::unordered_map<std::string, Suit>& load_suit_catalog() {
         std::string s = entry["abbreviation"].get<std::string>();
         if (!s.empty()) abbrev = static_cast<char>(std::tolower(static_cast<unsigned char>(s.front())));
       }
-      result.emplace(name, Suit{name, abbrev, SuitType::of_name(name)});
+      SuitType st = SuitType::of_name(name);
+      // Belt-and-suspenders: honor the JSON "inverted" field so any future
+      // suit whose name doesn't match the "Orange" substring still gets the
+      // flag if the data marks it.
+      if (entry.value("inverted", false)) st.inverted = true;
+      result.emplace(name, Suit{name, abbrev, st});
     }
     return result;
   }();
@@ -233,7 +247,9 @@ Variant variant_from_json(const nlohmann::json& entry) {
       entry.value("specialRankAllClueRanks", false),
       entry.value("specialRankNoClueRanks", false),
       entry.value("specialRankDeceptive", false),
-      entry.value("scarceOnes", false));
+      entry.value("scarceOnes", false),
+      entry.value("funnels", false),
+      entry.value("chimneys", false));
 }
 
 const std::unordered_map<std::string, Variant>& load_variants() {

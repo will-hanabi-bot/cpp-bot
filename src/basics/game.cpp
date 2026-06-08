@@ -515,10 +515,20 @@ void drop_from_hand(State& s, int player_index, int order) {
 }  // namespace
 
 void Game::on_discard(const DiscardAction& action) {
+  // For an "inverted" suit (Orange / Dark Orange) a physical discard is a
+  // play attempt: success advances the play stack, failure is a misplay.
+  // No clue regain on either outcome — the discard pile only gets the card
+  // on a misplay.
+  const bool inverted_id =
+      action.suit_index != -1 &&
+      state.variant->suits[action.suit_index].suit_type.inverted;
+
   with_state([&](State& s) {
     drop_from_hand(s, action.player_index_v, action.order);
     if (s.endgame_turns) --(*s.endgame_turns);
-    if (action.failed) {
+    if (inverted_id) {
+      if (action.failed) ++s.strikes;
+    } else if (action.failed) {
       ++s.strikes;
     } else {
       s = s.regain_clue();
@@ -527,7 +537,13 @@ void Game::on_discard(const DiscardAction& action) {
 
   if (action.suit_index != -1 && action.rank != -1) {
     Identity id{action.suit_index, action.rank};
-    with_state([&](State& s) { s = s.with_discard(id, action.order); });
+    with_state([&](State& s) {
+      if (inverted_id && !action.failed) {
+        s = s.with_play(id);
+      } else {
+        s = s.with_discard(id, action.order);
+      }
+    });
     with_id(action.order, id);
     with_thought(action.order, [&](const Thought& t) {
       Thought out = t;
@@ -584,7 +600,19 @@ void Game::on_play(const PlayAction& action) {
 
   if (action.suit_index != -1 && action.rank != -1) {
     Identity id{action.suit_index, action.rank};
-    with_state([&](State& s) { s = s.with_play(id); });
+    // For an "inverted" suit (Orange / Dark Orange) a physical play sends
+    // the card to the discard pile and regains a clue — the inverse of a
+    // normal play, so the orange stack does not advance here.
+    const bool inverted_id =
+        state.variant->suits[id.suit_index].suit_type.inverted;
+    with_state([&](State& s) {
+      if (inverted_id) {
+        s = s.with_discard(id, action.order);
+        s = s.regain_clue();
+      } else {
+        s = s.with_play(id);
+      }
+    });
     with_id(action.order, id);
     with_thought(action.order, [&](const Thought& t) {
       Thought out = t;
@@ -1129,6 +1157,16 @@ PerformAction Game::take_action() const {
     if (!urgent_action) {
       CardStatus status = meta[*urgent_order].status;
       const Thought& thought = m.thoughts[*urgent_order];
+      // CTP/CTD are PHYSICAL action labels: CTP → PerformPlay, CTD →
+      // PerformDiscard. For an inverted (Orange / Dark Orange) suit the
+      // game-rule inversion in on_play / on_discard converts the physical
+      // action into the right semantic outcome (PerformDiscard on a
+      // playable orange advances the orange stack; PerformPlay on any
+      // orange sends it to the discard pile). The convention is
+      // responsible for marking CTP/CTD on the card that *matches* the
+      // physical action it wants — e.g. try_stable's playable_rank branch
+      // marks CTD on an orange focus so PerformDiscard advances the
+      // stack.
       if (status == CardStatus::CALLED_TO_PLAY &&
           !thought.possible.forall([&](Identity i) { return s.is_basic_trash(i); })) {
         urgent_action = PerformPlay{*urgent_order};
@@ -1228,6 +1266,24 @@ PerformAction Game::take_action() const {
         playable_orders = std::move(definite);
       }
     }
+    // Queue-order honoring (second pass): when multiple plays remain
+    // tied after the definite-singleton filter — e.g. two CTP'd cards
+    // both with definite singletons that are independently playable on
+    // the current stacks — pick the earliest queued one by signal_turn.
+    // This mirrors the precedent in the possible_connectors branch a
+    // few lines up. Cards without signal_turn (e.g. an empathy-playable
+    // that became playable because a prerequisite just played) are
+    // treated as "always known" (signal_turn = 0), running ahead of any
+    // later convention-marked play.
+    if (playable_orders.size() > 1) {
+      auto it = std::min_element(
+          playable_orders.begin(), playable_orders.end(),
+          [&](int a, int b) {
+            return meta[a].signal_turn.value_or(0) <
+                   meta[b].signal_turn.value_or(0);
+          });
+      playable_orders = {*it};
+    }
   } else {
     playable_orders = m.thinks_playables(*this, s.our_player_index);
   }
@@ -1254,10 +1310,22 @@ PerformAction Game::take_action() const {
   std::vector<std::pair<PerformAction, Action>> all_plays;
   for (int o : playable_orders) {
     auto inferred = m.thoughts[o].id(/*infer=*/true);
-    Action act = inferred
-                      ? Action{PlayAction{s.our_player_index, o, inferred->suit_index, inferred->rank}}
-                      : Action{PlayAction{s.our_player_index, o, -1, -1}};
-    all_plays.emplace_back(PerformPlay{o}, std::move(act));
+    // Inverted (Orange) suit: an empathy-playable orange card advances the
+    // orange stack via PerformDiscard, not PerformPlay (the orange play
+    // rule sends physical PLAYs to the discard pile). When the inferred
+    // id pins the card to an inverted suit, route through DiscardAction.
+    if (inferred &&
+        s.variant->suits[inferred->suit_index].suit_type.inverted) {
+      Action act = Action{DiscardAction{s.our_player_index, o,
+                                            inferred->suit_index, inferred->rank,
+                                            /*failed=*/false}};
+      all_plays.emplace_back(PerformDiscard{o}, std::move(act));
+    } else {
+      Action act = inferred
+                        ? Action{PlayAction{s.our_player_index, o, inferred->suit_index, inferred->rank}}
+                        : Action{PlayAction{s.our_player_index, o, -1, -1}};
+      all_plays.emplace_back(PerformPlay{o}, std::move(act));
+    }
   }
 
   // Forced-play detection.
@@ -1317,10 +1385,22 @@ PerformAction Game::take_action() const {
     }
     for (int o : discard_orders) {
       auto inferred = m.thoughts[o].id(/*infer=*/true);
-      Action act = inferred
-                        ? Action{DiscardAction{s.our_player_index, o, inferred->suit_index, inferred->rank, false}}
-                        : Action{DiscardAction{s.our_player_index, o, -1, -1, false}};
-      all_discards.emplace_back(PerformDiscard{o}, std::move(act));
+      // Inverted (Orange) suit: PerformDiscard on a known orange would
+      // attempt a play onto the orange stack via the game-rule inversion
+      // (advance if currently playable, else a misplay strike). To actually
+      // *discard* a known-orange card to the discard pile and regain a
+      // clue, the bot must PerformPlay it.
+      if (inferred &&
+          s.variant->suits[inferred->suit_index].suit_type.inverted) {
+        Action act = Action{PlayAction{s.our_player_index, o,
+                                            inferred->suit_index, inferred->rank}};
+        all_discards.emplace_back(PerformPlay{o}, std::move(act));
+      } else {
+        Action act = inferred
+                          ? Action{DiscardAction{s.our_player_index, o, inferred->suit_index, inferred->rank, false}}
+                          : Action{DiscardAction{s.our_player_index, o, -1, -1, false}};
+        all_discards.emplace_back(PerformDiscard{o}, std::move(act));
+      }
     }
   }
 

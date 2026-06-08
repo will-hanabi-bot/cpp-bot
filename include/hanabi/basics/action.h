@@ -18,6 +18,9 @@
 
 namespace hanabi {
 
+struct Variant;
+
+
 // --- Inbound: server → bot events ----------------------------------------
 
 struct StatusAction {
@@ -160,6 +163,16 @@ using Action = std::variant<StatusAction, TurnAction, ClueAction, DrawAction,
 
 // Parse a single inbound action. Returns nullopt for unknown types.
 std::optional<Action> action_from_json(const nlohmann::json& obj);
+
+// Convert an outcome-oriented server action into the engine's button-oriented
+// action shape. Hanab.live's gameAction (and replay export) reports outcomes:
+// "play" / type=0 = card landed on a play stack, "discard" / type=1 = card
+// landed in the discard pile. cpp-bot's engine `on_play` / `on_discard`
+// invert play↔discard for inverted (Orange / Dark Orange) suits, so we have
+// to flip the action type before dispatch when the suit is inverted; the
+// engine then arrives at the right side of the inversion. No-op for
+// non-inverted suits and for non-suit actions (Clue / Draw / Turn / etc).
+Action orient_action_for_engine(Action act, const Variant& variant);
 
 // Polymorphic accessors over Action.
 inline int player_index(const Action& a) {

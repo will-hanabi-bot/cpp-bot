@@ -24,6 +24,10 @@ bool includes_rainbowish(const State& state) {
   return state.includes_variant("Rainbow") || state.includes_variant("Omni");
 }
 bool includes_pinkish(const State& state) {
+  // Funnels and Chimneys variants share the "rank clue touches multiple
+  // ranks" property, so they should go through the same convention path
+  // as pinkish variants (focus_slot = clue.value, etc.).
+  if (state.variant->funnels || state.variant->chimneys) return true;
   return state.includes_variant("Pink") || state.includes_variant("Omni");
 }
 bool includes_brownish(const State& state) {
@@ -493,9 +497,22 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
                               : std::nullopt;
           return out;
         });
-        game.with_meta(focus, [](ConvData& m) {
+        // CTP/CTD are PHYSICAL action labels. For an orange (inverted)
+        // focus the convention wants the receiver to advance the orange
+        // stack — the orange game-rule inversion requires PerformDiscard
+        // to do that — so mark CTD instead of CTP. The receiver's
+        // urgent_action then dispatches PerformDiscard naturally.
+        bool focus_is_inverted = false;
+        for (Identity i : new_inferred) {
+          if (state.variant->suits[i.suit_index].suit_type.inverted) {
+            focus_is_inverted = true;
+            break;
+          }
+        }
+        game.with_meta(focus, [focus_is_inverted](ConvData& m) {
           m.focused = true;
-          m.status = CardStatus::CALLED_TO_PLAY;
+          m.status = focus_is_inverted ? CardStatus::CALLED_TO_DISCARD
+                                        : CardStatus::CALLED_TO_PLAY;
         });
       }
     }

@@ -4,6 +4,7 @@
 
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/clue.h"
+#include "hanabi/basics/variant.h"
 
 using nlohmann::json;
 using namespace hanabi;
@@ -180,4 +181,93 @@ TEST(PerformAction, FromJsonRoundTrip) {
 
 TEST(PerformAction, FromJsonInvalidTypeThrows) {
   EXPECT_THROW(perform_action_from_json({{"type", 99}, {"target", 0}}), std::invalid_argument);
+}
+
+// --- orient_action_for_engine ---
+//
+// Hanab.live's server reports actions outcome-oriented ("play" = card landed
+// on play stack; "discard" = card landed in discard pile). The engine's
+// `on_play`/`on_discard` are button-oriented and invert play↔discard for
+// inverted (Orange / Dark Orange) suits. The helper flips the action type
+// for inverted suits so the engine arrives at the right side of the
+// inversion. Non-inverted suits and non-suit actions pass through.
+
+TEST(OrientActionForEngine, NonInvertedPlayPassthrough) {
+  const Variant& v = get_variant("No Variant");
+  Action act = PlayAction{0, 5, 0, 1};  // red 1
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<PlayAction>(out));
+  EXPECT_EQ(std::get<PlayAction>(out), (PlayAction{0, 5, 0, 1}));
+}
+
+TEST(OrientActionForEngine, NonInvertedDiscardCleanPassthrough) {
+  const Variant& v = get_variant("No Variant");
+  Action act = DiscardAction{0, 5, 1, 2, false};  // yellow 2
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<DiscardAction>(out));
+  EXPECT_EQ(std::get<DiscardAction>(out), (DiscardAction{0, 5, 1, 2, false}));
+}
+
+TEST(OrientActionForEngine, NonInvertedDiscardFailedPassthrough) {
+  const Variant& v = get_variant("No Variant");
+  Action act = DiscardAction{0, 5, 0, 3, true};  // red 3 misplay
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<DiscardAction>(out));
+  EXPECT_EQ(std::get<DiscardAction>(out), (DiscardAction{0, 5, 0, 3, true}));
+}
+
+TEST(OrientActionForEngine, OrangePlayFlipsToDiscard) {
+  // Orange (3 Suits): suits R(0), B(1), Orange(2). Orange is inverted.
+  const Variant& v = get_variant("Orange (3 Suits)");
+  Action act = PlayAction{0, 5, 2, 1};  // orange 1 (server reported outcome=advance)
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<DiscardAction>(out));
+  EXPECT_EQ(std::get<DiscardAction>(out), (DiscardAction{0, 5, 2, 1, false}));
+}
+
+TEST(OrientActionForEngine, OrangeDiscardCleanFlipsToPlay) {
+  const Variant& v = get_variant("Orange (3 Suits)");
+  Action act = DiscardAction{0, 5, 2, 3, false};  // orange 3 clean → server outcome=discard pile
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<PlayAction>(out));
+  EXPECT_EQ(std::get<PlayAction>(out), (PlayAction{0, 5, 2, 3}));
+}
+
+TEST(OrientActionForEngine, OrangeDiscardFailedPassthrough) {
+  const Variant& v = get_variant("Orange (3 Suits)");
+  Action act = DiscardAction{0, 5, 2, 4, true};  // orange 4 misplay
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<DiscardAction>(out));
+  EXPECT_EQ(std::get<DiscardAction>(out), (DiscardAction{0, 5, 2, 4, true}));
+}
+
+TEST(OrientActionForEngine, NonOrangePlayInOrangeVariantPassthrough) {
+  const Variant& v = get_variant("Orange (3 Suits)");
+  Action act = PlayAction{0, 5, 0, 2};  // red 2 — non-inverted suit inside an Orange variant
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<PlayAction>(out));
+  EXPECT_EQ(std::get<PlayAction>(out), (PlayAction{0, 5, 0, 2}));
+}
+
+TEST(OrientActionForEngine, UnknownSuitPassthrough) {
+  // Observer's own card after a draw: suit_index = -1.
+  const Variant& v = get_variant("Orange (3 Suits)");
+  Action act = PlayAction{0, 5, -1, -1};
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<PlayAction>(out));
+  EXPECT_EQ(std::get<PlayAction>(out), (PlayAction{0, 5, -1, -1}));
+}
+
+TEST(OrientActionForEngine, ClueActionPassthrough) {
+  const Variant& v = get_variant("Orange (3 Suits)");
+  Action act = ClueAction{0, 1, {3, 4}, BaseClue(ClueKind::COLOUR, 2)};
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<ClueAction>(out));
+}
+
+TEST(OrientActionForEngine, DrawActionPassthrough) {
+  const Variant& v = get_variant("Orange (3 Suits)");
+  Action act = DrawAction{0, 5, 2, 1};  // orange suit drawn — but a Draw is not a play/discard
+  Action out = orient_action_for_engine(act, v);
+  ASSERT_TRUE(std::holds_alternative<DrawAction>(out));
 }
