@@ -94,17 +94,48 @@ struct State {
     return (player_index + 1) % num_players;
   }
 
+  // Reversed-direction semantics: a reversed suit's stack starts at 6
+  // (sentinel meaning "nothing played, next playable = 5") and decreases
+  // as cards play 5 → 4 → 3 → 2 → 1. `max_ranks[suit]` for reversed
+  // stores the *lowest* still-achievable rank (rises as low-rank
+  // criticals are discarded).
   bool is_basic_trash(Identity id) const {
+    const auto& st = variant->suits[id.suit_index].suit_type;
+    if (st.reversed) {
+      return id.rank >= play_stacks[id.suit_index] || id.rank < max_ranks[id.suit_index];
+    }
     return id.rank <= play_stacks[id.suit_index] || id.rank > max_ranks[id.suit_index];
   }
   bool is_useful(Identity id) const {
+    const auto& st = variant->suits[id.suit_index].suit_type;
+    if (st.reversed) {
+      return id.rank < play_stacks[id.suit_index] && id.rank >= max_ranks[id.suit_index];
+    }
     return id.rank > play_stacks[id.suit_index] && id.rank <= max_ranks[id.suit_index];
   }
   int playable_away(Identity id) const {
+    const auto& st = variant->suits[id.suit_index].suit_type;
+    if (st.reversed) {
+      return (play_stacks[id.suit_index] - 1) - id.rank;
+    }
     return id.rank - (play_stacks[id.suit_index] + 1);
   }
   bool is_playable(Identity id) const { return playable_away(id) == 0; }
   bool is_critical(Identity id) const;
+
+  // Per-suit "cards played so far" — for both normal (stack 0 → 5
+  // counts directly) and reversed (stack 6 → 1, count = 6 − stack).
+  int played_count(int suit_index) const {
+    const auto& st = variant->suits[suit_index].suit_type;
+    if (st.reversed) return 6 - play_stacks[suit_index];
+    return play_stacks[suit_index];
+  }
+  // Per-suit "max cards reachable" given current discards.
+  int max_played(int suit_index) const {
+    const auto& st = variant->suits[suit_index].suit_type;
+    if (st.reversed) return 6 - max_ranks[suit_index];
+    return max_ranks[suit_index];
+  }
 
   const std::vector<int>& our_hand() const { return hands[our_player_index]; }
   bool can_clue() const { return clue_tokens > 0; }

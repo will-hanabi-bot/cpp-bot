@@ -155,7 +155,10 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
   std::vector<std::pair<int, int>> play_targets;
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
     int o = state.hands[receiver][i];
-    if (game.meta[o].status == CardStatus::CALLED_TO_DISCARD) continue;
+    // CTD'd cards are eligible as play targets *if* they're currently
+    // playable — the stack may have caught up to a card we earlier
+    // marked for discard. The is_playable check below filters
+    // CTD'd-not-yet-playable cards.
     if (contains(ctx.known_plays, o)) continue;
     auto id = state.deck[o].id();
     if (!id || !ctx.hypo_state.is_playable(*id)) continue;
@@ -373,7 +376,10 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
   std::vector<std::pair<int, int>> play_targets;
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
     int o = state.hands[receiver][i];
-    if (game.meta[o].status == CardStatus::CALLED_TO_DISCARD) continue;
+    // CTD'd cards are eligible as play targets *if* they're currently
+    // playable — the stack may have caught up to a card we earlier
+    // marked for discard. The is_playable check below filters the
+    // not-yet-playable CTD'd cards.
     if (contains(ctx.known_plays, o)) continue;
     auto id = state.deck[o].id();
     if (!id || !ctx.hypo_state.is_playable(*id)) continue;

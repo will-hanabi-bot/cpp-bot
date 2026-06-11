@@ -280,3 +280,71 @@ TEST(State, EndedMaxScore) {
   EXPECT_EQ(s.score(), 25);
   EXPECT_TRUE(s.ended());
 }
+
+// --- Reversed-direction stack mechanics ---
+
+namespace {
+State make_reversed_state() {
+  // "Reversed (5 Suits)" = Red, Yellow, Green, Blue, Purple Reversed.
+  // The reversed suit is at index 4.
+  const Variant& v = get_variant("Reversed (5 Suits)");
+  TableOptions opts;
+  opts.num_players = 3;
+  opts.variant_name = "Reversed (5 Suits)";
+  return State::create({"Alice", "Bob", "Cathy"}, /*our_player_index=*/0, v,
+                        std::move(opts));
+}
+}  // namespace
+
+TEST(State, ReversedInitialPlayableIs5) {
+  State s = make_reversed_state();
+  // suit 4 = Purple Reversed.
+  EXPECT_TRUE(s.is_playable(Identity(4, 5)))
+      << "rank-5 must be the first playable card on a reversed suit";
+  EXPECT_FALSE(s.is_playable(Identity(4, 4)));
+  EXPECT_FALSE(s.is_playable(Identity(4, 1)));
+  // Normal suits are unaffected.
+  EXPECT_TRUE(s.is_playable(Identity(0, 1)));
+  EXPECT_FALSE(s.is_playable(Identity(0, 5)));
+  // Initial score is 0 for both directions.
+  EXPECT_EQ(s.score(), 0);
+}
+
+TEST(State, ReversedAfterPlay5PlayableIs4) {
+  State s = make_reversed_state();
+  s = s.with_play(Identity(4, 5));
+  EXPECT_TRUE(s.is_playable(Identity(4, 4)));
+  EXPECT_FALSE(s.is_playable(Identity(4, 5)));
+  EXPECT_FALSE(s.is_playable(Identity(4, 3)));
+  // Trash semantics flip too: rank-5 (already played) is basic trash
+  // on the reversed suit.
+  EXPECT_TRUE(s.is_basic_trash(Identity(4, 5)));
+  EXPECT_FALSE(s.is_basic_trash(Identity(4, 4)));
+}
+
+TEST(State, ReversedScoreCounts) {
+  State s = make_reversed_state();
+  s = s.with_play(Identity(4, 5));
+  s = s.with_play(Identity(4, 4));
+  // Two ranks played on the reversed suit → score contribution = 2.
+  EXPECT_EQ(s.score(), 2);
+  // max_score parity check: 5 suits × 5 ranks = 25.
+  EXPECT_EQ(s.max_score(), 25);
+}
+
+TEST(State, ReversedFinalRankRegainsClue) {
+  State s = make_reversed_state();
+  s.clue_tokens = 4;
+  // Playing the final rank (= 1 for reversed) regains a clue, just
+  // like rank-5 does for normal suits.
+  s = s.with_play(Identity(4, 5));
+  EXPECT_EQ(s.clue_tokens, 4);
+  s = s.with_play(Identity(4, 4));
+  EXPECT_EQ(s.clue_tokens, 4);
+  s = s.with_play(Identity(4, 3));
+  EXPECT_EQ(s.clue_tokens, 4);
+  s = s.with_play(Identity(4, 2));
+  EXPECT_EQ(s.clue_tokens, 4);
+  s = s.with_play(Identity(4, 1));
+  EXPECT_EQ(s.clue_tokens, 5);
+}

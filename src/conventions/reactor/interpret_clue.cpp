@@ -308,7 +308,13 @@ std::optional<ClueInterp> ref_play(const Game& prev, Game& game,
   int target = *std::max_element(target_candidates.begin(), target_candidates.end());
 
   if (game.is_blind_playing(target)) return std::nullopt;
-  if (game.meta[target].status == CardStatus::CALLED_TO_DISCARD) return std::nullopt;
+  auto target_id = game.state.deck[target].id();
+  // CTD'd targets are allowed *if* they're currently playable — the
+  // stack may have caught up to a card we earlier marked for discard.
+  if (game.meta[target].status == CardStatus::CALLED_TO_DISCARD &&
+      !(target_id && game.state.is_playable(*target_id))) {
+    return std::nullopt;
+  }
   // CTP on an inverted-suit (Orange / Dark Orange) target is a losing
   // path: the engine's `on_play` for an inverted suit sends the card to
   // the discard pile (no stack advance). A stable colour clue's
@@ -319,7 +325,6 @@ std::optional<ClueInterp> ref_play(const Game& prev, Game& game,
   // when the orange is playable). Reject so eval treats this clue as
   // a MISTAKE (−10 penalty) and the bot prefers the rank-clue
   // alternative.
-  auto target_id = game.state.deck[target].id();
   if (target_id &&
       game.state.variant->suits[target_id->suit_index].suit_type.inverted) {
     return std::nullopt;

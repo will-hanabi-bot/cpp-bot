@@ -29,6 +29,10 @@ struct SuitType {
   bool prism = false;
   bool muddy = false;
   bool inverted = false;
+  // Reversed suits play 5 → 4 → 3 → 2 → 1 (instead of 1 → 5). Detected
+  // by "Reversed" in the suit name. Orthogonal to `inverted` (Orange's
+  // action-button swap) — a suit can in principle be both.
+  bool reversed = false;
 
   static SuitType of_name(std::string_view name);
 

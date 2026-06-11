@@ -29,14 +29,28 @@ State State::create(std::vector<std::string> names, int our_player_index,
   s.base_count.assign(num_ids, 0);
   s.card_count.assign(num_ids, 0);
 
+  // Reversed-direction initial values: play_stacks starts at 6 (sentinel
+  // "nothing played; next playable = 5") and max_ranks at 1 (the lowest
+  // achievable rank; rises as low-rank criticals get discarded).
+  for (int suit_index = 0; suit_index < num_suits; ++suit_index) {
+    if (variant.suits[suit_index].suit_type.reversed) {
+      s.play_stacks[suit_index] = 6;
+      s.max_ranks[suit_index] = 1;
+    }
+  }
+
   IdentitySet playable = IdentitySet::empty();
   IdentitySet critical = IdentitySet::empty();
   for (int suit_index = 0; suit_index < num_suits; ++suit_index) {
+    const bool reversed = variant.suits[suit_index].suit_type.reversed;
     for (int rank = 1; rank <= 5; ++rank) {
       Identity id(suit_index, rank);
       int count = variant.card_count(id);
       s.card_count[id.to_ord()] = count;
-      if (rank == 1) playable = playable.add(id);
+      // Initially playable rank: 1 for normal, 5 for reversed.
+      if ((reversed && rank == 5) || (!reversed && rank == 1)) {
+        playable = playable.add(id);
+      }
       if (count == 1) critical = critical.add(id);
     }
   }
@@ -65,7 +79,15 @@ State State::with_discard(Identity id, int order) const {
   ++out.base_count[ord];
 
   if (critical_set.contains(id)) {
-    out.max_ranks[suit_index] = std::min(out.max_ranks[suit_index], id.rank - 1);
+    // For normal suits: discarding critical-rank-N drops the max
+    // achievable to N-1. For reversed suits (play direction is high→
+    // low): discarding critical-rank-N raises the min achievable to
+    // N+1 (where max_ranks stores the *lowest* still-achievable rank).
+    if (variant->suits[suit_index].suit_type.reversed) {
+      out.max_ranks[suit_index] = std::max(out.max_ranks[suit_index], id.rank + 1);
+    } else {
+      out.max_ranks[suit_index] = std::min(out.max_ranks[suit_index], id.rank - 1);
+    }
     out.critical_set = critical_set.difference(id);
     out.trash_set = trash_set.union_with(id);
     out.playable_set = playable_set.difference(id);
@@ -80,13 +102,19 @@ State State::with_discard(Identity id, int order) const {
 State State::with_play(Identity id) const {
   State out = *this;
   IdentitySet new_playable = playable_set.difference(id);
-  if (auto next = id.next()) new_playable = new_playable.union_with(*next);
+  const bool reversed = variant->suits[id.suit_index].suit_type.reversed;
+  // Reversed plays advance the stack downward, so the "next playable"
+  // is id.prev() (= rank-1). The clue-regain happens on the *final*
+  // rank in the play direction: rank-5 for normal, rank-1 for reversed.
+  std::optional<Identity> next = reversed ? id.prev() : id.next();
+  if (next) new_playable = new_playable.union_with(*next);
 
   out.play_stacks[id.suit_index] = id.rank;
   ++out.base_count[id.to_ord()];
   out.playable_set = new_playable;
   out.trash_set = trash_set.union_with(id);
-  if (id.rank == 5) out = out.regain_clue();
+  const bool is_final = reversed ? (id.rank == 1) : (id.rank == 5);
+  if (is_final) out = out.regain_clue();
   return out;
 }
 
@@ -118,13 +146,17 @@ bool State::ended() const {
 
 int State::score() const {
   int total = 0;
-  for (int v : play_stacks) total += v;
+  for (int s = 0; s < static_cast<int>(play_stacks.size()); ++s) {
+    total += played_count(s);
+  }
   return total;
 }
 
 int State::max_score() const {
   int total = 0;
-  for (int v : max_ranks) total += v;
+  for (int s = 0; s < static_cast<int>(max_ranks.size()); ++s) {
+    total += max_played(s);
+  }
   return total;
 }
 

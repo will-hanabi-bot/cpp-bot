@@ -330,3 +330,42 @@ TEST(Variants, DarkRainbowDarkAndRainbowish) {
     EXPECT_EQ(v.card_count(Identity(dr_index, rank)), 1);
   }
 }
+
+// --- Reversed direction (orthogonal to inverted/Orange) ---
+
+TEST(Variants, ReversedSuitDetected) {
+  // "Reversed (5 Suits)" puts Purple Reversed at suit index 4.
+  const Variant& v = get_variant("Reversed (5 Suits)");
+  EXPECT_TRUE(v.suits[4].suit_type.reversed);
+  EXPECT_FALSE(v.suits[4].suit_type.inverted);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_FALSE(v.suits[i].suit_type.reversed);
+  }
+}
+
+TEST(Variants, ReversedCardCounts) {
+  // Non-dark reversed suits flip the rarity table: rank-1 is the
+  // unique critical (1 copy) and rank-5 is the most common (3 copies).
+  const Variant& v = get_variant("Reversed (5 Suits)");
+  const int rev_index = 4;
+  EXPECT_EQ(v.card_count(Identity(rev_index, 1)), 1);
+  EXPECT_EQ(v.card_count(Identity(rev_index, 2)), 2);
+  EXPECT_EQ(v.card_count(Identity(rev_index, 3)), 2);
+  EXPECT_EQ(v.card_count(Identity(rev_index, 4)), 2);
+  EXPECT_EQ(v.card_count(Identity(rev_index, 5)), 3);
+  // Normal suits unchanged.
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_EQ(v.card_count(Identity(i, 1)), 3);
+    EXPECT_EQ(v.card_count(Identity(i, 5)), 1);
+  }
+}
+
+TEST(Variants, BlackReversedOneOfEach) {
+  // Dark suits (Black Reversed) keep 1-of-each regardless of direction.
+  const Variant& v = get_variant("Black Reversed (5 Suits)");
+  EXPECT_TRUE(v.suits[4].suit_type.dark);
+  EXPECT_TRUE(v.suits[4].suit_type.reversed);
+  for (int rank = 1; rank <= 5; ++rank) {
+    EXPECT_EQ(v.card_count(Identity(4, rank)), 1);
+  }
+}

@@ -10,6 +10,12 @@ so observers can confirm which build is running.
 bump for behavioural changes). After making the change, **write the new version
 number in the change summary** you return to the user.
 
+**Every version bump must be committed and pushed to `origin/master`** with a
+commit message summarising the changes. Use a HEREDOC for multi-line messages.
+Do not skip hooks (`--no-verify`) or bypass signing. Confirm with the user
+before pushing if there's any ambiguity about whether the change is ready to
+deploy.
+
 ## Test changes
 
 The `tests/` tree captures behavioural expectations for the bot. Before

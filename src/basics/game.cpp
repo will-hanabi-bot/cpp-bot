@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "hanabi/basics/clue_result.h"
 #include "hanabi/basics/fix.h"
 #include "hanabi/basics/identity.h"
 #include "hanabi/basics/identity_set.h"
@@ -60,6 +61,17 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   using namespace hanabi::reactor;
   check_missed(action.giver, /*sentinel=*/99);
 
+  // Detect a "deferred reactive": the giver of this clue was the
+  // reacter the previous reactive expected to act. Deferring (= clue
+  // instead of reacting) cancels the prior reactive's expected
+  // reaction AND carries the reactive intent forward — the new clue
+  // is itself reactive, with the natural next-player-after-giver
+  // reacter. Guard on `!inverted` because response-inversion waitings
+  // (set by some stable paths) just end on deferral, no chain
+  // continuation. Capture the flag BEFORE clearing `waiting`.
+  bool was_deferring = !waiting.empty() &&
+                       waiting.front().reacter == action.giver &&
+                       !waiting.front().inverted;
   if (!waiting.empty() && waiting.front().reacter == action.giver) {
     waiting.clear();
   }
@@ -79,6 +91,12 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
     }
   } else if (state.options.empty_clues && action.list_.empty()) {
     interp = ClueInterp::USELESS;
+  } else if (was_deferring) {
+    // Skip the standard stable/reactive heuristic — the deferral
+    // context forces the reactive interpretation.
+    int reacter = state.next_player_index(action.giver);
+    interp = interpret_reactive(prev, *this, action, reacter,
+                                   /*looks_stable=*/false);
   } else if (prev.common.obvious_locked(prev, action.giver) || in_endgame() ||
               prev.state.clue_tokens == 8) {
     int bob = state.next_player_index(action.giver);
@@ -1432,6 +1450,81 @@ PerformAction Game::take_action() const {
                           ? Action{DiscardAction{s.our_player_index, o, inferred->suit_index, inferred->rank, false}}
                           : Action{DiscardAction{s.our_player_index, o, -1, -1, false}};
         all_discards.emplace_back(PerformDiscard{o}, std::move(act));
+      }
+    }
+  }
+
+  // Force-play override: when we have a pending play AND no clue
+  // would create a play in any other player's hand AND Bob's next
+  // turn is safe (Bob has a known trash to discard, or his chop
+  // isn't critical from our full visibility), trust the convention's
+  // CTP and play — don't let a marginally-positive clue eval-win
+  // against a small-rank play. (The forced-endgame and urgent paths
+  // earlier in this function handle the corresponding "must clue"
+  // and "must perform urgent" overrides — this is the symmetric
+  // "must play" override.)
+  if (!all_plays.empty()) {
+    bool any_clue_creates_play = false;
+    for (const auto& [perform_unused, act] : all_clues) {
+      if (!std::holds_alternative<ClueAction>(act)) continue;
+      Game hypo = simulate(act);
+      auto [_blind, hypo_playables] = hanabi::playables_result(*this, hypo);
+      if (!hypo_playables.empty()) {
+        any_clue_creates_play = true;
+        break;
+      }
+    }
+
+    if (!any_clue_creates_play) {
+      int bob = s.next_player_index(s.our_player_index);
+      bool bob_safe = false;
+      if (!common.thinks_trash(*this, bob).empty()) {
+        bob_safe = true;
+      } else if (auto bob_chop = chop(bob); !bob_chop) {
+        // Locked — Bob won't discard, so no critical-loss risk.
+        bob_safe = true;
+      } else if (auto chop_id = s.deck[*bob_chop].id();
+                 chop_id && !s.is_critical(*chop_id)) {
+        bob_safe = true;
+      }
+
+      if (bob_safe) {
+        auto best_play = std::max_element(
+            all_plays.begin(), all_plays.end(),
+            [&](const auto& a, const auto& b) {
+              return hanabi::reactor::eval_action(*this, a.second) <
+                     hanabi::reactor::eval_action(*this, b.second);
+            });
+        // Don't force-play a card whose inferred id is already CTP'd
+        // (or visibly known to be played) in another player's hand —
+        // that's a wasted duplicate. (Mirrors the existing
+        // `identity_called_to_play_elsewhere` check in state_eval.cpp.)
+        bool dup_ctp_elsewhere = false;
+        int play_order = -1;
+        if (auto* pp = std::get_if<PerformPlay>(&best_play->first)) {
+          play_order = pp->target;
+        } else if (auto* pd = std::get_if<PerformDiscard>(&best_play->first)) {
+          play_order = pd->target;
+        }
+        if (play_order != -1) {
+          auto play_id = m.thoughts[play_order].id(/*infer=*/true);
+          if (play_id) {
+            for (const auto& hand : s.hands) {
+              for (int o : hand) {
+                if (o == play_order) continue;
+                if (meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+                auto cid = m.thoughts[o].id(/*infer=*/true);
+                if (cid && *cid == *play_id) { dup_ctp_elsewhere = true; break; }
+                auto did = s.deck[o].id();
+                if (did && *did == *play_id) { dup_ctp_elsewhere = true; break; }
+              }
+              if (dup_ctp_elsewhere) break;
+            }
+          }
+        }
+        if (!dup_ctp_elsewhere) {
+          return best_play->first;
+        }
       }
     }
   }

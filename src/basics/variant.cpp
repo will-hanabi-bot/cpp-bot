@@ -121,6 +121,7 @@ SuitType SuitType::of_name(std::string_view name) {
   st.prism = name.find("Prism") != std::string_view::npos;
   st.muddy = contains_any(name, {"Muddy", "Cocoa"});
   st.inverted = name.find("Orange") != std::string_view::npos;
+  st.reversed = name.find("Reversed") != std::string_view::npos;
   return st;
 }
 
@@ -147,6 +148,10 @@ int Variant::card_count(Identity id) const {
   if (s.suit_type.dark || (critical_rank && *critical_rank == id.rank)) return 1;
   if (id.rank == 1 && scarce_ones) return 2;
   static constexpr int kCounts[5] = {3, 2, 2, 2, 1};
+  // Reversed suits play 5 → 1, so the rarity is flipped: the unique
+  // "rank-5 stays last" criticality lives at rank-1 instead.
+  static constexpr int kCountsReversed[5] = {1, 2, 2, 2, 3};
+  if (s.suit_type.reversed) return kCountsReversed[id.rank - 1];
   return kCounts[id.rank - 1];
 }
 
@@ -219,6 +224,7 @@ const std::unordered_map<std::string, Suit>& load_suit_catalog() {
       // suit whose name doesn't match the "Orange" substring still gets the
       // flag if the data marks it.
       if (entry.value("inverted", false)) st.inverted = true;
+      if (entry.value("reversed", false)) st.reversed = true;
       result.emplace(name, Suit{name, abbrev, st});
     }
     return result;
