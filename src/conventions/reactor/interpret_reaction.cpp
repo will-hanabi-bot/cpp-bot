@@ -83,21 +83,21 @@ void target_i_play(const Game& /*prev*/, Game& game, const ReactorWC& wc,
     }
   }
   IdentitySet new_inferred = game.common.thoughts[order].inferred.intersect(self_playables);
-  // If the intersection is empty there's no identity we can plausibly call
-  // playable here (the convention's earlier narrowing of `inferred` —
-  // typically via an info_lock left over from an older target_play — has
-  // no overlap with the current playable_set). Setting CALLED_TO_PLAY in
-  // that state is unsafe: the next update_turn would immediately reset
-  // it (common.inferred ∩ playable_set is empty), producing a stale
-  // "[f] ... | [reset]" pair in the note diff. Leave the card alone.
-  if (new_inferred.is_empty()) return;
-  game.with_thought(order, [&](const Thought& t) {
-    Thought out = t;
-    out.old_inferred = t.inferred;
-    out.inferred = new_inferred;
-    out.info_lock = std::optional<IdentitySet>{new_inferred};
-    return out;
-  });
+  // Stamp CTP unconditionally — the convention's "play this slot" signal must
+  // reach the reacter even when no currently-playable identity overlaps the
+  // card's inferred set (e.g. a delayed-play chain where the prerequisite
+  // hasn't fired yet). Only narrow `inferred` / `info_lock` when there's a
+  // non-empty intersection, so we don't leave the card in an empty-inferred
+  // state that elim would later sweep.
+  if (!new_inferred.is_empty()) {
+    game.with_thought(order, [&](const Thought& t) {
+      Thought out = t;
+      out.old_inferred = t.inferred;
+      out.inferred = new_inferred;
+      out.info_lock = std::optional<IdentitySet>{new_inferred};
+      return out;
+    });
+  }
   int turn = state.turn_count;
   int giver = wc.giver;
   game.with_meta(order, [turn, giver](ConvData& m) {

@@ -267,6 +267,9 @@ std::optional<ClueInterp> target_discard(Game& game, const ClueAction& action,
   const State& state = game.state;
   game.with_thought(target, [&](const Thought& t) {
     Thought out = t;
+    // Preserve old_inferred so check_missed can revert if the urgent
+    // call goes unactioned — parallel to target_play (line 234).
+    out.old_inferred = t.inferred;
     out.inferred = t.inferred.filter(
         [&](Identity i) { return !state.is_critical(i); });
     return out;
@@ -306,6 +309,21 @@ std::optional<ClueInterp> ref_play(const Game& prev, Game& game,
 
   if (game.is_blind_playing(target)) return std::nullopt;
   if (game.meta[target].status == CardStatus::CALLED_TO_DISCARD) return std::nullopt;
+  // CTP on an inverted-suit (Orange / Dark Orange) target is a losing
+  // path: the engine's `on_play` for an inverted suit sends the card to
+  // the discard pile (no stack advance). A stable colour clue's
+  // ref_play interpretation that lands on an orange card therefore
+  // cannot get the orange to play onto its stack — the equivalent
+  // outcome is reachable only via a rank clue's ref_discard path
+  // (which marks CTD = PerformDiscard = orange play attempt = advance
+  // when the orange is playable). Reject so eval treats this clue as
+  // a MISTAKE (−10 penalty) and the bot prefers the rank-clue
+  // alternative.
+  auto target_id = game.state.deck[target].id();
+  if (target_id &&
+      game.state.variant->suits[target_id->suit_index].suit_type.inverted) {
+    return std::nullopt;
+  }
   return target_play(game, action, target, /*urgent=*/false, /*stable=*/true);
 }
 

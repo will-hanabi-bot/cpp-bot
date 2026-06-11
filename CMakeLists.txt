@@ -39,6 +39,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor/interpret_reactive.cpp
   src/conventions/reactor/reactive_table.cpp
   src/conventions/reactor/state_eval.cpp
+  src/endgame/forced_endgame.cpp
   src/endgame/helper.cpp
   src/endgame/solver.cpp
   src/endgame/winnable.cpp
@@ -76,6 +77,7 @@ add_executable(hanabi_tests
   tests/test_reactor/test_allplays.cpp
   tests/test_reactor/test_orange.cpp
   tests/test_reactor/test_discard_penalty.cpp
+  tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_replay_1874799.cpp
   tests/test_endgame/test_replay_1875252.cpp
@@ -100,6 +102,14 @@ add_executable(hanabi_tests
   tests/test_endgame/test_replay_1884469.cpp
   tests/test_endgame/test_replay_1885375.cpp
   tests/test_endgame/test_replay_1885467.cpp
+  tests/test_endgame/test_replay_1885527.cpp
+  tests/test_endgame/test_replay_1885536.cpp
+  tests/test_endgame/test_replay_1885550.cpp
+  tests/test_endgame/test_replay_1885749.cpp
+  tests/test_endgame/test_replay_1885855.cpp
+  tests/test_endgame/test_replay_1885899.cpp
+  tests/test_endgame/test_replay_1888951.cpp
+  tests/test_endgame/test_replay_1888970.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp

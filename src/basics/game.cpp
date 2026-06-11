@@ -14,6 +14,7 @@
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/state_eval.h"
 #include "hanabi/endgame/fraction.h"
+#include "hanabi/endgame/forced_endgame.h"
 #include "hanabi/endgame/solver.h"
 
 namespace hanabi {
@@ -300,14 +301,13 @@ void Game::update_turn(const TurnAction& action) {
     int order = *next_queued_playable;
     IdentitySet new_inferred =
         common.thoughts[order].inferred.intersect(state.playable_set);
-    if (new_inferred.is_empty()) {
-      with_thought(order, [](const Thought& t) { return t.reset_inferences(); });
-      with_meta(order, [](ConvData& m) {
-        m.status = CardStatus::NONE;
-        m.by = std::nullopt;
-        m.trash = true;
-      });
-    } else {
+    // Narrow inferred to currently-playable identities when possible, but do
+    // NOT clear CTP when the intersection is empty. A CTP'd card may be
+    // waiting on a delayed-play chain (e.g. brown 4 called to play after
+    // brown 3 plays); clearing here would lose the convention signal before
+    // the chain resolves. CTP is cleared only by on_play (card leaves hand)
+    // or by elim's post-card_elim sweep (card proven trash).
+    if (!new_inferred.is_empty()) {
       IdentitySet ni = new_inferred;
       with_thought(order, [ni](const Thought& t) {
         Thought out = t;
@@ -1179,6 +1179,13 @@ PerformAction Game::take_action() const {
 
   // --- Endgame solver fork ---
   if (s.rem_score() <= static_cast<int>(s.variant->suits.size()) + 1) {
+    // Forced-endgame layer: mechanical rules that override the search
+    // when the correct action is hardcoded. See
+    // `src/endgame/forced_endgame.cpp` for the rule list. Cheap enough
+    // (O(n × hand × suits)) to check before the solver kicks in.
+    if (auto forced = hanabi::endgame::forced_endgame_action(*this); forced) {
+      return *forced;
+    }
     // 6 s is enough budget for the solver to find a near-optimal action in
     // the positions we've seen on hanab.live (the deeper search rarely
     // changes the picked action) while keeping per-turn compute well under
@@ -1356,9 +1363,31 @@ PerformAction Game::take_action() const {
   std::vector<std::pair<PerformAction, Action>> all_discards;
   if (!cant_discard) {
     auto trash = m.thinks_trash(*this, s.our_player_index);
+    // Orange-safety filter. Auto-discarding an empathy-trash card whose
+    // `possible` still includes an inverted-suit (Orange / Dark Orange)
+    // identity risks the engine's `on_discard(inverted, failed=false)`
+    // play-attempt — which strikes when the actual id is an orange
+    // basic_trash (e.g. o1 on orange stack 1). Drop those candidates so
+    // the bot falls back to the chop instead. Keep:
+    //   * CTD'd cards (the convention explicitly told us to discard),
+    //   * cards with a singleton inferred (the dispatch swap a few lines
+    //     down routes orange singletons through PerformPlay correctly),
+    //   * cards whose possible has no inverted-suit id (cannot be orange).
+    auto trash_is_orange_safe = [&](int o) -> bool {
+      if (meta[o].status == CardStatus::CALLED_TO_DISCARD) return true;
+      if (m.thoughts[o].id(/*infer=*/true)) return true;
+      for (Identity i : m.thoughts[o].possible) {
+        if (s.variant->suits[i.suit_index].suit_type.inverted) return false;
+      }
+      return true;
+    };
+    std::vector<int> safe_trash;
+    for (int o : trash) {
+      if (trash_is_orange_safe(o)) safe_trash.push_back(o);
+    }
     std::vector<int> expected;
-    if (!trash.empty()) {
-      expected = trash;
+    if (!safe_trash.empty()) {
+      expected = safe_trash;
     } else if (!m.obvious_locked(*this, s.our_player_index) && all_plays.empty() &&
                 has_ptd()) {
       auto chop_o = chop(s.our_player_index);
@@ -1377,10 +1406,13 @@ PerformAction Game::take_action() const {
         }
       }
       for (int o : discardable) {
-        if (!contains_v(seen, o)) {
-          discard_orders.push_back(o);
-          seen.push_back(o);
-        }
+        if (contains_v(seen, o)) continue;
+        // Re-apply the orange-safety filter on empathy-trash entries
+        // that `discardable` may have added — `safe_trash` only
+        // controlled `expected`.
+        if (m.order_trash(*this, o) && !trash_is_orange_safe(o)) continue;
+        discard_orders.push_back(o);
+        seen.push_back(o);
       }
     }
     for (int o : discard_orders) {

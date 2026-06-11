@@ -147,6 +147,17 @@ double get_result(const Game& game, const Game& hypo, const ClueAction& action) 
 
   if (move_is(ClueInterp::MISTAKE)) return value - 10.0;
   if (move_is(ClueInterp::FIX)) return value + 1.0;
+  if (move_is(ClueInterp::REACTIVE) && playables.size() >= 2) {
+    // Strongly prefer a reactive that gets 2+ plays over a reactive
+    // (or any other clue) that gets only 1. The +1.0 from the extra
+    // `playables.size()` term and +0.125 from `good_touch` are too
+    // small to survive the `result * mult - 0.5` damping in
+    // eval_action's clue branch — competing 1-play clues can win on
+    // the advance() lookahead. This flat bonus is sized to dominate
+    // realistic alternatives even after damping (mult=0.25 mid-game
+    // → +2.5; mult=0.1 endgame → +1.0).
+    value += 10.0;
+  }
   return value;
 }
 
@@ -381,12 +392,53 @@ double eval_action(const Game& game, const Action& action) {
     else if (!id) value = -1.5;
     else value = -0.5;
 
+    // Orange-variant tiering. In a variant with an inverted (Orange /
+    // Dark Orange) suit the on_discard rule turns a PerformDiscard of
+    // an orange card into a play attempt — so discarding an orange-
+    // playable card *is* a play, and discarding a card that could be
+    // orange has upside that the baseline penalty doesn't capture.
+    bool target_id_is_orange =
+        id && state.variant->suits[id->suit_index].suit_type.inverted;
+    bool target_possible_has_orange = false;
+    for (Identity i : game.me().thoughts[da.order].possible) {
+      if (state.variant->suits[i.suit_index].suit_type.inverted) {
+        target_possible_has_orange = true;
+        break;
+      }
+    }
+    if (!is_trash) {
+      if (target_id_is_orange && state.is_playable(*id)) {
+        // Discard advances the orange stack — value at the play tier
+        // regardless of endgame. The known-id PlayAction baseline is
+        // `0.02 * (5 - rank)` (line 370) ≈ 0.02..0.08, small enough
+        // that clue eval often beats it, so bump to 1.0. This must
+        // override the in_endgame baseline (-1.0) too — discarding
+        // a known-orange playable in endgame is still a stack-advance.
+        value = 1.0;
+      } else if (target_possible_has_orange && !target_id_is_orange) {
+        // Possibly-orange unknown: in orange games the bot must be
+        // willing to discard rather than fall back to clues that may
+        // force a critical orange misplay. Floor materially above the
+        // unknown-card baseline; the upside (might advance the orange
+        // stack) justifies preferring this over a positively-scored
+        // clue that the convention may have mis-evaluated.
+        value = std::max(value, 0.5);
+      }
+      // Known-orange-unplayable falls through to the baseline
+      // intentionally: PerformDiscard would strike, so the existing
+      // penalty is the right ceiling.
+    }
+
     if (!game.in_endgame()) {
       const Player& m = game.me();
       for (int o : m.obvious_playables(game, state.our_player_index)) {
         // If this discard IS the play (inverted-suit game-rule), don't
         // penalize — PerformDiscard{o} dispatches the play onto the stack.
         if (o == da.order) continue;
+        // Known-orange-playable: the discard is also a play under the
+        // inversion, so it isn't "blocking" the other playable — it's
+        // a choice of which of two plays to take this turn.
+        if (target_id_is_orange && state.is_playable(*id)) break;
         auto pid = m.thoughts[o].id(/*infer=*/true);
         if (!pid || !state.is_playable(*pid)) continue;
         if (identity_called_to_play_elsewhere(game, *pid, o)) continue;

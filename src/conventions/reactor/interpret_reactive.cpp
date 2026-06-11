@@ -220,6 +220,21 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                                         /*stable=*/false)
                        : target_discard(game, action, react_order, /*urgent=*/true);
     if (!interp) return std::nullopt;
+    // Stamp the receiver's `_target` so hypo_plays sees the second
+    // play (parallel to the rank path above; see the rank comment for
+    // the rationale).
+    {
+      int turn = state.turn_count;
+      int giver = action.giver;
+      CardStatus target_status = target_is_inverted(state, _target)
+                                      ? CardStatus::CALLED_TO_DISCARD
+                                      : CardStatus::CALLED_TO_PLAY;
+      game.with_meta(_target, [turn, giver, target_status](ConvData& m) {
+        m.status = target_status;
+        m.by = giver;
+        m = m.reason(turn).signal(turn);
+      });
+    }
     return ClueInterp::REACTIVE;
   }
 
@@ -417,6 +432,26 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
                        : target_play(game, action, react_order, /*urgent=*/true,
                                         /*stable=*/false);
     if (!interp) return std::nullopt;
+    // Stamp the receiver's `target` so hypo_plays sees it as the
+    // second play. The receiver figures out their target via the
+    // slot-mapping rule, but until this stamp the convention only
+    // recorded the reacter's CTP — `playables_result` returned
+    // size=1 for genuine 2-play reactives, and the +10 REACTIVE
+    // 2-play eval bonus never fired. For an inverted-suit target the
+    // receiver's physical action is PerformDiscard (= play attempt
+    // via on_discard inversion), so the stamp is CTD; otherwise CTP.
+    {
+      int turn = state.turn_count;
+      int giver = action.giver;
+      CardStatus target_status = target_is_inverted(state, target)
+                                      ? CardStatus::CALLED_TO_DISCARD
+                                      : CardStatus::CALLED_TO_PLAY;
+      game.with_meta(target, [turn, giver, target_status](ConvData& m) {
+        m.status = target_status;
+        m.by = giver;
+        m = m.reason(turn).signal(turn);
+      });
+    }
     auto target_id = state.deck[target].id();
     if (target_id) {
       Identity ti = *target_id;
@@ -474,6 +509,21 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
     });
     if (!ok) continue;
     if (!effective_possible.contains(*prev_id)) continue;
+    // POV-invariant guard. The reacter picks `react_slot` from
+    // {1, 5, 4, 3, 2} using only `effective_possible` (common
+    // knowledge), so giver / receiver / reacter all agree on which
+    // slot the convention points at. From the giver's POV (or any POV
+    // that can see the reacter's hand directly) we *additionally* know
+    // whether the reacter's actual card is the prereq. If it isn't,
+    // the reacter will PerformDiscard (or PerformPlay) a card that
+    // strikes — abort the whole reactive interpretation as a MISTAKE
+    // rather than silently picking a different slot. (No "try next
+    // slot" — the reacter, from her own POV, will still pick THIS
+    // slot when she acts; no later iteration can rescue it.)
+    auto react_actual_id = state.deck[react_order].id();
+    if (react_actual_id && *react_actual_id != *prev_id) {
+      return std::nullopt;
+    }
     // Skip this finesse if it would resolve to target_play on an
     // inverted-suit reacter (orange goes to discard pile, lost).
     if (would_lose_inverted_reacter(state, react_order,
