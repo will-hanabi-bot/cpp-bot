@@ -34,6 +34,77 @@ bool identity_called_to_play_elsewhere(const Game& game, Identity id,
   return false;
 }
 
+// True iff `chop_order` (the candidate discard) has a non-trash identity
+// from the common-knowledge perspective. Treats unknown chop as non-trash
+// (we don't know it's safe).
+bool chop_is_nontrash(const Game& game, std::optional<int> chop_order) {
+  if (!chop_order) return false;
+  auto id = game.state.deck[*chop_order].id();
+  if (!id) return true;
+  return !game.state.is_basic_trash(*id);
+}
+
+bool chop_is_trash(const Game& game, std::optional<int> chop_order) {
+  if (!chop_order) return false;
+  auto id = game.state.deck[*chop_order].id();
+  return id && game.state.is_basic_trash(*id);
+}
+
+// Low-clue-count gate (CLAUDE.md v0.21). When `state.clue_tokens < 3` AND
+// `state.pace() >= 3`, a clue is only "worth it" if it's high-value. The
+// caller penalises a non-high-value clue so any known play wins.
+//
+// High value = (Bob in discard-danger) OR (Bob safe AND Cathy in
+// discard-danger AND the clue advances ≥ 2 plays).
+//
+// - "Bob in discard-danger" = Bob has no obvious play, no known trash
+//   anywhere in hand, AND chop is non-trash.
+// - "Bob safe" = Bob has an obvious play OR trash chop OR known trash in
+//   hand (any way to defer the chop discard safely).
+// - "Cathy in discard-danger" = Cathy's chop is non-trash.
+//
+// Sub-condition #3 of scenario B in the user's spec — "the clue gets
+// Cathy to play a card that is impossible to otherwise stable-clue Bob a
+// playable" — is intentionally *not* implemented here. It's a rarely-
+// triggered sub-case and hard to detect statically. The 2+-plays
+// alternative covers the typical case where the burn is justified.
+bool is_high_value_low_clue(const Game& game, const Game& hypo,
+                            const ClueAction& /*ca*/) {
+  const State& s = game.state;
+  const Player& common = game.common;
+  int giver = s.current_player_index;
+  int bob = s.next_player_index(giver);
+  if (bob == giver) return true;  // Solo (shouldn't happen) — let it through.
+
+  auto bob_chop = game.chop(bob);
+  bool bob_loaded = !common.obvious_playables(game, bob).empty();
+  bool bob_known_trash = !common.thinks_trash(game, bob).empty();
+  bool bob_safe = bob_loaded || bob_known_trash || chop_is_trash(game, bob_chop);
+  bool bob_chop_nontrash = chop_is_nontrash(game, bob_chop);
+
+  // Scenario A: Bob about to discard something non-trash.
+  if (!bob_safe && bob_chop_nontrash) return true;
+
+  if (!bob_safe) return false;  // Bob in unclear state — be conservative.
+
+  int cathy = s.next_player_index(bob);
+  if (cathy == giver) return false;  // 2p: no Cathy.
+  auto cathy_chop = game.chop(cathy);
+  if (!chop_is_nontrash(game, cathy_chop)) return false;
+
+  // Sub-condition: clue advances ≥ 2 plays (newly CALLED_TO_PLAY).
+  int new_plays = 0;
+  for (const auto& hand : s.hands) {
+    for (int o : hand) {
+      if (game.meta[o].status != CardStatus::CALLED_TO_PLAY &&
+          hypo.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+        ++new_plays;
+      }
+    }
+  }
+  return new_plays >= 2;
+}
+
 }  // namespace
 
 // --- get_result ----------------------------------------------------------
@@ -359,6 +430,24 @@ double eval_action(const Game& game, const Action& action) {
   if (std::holds_alternative<ClueAction>(action)) {
     const auto& ca = std::get<ClueAction>(action);
     auto playables_us = game.me().obvious_playables(game, state.our_player_index);
+    // Low-clue-count gate: at clue_tokens < 3 AND pace >= 3, only
+    // high-value clues clear; otherwise penalise so a known play wins.
+    // Skip the gate when every known play is a dupe (CTP'd elsewhere) —
+    // suppressing the clue would force a wasted dupe-play or a worse
+    // discard, and the v0.21 policy is about preferring real plays over
+    // low-value clues, not about forcing dupe-plays.
+    if (state.clue_tokens < 3 && state.pace() >= 3) {
+      bool has_real_play = false;
+      for (int o : playables_us) {
+        auto pid = game.me().thoughts[o].id(/*infer=*/true);
+        if (pid && identity_called_to_play_elsewhere(game, *pid, o)) continue;
+        has_real_play = true;
+        break;
+      }
+      if (has_real_play && !is_high_value_low_clue(game, hypo_game, ca)) {
+        return -1.0;
+      }
+    }
     double mult = playables_us.empty() ? 0.5 : (game.in_endgame() ? 0.1 : 0.25);
     double result = get_result(game, hypo_game, ca);
     value = result * (result > 0 ? mult : 1.0) - 0.5;

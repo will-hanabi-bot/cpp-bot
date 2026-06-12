@@ -123,6 +123,22 @@ target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
 hanabi_set_warnings(hanabi_tests)
 gtest_discover_tests(hanabi_tests)
 
+# --- Decision-making tests -----------------------------------------------
+# Behavioural-quality tests. Failures here mean the bot made a suboptimal
+# (but not necessarily incorrect) decision. They live under a separate
+# executable + ctest label so they can be skipped via `ctest -LE
+# decision_making` when only correctness regression matters. Per
+# CLAUDE.md, decision-test failures need manual review (either bot fix or
+# test change) before being silenced.
+add_executable(hanabi_decision_tests
+  tests/test_harness.cpp
+  tests/test_decision_making/test_low_clue_count.cpp
+)
+target_include_directories(hanabi_decision_tests PRIVATE tests)
+target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)
+hanabi_set_warnings(hanabi_decision_tests)
+gtest_discover_tests(hanabi_decision_tests PROPERTIES LABELS "decision_making")
+
 # --- Apps ----------------------------------------------------------------
 add_executable(hanabi_bot apps/hanabi_bot.cpp)
 target_link_libraries(hanabi_bot PRIVATE hanabi_core)
