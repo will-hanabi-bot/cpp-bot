@@ -223,6 +223,35 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                                         /*stable=*/false)
                        : target_discard(game, action, react_order, /*urgent=*/true);
     if (!interp) return std::nullopt;
+    // Narrow the receiver target's inferred to (playable_set ∪
+    // next-ranks-of-reacter-inferred). Without this, the CTP'd receiver
+    // target retains the wide post-basic-clue-elim empathy, polluting
+    // downstream [f] notes and finesse / connection inference (see
+    // replay 1890204 T3 for the symptom). Mirrors target_play's
+    // narrowing pattern (interpret_clue.cpp:189-260); `delayed_plays`
+    // walks players between giver and the receiver and yields each
+    // urgent/obvious-playable's next-rank successor.
+    {
+      int holder = state.holder_of(_target);
+      auto receiver_conns =
+          delayed_plays(game, action.giver, holder, /*stable=*/false);
+      IdentitySet ps = state.playable_set;
+      IdentitySet narrowed = game.common.thoughts[_target].inferred.filter(
+          [&](Identity i) {
+            if (ps.contains(i)) return true;
+            for (const auto& [_, c] : receiver_conns) {
+              if (c == i) return true;
+            }
+            return false;
+          });
+      if (narrowed.is_empty()) return std::nullopt;
+      game.with_thought(_target, [&narrowed](const Thought& t) {
+        Thought out = t;
+        out.old_inferred = t.inferred;
+        out.inferred = narrowed;
+        return out;
+      });
+    }
     // Stamp the receiver's `_target` so hypo_plays sees the second
     // play (parallel to the rank path above; see the rank comment for
     // the rationale).
@@ -438,6 +467,35 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
                        : target_play(game, action, react_order, /*urgent=*/true,
                                         /*stable=*/false);
     if (!interp) return std::nullopt;
+    // Narrow the receiver target's inferred to (playable_set ∪
+    // next-ranks-of-reacter-inferred). Without this, the CTP'd receiver
+    // target retains the wide post-basic-clue-elim empathy, polluting
+    // downstream [f] notes and finesse / connection inference (see
+    // replay 1890204 T3 for the symptom). Mirrors target_play's
+    // narrowing pattern (interpret_clue.cpp:189-260); `delayed_plays`
+    // walks players between giver and the receiver and yields each
+    // urgent/obvious-playable's next-rank successor.
+    {
+      int holder = state.holder_of(target);
+      auto receiver_conns =
+          delayed_plays(game, action.giver, holder, /*stable=*/false);
+      IdentitySet ps = state.playable_set;
+      IdentitySet narrowed = game.common.thoughts[target].inferred.filter(
+          [&](Identity i) {
+            if (ps.contains(i)) return true;
+            for (const auto& [_, c] : receiver_conns) {
+              if (c == i) return true;
+            }
+            return false;
+          });
+      if (narrowed.is_empty()) return std::nullopt;
+      game.with_thought(target, [&narrowed](const Thought& t) {
+        Thought out = t;
+        out.old_inferred = t.inferred;
+        out.inferred = narrowed;
+        return out;
+      });
+    }
     // Stamp the receiver's `target` so hypo_plays sees it as the
     // second play. The receiver figures out their target via the
     // slot-mapping rule, but until this stamp the convention only

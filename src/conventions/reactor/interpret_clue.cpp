@@ -203,12 +203,31 @@ std::optional<ClueInterp> target_play(Game& game, const ClueAction& action,
       });
 
   // If we have the actual id and a connector matches, mark connector urgent.
+  //
+  // Chain-consistency guard (v0.22 Stage B): the connector narrowing
+  // below locks `conn_order` to `prev_id` (= target's predecessor on
+  // its stack). If the giver can see `conn_order`'s actual deck id and
+  // it isn't `prev_id`, the chain is broken — the convention would
+  // commit to a play that requires `conn_order` to be a card it
+  // demonstrably isn't. Bail to std::nullopt so the caller (typically a
+  // reactive interp) can try a different play target instead of
+  // committing to a striking CTP.
+  //
+  // Symptom this prevents: replay 1890204 T7 — yagami's slot 1 was
+  // narrowed to {b1} as a chain prereq for will-bot69's slot 2 = b2,
+  // but yagami's actual slot 1 was y2. The chain commit produced a
+  // strike at T9 when will-bot69 played b2 with the blue stack still 0.
   auto target_id = state.deck[target].id();
   if (target_id) {
     for (const auto& [conn_order, conn_id] : possible_conns) {
       if (conn_id == *target_id) {
         auto prev_id = target_id->prev();
         if (!prev_id) continue;
+        auto conn_actual = state.deck[conn_order].id();
+        if (conn_actual && *conn_actual != *prev_id) {
+          // Chain mismatch — bail.
+          return std::nullopt;
+        }
         Identity pid = *prev_id;
         game.with_thought(conn_order, [&](const Thought& t) {
           Thought out = t;
