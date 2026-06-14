@@ -262,8 +262,27 @@ std::optional<ClueInterp> target_play(Game& game, const ClueAction& action,
     m = m.reason(turn).signal(turn);
   });
 
-  if (new_inferred.is_empty() ||
-      !state.has_consistent_infs(game.common.thoughts[target])) {
+  // v0.24: for the reactive path (stable=false), use POV-invariant
+  // consistency via `common.thoughts[target].id()`. The original POV-
+  // specific check (`state.deck[target].id()` via has_consistent_infs)
+  // returns nullopt for the holder's own hand, so the giver (sees
+  // actual id) and the holder (sees nullopt) reach different verdicts
+  // — producing different convention interpretations. Replay 1892197
+  // T9: giver will-bot69 saw will-bot67's slot 2 = i2 (not in
+  // playable_set), failed the check, and fell through to a different
+  // play_target; holder will-bot67 couldn't see own slot 2, passed
+  // the check, and locked in the desync'd target. Stable callers
+  // (ref_play) keep the strict POV-specific check — they're already
+  // safe (the giver-POV rejection is the canonical answer for stable
+  // interps).
+  bool consistent;
+  if (stable) {
+    consistent = state.has_consistent_infs(game.common.thoughts[target]);
+  } else {
+    auto common_id = game.common.thoughts[target].id();
+    consistent = !common_id || new_inferred.contains(*common_id);
+  }
+  if (new_inferred.is_empty() || !consistent) {
     game.with_thought(target, [](const Thought& t) { return t.reset_inferences(); });
     if (stable && game.common.order_kt(game, target)) return ClueInterp::STALL;
     return std::nullopt;

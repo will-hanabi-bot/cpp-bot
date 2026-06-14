@@ -108,41 +108,33 @@ void apply_prefix(Game& g, size_t count) {
 
 }  // namespace
 
-// Regression: T11's reactive interp must NOT CTP will-bot69's slot 5
-// (= p1 actual, would misplay since p stack=1). The play_target sort
-// picks slot 2 (b2) first, but the resulting react_slot 5 (p1) fails
-// target_play because the giver-visible identity (p1) isn't in the
-// narrowed-to-{p2} inferred. The continue-on-failure logic then falls
-// through to slot 3 (g3) → react_slot 4 (y1 playable).
-TEST(EndgameReplay1892112, T11DoesNotCTPBadReacterSlot) {
+// Regression for the T7 desync: v0.23 fixed it via target_play
+// rejection (POV-specific has_consistent_infs catching the giver-
+// visible p1 mismatch). v0.24 made the reactive path's consistency
+// check POV-invariant — the convention now commits the CTP from all
+// POVs, but the GIVER'S EVAL correctly anticipates the T9 strike and
+// rejects this clue at clue-pick time. Same net result for the user
+// (no strike-inducing clue picked), different mechanism.
+//
+// Test now setups the game to JUST BEFORE T7 (the suspect clue) and
+// asserts the giver's take_action() picks something OTHER than this
+// rank-4 → yagami clue.
+TEST(EndgameReplay1892112, T11GiverEvalRejectsBadClue) {
   Game g = build_start();
-  apply_prefix(g, 11);
+  apply_prefix(g, 10);  // T1..T10 — STOP before the suspect T11 clue.
 
-  // my P1 = will-bot69. Slot 5 = ord 5 = orig 10 = p1 (already played
-  // copy at T6 → p stack=1, so p1 is now basic trash).
-  int wb69_slot5 = g.state.hands[1][4];
-  ASSERT_EQ(wb69_slot5, 5);
-  EXPECT_NE(g.meta[wb69_slot5].status, CardStatus::CALLED_TO_PLAY)
-      << "T11 must NOT CTP will-bot69's slot 5 (= p1, basic trash) "
-         "— pre-fix the giver could see slot 3's p2 and narrowed slot 5 "
-         "to {p2}, which target_play accepted under giver visibility "
-         "but failed under receiver visibility, causing a strike-at-T12 "
-         "desync between giver and receiver.";
-}
+  ASSERT_EQ(g.state.current_player_index, 0)
+      << "POV bot will-bot67 must be on turn at T11";
 
-// Sanity: the convention now picks a valid alternative play_target.
-// Specifically slot 3 (g3) → react_slot 4 = will-bot69's slot 4
-// (y1 actual, currently playable).
-TEST(EndgameReplay1892112, T11FallsThroughToValidReactiveTarget) {
-  Game g = build_start();
-  apply_prefix(g, 11);
-
-  int wb69_slot4 = g.state.hands[1][3];
-  ASSERT_EQ(wb69_slot4, 6);
-  // Will-bot69's slot 4 = ord 6 = orig 11 = y1 (playable on y stack=0).
-  EXPECT_EQ(g.meta[wb69_slot4].status, CardStatus::CALLED_TO_PLAY)
-      << "post-fix: convention falls through to target_slot=3 (g3) "
-         "with react_slot=4 (y1 playable). Both giver and receiver "
-         "agree — no desync.";
-  EXPECT_TRUE(g.meta[wb69_slot4].urgent);
+  PerformAction action = g.take_action();
+  // The suspect clue is rank-2 to yagami (= my P2 in the rotated test).
+  bool is_the_bad_clue = std::holds_alternative<PerformRank>(action) &&
+                          std::get<PerformRank>(action).target ==
+                              static_cast<int>(TestPlayer::CATHY) &&
+                          std::get<PerformRank>(action).value == 2;
+  EXPECT_FALSE(is_the_bad_clue)
+      << "will-bot67's eval at T11 must reject the rank-2 → yagami clue "
+         "— under v0.24's POV-invariant convention, the clue causes a "
+         "strike at T12 (will-bot69 plays slot 5 = p1, basic trash). "
+         "advance() should catch this in the eval simulation.";
 }
