@@ -66,19 +66,42 @@ bool would_lose_inverted_reacter(const State& state, int react_order,
   return !state.is_playable(*id);
 }
 
-// Narrow `thought.possible` by visibility — drop any identity whose
-// total copies (base_count + visible-in-other-hands) already equal the
-// variant's card count, since those copies are accounted for elsewhere
-// and the card we're checking can't be that identity. This anticipates
-// the post-clue elim's visibility step so the convention rejects react
-// candidates whose narrowed inferred would be elim'd away afterward.
-IdentitySet effective_possible_for(const State& state, const Thought& thought,
-                                    int self_order) {
+// Narrow `thought.possible` by visibility from the HOLDER's POV.
+//
+// v0.23: previously this iterated *all* hands and used the computing
+// bot's `state.deck[o].id()`. That mixed two visibilities — the
+// computing bot's, and the holder's — and produced different
+// answers depending on which bot was computing. Replay 1892112 T11
+// surfaced this: the giver could see the reacter's own slot-3 p2,
+// dropped p2 from the reacter's slot-5 `effective_possible`, and
+// skipped the receiver-target it should have picked; the reacter
+// couldn't see its own slot 3, so kept p2 and picked it. Two bots,
+// two convention interpretations.
+//
+// Fix: use the HOLDER's POV by excluding the holder's entire hand
+// from the visibility count. The reacter sees every non-self hand,
+// and every other bot can model exactly that vision via
+// `state.deck[o].id()` because every non-holder hand is visible to
+// every non-holder bot. The remaining POV-asymmetry — a bot can't
+// see its own hand — only matters when the computing bot IS in a
+// non-holder hand, which is acceptable: the convention's role-
+// specific decisions (reacter's action, receiver's narrowing) are
+// the ones that need to agree, and those bots compute the same
+// answer from their own POV via this rule.
+//
+// (Cross-test 1884192 + 1892112: the holder's POV rule lets a
+// reacter who can see another player's i5 drop i5 from their own
+// possible — the 1884192 fix — while keeping the reacter's slot p2
+// possible when no non-reacter hand has p2 — the 1892112 fix.)
+IdentitySet effective_possible_for(const Game& game, int self_order) {
+  const State& state = game.state;
+  const Thought& thought = game.common.thoughts[self_order];
+  int holder = state.holder_of(self_order);
   return thought.possible.filter([&](Identity id) {
     int seen = state.base_count[id.to_ord()];
-    for (const auto& hand : state.hands) {
-      for (int o : hand) {
-        if (o == self_order) continue;
+    for (int p = 0; p < static_cast<int>(state.hands.size()); ++p) {
+      if (p == holder) continue;
+      for (int o : state.hands[p]) {
         auto did = state.deck[o].id();
         if (did && *did == id) ++seen;
       }
@@ -222,7 +245,9 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                        ? target_play(game, action, react_order, /*urgent=*/true,
                                         /*stable=*/false)
                        : target_discard(game, action, react_order, /*urgent=*/true);
-    if (!interp) return std::nullopt;
+    // v0.23: continue on target_play/discard failure (see comment in
+    // rank path).
+    if (!interp) continue;
     // Narrow the receiver target's inferred to (playable_set ∪
     // next-ranks-of-reacter-inferred). Without this, the CTP'd receiver
     // target retains the wide post-basic-clue-elim empathy, polluting
@@ -244,7 +269,7 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
             }
             return false;
           });
-      if (narrowed.is_empty()) return std::nullopt;
+      if (narrowed.is_empty()) continue;
       game.with_thought(_target, [&narrowed](const Thought& t) {
         Thought out = t;
         out.old_inferred = t.inferred;
@@ -440,9 +465,7 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
     int react_order = state.hands[reacter][react_slot - 1];
     auto prev_plays = prev.common.obvious_playables(prev, reacter);
     if (contains(prev_plays, react_order)) continue;
-    IdentitySet effective_possible =
-        effective_possible_for(game.state, game.common.thoughts[react_order],
-                               react_order);
+    IdentitySet effective_possible = effective_possible_for(game, react_order);
     bool ok = effective_possible.exists([&](Identity i) {
       if (state.playable_set.contains(i)) return true;
       for (const auto& [_, c] : ctx.possible_conns) {
@@ -451,22 +474,21 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
       return false;
     });
     if (!ok) continue;
-    // Skip this rank play-target if it would resolve to target_play on an
-    // inverted-suit reacter (orange goes to discard pile, lost).
     if (would_lose_inverted_reacter(state, react_order,
                                        target_is_inverted(state, target),
                                        /*standard_is_target_play=*/true)) {
       continue;
     }
-    // Inverted-suit play-target on a rank clue: swap reacter intent to
-    // discard so the receiver reads (rank + reacter discards) →
-    // target_i_discard on the orange target, whose physical discard
-    // advances the orange stack via the game-rule inversion.
     auto interp = target_is_inverted(state, target)
                        ? target_discard(game, action, react_order, /*urgent=*/true)
                        : target_play(game, action, react_order, /*urgent=*/true,
                                         /*stable=*/false);
-    if (!interp) return std::nullopt;
+    // v0.23: continue on target_play failure rather than bailing the
+    // entire reactive interp. Lets the convention fall through when
+    // the first play_target's react_slot lands on an inconsistent
+    // reacter card (e.g. visible-id doesn't match the narrowed
+    // inferred). Replay 1885536 T22 + 1892112 T11 both exercise this.
+    if (!interp) continue;
     // Narrow the receiver target's inferred to (playable_set ∪
     // next-ranks-of-reacter-inferred). Without this, the CTP'd receiver
     // target retains the wide post-basic-clue-elim empathy, polluting
@@ -488,7 +510,7 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
             }
             return false;
           });
-      if (narrowed.is_empty()) return std::nullopt;
+      if (narrowed.is_empty()) continue;
       game.with_thought(target, [&narrowed](const Thought& t) {
         Thought out = t;
         out.old_inferred = t.inferred;
@@ -561,9 +583,7 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
     if (!deck_id) continue;
     auto prev_id = deck_id->prev();
     if (!prev_id) continue;
-    IdentitySet effective_possible =
-        effective_possible_for(game.state, game.common.thoughts[react_order],
-                               react_order);
+    IdentitySet effective_possible = effective_possible_for(game, react_order);
     bool ok = effective_possible.exists([&](Identity i) {
       if (state.playable_set.contains(i)) return true;
       for (const auto& [_, c] : ctx.possible_conns) {
@@ -658,10 +678,7 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
   int chop_react_order = state.hands[reacter][chop_react_slot - 1];
   auto chop_prev_plays = prev.common.obvious_playables(prev, reacter);
   if (contains(chop_prev_plays, chop_react_order)) return std::nullopt;
-  IdentitySet chop_effective =
-      effective_possible_for(game.state,
-                              game.common.thoughts[chop_react_order],
-                              chop_react_order);
+  IdentitySet chop_effective = effective_possible_for(game, chop_react_order);
   bool chop_has_playable = chop_effective.exists([&](Identity i) {
     if (state.playable_set.contains(i)) return true;
     for (const auto& [_, c] : ctx.possible_conns) {
