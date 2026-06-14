@@ -1084,6 +1084,47 @@ std::vector<PerformAction> Game::find_all_clues(int giver) const {
         continue;
       }
 
+      // Critical-discard guard. The reactor's reactive interp can stamp a
+      // reacter slot CALLED_TO_DISCARD (via `target_discard` from the
+      // colour-reactive play_target path, the rank-reactive inverted-target
+      // path, etc.) whenever `calc_slot(focus_slot, target_slot, hand_size)`
+      // lands on a slot whose `inferred` filters to a non-empty non-critical
+      // set from the holder's POV. `target_discard` doesn't verify that the
+      // *actual* identity of that card (visible to the giver) is non-
+      // critical — so a clue can promise the reacter "this is safe to
+      // discard" when the giver can see plainly that it isn't. The reacter's
+      // solver then follows the urgent CTD signal and discards a critical
+      // card.
+      //
+      // Replay 1892428 T47 (the surfacing case): will-bot67 cluing green to
+      // will-bot69 picked wb69's slot 1 (i3 playable) as the receiver play
+      // target. The newest-demoted focus rule chose g2 (slot 3) for
+      // focus_slot=3, so calc_slot(3, 1, 5) = 2 landed the reacter CTD on
+      // yagami's slot 2 = i4 — the only remaining i4 in a Dark Prism game.
+      // yagami's solver followed the CTD and discarded i4, capping the
+      // max_score. The mirror of the 1892259 reacter-strike fix on the
+      // discard side: filter at find_all_clues time so the giver doesn't
+      // issue the clue. Done only here (not inside `target_discard`) so
+      // every observer interpreting an already-given clue runs the same
+      // POV-invariant convention pipeline and stays consistent — exactly the
+      // approach the v0.25 fix (interpret_clue.cpp:265-278 commentary) took
+      // for the play-side.
+      bool reacter_critical_discard = false;
+      for (const auto& hand : state.hands) {
+        for (int o : hand) {
+          if (hypo.meta[o].status != CardStatus::CALLED_TO_DISCARD) continue;
+          if (meta[o].status == CardStatus::CALLED_TO_DISCARD) continue;
+          auto actual = state.deck[o].id();
+          if (!actual) continue;
+          if (state.is_critical(*actual)) {
+            reacter_critical_discard = true;
+            break;
+          }
+        }
+        if (reacter_critical_discard) break;
+      }
+      if (reacter_critical_discard) continue;
+
       double clue_result = hanabi::reactor::get_result(*this, hypo, action);
       bool reactive_move =
           last && std::holds_alternative<ClueInterp>(*last) &&

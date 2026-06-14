@@ -122,6 +122,8 @@ add_executable(hanabi_tests
   tests/test_endgame/test_replay_1892197.cpp
   tests/test_endgame/test_replay_1892259.cpp
   tests/test_endgame/test_replay_1892397.cpp
+  tests/test_endgame/test_replay_1892428.cpp
+  tests/test_endgame/test_replay_1892511.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp

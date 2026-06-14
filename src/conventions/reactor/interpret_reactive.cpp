@@ -412,8 +412,42 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                return ka < kb;
              });
 
+  // Pre-clued slots that post-clue common-knowledge `order_kt` marks
+  // as basic-trash. When the receiver has a slot that was clued
+  // *before* this turn AND the current clue's narrowing on
+  // `common.thoughts.possible` is enough to push every remaining id
+  // into `state.trash_set`, the clue's effect is to disambiguate
+  // that slot as trash. The reactive interp promotes the reacter to
+  // play the slot mapped via `calc_slot`, which:
+  //   (a) advances a stack (the reacter's mapped slot is currently
+  //       playable), vs. only revealing trash the receiver would
+  //       discard on chop anyway;
+  //   (b) gives the receiver the disambiguation that the giver's
+  //       clue was *about* that pre-clued slot — they can confidently
+  //       discard it in the future.
+  // POV invariance: the membership uses `game.common.thinks_trash`
+  // (post-clue, common-knowledge), so giver / receiver / reacter all
+  // compute the same candidate set. The clued-before-this-turn check
+  // uses `prev.state.deck[o].clued`, also POV-invariant.
+  // Replay 1892505 T32: a colour-red clue to wb69 narrows the pre-
+  // clued slot 4 (i2, prior possible {r2,r3,y2,g3,i2,i3}) to {y2,g3,
+  // i2,i3} via the red-untouched filter — every survivor is basic-
+  // trash at stacks y=5/g=5/i=3, so post-clue `order_kt(slot 4)` is
+  // true. focus_slot=3 (newest-demoted) + target_slot=4 ⟹ react_slot=
+  // 4, mapping to wb67's slot 4 = i4 (currently playable on prism
+  // stack=3).
+  auto game_kt = game.common.thinks_trash(game, receiver);
+  std::vector<std::pair<int, int>> pre_clued_trash;
+  for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
+    int o = state.hands[receiver][i];
+    if (!prev.state.deck[o].clued) continue;
+    if (!contains(game_kt, o)) continue;
+    pre_clued_trash.emplace_back(o, static_cast<int>(i));
+  }
+
   std::vector<std::pair<int, int>> dc_targets;
-  if (!unknown_trash.empty()) dc_targets = unknown_trash;
+  if (!pre_clued_trash.empty()) dc_targets = pre_clued_trash;
+  else if (!unknown_trash.empty()) dc_targets = unknown_trash;
   else if (!known_trash.empty()) dc_targets = known_trash;
   else if (!unknown_dupes.empty()) dc_targets = unknown_dupes;
   else dc_targets = sacrifices;
@@ -461,7 +495,12 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                        ? target_discard(game, action, react_order, /*urgent=*/true)
                        : target_play(game, action, react_order, /*urgent=*/true,
                                         /*stable=*/false);
-    if (!interp) return std::nullopt;
+    // v0.28: continue on target_play/target_discard failure rather than
+    // bailing the entire reactive — mirrors the rank-path v0.23 fix at
+    // `interpret_reactive_rank`. With the new `pre_clued_trash` pool
+    // sometimes producing multiple candidate dc-targets, a single
+    // failure on the first one shouldn't abort the whole interp.
+    if (!interp) continue;
     return ClueInterp::REACTIVE;
   }
   return std::nullopt;
