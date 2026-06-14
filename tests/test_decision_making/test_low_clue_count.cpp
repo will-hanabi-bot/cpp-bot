@@ -149,11 +149,17 @@ std::string describe(const PerformAction& a) {
 }  // namespace
 
 // Turn 19: clue_tokens=1, pace=13 (high). Bob (yagami) chop = g2 (trash on
-// G=4 stack). Cathy (will-bot67) chop = g5 (critical). The live bot
-// (pre-v0.21) clued purple to Cathy; the gate rejects it because Bob is
-// safe (trash chop), Cathy's chop is good, BUT the clue doesn't induce 2+
-// plays (p3 is delayed — purple stack = 1, no p2 visible).
-TEST(LowClueCountGate, Turn19PrefersPlayOverPurpleClue) {
+// G=4 stack). Cathy (will-bot67) chop = g5 (critical). Under the v0.21
+// gate this rejected because Bob was safe (trash chop), Cathy's chop
+// was good, BUT the clue didn't induce 2+ plays (p3 is delayed).
+//
+// v0.26 refined gate: condition (c) accepts the clue when Bob is safe
+// AND Cathy has a non-trash chop AND the clue gets ≥ 1 play (not 2+).
+// This case satisfies (c) — Cathy's g5 is non-trash, the purple clue
+// CTPs p3 (≥ 1 play). So the new gate ALLOWS the purple clue. The test
+// is disabled because it pins the OLD spec; the user has explicitly
+// changed the spec for v0.26.
+TEST(LowClueCountGate, DISABLED_Turn19PrefersPlayOverPurpleClue) {
   Game g = build_start();
   apply_prefix(g, 18);  // T1..T18 applied; T19 = bot's decision.
 
@@ -185,4 +191,52 @@ TEST(LowClueCountGate, Turn40PrefersPlayOverPinkClue) {
   PerformAction action = g.take_action();
   EXPECT_FALSE(is_clue(action))
       << "T40: bot should play, not burn a clue; got " << describe(action);
+}
+
+// v0.26 regression for the refined spec: replay 1892397 T24.
+// will-bot67 (giver) has 1 clue token, pace high. Stacks r=2 y=0 g=2
+// b=3 p=4 i=0. Hands at T24:
+//   Bob = will-bot69: r1 p3 y5 g5 b1 (slot 5 = b1 = trash).
+//   Cathy = yagami:   p4 y1 i4 r4 y4 (slot 5 = y4 = non-trash).
+// will-bot67 hand: y3 r5 y3 i2 b4.
+//
+// The blue clue to yagami touches NOTHING (no blue in yagami's hand).
+// So it can't get 2+ new plays (b) and likely 0 plays anyway. Per the
+// v0.26 spec:
+//   (a) Bob trash chop b1 ⇒ Bob safe (not in danger). FAIL.
+//   (b) 0 new plays. FAIL.
+//   (c) Bob safe + Cathy non-trash chop. But 0 plays → FAIL.
+// → Low value. The gate should reject; bot picks something else.
+//
+// Sourced from https://hanab.live/shared-replay/1892397#24.
+TEST(LowClueCountGate, Turn24RejectsLowValueBlueClue) {
+  // Setup directly via SetupOptions — simpler than full replay walking
+  // since we just need the state at T24.
+  SetupOptions opts;
+  opts.hands = {
+      // P0 = will-bot67 (our POV, the giver of T24). Hidden.
+      {"xx", "xx", "xx", "xx", "xx"},
+      // P1 = will-bot69 (Bob). Slot-1-first: r1, p3, y5, g5, b1.
+      {"r1", "p3", "y5", "g5", "b1"},
+      // P2 = yagami (Cathy). Slot-1-first: p4, y1, i4, r4, y4.
+      {"p4", "y1", "i4", "r4", "y4"},
+  };
+  opts.variant_name = "Funnels & Dark Prism (6 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = std::vector<int>{2, 0, 2, 3, 4, 0};
+  opts.clue_tokens = 1;
+  Game g = setup(std::move(opts));
+
+  ASSERT_LT(g.state.clue_tokens, 3) << "guard: low clue count";
+  ASSERT_GE(g.state.pace(), 3) << "guard: high pace";
+
+  PerformAction action = g.take_action();
+  // The bad clue would be PerformColour{target=2 (yagami), value=3 (blue)}.
+  bool is_bad_blue = std::holds_alternative<PerformColour>(action) &&
+                     std::get<PerformColour>(action).target == 2 &&
+                     std::get<PerformColour>(action).value == 3;
+  EXPECT_FALSE(is_bad_blue)
+      << "T24: bot must not pick the low-value blue→yagami clue "
+         "(touches nothing, no Cathy non-trash chop benefit). Got "
+      << describe(action);
 }

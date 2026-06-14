@@ -50,31 +50,30 @@ bool chop_is_trash(const Game& game, std::optional<int> chop_order) {
   return id && game.state.is_basic_trash(*id);
 }
 
-// Low-clue-count gate (CLAUDE.md v0.21). When `state.clue_tokens < 3` AND
-// `state.pace() >= 3`, a clue is only "worth it" if it's high-value. The
-// caller penalises a non-high-value clue so any known play wins.
+// Low-clue-count gate. When `state.clue_tokens < 3` AND
+// `state.pace() >= 3`, a clue is only "worth it" if it's high-value.
+// The caller penalises a non-high-value clue so any known play wins.
 //
-// High value = (Bob in discard-danger) OR (Bob safe AND Cathy in
-// discard-danger AND the clue advances ≥ 2 plays).
+// v0.26 spec (user-refined): high-value iff ANY of:
+//   (a) Bob has a non-trash chop AND no safe discards.
+//   (b) The clue gets CTP on TWO new cards.
+//   (c) Bob has trash chop OR safe discard, BUT Cathy has a non-trash
+//       chop, AND the clue gets at least ONE play.
 //
-// - "Bob in discard-danger" = Bob has no obvious play, no known trash
-//   anywhere in hand, AND chop is non-trash.
-// - "Bob safe" = Bob has an obvious play OR trash chop OR known trash in
-//   hand (any way to defer the chop discard safely).
-// - "Cathy in discard-danger" = Cathy's chop is non-trash.
-//
-// Sub-condition #3 of scenario B in the user's spec — "the clue gets
-// Cathy to play a card that is impossible to otherwise stable-clue Bob a
-// playable" — is intentionally *not* implemented here. It's a rarely-
-// triggered sub-case and hard to detect statically. The 2+-plays
-// alternative covers the typical case where the burn is justified.
+// Notes:
+// - "Bob safe" = Bob has an obvious play OR known trash anywhere OR
+//   trash chop (any way to defer chop discard safely).
+// - "Non-trash chop" = chop card identity is not basic-trash (treats
+//   unknown chop as non-trash).
+// - "New plays" = orders that transitioned from non-CTP to CTP through
+//   this clue's interpretation in `hypo`.
 bool is_high_value_low_clue(const Game& game, const Game& hypo,
                             const ClueAction& /*ca*/) {
   const State& s = game.state;
   const Player& common = game.common;
   int giver = s.current_player_index;
   int bob = s.next_player_index(giver);
-  if (bob == giver) return true;  // Solo (shouldn't happen) — let it through.
+  if (bob == giver) return true;  // Solo — let it through.
 
   auto bob_chop = game.chop(bob);
   bool bob_loaded = !common.obvious_playables(game, bob).empty();
@@ -82,17 +81,9 @@ bool is_high_value_low_clue(const Game& game, const Game& hypo,
   bool bob_safe = bob_loaded || bob_known_trash || chop_is_trash(game, bob_chop);
   bool bob_chop_nontrash = chop_is_nontrash(game, bob_chop);
 
-  // Scenario A: Bob about to discard something non-trash.
+  // (a) Bob about to discard something non-trash.
   if (!bob_safe && bob_chop_nontrash) return true;
 
-  if (!bob_safe) return false;  // Bob in unclear state — be conservative.
-
-  int cathy = s.next_player_index(bob);
-  if (cathy == giver) return false;  // 2p: no Cathy.
-  auto cathy_chop = game.chop(cathy);
-  if (!chop_is_nontrash(game, cathy_chop)) return false;
-
-  // Sub-condition: clue advances ≥ 2 plays (newly CALLED_TO_PLAY).
   int new_plays = 0;
   for (const auto& hand : s.hands) {
     for (int o : hand) {
@@ -102,7 +93,17 @@ bool is_high_value_low_clue(const Game& game, const Game& hypo,
       }
     }
   }
-  return new_plays >= 2;
+
+  // (b) Clue gets ≥ 2 new plays — independent of Bob/Cathy state.
+  if (new_plays >= 2) return true;
+
+  // (c) Bob safe + Cathy non-trash chop + ≥ 1 new play.
+  if (!bob_safe) return false;
+  int cathy = s.next_player_index(bob);
+  if (cathy == giver) return false;  // 2p: no Cathy.
+  auto cathy_chop = game.chop(cathy);
+  if (!chop_is_nontrash(game, cathy_chop)) return false;
+  return new_plays >= 1;
 }
 
 }  // namespace

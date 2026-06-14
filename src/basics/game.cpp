@@ -800,6 +800,20 @@ void Game::elim(std::optional<int> except_) {
   common = std::move(new_common);
   for (int order : resets) {
     if (meta[order].status == CardStatus::CALLED_TO_PLAY) {
+      // v0.26: don't clear CTP when the elim-driven reset is the
+      // side-effect of a duplicate-strike on ANOTHER copy of the
+      // CTP'd identity. The original convention commitment is still
+      // valid from common knowledge — the duplicate just happened to
+      // land on the stack first. Tracked symptom in replay 1892397
+      // T23: yagami's CTP'd g2 strikes (g stack already at 2 from
+      // T16); the resulting elim cascade was clearing CTP/notes on
+      // unrelated cards (e.g. will-bot67's b4) which should remain
+      // committed. Detection: if the card's actual deck identity is
+      // visible AND has already been played onto the stacks (=
+      // basic_trash), keep the CTP — the elim's narrowed-to-empty
+      // verdict reflects the dupe-strike, not a real chain break.
+      auto did = state.deck[order].id();
+      if (did && state.is_basic_trash(*did)) continue;
       with_meta(order, [](ConvData& m) {
         m.status = CardStatus::NONE;
         m.by = std::nullopt;

@@ -563,12 +563,20 @@ Player refresh_play_links(Player p, const Game& game) {
       if (in_play.count(o)) rem.push_back(o);
     }
     if (rem.empty()) {
-      IdentitySet playable_set = game.state.playable_set;
-      p = p.with_thought(pl.target, [&](const Thought& t) {
-        Thought out = t;
-        out.inferred = t.inferred.intersect(playable_set);
-        return out;
-      });
+      // v0.26: previously this narrowed `inferred` to
+      // `intersect(state.playable_set)` whenever the link resolved
+      // (= all prereq orders left hands). That intersection fires
+      // every play-event and over-narrows CTP'd cards based on the
+      // CURRENT playable_set rather than physical evidence about the
+      // card's identity. Replay 1892397: yagami's g2 inferred
+      // {r3,y1,g2,b3,p3,i1} narrowed all the way down to {r3} via
+      // repeated playable_set intersections, even though only the
+      // p3-by-will-bot69 play provided actual visibility evidence.
+      //
+      // The visibility-based narrowing (`card_elim` in this file
+      // earlier) handles legitimate "all copies accounted for"
+      // shrinking. Resolved links no longer touch `inferred` — the
+      // link just drops.
     } else {
       PlayLink kept{std::move(rem), pl.prereqs, pl.target};
       p.play_links.insert(p.play_links.begin(), std::move(kept));
