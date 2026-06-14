@@ -154,10 +154,50 @@ ReactiveContext reactive_context(const Game& prev, const Game& game,
   ctx.hypo_state = after_others;
   Game hypo_prev = prev;
   hypo_prev.state = after_others;
-  auto self_plays = prev.common.obvious_playables(hypo_prev, receiver);
+  // Advance hypo_state through the receiver's empathy-known plays. Using
+  // `thinks_playables(exclude_trash=true)` (inferred-aware via
+  // `order_playable`) instead of `obvious_playables` (possible-only via
+  // `order_kp`) catches good-touch-narrowed plays whose `status` is still
+  // NONE — e.g. a clued slot whose `possible` is `{b1..b4, i4}` reduces
+  // to the singleton playable `{i4}` once basic-trash ids are filtered
+  // out. Without this advance, the play-target loop below treats those
+  // cards as the convention's primary play target even though they would
+  // play naturally; the next playable in the chain (the card that
+  // actually needs the clue's narrowing) never surfaces.
+  //
+  // `good_touch_elim` is gated on `game.good_touch` (which the reactor
+  // pipeline leaves at false), so `thoughts.inferred` itself isn't
+  // narrowed by `trash_set`. We do the narrowing inline here against
+  // `prev.common.thoughts[o].possibilities()` (= inferred if non-empty,
+  // else possible), filtering out `trash_set`. POV invariance: this uses
+  // `common.thoughts[o]` which every observer agrees on, unlike
+  // `state.deck[o].id()` which is hidden for the receiver's own cards.
+  // The `is_playable` guard prevents duplicate-singleton links (two
+  // cards both narrowing to the same playable id) from double-advancing
+  // the same stack.
+  auto self_plays = prev.common.thinks_playables(hypo_prev, receiver,
+                                                    /*exclude_trash=*/true);
   for (int o : self_plays) {
-    auto id = state.deck[o].id();
-    if (id) ctx.hypo_state = ctx.hypo_state.try_play(*id);
+    // Only advance through cards the receiver would naturally PLAY —
+    // skip cards already CTD'd (slated for discard) or otherwise
+    // earmarked for non-play actions (sarcastic, gentleman's discard).
+    // `thinks_playables` can pull in a CTD'd card if its (still-broad)
+    // `inferred` happens to narrow to a single non-trash playable id
+    // after the trash_set filter; the convention has explicitly told
+    // the holder to discard it, so we must not assume it will play and
+    // advance the stack. (Replay 1875304 T21: a CTD'd g1 narrowed to
+    // {r4} via this trash filter; advancing r_stack via the false
+    // "r4 play" pushed the convention's reactive picks to the wrong
+    // slot.)
+    CardStatus st = prev.meta[o].status;
+    if (st != CardStatus::NONE && st != CardStatus::CALLED_TO_PLAY) continue;
+    IdentitySet effective =
+        prev.common.thoughts[o].possibilities().difference(prev.state.trash_set);
+    if (effective.length() != 1) continue;
+    Identity id = effective.head();
+    if (ctx.hypo_state.is_playable(id)) {
+      ctx.hypo_state = ctx.hypo_state.try_play(id);
+    }
   }
   return ctx;
 }
@@ -260,7 +300,16 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
       int holder = state.holder_of(_target);
       auto receiver_conns =
           delayed_plays(game, action.giver, holder, /*stable=*/false);
-      IdentitySet ps = state.playable_set;
+      // Filter the receiver target's inferred against the playable set
+      // *after* the receiver's empathy-known self-plays have advanced
+      // hypo_state. Without this, a play target like i5 (which only
+      // becomes playable once the receiver plays their already-known i4)
+      // would be intersected against the pre-advance playable_set and
+      // narrow to empty — falsely rejecting the convention's actual
+      // intended target. Reacter checks elsewhere still use
+      // state.playable_set because the reacter acts *before* the
+      // receiver's self-plays.
+      IdentitySet ps = ctx.hypo_state.playable_set;
       IdentitySet narrowed = game.common.thoughts[_target].inferred.filter(
           [&](Identity i) {
             if (ps.contains(i)) return true;
@@ -501,7 +550,16 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
       int holder = state.holder_of(target);
       auto receiver_conns =
           delayed_plays(game, action.giver, holder, /*stable=*/false);
-      IdentitySet ps = state.playable_set;
+      // Filter the receiver target's inferred against the playable set
+      // *after* the receiver's empathy-known self-plays have advanced
+      // hypo_state. Without this, a play target like i5 (which only
+      // becomes playable once the receiver plays their already-known i4)
+      // would be intersected against the pre-advance playable_set and
+      // narrow to empty — falsely rejecting the convention's actual
+      // intended target. Reacter checks elsewhere still use
+      // state.playable_set because the reacter acts *before* the
+      // receiver's self-plays.
+      IdentitySet ps = ctx.hypo_state.playable_set;
       IdentitySet narrowed = game.common.thoughts[target].inferred.filter(
           [&](Identity i) {
             if (ps.contains(i)) return true;
