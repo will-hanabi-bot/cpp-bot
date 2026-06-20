@@ -460,6 +460,27 @@ std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
   }
 
   int target_order = hand[target_index];
+  // v0.30: if the on_clue untouched-diff just wiped the target's
+  // inferred set (e.g. a previously-singleton inferred from a
+  // sarcastic link / finesse happened to be exactly the rank/colour
+  // we just removed for untouched cards), elim()'s Step 1 "inferred
+  // empty -> reset everything" path would unconditionally clear the
+  // CTD status we're about to stamp -- silently dropping the
+  // referential-discard signal. Reset the inferred back to `possible`
+  // first so the empty-check fails when elim runs. The CTD signal
+  // doesn't depend on the inferred set (the bot just needs to know
+  // "discard this slot"), so resetting is safe.
+  //
+  // Symptom this prevents: replay 1899044 T16 -- ord 15 had inferred
+  // {g3} from a SarcasticLink created at T9; the rank-3 clue's
+  // untouched-diff stripped g3, leaving inferred empty; ref_discard
+  // correctly stamped CTD on slot 4, but elim's Step 1 then reset
+  // status to NONE and the bot fell back to chopping slot 1 instead.
+  if (game.common.thoughts[target_order].inferred.is_empty()) {
+    game.with_thought(target_order, [](const Thought& t) {
+      return t.reset_inferences();
+    });
+  }
   int turn = state.turn_count;
   int g = giver;
   game.with_meta(target_order, [turn, g](ConvData& m) {
