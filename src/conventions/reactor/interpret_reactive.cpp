@@ -363,10 +363,16 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
     }
     if (is_trash) unknown_trash.emplace_back(o, static_cast<int>(i));
   }
+  // Prefer unclued trash (newly identifiable as trash via this clue's
+  // mapping) over already-clued trash. Re-CTD'ing a clued card adds no
+  // new information; an unclued trash slot is the one the receiver
+  // genuinely learns about. Example 2 in the convention spec: g1
+  // (clued, known trash) vs. b3 (unclued, same-hand-duped) — the
+  // convention should mark the unclued b3.
   std::sort(unknown_trash.begin(), unknown_trash.end(),
              [&](const auto& a, const auto& b) {
-               int ka = prev.state.deck[a.first].clued ? -1 : 1;
-               int kb = prev.state.deck[b.first].clued ? -1 : 1;
+               int ka = prev.state.deck[a.first].clued ? 1 : -1;
+               int kb = prev.state.deck[b.first].clued ? 1 : -1;
                return ka < kb;
              });
 
@@ -446,11 +452,43 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
   }
 
   std::vector<std::pair<int, int>> dc_targets;
+  bool chose_sacrifices = false;
   if (!pre_clued_trash.empty()) dc_targets = pre_clued_trash;
   else if (!unknown_trash.empty()) dc_targets = unknown_trash;
   else if (!known_trash.empty()) dc_targets = known_trash;
   else if (!unknown_dupes.empty()) dc_targets = unknown_dupes;
-  else dc_targets = sacrifices;
+  else { dc_targets = sacrifices; chose_sacrifices = true; }
+
+  // v0.30 convention: don't retarget to a card that is already CTD'd
+  // (re-CTD adds no info — see Example 3) or whose identity duplicates
+  // an existing CTD'd card in the same hand (double-discarding the
+  // identity would lose it entirely — see Example 4). When the filter
+  // empties the chosen pool, fall back to filtered sacrifices.
+  auto target_is_blocked = [&](int target) {
+    if (game.meta[target].status == CardStatus::CALLED_TO_DISCARD) return true;
+    auto tid = state.deck[target].id();
+    if (!tid) return false;
+    for (int o2 : state.hands[receiver]) {
+      if (o2 == target) continue;
+      auto oid = state.deck[o2].id();
+      if (oid && *oid == *tid &&
+          game.meta[o2].status == CardStatus::CALLED_TO_DISCARD) {
+        return true;
+      }
+    }
+    return false;
+  };
+  dc_targets.erase(
+      std::remove_if(dc_targets.begin(), dc_targets.end(),
+                      [&](const auto& p) { return target_is_blocked(p.first); }),
+      dc_targets.end());
+  if (dc_targets.empty() && !chose_sacrifices) {
+    sacrifices.erase(
+        std::remove_if(sacrifices.begin(), sacrifices.end(),
+                        [&](const auto& p) { return target_is_blocked(p.first); }),
+        sacrifices.end());
+    dc_targets = sacrifices;
+  }
 
   if (dc_targets.empty()) return std::nullopt;
 

@@ -1488,6 +1488,31 @@ PerformAction Game::take_action() const {
         seen.push_back(o);
       }
     }
+    // v0.30: most-recent-CTD enforcement. When the hand has multiple
+    // CTD'd cards (older CTDs that the bot hasn't yet discarded plus a
+    // newer CTD from this turn's clue), the convention says the bot
+    // always discards the most-recently-signaled CTD. Drop older CTDs
+    // from the candidate pool so eval can't pick them this turn — they
+    // remain CTD'd for future turns once the newer CTD is consumed.
+    {
+      int newest_signal = -1;
+      for (int o : discard_orders) {
+        if (meta[o].status == CardStatus::CALLED_TO_DISCARD) {
+          int sig = meta[o].signal_turn.value_or(-1);
+          if (sig > newest_signal) newest_signal = sig;
+        }
+      }
+      if (newest_signal >= 0) {
+        discard_orders.erase(
+            std::remove_if(
+                discard_orders.begin(), discard_orders.end(),
+                [&](int o) {
+                  return meta[o].status == CardStatus::CALLED_TO_DISCARD &&
+                         meta[o].signal_turn.value_or(-1) != newest_signal;
+                }),
+            discard_orders.end());
+      }
+    }
     for (int o : discard_orders) {
       auto inferred = m.thoughts[o].id(/*infer=*/true);
       // Inverted (Orange) suit: PerformDiscard on a known orange would
