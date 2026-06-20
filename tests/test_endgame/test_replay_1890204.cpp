@@ -106,21 +106,30 @@ TEST(EndgameReplay1890204, T7DoesNotCTPWillbot69Slot2) {
          "{b1} but actually y2), leading to the T9 strike.";
 }
 
-// Stage A regression: when the reactive interp DOES commit a CTP on a
-// receiver target, the target's inferred is narrowed (no longer the
-// wide post-basic-clue-elim empathy). This is the same y2 narrowing
-// the user surfaced for T3 — pinned here via the post-T3 state.
+// Stage A regression: when the reactive interp DOES commit a CTP on
+// a receiver target, the target's inferred is narrowed (no longer
+// the wide post-basic-clue-elim empathy).
+//
+// Pre-v0.33: yagami's hand post-T2 was [y2(slot1, new), b1, b2, y2,
+// p1] and the convention picked slot 1 (newest y2) as the receiver
+// target. Post-v0.33's same-hand-dupe rule: slot 1 y2 is demoted
+// because slot 4 also holds y2; the primary list (sorted slot-ASC)
+// becomes [b1@slot2, y2@slot4, p1@slot5, y2@slot1(dupe)]. b1@slot2
+// is the first primary that resolves on Bob, so the CTP target is
+// yagami's slot 2 (b1) instead. The narrowing assertion still holds
+// — just pointed at slot 2 with the actual id b1.
 TEST(EndgameReplay1890204, T3ReceiverTargetInferredIsNarrow) {
   Game g = build_start();
   apply_prefix(g, 3);  // T1..T3 applied.
 
-  // Yagami's slot 1 = order 15 = y2 (CTP'd at T3 as reactive receiver).
-  int yagami_slot1 = g.state.hands[1][0];
-  ASSERT_EQ(yagami_slot1, 15);
-  ASSERT_EQ(g.meta[yagami_slot1].status, CardStatus::CALLED_TO_PLAY)
-      << "T3 should CTP yagami's slot 1 via reactive";
+  int yagami_slot2 = g.state.hands[1][1];
+  ASSERT_EQ(yagami_slot2, 9);  // b1, drawn at setup as P1's slot-1 originally.
+  ASSERT_EQ(g.meta[yagami_slot2].status, CardStatus::CALLED_TO_PLAY)
+      << "T3 should CTP yagami's slot 2 (b1, unique playable identity) "
+         "via reactive — slot 1's y2 is a dupe of slot 4's y2 under "
+         "v0.33's same-hand-dupe rule";
 
-  const auto& inferred = g.common.thoughts[yagami_slot1].inferred;
+  const auto& inferred = g.common.thoughts[yagami_slot2].inferred;
   // Pre-Stage A: inferred had ~18 ids (post-basic-clue narrow by rank
   // ≤ 3). Post-Stage A: narrowed to (playable_set ∪ next-ranks-of-
   // reacter-inferred). Rank-3+ ids of all-zero stacks must not survive.
@@ -133,7 +142,8 @@ TEST(EndgameReplay1890204, T3ReceiverTargetInferredIsNarrow) {
           << " ids; suit=" << suit;
     }
   }
-  // The actual id (y2) must still be in the narrowed set.
-  EXPECT_TRUE(inferred.contains(Identity{1, 2}))
-      << "narrowed inferred must keep the actual identity y2";
+  // The actual id (b1 = suit 3, rank 1) must still be in the narrowed
+  // set.
+  EXPECT_TRUE(inferred.contains(Identity{3, 1}))
+      << "narrowed inferred must keep the actual identity b1";
 }

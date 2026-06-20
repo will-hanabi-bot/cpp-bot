@@ -83,6 +83,7 @@ add_executable(hanabi_tests
   tests/test_reactor/test_orange.cpp
   tests/test_reactor/test_discard_penalty.cpp
   tests/test_reactor/test_dc_target_retarget.cpp
+  tests/test_reactor/test_same_hand_dupe_playables.cpp
   tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_replay_1874799.cpp

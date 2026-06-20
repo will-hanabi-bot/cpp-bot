@@ -1,6 +1,7 @@
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 
 #include <algorithm>
+#include <set>
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/clue.h"
@@ -215,35 +216,49 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
   ReactiveContext ctx = reactive_context(prev, game, action, reacter);
 
   // Find play targets in receiver's hand.
-  std::vector<std::pair<int, int>> play_targets;
+  // v0.33: among multiple copies of the same playable identity in
+  // the receiver's hand, only the RIGHTMOST copy (highest slot index
+  // = oldest) is a "primary" play target. The lefter copies are
+  // treated as trash for primary selection and tried only as a
+  // right-to-left fallback if no primary react_slot resolves on Bob.
+  // CTD'd cards are eligible as play targets *if* they're currently
+  // playable — the stack may have caught up to a card we earlier
+  // marked for discard. The is_playable check below filters
+  // CTD'd-not-yet-playable cards.
+  std::vector<std::pair<int, int>> all_playable;
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
     int o = state.hands[receiver][i];
-    // CTD'd cards are eligible as play targets *if* they're currently
-    // playable — the stack may have caught up to a card we earlier
-    // marked for discard. The is_playable check below filters
-    // CTD'd-not-yet-playable cards.
     if (contains(ctx.known_plays, o)) continue;
     auto id = state.deck[o].id();
     if (!id || !ctx.hypo_state.is_playable(*id)) continue;
-    play_targets.emplace_back(o, static_cast<int>(i));
+    all_playable.emplace_back(o, static_cast<int>(i));
   }
-
-  // Sort: unclued dupe → 99 (last); else by slot index.
-  auto sort_key = [&](const std::pair<int, int>& t) {
-    int o = t.first;
-    bool unclued_dupe = !prev.state.deck[o].clued;
-    if (unclued_dupe) {
-      for (int o2 : state.hands[receiver]) {
-        if (o2 < o && prev.state.deck[o2].clued &&
-            state.deck[o].matches(state.deck[o2])) {
-          return 99;
-        }
+  std::vector<std::pair<int, int>> play_targets;
+  std::vector<std::pair<int, int>> dupe_targets;
+  {
+    // Walk slot DESCENDING so the first encounter of each identity
+    // is the rightmost copy → that one becomes primary; subsequent
+    // (lefter) copies of the same identity become dupes.
+    std::vector<std::pair<int, int>> by_slot_desc = all_playable;
+    std::sort(by_slot_desc.begin(), by_slot_desc.end(),
+               [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::set<int> seen_id;
+    for (const auto& p : by_slot_desc) {
+      auto id = state.deck[p.first].id();
+      int id_ord = id->to_ord();
+      if (seen_id.insert(id_ord).second) {
+        play_targets.push_back(p);
+      } else {
+        dupe_targets.push_back(p);
       }
     }
-    return t.second;
-  };
+  }
+  // Primary play_targets sorted slot ASCENDING (leftmost first).
   std::sort(play_targets.begin(), play_targets.end(),
-             [&](const auto& a, const auto& b) { return sort_key(a) < sort_key(b); });
+             [](const auto& a, const auto& b) { return a.second < b.second; });
+  // dupe_targets stays slot DESCENDING (iterated right-to-left).
+  play_targets.insert(play_targets.end(), dupe_targets.begin(),
+                       dupe_targets.end());
 
   int hand_size = kHandSize[state.num_players];
   for (const auto& [_target, index] : play_targets) {
@@ -553,32 +568,44 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
   int receiver = action.target;
   ReactiveContext ctx = reactive_context(prev, game, action, reacter);
 
-  std::vector<std::pair<int, int>> play_targets;
+  // v0.33: among multiple copies of the same playable identity in
+  // the receiver's hand, only the RIGHTMOST copy (highest slot index
+  // = oldest) is a "primary" play target. The lefter copies are
+  // treated as trash for primary selection and tried only as a
+  // right-to-left fallback if no primary react_slot resolves on Bob.
+  // CTD'd cards are eligible as play targets *if* they're currently
+  // playable — the stack may have caught up to a card we earlier
+  // marked for discard. The is_playable check below filters the
+  // not-yet-playable CTD'd cards.
+  std::vector<std::pair<int, int>> all_playable;
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
     int o = state.hands[receiver][i];
-    // CTD'd cards are eligible as play targets *if* they're currently
-    // playable — the stack may have caught up to a card we earlier
-    // marked for discard. The is_playable check below filters the
-    // not-yet-playable CTD'd cards.
     if (contains(ctx.known_plays, o)) continue;
     auto id = state.deck[o].id();
     if (!id || !ctx.hypo_state.is_playable(*id)) continue;
-    play_targets.emplace_back(o, static_cast<int>(i));
+    all_playable.emplace_back(o, static_cast<int>(i));
   }
-  auto sort_key = [&](const std::pair<int, int>& t) {
-    int o = t.first;
-    if (!prev.state.deck[o].clued) {
-      for (int o2 : state.hands[receiver]) {
-        if (o2 != o && prev.state.deck[o2].clued &&
-            state.deck[o].matches(state.deck[o2])) {
-          return 99;
-        }
+  std::vector<std::pair<int, int>> play_targets;
+  std::vector<std::pair<int, int>> dupe_targets;
+  {
+    std::vector<std::pair<int, int>> by_slot_desc = all_playable;
+    std::sort(by_slot_desc.begin(), by_slot_desc.end(),
+               [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::set<int> seen_id;
+    for (const auto& p : by_slot_desc) {
+      auto id = state.deck[p.first].id();
+      int id_ord = id->to_ord();
+      if (seen_id.insert(id_ord).second) {
+        play_targets.push_back(p);
+      } else {
+        dupe_targets.push_back(p);
       }
     }
-    return t.second;
-  };
+  }
   std::sort(play_targets.begin(), play_targets.end(),
-             [&](const auto& a, const auto& b) { return sort_key(a) < sort_key(b); });
+             [](const auto& a, const auto& b) { return a.second < b.second; });
+  play_targets.insert(play_targets.end(), dupe_targets.begin(),
+                       dupe_targets.end());
 
   int hand_size = kHandSize[state.num_players];
   for (const auto& [target, index] : play_targets) {

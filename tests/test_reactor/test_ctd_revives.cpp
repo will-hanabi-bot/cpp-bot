@@ -97,10 +97,11 @@ TEST(CTDRevives, ReactiveColourPicksCTDPlayableAsTarget) {
 // implicitly by the full ctest sweep on all existing replay tests.)
 
 // Multi-copy CTD: two CTD'd copies of the same identity in one hand,
-// both currently playable. The existing sort_key picks leftmost-clued
-// (= lowest slot index, since both are touched). Verify the leftmost
-// CTD'd card gets CTP'd by the convention.
-TEST(CTDRevives, MultiCopyCTDLeftmostClued) {
+// both currently playable. Under v0.33's same-hand-dupe rule, the
+// RIGHTMOST (highest slot index = oldest) copy is the primary play
+// target; the leftmore copy is treated as trash for play-target
+// selection. Verify the rightmost CTD'd card gets CTP'd.
+TEST(CTDRevives, MultiCopyCTDRightmostBecomesPrimary) {
   SetupOptions opts;
   opts.hands = {
       {"r2", "r3", "y4", "g4", "b4"},
@@ -123,10 +124,11 @@ TEST(CTDRevives, MultiCopyCTDLeftmostClued) {
 
   g = take_turn(std::move(g), "Alice clues Purple to Cathy");
 
-  // The convention's sort_key picks the leftmost (= newest = lowest
-  // slot index) clued play target. Slot 2 < Slot 4 → slot 2 gets
-  // promoted to CTP. Slot 4 stays CTD'd (the convention picked the
-  // other copy as the play target).
-  EXPECT_EQ(g.meta[cathy_p3_slot2].status, CardStatus::CALLED_TO_PLAY)
-      << "leftmost CTD'd copy must be promoted to CTP";
+  // v0.33: among multiple copies of the same playable identity, the
+  // RIGHTMOST (= oldest = highest slot index) copy is the primary
+  // play target. Slot 4 wins over slot 2 → slot 4 gets promoted to
+  // CTP; slot 2 stays CTD'd (it was treated as trash for play-target
+  // selection under the new rule).
+  EXPECT_EQ(g.meta[cathy_p3_slot4].status, CardStatus::CALLED_TO_PLAY)
+      << "rightmost CTD'd copy must be promoted to CTP under v0.33";
 }
