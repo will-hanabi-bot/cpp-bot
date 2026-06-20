@@ -203,9 +203,19 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   }
 
   if (failed) {
-    // Bombed - clear all conv info.
+    // Bombed - clear conv info, except for cards explicitly CALLED_TO_PLAY.
+    // A strike (often a dupe-strike on an already-played card or a finesse
+    // miscommunication) breaks the convention chain that produced the
+    // misplayed card, but CTPs stamped by *separate* clues remain valid.
+    // The previous nuclear reset wiped them, costing the team the queued
+    // play; the v0.26 fix preserved CTP through `elim()`'s narrow-to-empty
+    // path but that runs *after* this handler. Mirroring the same intent
+    // here keeps the CTP committed across the strike. CTP cards retain
+    // their `inferred`/`info_lock` narrowing too (the convention's promise
+    // about the identity still holds).
     for (const auto& hand : state.hands) {
       for (int o : hand) {
+        if (meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
         with_thought(o, [](const Thought& t) {
           Thought out = t;
           out.inferred = t.possible;
