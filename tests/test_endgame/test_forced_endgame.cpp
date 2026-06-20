@@ -136,3 +136,111 @@ TEST(ForcedEndgame, FiveLockoutDoesNotFireWhenCardsLeftAboveOne) {
 
   EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value());
 }
+
+// --- Two-critical play rule ---------------------------------------------
+//
+// Setup pattern: Alice (CP) holds r4 in slot 1 and b4 in slot 2 with
+// `discarded = {"r4", "b4"}` so each remaining 4 is the only copy left
+// in the game (`is_critical` true). `fully_known` pre-clues both slots
+// so `common.thoughts[order].inferred` is a singleton. All 5s stay in
+// the deck so the 5-lockout rule never triggers for these positions
+// (its `five_holder` lookup returns nullopt). `play_stacks` controls
+// playability: r=3 makes r4 playable; r=0 leaves it unplayable.
+
+namespace {
+
+SetupOptions two_crit_base() {
+  SetupOptions opts;
+  opts.hands = {
+      {"r4", "b4", "o1", "o2", "o3"},
+      {"r1", "r2", "b1", "b2", "o4"},
+      {"r1", "r3", "b1", "b3", "o4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.discarded = {"r4", "b4"};
+  return opts;
+}
+
+}  // namespace
+
+// Canonical fire case: two known crits (r4, b4), r4 playable (r stack=3),
+// cards_left=1, clue_tokens=2 < num_players=3 → forced PerformPlay on r4.
+TEST(ForcedEndgame, TwoCriticalPlayFiresWhenTwoCritsOnePlayable) {
+  SetupOptions opts = two_crit_base();
+  opts.play_stacks = {3, 0, 0};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = fully_known(std::move(g), TestPlayer::ALICE, 2, "b4");
+  g = with_cards_left(std::move(g), 1);
+
+  int r4_order = g.state.hands[0][0];
+  auto forced = hanabi::endgame::forced_endgame_action(g);
+  ASSERT_TRUE(forced.has_value())
+      << "two-critical play must fire: Alice knows r4 (playable) and b4 "
+         "(critical, non-playable); cards_left=1, ct=2 < n=3";
+  ASSERT_TRUE(std::holds_alternative<PerformPlay>(*forced))
+      << "forced action must be a PerformPlay, not a clue/discard";
+  EXPECT_EQ(std::get<PerformPlay>(*forced).target, r4_order)
+      << "must target the playable critical card (r4)";
+}
+
+// Negative: only one critical known. Alice has r4 fully_known (crit
+// playable); b4 in hand but not pre-clued so common.thoughts.inferred is
+// not a singleton and the rule doesn't count it. Rule must not fire.
+TEST(ForcedEndgame, TwoCriticalPlayDoesNotFireWhenOnlyOneCrit) {
+  SetupOptions opts = two_crit_base();
+  opts.play_stacks = {3, 0, 0};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = with_cards_left(std::move(g), 1);
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "only one known critical in hand — defer to the solver";
+}
+
+// Negative: two known critical 4s but stacks are too low for either to
+// be playable. The rule needs at least one playable critical.
+TEST(ForcedEndgame, TwoCriticalPlayDoesNotFireWhenNoPlayable) {
+  SetupOptions opts = two_crit_base();
+  opts.play_stacks = {0, 0, 0};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = fully_known(std::move(g), TestPlayer::ALICE, 2, "b4");
+  g = with_cards_left(std::move(g), 1);
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "neither known critical is currently playable — rule must not "
+         "fire (no productive play exists for the rule to force)";
+}
+
+// Negative: clue_tokens == num_players. The team can in principle stall
+// by all cluing once each, giving Alice another play opportunity later.
+TEST(ForcedEndgame, TwoCriticalPlayDoesNotFireWhenClueTokensAtLeastPlayers) {
+  SetupOptions opts = two_crit_base();
+  opts.play_stacks = {3, 0, 0};
+  opts.clue_tokens = 3;  // == num_players, stalling possible.
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = fully_known(std::move(g), TestPlayer::ALICE, 2, "b4");
+  g = with_cards_left(std::move(g), 1);
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "ct >= num_players — team could cycle clues, defer to the solver";
+}
+
+// Sanity guard: rule must not fire when `cards_left > 1`.
+TEST(ForcedEndgame, TwoCriticalPlayDoesNotFireWhenCardsLeftAboveOne) {
+  SetupOptions opts = two_crit_base();
+  opts.play_stacks = {3, 0, 0};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = fully_known(std::move(g), TestPlayer::ALICE, 2, "b4");
+  g = with_cards_left(std::move(g), 2);
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value());
+}

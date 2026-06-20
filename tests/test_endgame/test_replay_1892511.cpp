@@ -103,16 +103,14 @@ void apply_prefix(Game& g, size_t count) {
 
 }  // namespace
 
-// Bug regression: at T41 will-bot67 should play slot 3 (b5) or slot
-// 2 (g4) — both obvious-playable, both lead to a 20/20 win via the
-// endgame chain (yagami's CTP'd g4 at T42 → will-bot67's known g5 at
-// T44). The bot discards b3 instead.
-//
-// Currently this test PASSES by accident (it only asserts the bot
-// doesn't play b5). Once the underlying solver / forced_endgame
-// issue is fixed, change `EXPECT_TRUE(is_discard)` to
-// `EXPECT_FALSE(is_discard)` and the test will guard against
-// regression.
+// Regression guard for the two-critical-play forced-endgame rule
+// (src/endgame/forced_endgame.cpp). At T41 will-bot67 holds two strictly
+// critical cards in hand (g5 and b5; g4 is not critical since yagami
+// also holds a g4), b5 is currently playable, cards_left=1, and
+// clue_tokens=1 < num_players=3. The rule must fire and return a
+// PerformPlay targeting b5 (the unique playable critical), short-
+// circuiting the solver and yielding the known 20/20 win line
+// (T41 b5 → T42 yagami's CTP'd g4 → T44 known g5).
 TEST(EndgameReplay1892511, T41ShouldPlayB5NotDiscard) {
   Game g = build_start();
   apply_prefix(g, 40);  // T1..T40 applied; T41 = bot's decision.
@@ -131,15 +129,11 @@ TEST(EndgameReplay1892511, T41ShouldPlayB5NotDiscard) {
   bool is_play_b5 = std::holds_alternative<PerformPlay>(action) &&
                     std::get<PerformPlay>(action).target == slot3;
 
-  // TODO: once the solver / forced_endgame bug is fixed, flip to
-  // EXPECT_TRUE(is_play_b5).
-  EXPECT_FALSE(is_play_b5)
-      << "Pinning current (buggy) behaviour: bot discards instead of "
-         "playing the obviously-playable b5. Fix: make solver / "
-         "forced_endgame recognise own-hand singleton-inferred plays "
-         "(state.deck[o].id() returns nullopt for own hand even when "
-         "common.thoughts[o].inferred is singleton — solver line 141 "
-         "skips these as un-evaluable plays).";
+  EXPECT_TRUE(is_play_b5)
+      << "two-critical-play forced-endgame rule must fire on T41 and "
+         "force a play of b5 (the unique playable critical in POV's "
+         "hand); regressing here means the rule's preconditions are no "
+         "longer met or the dispatch order changed.";
 }
 
 TEST(EndgameReplay1892511, T41WillBot67DumpAndTakeAction) {

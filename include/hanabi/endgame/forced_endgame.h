@@ -10,7 +10,11 @@
 // the full `EndgameSolver`.
 //
 // Currently implemented rules:
-//   * 5-lockout — see `src/endgame/forced_endgame.cpp`.
+//   * 5-lockout — clue to delay deck-empty when the 5-holder would otherwise
+//     be locked out of their post-4 final turn.
+//   * Two-critical play — force a play when CP knows they hold two critical
+//     cards (one playable) with `cards_left == 1` and `clue_tokens < n`.
+// See `src/endgame/forced_endgame.cpp` for the predicates.
 #pragma once
 
 #include <optional>

@@ -3,6 +3,8 @@
 #include "hanabi/basics/clue.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity.h"
+#include "hanabi/basics/identity_set.h"
+#include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 
@@ -56,6 +58,41 @@ bool five_lockout_fires(const Game& game, int suit) {
   return true;
 }
 
+// Rule 2 — "two-critical play".
+//
+// Precondition: `cards_left == 1`, `clue_tokens < num_players`, and the
+// current player (CP) holds at least two cards whose common-knowledge
+// inference is a singleton critical identity, with at least one of those
+// also currently playable.
+//
+// Why play is forced. With `cards_left == 1`, CP has exactly two play
+// turns remaining if they play now (this turn + the final-round turn that
+// comes back around after the deck empties). Cluing or discarding burns
+// one of those two play opportunities. The `clue_tokens < num_players`
+// guard rules out the "team cycles clues to keep the deck at 1" stall —
+// at least one of the next `n` turns must be a play or discard, which
+// empties the deck before CP recovers the play they skipped. With two
+// strictly critical cards in hand (each only one copy left in the game),
+// every skipped play turn costs one of them permanently.
+std::optional<PerformAction> two_critical_play_action(const Game& game) {
+  const State& s = game.state;
+  int cp = s.current_player_index;
+
+  int critical_count = 0;
+  std::optional<int> playable_order;
+  for (int o : s.hands[cp]) {
+    const IdentitySet& inf = game.common.thoughts[o].inferred;
+    if (inf.length() != 1) continue;
+    Identity id = inf.head();
+    if (!s.is_critical(id)) continue;
+    ++critical_count;
+    if (!playable_order && s.is_playable(id)) playable_order = o;
+  }
+
+  if (critical_count < 2 || !playable_order) return std::nullopt;
+  return PerformAction{PerformPlay{*playable_order}};
+}
+
 // Fallback: enumerate every (target, kind, value) triple and return the
 // first one that legally touches at least one card in the target's hand.
 // Used only if `Game::find_all_clues` returns empty (very rare — would
@@ -84,6 +121,15 @@ std::optional<PerformAction> any_legal_clue(const Game& game) {
 std::optional<PerformAction> forced_endgame_action(const Game& game) {
   const State& s = game.state;
   if (s.cards_left != 1) return std::nullopt;
+
+  // Rule 2 takes precedence over Rule 1: when both fire (e.g., CP holds the
+  // suit's 4 and 5, both critical, 4 playable), playing the playable
+  // critical card is the concrete winning move; the 5-lockout's "clue to
+  // delay" would skip a play turn and lose a critical.
+  if (s.clue_tokens < s.num_players) {
+    if (auto a = two_critical_play_action(game)) return a;
+  }
+
   if (s.clue_tokens == 0) return std::nullopt;
 
   bool any_lockout = false;
