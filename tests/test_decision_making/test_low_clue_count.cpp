@@ -1,4 +1,4 @@
-// Decision-quality tests for the v0.21 low-clue-count gate.
+// Decision-quality tests for the low-clue-count gate.
 //
 // Source: https://hanab.live/shared-replay/1889974 — 3-player Funnels &
 // Dark Pink (6 Suits) game between will-bot69 (P0), yagami_black (P1),
@@ -6,14 +6,32 @@
 //
 // Two cases where the live bot (pre-v0.21) burned a clue instead of
 // playing a known-or-cued card under low clue tokens + high pace. The
-// v0.21 gate in state_eval.cpp eval_action — when state.clue_tokens < 3
-// and state.pace() >= 3, only "high value" clues survive scoring;
-// otherwise the gate returns −1.0 so any known play (≥ 0.02) wins.
+// gate in state_eval.cpp eval_action — when state.clue_tokens < 3 and
+// state.pace() >= 3 AND the bot has a real (non-duped) pending play,
+// only HIGH VALUE clues survive scoring (v0.34 spec); otherwise the
+// gate returns −1.0 so any known play (≥ 0.02) wins.
+//
+// Spec evolution:
+//   * v0.21: first version of the gate. "High value" = Bob has non-
+//     trash chop AND is not safe (Bob in danger).
+//   * v0.26: relaxed — also accepted (Bob safe + Cathy non-trash chop
+//     + ≥ 1 play) as "high value". (The DISABLED test below pinned the
+//     original v0.21 rule and was disabled at v0.26 because the spec
+//     loosened.)
+//   * v0.34 (current): under three categories — LOW VALUE / MIDDLE /
+//     HIGH VALUE. The gate now requires HIGH VALUE (strict): condition
+//     (1) Bob in danger with a UNIQUE good chop, (2) clue gets a
+//     critical first/second-rank played, or (3) clue gets ≥ 2 plays
+//     incl. a clue-regain rank. See `is_high_value_clue` in
+//     state_eval.cpp. The v0.26-loosened middle ground no longer
+//     passes — clues there fall to MIDDLE (= "not low value, not
+//     high value") and the gate rejects them when the bot has a
+//     pending play.
 //
 // These are decision-making tests (not correctness tests): a failure
-// means the bot's choice deviates from the policy in CLAUDE.md, not that
-// it played illegally. Per CLAUDE.md, breaking a test here needs review
-// before the test is altered or removed.
+// means the bot's choice deviates from the policy in CLAUDE.md, not
+// that it played illegally. Per CLAUDE.md, breaking a test here needs
+// review before the test is altered or removed.
 
 #include <gtest/gtest.h>
 
@@ -148,18 +166,18 @@ std::string describe(const PerformAction& a) {
 
 }  // namespace
 
-// Turn 19: clue_tokens=1, pace=13 (high). Bob (yagami) chop = g2 (trash on
-// G=4 stack). Cathy (will-bot67) chop = g5 (critical). Under the v0.21
-// gate this rejected because Bob was safe (trash chop), Cathy's chop
-// was good, BUT the clue didn't induce 2+ plays (p3 is delayed).
+// Turn 19: clue_tokens=1, pace=13 (high). Bob (yagami) chop = g2 (trash
+// on G=4 stack). Cathy (will-bot67) chop = g5 (critical). The purple
+// clue CTPs p3 (1 play; p4 chain is delayed).
 //
-// v0.26 refined gate: condition (c) accepts the clue when Bob is safe
-// AND Cathy has a non-trash chop AND the clue gets ≥ 1 play (not 2+).
-// This case satisfies (c) — Cathy's g5 is non-trash, the purple clue
-// CTPs p3 (≥ 1 play). So the new gate ALLOWS the purple clue. The test
-// is disabled because it pins the OLD spec; the user has explicitly
-// changed the spec for v0.26.
-TEST(LowClueCountGate, DISABLED_Turn19PrefersPlayOverPurpleClue) {
+// Under v0.34's strict HIGH VALUE definition:
+//   (1) Bob has a trash chop = safe discard → condition (1) fails.
+//   (2) p3 is not a critical first/second-rank → condition (2) fails.
+//   (3) Only 1 play (no rank-5 chain) → condition (3) fails.
+// → Gate rejects the purple clue. Bot plays instead. (Re-enabled at
+// v0.34 — the test was disabled during v0.26's looser spec because
+// (c) then accepted the clue. v0.34 returned to the stricter rule.)
+TEST(LowClueCountGate, Turn19PrefersPlayOverPurpleClue) {
   Game g = build_start();
   apply_prefix(g, 18);  // T1..T18 applied; T19 = bot's decision.
 
@@ -193,7 +211,7 @@ TEST(LowClueCountGate, Turn40PrefersPlayOverPinkClue) {
       << "T40: bot should play, not burn a clue; got " << describe(action);
 }
 
-// v0.26 regression for the refined spec: replay 1892397 T24.
+// Regression for the strict v0.34 spec: replay 1892397 T24.
 // will-bot67 (giver) has 1 clue token, pace high. Stacks r=2 y=0 g=2
 // b=3 p=4 i=0. Hands at T24:
 //   Bob = will-bot69: r1 p3 y5 g5 b1 (slot 5 = b1 = trash).
@@ -201,12 +219,11 @@ TEST(LowClueCountGate, Turn40PrefersPlayOverPinkClue) {
 // will-bot67 hand: y3 r5 y3 i2 b4.
 //
 // The blue clue to yagami touches NOTHING (no blue in yagami's hand).
-// So it can't get 2+ new plays (b) and likely 0 plays anyway. Per the
-// v0.26 spec:
-//   (a) Bob trash chop b1 ⇒ Bob safe (not in danger). FAIL.
-//   (b) 0 new plays. FAIL.
-//   (c) Bob safe + Cathy non-trash chop. But 0 plays → FAIL.
-// → Low value. The gate should reject; bot picks something else.
+// Per v0.34's strict HIGH VALUE definition:
+//   (1) Bob has trash chop b1 → safe discard → condition (1) fails.
+//   (2) 0 plays (touches nothing) → condition (2) fails.
+//   (3) 0 plays → condition (3) fails.
+// → Low/middle value. Gate rejects; bot picks something else.
 //
 // Sourced from https://hanab.live/shared-replay/1892397#24.
 TEST(LowClueCountGate, Turn24RejectsLowValueBlueClue) {

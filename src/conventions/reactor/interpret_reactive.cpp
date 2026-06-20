@@ -127,10 +127,21 @@ ReactiveContext reactive_context(const Game& prev, const Game& game,
 
   ReactiveContext ctx;
   ctx.possible_conns = delayed_plays(game, giver, receiver, /*stable=*/false);
-  auto old_playables = prev.common.obvious_playables(prev, receiver);
-  auto new_playables = game.common.obvious_playables(game, receiver);
-  for (int o : old_playables) {
-    if (contains(new_playables, o)) ctx.known_plays.push_back(o);
+  // v0.37: `known_plays` is the set of receiver cards that should be
+  // excluded from the reactive convention's play-target pool because
+  // "the receiver already knows to play this — the clue shouldn't be
+  // wasted re-signalling it." Tightened to require a *strictly*
+  // singleton common-knowledge identity (`thought.id()` with no
+  // `infer` flag, no trash-elim narrowing). The looser pre-v0.37
+  // construction — intersection of `obvious_playables(prev) ∩
+  // obvious_playables(game)` — pulled in cards that were merely
+  // good-touch-narrowed to "the only useful identity in inferred",
+  // which conflicts with the human reactive convention that wraps a
+  // known-playable focus card with the reacter's blind play for a
+  // 2-play tempo gain (replay 1899567 T21).
+  for (int o : state.hands[receiver]) {
+    auto id = game.common.thoughts[o].id();
+    if (id && state.is_playable(*id)) ctx.known_plays.push_back(o);
   }
 
   State after_others = prev.state;
@@ -176,28 +187,34 @@ ReactiveContext reactive_context(const Game& prev, const Game& game,
   // The `is_playable` guard prevents duplicate-singleton links (two
   // cards both narrowing to the same playable id) from double-advancing
   // the same stack.
-  auto self_plays = prev.common.thinks_playables(hypo_prev, receiver,
-                                                    /*exclude_trash=*/true);
+  // v0.37: was `prev.common.thinks_playables(hypo_prev, receiver,
+  // exclude_trash=true)` — pulled in cards whose order_playable was
+  // only true via the trash-elim narrowing (clued card whose possible
+  // = {r1, r2, r3, r5} reduces to "must be r5 since the others are
+  // trash"). Advancing hypo_state through such cards (as if the
+  // receiver were guaranteed to play r5 naturally) caused
+  // `is_playable(r5)` to return false in the all_playable loop below,
+  // dropping r5 from the reactive play-target pool. Replay 1899567
+  // T21: wb67 then fell through to a b4 finesse instead of the
+  // intended r5 reactive double-play.
+  //
+  // Strict replacement: only advance through cards whose effective
+  // identity is determined WITHOUT trash-elim — i.e. inferred is a
+  // strict singleton, or info_lock is a strict singleton that the
+  // visible card matches.
+  auto self_plays = prev.common.obvious_playables(hypo_prev, receiver);
   for (int o : self_plays) {
     // Only advance through cards the receiver would naturally PLAY —
     // skip cards already CTD'd (slated for discard) or otherwise
     // earmarked for non-play actions (sarcastic, gentleman's discard).
-    // `thinks_playables` can pull in a CTD'd card if its (still-broad)
-    // `inferred` happens to narrow to a single non-trash playable id
-    // after the trash_set filter; the convention has explicitly told
-    // the holder to discard it, so we must not assume it will play and
-    // advance the stack. (Replay 1875304 T21: a CTD'd g1 narrowed to
-    // {r4} via this trash filter; advancing r_stack via the false
-    // "r4 play" pushed the convention's reactive picks to the wrong
-    // slot.)
     CardStatus st = prev.meta[o].status;
     if (st != CardStatus::NONE && st != CardStatus::CALLED_TO_PLAY) continue;
-    IdentitySet effective =
-        prev.common.thoughts[o].possibilities().difference(prev.state.trash_set);
-    if (effective.length() != 1) continue;
-    Identity id = effective.head();
-    if (ctx.hypo_state.is_playable(id)) {
-      ctx.hypo_state = ctx.hypo_state.try_play(id);
+    // Strict singleton: require the card to be unambiguously identified
+    // (no good-touch / trash-elim narrowing).
+    auto id = prev.common.thoughts[o].id();
+    if (!id) continue;
+    if (ctx.hypo_state.is_playable(*id)) {
+      ctx.hypo_state = ctx.hypo_state.try_play(*id);
     }
   }
   return ctx;
@@ -664,7 +681,21 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
       // state.playable_set because the reacter acts *before* the
       // receiver's self-plays.
       IdentitySet ps = ctx.hypo_state.playable_set;
-      IdentitySet narrowed = game.common.thoughts[target].inferred.filter(
+      // v0.37: when `common.thoughts[target].inferred` is already empty
+      // — typically because the T21 untouching just removed every
+      // surviving id from a previously-narrowed inferred (e.g. info_lock
+      // = {r4} stamped at a stable colour-red clue, then a rank-4
+      // untouching empties it) — narrowing produces an empty result and
+      // the loop would skip this otherwise-valid play_target. Reset to
+      // the empathy baseline (possible) before narrowing, matching the
+      // "if inferred goes empty, fall back to empathy" principle the
+      // rest of the interpreter uses (`Thought::reset_inferences` +
+      // `elim` Step 1).
+      const Thought& target_thought = game.common.thoughts[target];
+      IdentitySet base = target_thought.inferred.non_empty()
+                            ? target_thought.inferred
+                            : target_thought.possible;
+      IdentitySet narrowed = base.filter(
           [&](Identity i) {
             if (ps.contains(i)) return true;
             for (const auto& [_, c] : receiver_conns) {

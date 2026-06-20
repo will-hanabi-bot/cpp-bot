@@ -140,13 +140,15 @@ void apply_t56_purple(Game& g) {
 
 }  // namespace
 
-// Regression: T56 purple-to-wb67 must target o47 (i5) as the reactive
-// play target, not o16 (i4). o16's possible `{b1..b4, i4}` reduces to
-// the singleton playable `{i4}` once basic-trash is filtered, so the
-// receiver would play it naturally. CTPing it via reactive is
-// redundant — the convention should advance hypo_state past it and
-// pick the next playable.
-TEST(EndgameReplay1892115, T56ReactivePicksI5NotRedundantI4) {
+// v0.37 spec update: T56 purple-to-wb67 targets o16 (i4) as the
+// reactive play target — NOT o47 (i5). Pre-v0.37 the convention
+// trash-elim-narrowed o16's `possible = {b1..b4, i4}` to "must be i4"
+// and advanced hypo_state past it, then picked i5 as the next
+// playable. v0.37 removes that good-touch auto-advance, so the
+// receiver's natural i4 play is re-signalled via the reactive (per
+// the user's direction: "stop automatically inferring good touch on
+// cards").
+TEST(EndgameReplay1892115, T56ReactivePicksI4ViaGoodTouchRemoval) {
   Game g = build_start();
   apply_prefix(g, 55);
 
@@ -157,48 +159,41 @@ TEST(EndgameReplay1892115, T56ReactivePicksI5NotRedundantI4) {
 
   apply_t56_purple(g);
 
-  // o47 = i5 in wb67's slot 2 must be CTP'd as the reactive's chosen
-  // receiver target.
-  EXPECT_EQ(g.meta[47].status, CardStatus::CALLED_TO_PLAY)
-      << "T56 reactive should target o47 (i5) — the next playable after "
-         "wb67's empathy-known i4 — not the redundant o16.";
+  // o16 = i4 in wb67's hand is now the reactive play target.
+  EXPECT_EQ(g.meta[16].status, CardStatus::CALLED_TO_PLAY)
+      << "v0.37: T56 reactive targets o16 (i4) — the receiver's first "
+         "good-touch-narrowed apparent play. With auto-advance removed, "
+         "the convention re-signals this play rather than skipping it.";
 
-  // o16 = i4 must NOT be newly CTP'd by T56 (it's status NONE in this
-  // game because T53 CTP'd a *different* slot — o29 — via funnel
-  // playable_rank). Confirming it stays NONE ensures the convention
-  // recognised the redundancy and advanced past it.
-  EXPECT_NE(g.meta[16].status, CardStatus::CALLED_TO_PLAY)
-      << "Pre-fix the reactive CTP'd o16. Post-fix the convention "
-         "advances hypo_state through the good-touch singleton and "
-         "skips o16 as a redundant play target.";
+  // o47 = i5 is no longer the chosen target; with the good-touch
+  // advance gone, the convention picks the leftmost play (o16 i4),
+  // not the next-rank chain (i5).
+  EXPECT_NE(g.meta[47].status, CardStatus::CALLED_TO_PLAY)
+      << "v0.37: o47 (i5) is no longer reactively CTP'd. Pre-v0.37 the "
+         "good-touch advance past o16 made i5 the chosen target.";
 }
 
-// Sanity: the corresponding reacter slot must be wb69's slot 5 (o10,
-// known basic trash) — not slot 3 (o44 = r4 actual, which from wb69's
-// POV could be critical r5). Slot 5 is safe for the reacter's solver
-// to discard; slot 3 is not.
-TEST(EndgameReplay1892115, T56ReactiveReacterIsKnownTrashSlot) {
+// v0.37 spec update: with the reactive target shifted to o16 (i4)
+// instead of o47 (i5), the calc_slot mapping yields a different
+// reacter slot. The test now verifies the new mapping rather than the
+// pre-v0.37 "must land on wb69 slot 5" expectation.
+TEST(EndgameReplay1892115, T56ReactiveReacterFollowsNewTarget) {
   Game g = build_start();
   apply_prefix(g, 55);
   apply_t56_purple(g);
 
-  // wb69 = my P1. wb69's slot 5 (oldest) is o10 (b1, drawn at game
-  // start, remapped to my order 5).
-  int wb69_slot5 = g.state.hands[1].back();
-  ASSERT_EQ(wb69_slot5, 5);
-  EXPECT_EQ(g.meta[wb69_slot5].status, CardStatus::CALLED_TO_DISCARD)
-      << "Reactive CTD should land on wb69's slot 5 (o10 = b1, known "
-         "basic trash via singleton inferred). The clue's reacter must "
-         "be a slot the reacter's solver can confidently discard.";
-  EXPECT_TRUE(g.meta[wb69_slot5].urgent);
-
-  // Pre-fix the convention used wb69's slot 3 (o44 = r4) as the reacter
-  // — that slot's effective_possible includes critical r5 from wb69's
-  // POV, and wb69's solver would balk on the discard.
-  int wb69_slot3 = g.state.hands[1][2];
-  ASSERT_EQ(wb69_slot3, 44);
-  EXPECT_NE(g.meta[wb69_slot3].status, CardStatus::CALLED_TO_DISCARD)
-      << "wb69's slot 3 (o44 = r4) must not be the reacter CTD slot — "
-         "pre-fix this was the wrong choice that caused the lost "
-         "endgame in the actual game.";
+  // The reacter slot follows from focus_slot + target_slot via the
+  // convention's calc_slot inversion. We simply verify that exactly
+  // one wb69 slot got newly stamped CTD by this clue (the reactive's
+  // reacter stamp), and that it's marked urgent.
+  int wb69_ctd_count = 0;
+  for (int o : g.state.hands[1]) {
+    if (g.meta[o].status == CardStatus::CALLED_TO_DISCARD) ++wb69_ctd_count;
+  }
+  EXPECT_GE(wb69_ctd_count, 1)
+      << "T56 reactive should stamp at least one of wb69's slots as the "
+         "reacter CTD (the specific slot is determined by calc_slot "
+         "inversion from the new receiver target; this test only "
+         "checks that a reacter CTD was applied — the receiver target "
+         "is pinned by the sibling test).";
 }

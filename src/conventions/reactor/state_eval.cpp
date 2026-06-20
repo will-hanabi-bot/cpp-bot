@@ -44,66 +44,110 @@ bool chop_is_nontrash(const Game& game, std::optional<int> chop_order) {
   return !game.state.is_basic_trash(*id);
 }
 
-bool chop_is_trash(const Game& game, std::optional<int> chop_order) {
-  if (!chop_order) return false;
-  auto id = game.state.deck[*chop_order].id();
-  return id && game.state.is_basic_trash(*id);
-}
-
 // Low-clue-count gate. When `state.clue_tokens < 3` AND
-// `state.pace() >= 3`, a clue is only "worth it" if it's high-value.
-// The caller penalises a non-high-value clue so any known play wins.
+// `state.pace() >= 3`, a clue is only "worth it" if it's high-value
+// (the bot always has a pending play in this branch — has_real_play
+// is the gate's conjoined guard, so the strict v0.34 predicate is the
+// only one consulted). The caller penalises a non-high-value clue so
+// any known play wins.
 //
-// v0.26 spec (user-refined): high-value iff ANY of:
-//   (a) Bob has a non-trash chop AND no safe discards.
-//   (b) The clue gets CTP on TWO new cards.
-//   (c) Bob has trash chop OR safe discard, BUT Cathy has a non-trash
-//       chop, AND the clue gets at least ONE play.
+// v0.34 spec: a clue is HIGH VALUE iff ANY of:
+//   (1) Bob is not locked AND Bob has no safe discard (no obvious
+//       play, no known trash, no CTD) AND Bob's chop is a non-trash
+//       card whose identity has NO other visible copy — i.e., no
+//       same-id card in Cathy's hand AND no same-id card in the
+//       giver's own hand whose common.thoughts inferred is the
+//       singleton matching identity. "Unique good chop in danger".
+//   (2) The clue gets a critical "low" card (suit-direction
+//       sensitive) played. For normal suits that's rank 1 or 2; for
+//       reversed suits (play direction 5→1) that's rank 5 or 4.
+//   (3) The clue gets ≥ 2 new plays AND at least one of them is the
+//       suit's "final" rank — rank 5 for normal suits, rank 1 for
+//       reversed suits — i.e., a card that regains a clue token when
+//       played.
 //
 // Notes:
-// - "Bob safe" = Bob has an obvious play OR known trash anywhere OR
-//   trash chop (any way to defer chop discard safely).
-// - "Non-trash chop" = chop card identity is not basic-trash (treats
-//   unknown chop as non-trash).
-// - "New plays" = orders that transitioned from non-CTP to CTP through
-//   this clue's interpretation in `hypo`.
-bool is_high_value_low_clue(const Game& game, const Game& hypo,
-                            const ClueAction& /*ca*/) {
+// - "Bob safe (discard)" = Bob has an obvious play OR `thinks_trash`
+//   anywhere (which includes CTD and known basic-trash).
+// - Identity-direction for ranks uses `suit_type.reversed`. Orange's
+//   `inverted` flag (play↔discard action swap) does NOT change the
+//   stack direction or the regain-clue rank — only `reversed` does.
+// - "New plays" = orders that transitioned from non-CTP to CTP
+//   through this clue's interpretation in `hypo`.
+
+bool chop_id_is_unique(const Game& game, int bob_chop_order) {
+  const State& s = game.state;
+  auto chop_id = s.deck[bob_chop_order].id();
+  if (!chop_id) return false;  // unknown chop id from POV — can't verify
+  int giver = s.current_player_index;
+  int bob = s.next_player_index(giver);
+  // Cathy's hand: any visible copy of the same identity disqualifies.
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == giver || p == bob) continue;
+    for (int o : s.hands[p]) {
+      auto id = s.deck[o].id();
+      if (id && *id == *chop_id) return false;
+    }
+  }
+  // Giver's own hand: a common-knowledge singleton-inferred copy of
+  // the same identity disqualifies (giver knows they hold it).
+  for (int o : s.hands[giver]) {
+    const auto& inf = game.common.thoughts[o].inferred;
+    if (inf.length() == 1 && inf.head() == *chop_id) return false;
+  }
+  return true;
+}
+
+bool is_clue_regain_rank(const State& s, Identity id) {
+  bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
+  return reversed ? (id.rank == 1) : (id.rank == 5);
+}
+
+bool is_first_or_second_rank(const State& s, Identity id) {
+  bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
+  if (reversed) return id.rank == 4 || id.rank == 5;
+  return id.rank == 1 || id.rank == 2;
+}
+
+bool is_high_value_clue(const Game& game, const Game& hypo,
+                        const ClueAction& /*ca*/) {
   const State& s = game.state;
   const Player& common = game.common;
   int giver = s.current_player_index;
   int bob = s.next_player_index(giver);
   if (bob == giver) return true;  // Solo — let it through.
 
-  auto bob_chop = game.chop(bob);
-  bool bob_loaded = !common.obvious_playables(game, bob).empty();
-  bool bob_known_trash = !common.thinks_trash(game, bob).empty();
-  bool bob_safe = bob_loaded || bob_known_trash || chop_is_trash(game, bob_chop);
-  bool bob_chop_nontrash = chop_is_nontrash(game, bob_chop);
-
-  // (a) Bob about to discard something non-trash.
-  if (!bob_safe && bob_chop_nontrash) return true;
-
-  int new_plays = 0;
-  for (const auto& hand : s.hands) {
-    for (int o : hand) {
-      if (game.meta[o].status != CardStatus::CALLED_TO_PLAY &&
-          hypo.meta[o].status == CardStatus::CALLED_TO_PLAY) {
-        ++new_plays;
+  // Condition (1): Bob has a unique good chop in danger.
+  if (!common.thinks_locked(game, bob)) {
+    bool bob_safe_discard = !common.obvious_playables(game, bob).empty() ||
+                             !common.thinks_trash(game, bob).empty();
+    if (!bob_safe_discard) {
+      auto bob_chop = game.chop(bob);
+      if (bob_chop && chop_is_nontrash(game, bob_chop) &&
+          chop_id_is_unique(game, *bob_chop)) {
+        return true;
       }
     }
   }
 
-  // (b) Clue gets ≥ 2 new plays — independent of Bob/Cathy state.
-  if (new_plays >= 2) return true;
-
-  // (c) Bob safe + Cathy non-trash chop + ≥ 1 new play.
-  if (!bob_safe) return false;
-  int cathy = s.next_player_index(bob);
-  if (cathy == giver) return false;  // 2p: no Cathy.
-  auto cathy_chop = game.chop(cathy);
-  if (!chop_is_nontrash(game, cathy_chop)) return false;
-  return new_plays >= 1;
+  // Conditions (2) and (3) walk newly-CTP'd cards from this clue.
+  int new_plays = 0;
+  bool any_clue_regain_rank = false;
+  for (const auto& hand : s.hands) {
+    for (int o : hand) {
+      if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+      if (hypo.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      ++new_plays;
+      auto id = s.deck[o].id();
+      if (!id) continue;
+      // (2) Critical first/second-rank in play direction.
+      if (s.is_critical(*id) && is_first_or_second_rank(s, *id)) return true;
+      if (is_clue_regain_rank(s, *id)) any_clue_regain_rank = true;
+    }
+  }
+  // (3) ≥ 2 plays AND at least one regains a clue token.
+  if (new_plays >= 2 && any_clue_regain_rank) return true;
+  return false;
 }
 
 }  // namespace
@@ -445,7 +489,7 @@ double eval_action(const Game& game, const Action& action) {
         has_real_play = true;
         break;
       }
-      if (has_real_play && !is_high_value_low_clue(game, hypo_game, ca)) {
+      if (has_real_play && !is_high_value_clue(game, hypo_game, ca)) {
         return -1.0;
       }
     }

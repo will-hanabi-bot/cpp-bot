@@ -131,6 +131,7 @@ add_executable(hanabi_tests
   tests/test_endgame/test_replay_1899044.cpp
   tests/test_endgame/test_replay_1899527.cpp
   tests/test_endgame/test_replay_1899552.cpp
+  tests/test_endgame/test_replay_1899567.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp
@@ -150,6 +151,7 @@ gtest_discover_tests(hanabi_tests)
 add_executable(hanabi_decision_tests
   tests/test_harness.cpp
   tests/test_decision_making/test_low_clue_count.cpp
+  tests/test_decision_making/test_high_value_clue.cpp
 )
 target_include_directories(hanabi_decision_tests PRIVATE tests)
 target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)

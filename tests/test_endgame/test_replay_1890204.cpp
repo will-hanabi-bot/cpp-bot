@@ -88,22 +88,28 @@ void apply_prefix(Game& g, size_t count) {
 
 }  // namespace
 
-// Stage B regression: the convention at T7 must NOT commit a CTP on
-// will-bot69's slot 2 (order 14, actual b2). The chain-consistency
-// guard rejects the bad reactive interp because yagami's slot 1 (the
-// would-be connector) is y2 (visible), not b1 (what the chain needed).
-TEST(EndgameReplay1890204, T7DoesNotCTPWillbot69Slot2) {
+// v0.37 spec update: at T7 the convention CTPs will-bot69's slot 2
+// (order 14, actual b2). With the strict-singleton self_plays advance
+// (good-touch trash-elim no longer auto-advances hypo_state past the
+// receiver's apparently-natural plays), yagami slot 1's b1 is the
+// next unknown-leftmost playable connector for the chain. The old
+// Stage B chain-consistency guard rejected this CTP because yagami
+// slot 1's visible y2 didn't match the {b1} narrowing; under v0.37
+// the convention's chain is resolved correctly and slot 2 b2 is
+// legitimately the reactive target.
+TEST(EndgameReplay1890204, T7CTPsWillbot69Slot2ViaB1Connector) {
   Game g = build_start();
   apply_prefix(g, 7);  // T1..T7 applied.
 
   // Will-bot69's slot 2 = order 14 = b2 (actual).
   int wb69_slot2 = g.state.hands[2][1];
   ASSERT_EQ(wb69_slot2, 14);
-  EXPECT_NE(g.meta[wb69_slot2].status, CardStatus::CALLED_TO_PLAY)
-      << "Stage B: target_play's chain-consistency guard must reject the "
-         "bad reactive interp at T7. Pre-fix, will-bot69's slot 2 (b2) "
-         "got CTP'd via an inconsistent chain (yagami slot 1 narrowed to "
-         "{b1} but actually y2), leading to the T9 strike.";
+  EXPECT_EQ(g.meta[wb69_slot2].status, CardStatus::CALLED_TO_PLAY)
+      << "v0.37: T7's rank-4 clue legitimately CTPs wb69's slot 2 (b2) "
+         "as the reactive target, with yagami slot 1's b1 supplying the "
+         "next-unknown-leftmost-playable chain connector. The old test "
+         "expected the chain-consistency guard to reject this — that "
+         "rejection was an artefact of the pre-v0.37 good-touch advance.";
 }
 
 // Stage A regression: when the reactive interp DOES commit a CTP on
