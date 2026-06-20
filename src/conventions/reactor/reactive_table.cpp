@@ -37,17 +37,24 @@ bool rank_blocked(const Variant& v, int rank) {
          (v.pink_s || v.brown_s || v.deceptive_s);
 }
 
+// Cache key: (variant.name, hand_size). The previous keying used the raw
+// `const Variant*` pointer, which is unsafe when callers stack-allocate
+// Variants: a returning test frees its Variant's stack slot, the next
+// test's Variant lands at the same address, and the cache hands back the
+// previous test's result. Production variants are loaded once with stable
+// unique names, and the reactive_value_table tests already use unique
+// short names ("t1"..."trp"), so name-keying is safe in both cases.
 struct CacheKey {
-  const Variant* variant;
+  std::string name;
   int hand_size;
   bool operator==(const CacheKey& o) const {
-    return variant == o.variant && hand_size == o.hand_size;
+    return name == o.name && hand_size == o.hand_size;
   }
 };
 
 struct CacheKeyHash {
   size_t operator()(const CacheKey& k) const {
-    return std::hash<const Variant*>{}(k.variant) ^ (k.hand_size * 0x9e3779b1);
+    return std::hash<std::string>{}(k.name) ^ (k.hand_size * 0x9e3779b1);
   }
 };
 
@@ -59,7 +66,7 @@ std::vector<int> reactive_value_table(const Variant& variant, int hand_size) {
 
   {
     std::lock_guard<std::mutex> lock(cache_mu);
-    auto it = cache.find({&variant, hand_size});
+    auto it = cache.find({variant.name, hand_size});
     if (it != cache.end()) return it->second;
   }
 
@@ -103,7 +110,7 @@ std::vector<int> reactive_value_table(const Variant& variant, int hand_size) {
   }
 
   std::lock_guard<std::mutex> lock(cache_mu);
-  cache[{&variant, hand_size}] = result;
+  cache[{variant.name, hand_size}] = result;
   return result;
 }
 
