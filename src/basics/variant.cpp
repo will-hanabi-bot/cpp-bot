@@ -96,12 +96,47 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
     if (it != catalog.end()) {
       suit = it->second;
     } else {
-      suit = Suit{sname, short_c, SuitType::of_name(sname)};
+      suit = Suit{sname, short_c, SuitType::of_name(sname), {}};
     }
     v.suits.push_back(suit);
     v.short_forms.push_back(short_c);
-    if (!is_no_colour(sname)) {
-      v.colourable_suit_indices.push_back(static_cast<int>(i));
+  }
+
+  // Build `clue_colour_names` + `colourable_suit_indices` together so
+  // the sizes match: one entry per DISTINCT colour name appearing in
+  // any suit's `clue_colors`, in order of first encounter. Each entry
+  // in `colourable_suit_indices` is the index of the first suit that
+  // contributes that colour. Ambiguous variants collapse multiple
+  // suits to fewer colours (e.g. Ambiguous (6 Suits) → 3 colours).
+  // Prism, whitish, and rainbowish suits don't contribute to the
+  // colour name list (their touch rules are flag-driven inside
+  // id_touched).
+  for (size_t i = 0; i < v.suits.size(); ++i) {
+    const Suit& suit = v.suits[i];
+    if (suit.suit_type.rainbowish || suit.suit_type.whitish ||
+        suit.suit_type.prism) {
+      continue;
+    }
+    for (const std::string& c : suit.clue_colors) {
+      auto seen = std::find(v.clue_colour_names.begin(),
+                             v.clue_colour_names.end(), c);
+      if (seen == v.clue_colour_names.end()) {
+        v.clue_colour_names.push_back(c);
+        v.colourable_suit_indices.push_back(static_cast<int>(i));
+      }
+    }
+  }
+  // Fallback for variants whose suit catalog entries are missing
+  // clueColors (shouldn't happen for shipped data but keeps legacy
+  // tests that construct synthetic Variants working). Pre-fix
+  // behaviour: one colour per non-no-colour suit, matched by suit
+  // equality.
+  if (v.clue_colour_names.empty()) {
+    for (size_t i = 0; i < v.suits.size(); ++i) {
+      if (!is_no_colour(v.suits[i].name)) {
+        v.clue_colour_names.push_back(v.suits[i].name);
+        v.colourable_suit_indices.push_back(static_cast<int>(i));
+      }
     }
   }
   return v;
@@ -174,9 +209,21 @@ bool Variant::id_touched(Identity id, ClueKind kind, int value) const {
       if (white_s) return false;
     }
     if (st.prism) {
-      return ((rank - 1) % colourable_suit_indices.size()) == static_cast<size_t>(value);
+      return ((rank - 1) % clue_colour_names.size()) == static_cast<size_t>(value);
     }
-    return suit == suits[colourable_suit_indices[value]];
+    // Multiple suits may share the same colour clue name (Ambiguous
+    // variants) and a single suit may list multiple colour names
+    // (Lime → Yellow + Green). Match by colour name lookup, not by
+    // suit equality against a single rep.
+    if (value < 0 ||
+        value >= static_cast<int>(clue_colour_names.size())) {
+      return false;
+    }
+    const std::string& target = clue_colour_names[value];
+    for (const std::string& c : suit.clue_colors) {
+      if (c == target) return true;
+    }
+    return false;
   }
 
   // Rank clue.
@@ -225,7 +272,25 @@ const std::unordered_map<std::string, Suit>& load_suit_catalog() {
       // flag if the data marks it.
       if (entry.value("inverted", false)) st.inverted = true;
       if (entry.value("reversed", false)) st.reversed = true;
-      result.emplace(name, Suit{name, abbrev, st});
+      // Resolve the suit's clue colors. Precedence: explicit `clueColors`
+      // array in JSON > the `noClueColors` / `allClueColors` flags (which
+      // make the colour set empty / universal — handled at touch time
+      // via the rainbowish / whitish flags below) > implicit default of
+      // {suit_name} for primary-colour suits (Red, Yellow, Black, Pink,
+      // Brown, Orange, ...) whose JSON entry omits clueColors. Prism
+      // suits use rank-based touch (no name list).
+      std::vector<std::string> clue_colors;
+      const bool no_colours = entry.value("noClueColors", false);
+      const bool all_colours = entry.value("allClueColors", false);
+      if (entry.contains("clueColors") && entry["clueColors"].is_array()) {
+        for (const auto& c : entry["clueColors"]) {
+          if (c.is_string()) clue_colors.push_back(c.get<std::string>());
+        }
+      } else if (!no_colours && !all_colours && !st.prism &&
+                  !st.rainbowish && !st.whitish) {
+        clue_colors.push_back(name);
+      }
+      result.emplace(name, Suit{name, abbrev, st, std::move(clue_colors)});
     }
     return result;
   }();

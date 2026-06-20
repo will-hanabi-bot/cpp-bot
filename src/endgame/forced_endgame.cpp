@@ -158,12 +158,24 @@ std::optional<PerformAction> two_critical_play_action(const Game& game) {
 // Used only if `Game::find_all_clues` returns empty (very rare — would
 // mean every valid clue is a mistake or perfectly redundant; we still
 // must give *something* since the rule forbids play/discard).
+//
+// Colour values iterate `colourable_suit_indices.size()`, not `suits
+// .size()`. In Ambiguous variants multiple suits share a single clue
+// colour (e.g. Tomato + Mahogany both clue with Red), so the count of
+// valid colour clue values is the count of distinct clue colours.
+// Mirrors the loop bound in `State::all_colour_clues` / `all_valid
+// _clues` (src/basics/state.cpp). Surfaced as a server-side rejection
+// for "Ambiguous (6 Suits)" (6 suits, 3 colours): the bot tried to
+// send colour value 3 and the server warned
+// "You cannot give a color clue with a value of \"3\".".
 std::optional<PerformAction> any_legal_clue(const Game& game) {
   const State& s = game.state;
   int cp = s.current_player_index;
   for (int target = 0; target < s.num_players; ++target) {
     if (target == cp) continue;
-    for (int v = 0; v < static_cast<int>(s.variant->suits.size()); ++v) {
+    const int num_colours =
+        static_cast<int>(s.variant->colourable_suit_indices.size());
+    for (int v = 0; v < num_colours; ++v) {
       auto touched =
           s.clue_touched(s.hands[target], ClueKind::COLOUR, v);
       if (!touched.empty()) return PerformAction{PerformColour{target, v}};

@@ -369,3 +369,84 @@ TEST(Variants, BlackReversedOneOfEach) {
     EXPECT_EQ(v.card_count(Identity(4, rank)), 1);
   }
 }
+
+// --- Ambiguous family (multiple suits share one colour clue) -------------
+
+// Ambiguous (6 Suits): six suits collapse to three colour clues.
+// Red touches suits 0 (Tomato) + 1 (Mahogany); Green touches 2
+// (Emerald) + 3 (Olive); Blue touches 4 (Berry) + 5 (Navy).
+TEST(Variants, AmbiguousSixSuitsThreeColours) {
+  const Variant& v = get_variant("Ambiguous (6 Suits)");
+  ASSERT_EQ(v.suits.size(), 6u);
+  EXPECT_EQ(v.clue_colour_names.size(), 3u);
+  EXPECT_EQ(v.colourable_suits().size(), 3u);
+  EXPECT_EQ(v.clue_colour_names,
+             (std::vector<std::string>{"Red", "Green", "Blue"}));
+
+  struct Case { int suit; int colour; bool touched; };
+  for (Case c : std::vector<Case>{
+           {0, 0, true},  {1, 0, true},  {2, 0, false}, {3, 0, false},
+           {4, 0, false}, {5, 0, false}, {0, 1, false}, {1, 1, false},
+           {2, 1, true},  {3, 1, true},  {4, 1, false}, {5, 1, false},
+           {0, 2, false}, {1, 2, false}, {2, 2, false}, {3, 2, false},
+           {4, 2, true},  {5, 2, true},
+       }) {
+    EXPECT_EQ(v.id_touched(Identity(c.suit, 3), ClueKind::COLOUR, c.colour),
+              c.touched)
+        << "suit=" << c.suit << " colour=" << c.colour
+        << " expected=" << c.touched;
+  }
+}
+
+// Very Ambiguous (6 Suits): six suits collapse to two colours. Red
+// touches Tomato/Mahogany/Carrot (suits 0,1,2); Blue touches
+// Berry/Navy/Sky (suits 3,4,5).
+TEST(Variants, VeryAmbiguousSixSuitsTwoColours) {
+  const Variant& v = get_variant("Very Ambiguous (6 Suits)");
+  ASSERT_EQ(v.suits.size(), 6u);
+  EXPECT_EQ(v.clue_colour_names.size(), 2u);
+  EXPECT_EQ(v.colourable_suits().size(), 2u);
+  EXPECT_EQ(v.clue_colour_names,
+             (std::vector<std::string>{"Red", "Blue"}));
+
+  for (int suit = 0; suit < 6; ++suit) {
+    bool red_touches = (suit <= 2);
+    bool blue_touches = (suit >= 3);
+    EXPECT_EQ(v.id_touched(Identity(suit, 3), ClueKind::COLOUR, 0),
+              red_touches)
+        << "Red should touch suits 0-2 only; suit=" << suit;
+    EXPECT_EQ(v.id_touched(Identity(suit, 3), ClueKind::COLOUR, 1),
+              blue_touches)
+        << "Blue should touch suits 3-5 only; suit=" << suit;
+  }
+}
+
+// Extremely Ambiguous (6 Suits): all six suits share a single colour
+// (Blue). One clue colour for the whole variant.
+TEST(Variants, ExtremelyAmbiguousSixSuitsOneColour) {
+  const Variant& v = get_variant("Extremely Ambiguous (6 Suits)");
+  ASSERT_EQ(v.suits.size(), 6u);
+  EXPECT_EQ(v.clue_colour_names.size(), 1u);
+  EXPECT_EQ(v.colourable_suits().size(), 1u);
+  EXPECT_EQ(v.clue_colour_names, (std::vector<std::string>{"Blue"}));
+
+  for (int suit = 0; suit < 6; ++suit) {
+    EXPECT_TRUE(v.id_touched(Identity(suit, 3), ClueKind::COLOUR, 0))
+        << "Blue must touch every Extremely Ambiguous suit; suit=" << suit;
+  }
+}
+
+// Sanity: a single Suit catalog entry now exposes its clue_colors.
+TEST(Variants, SuitCatalogExposesClueColors) {
+  const auto& catalog = load_suit_catalog();
+  ASSERT_TRUE(catalog.count("Tomato"));
+  EXPECT_EQ(catalog.at("Tomato").clue_colors,
+             (std::vector<std::string>{"Red"}));
+  ASSERT_TRUE(catalog.count("Mahogany"));
+  EXPECT_EQ(catalog.at("Mahogany").clue_colors,
+             (std::vector<std::string>{"Red"}));
+  ASSERT_TRUE(catalog.count("Lime"));
+  // Lime is a dual-colour suit (Yellow + Green) used in other variants.
+  EXPECT_EQ(catalog.at("Lime").clue_colors,
+             (std::vector<std::string>{"Yellow", "Green"}));
+}

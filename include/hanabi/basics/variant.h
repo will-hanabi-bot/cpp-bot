@@ -43,6 +43,14 @@ struct Suit {
   std::string name;
   std::optional<char> abbreviation;  // single lowercase character, or none
   SuitType suit_type;
+  // Names of colour clues that touch this suit. Loaded from the
+  // `clueColors` field in data/suits.json. Empty for whitish/prism
+  // suits (which use suit-flag logic instead of name matching) and
+  // implicitly "all" for rainbowish suits (also flag-driven).
+  // Multi-colour suits like "Lime" have ["Yellow", "Green"], and
+  // Ambiguous variants reuse colour names across suits (Tomato and
+  // Mahogany both list ["Red"]).
+  std::vector<std::string> clue_colors;
 
   bool operator==(const Suit&) const = default;
 };
@@ -52,7 +60,19 @@ struct Variant {
   std::string name;
   std::vector<Suit> suits;
   std::vector<char> short_forms;
-  // Indices into `suits` that are colourable (i.e. not whitish/rainbowish/etc).
+  // Distinct colour clue names available in this variant, in order of
+  // first appearance across `suits[].clue_colors`. A clue with
+  // `ClueKind::COLOUR` and value `i` matches the colour
+  // `clue_colour_names[i]`. For most variants this length equals the
+  // number of non-special suits, but Ambiguous variants collapse
+  // multiple suits to a single colour (e.g. Ambiguous (6 Suits)
+  // exposes only Red/Green/Blue across six suits).
+  std::vector<std::string> clue_colour_names;
+  // One representative suit index per distinct colour, in the same
+  // order as `clue_colour_names`. `colourable_suit_indices.size()`
+  // always equals `clue_colour_names.size()`; existing callers that
+  // iterate this vector as "the list of colour clues" continue to
+  // work unchanged.
   std::vector<int> colourable_suit_indices;
   std::optional<int> critical_rank;
   bool clue_starved = false;
