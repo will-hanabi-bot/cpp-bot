@@ -61,9 +61,8 @@ bool five_lockout_fires(const Game& game, int suit) {
 // Rule 2 — "two-critical play".
 //
 // Precondition: `cards_left == 1`, `clue_tokens < num_players`, and the
-// current player (CP) holds at least two cards whose common-knowledge
-// inference is a singleton critical identity, with at least one of those
-// also currently playable.
+// current player (CP) holds at least two singleton-critical cards in
+// hand, with at least one of those also currently playable.
 //
 // Why play is forced. With `cards_left == 1`, CP has exactly two play
 // turns remaining if they play now (this turn + the final-round turn that
@@ -74,23 +73,84 @@ bool five_lockout_fires(const Game& game, int suit) {
 // empties the deck before CP recovers the play they skipped. With two
 // strictly critical cards in hand (each only one copy left in the game),
 // every skipped play turn costs one of them permanently.
+//
+// Singleton check uses `common.thoughts[o].inferred ∩ players[cp]
+// .thoughts[o].inferred`. Common alone can include basic-trash that
+// good-touch hasn't stripped (`game.good_touch` stays false outside
+// specific code paths). Per-player alone can be wider than common in
+// test setups that seed common.thoughts directly without syncing
+// per-player views (`fully_known` in test_forced_endgame.cpp). The
+// intersection is the tight set both agree on. Replay 1899527 T47 —
+// common inferred for will-bot69's slot 4 = {y1, y2, y4} (the rank-3-
+// stack basic-trash y1/y2 aren't elim'd from common); per-player narrows
+// to {y4} via good-touch / visibility. Intersection = {y4} singleton.
+//
+// Play-target tiebreaker. With multiple playable criticals, prefer the
+// one whose play unblocks another critical play. The successor identity
+// (rank+1, or rank-1 for reversed suits) is "unblocked" if another
+// player holds it. Replay 1899527 T47 — slot 1 = r5 (critical playable,
+// nothing in line after), slot 4 = y4 (critical playable, will-bot67
+// holds y5 next-up). Playing r5 first leaves will-bot67 unable to play
+// y5 in their endgame turn (still needs y4 to land first), losing y5
+// permanently. Playing y4 first means y5 becomes playable, will-bot67
+// plays y5 on their final-round turn, CP plays r5 on their final-round
+// turn = full score.
 std::optional<PerformAction> two_critical_play_action(const Game& game) {
   const State& s = game.state;
   int cp = s.current_player_index;
+  const Player& me = game.players[cp];
 
-  int critical_count = 0;
-  std::optional<int> playable_order;
+  std::vector<std::pair<int, Identity>> singleton_critical;
   for (int o : s.hands[cp]) {
-    const IdentitySet& inf = game.common.thoughts[o].inferred;
-    if (inf.length() != 1) continue;
-    Identity id = inf.head();
+    IdentitySet tight = game.common.thoughts[o].inferred.intersect(
+        me.thoughts[o].inferred);
+    if (tight.length() != 1) continue;
+    Identity id = tight.head();
     if (!s.is_critical(id)) continue;
-    ++critical_count;
-    if (!playable_order && s.is_playable(id)) playable_order = o;
+    singleton_critical.push_back({o, id});
   }
+  if (singleton_critical.size() < 2) return std::nullopt;
 
-  if (critical_count < 2 || !playable_order) return std::nullopt;
-  return PerformAction{PerformPlay{*playable_order}};
+  std::vector<std::pair<int, Identity>> playable;
+  for (const auto& [o, id] : singleton_critical) {
+    if (s.is_playable(id)) playable.push_back({o, id});
+  }
+  if (playable.empty()) return std::nullopt;
+
+  // Score each playable critical by whether its play unblocks a
+  // successor held by another player. The successor identity for a
+  // suit's reversed direction is rank-1 (Identity::prev); for normal
+  // suits it's rank+1 (Identity::next). The unblock bonus only counts
+  // when the successor itself is critical or useful (i.e., not already
+  // basic-trash), since unblocking a trash card means nothing.
+  auto successor = [&](Identity id) -> std::optional<Identity> {
+    const auto& st = s.variant->suits[id.suit_index].suit_type;
+    return st.reversed ? id.prev() : id.next();
+  };
+  auto unblock_score = [&](Identity id) -> int {
+    auto succ = successor(id);
+    if (!succ) return 0;
+    if (s.is_basic_trash(*succ)) return 0;
+    for (int p = 0; p < s.num_players; ++p) {
+      if (p == cp) continue;
+      for (int o : s.hands[p]) {
+        auto deck_id = s.deck[o].id();
+        if (deck_id && *deck_id == *succ) return 1;
+      }
+    }
+    return 0;
+  };
+
+  auto best = playable.front();
+  int best_score = unblock_score(best.second);
+  for (size_t i = 1; i < playable.size(); ++i) {
+    int score = unblock_score(playable[i].second);
+    if (score > best_score) {
+      best = playable[i];
+      best_score = score;
+    }
+  }
+  return PerformAction{PerformPlay{best.first}};
 }
 
 // Fallback: enumerate every (target, kind, value) triple and return the

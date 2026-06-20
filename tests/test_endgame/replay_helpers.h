@@ -62,7 +62,9 @@ inline void apply_orig_action(Game& g, const OrigAction& action,
     int my_order = ctx.orig_to_my_order[orig_order];
     auto [suit, rank] = ctx.deck[orig_order];
     const bool inverted = g.state.variant->suits[suit].suit_type.inverted;
-    const bool playable = g.state.play_stacks[suit] + 1 == rank;
+    // Use the State's variant-aware playable check (handles `reversed`
+    // suits, where play_stacks starts at 6 and counts down 5->1).
+    const bool playable = g.state.is_playable(Identity(suit, rank));
     // Hanab.live's export is OUTCOME-oriented: type=0 = card landed on a
     // play stack, type=1 = card landed in the discard pile. We build the
     // outcome-shaped action, then `orient_action_for_engine` flips it

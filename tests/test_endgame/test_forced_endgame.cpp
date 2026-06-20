@@ -244,3 +244,53 @@ TEST(ForcedEndgame, TwoCriticalPlayDoesNotFireWhenCardsLeftAboveOne) {
 
   EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value());
 }
+
+// Tiebreaker: when two playable criticals exist (e.g. r4 and b5 both
+// playable from CP), play the one whose successor (rank+1) is held by
+// another player. Without the tiebreaker, the rule picks the first slot
+// in iteration order — b5 in this setup — which would lose the
+// successor's play opportunity (here r5, held by Bob, becomes playable
+// only after r4 lands; if CP plays b5 first then r5 has no chance).
+//
+// Setup: r stack=3 (so r4 playable), b stack=4 (so b5 playable). r4 and
+// b5 both fully_known in Alice's hand. r5 in Bob's hand (he'll play it
+// in his endgame turn iff Alice unblocks it first). Replay 1899527 T47
+// reproducer.
+TEST(ForcedEndgame, TwoCriticalPlayPrefersRank4WhenSuccessorHeldElsewhere) {
+  SetupOptions opts;
+  opts.hands = {
+      // Alice: slot 1 = b5 (critical, playable on b=4), slot 2 = r4
+      // (critical, playable on r=3). Filler avoids accidental clue
+      // targets touching these slots.
+      {"b5", "r4", "o1", "o2", "o3"},
+      // Bob: slot 1 = r5 (the successor of r4; would play in his
+      // endgame turn only if r4 lands first).
+      {"r5", "r1", "r2", "b1", "b2"},
+      // Cathy: filler.
+      {"r1", "r3", "b1", "b3", "o4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  // r4 has 2 copies — discard 1 to make Alice's copy critical. b5 has
+  // 1 copy (rank-5), so Alice's b5 is naturally critical.
+  opts.discarded = {"r4"};
+  opts.play_stacks = {3, 4, 0};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "b5");
+  g = fully_known(std::move(g), TestPlayer::ALICE, 2, "r4");
+  g = with_cards_left(std::move(g), 1);
+
+  int b5_order = g.state.hands[0][0];
+  int r4_order = g.state.hands[0][1];
+
+  auto forced = hanabi::endgame::forced_endgame_action(g);
+  ASSERT_TRUE(forced.has_value()) << "two-critical play must fire";
+  ASSERT_TRUE(std::holds_alternative<PerformPlay>(*forced));
+  EXPECT_EQ(std::get<PerformPlay>(*forced).target, r4_order)
+      << "must play r4 (the rank-4 critical with a successor r5 held by "
+         "Bob), not b5 (rank-5, no successor to unblock). Playing b5 "
+         "first loses r5 permanently — Bob can't play r5 on his endgame "
+         "turn because r stack is still 3.";
+  EXPECT_NE(std::get<PerformPlay>(*forced).target, b5_order);
+}
