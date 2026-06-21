@@ -8,6 +8,8 @@
 #include "hanabi/basics/interp.h"
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::reactor {
 
@@ -246,6 +248,10 @@ void elim_dc_dc(const State& prev_state, Game& game,
 
 bool react_discard(const Game& prev, Game& game, int player_index, int order,
                     const ReactorWC& wc) {
+  hanabi::instr::ScopedTimer st("reactor.react_discard");
+  hanabi::logging::LogScope ls(
+      "reactor.react_discard",
+      {{"player_index", player_index}, {"order", order}, {"reacter", wc.reacter}});
   if (player_index != wc.reacter) {
     game.with_move(DiscardInterp::NONE);
     return false;
@@ -314,6 +320,10 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
 
 bool react_play(const Game& prev, Game& game, int player_index, int order,
                  const ReactorWC& wc) {
+  hanabi::instr::ScopedTimer st("reactor.react_play");
+  hanabi::logging::LogScope ls(
+      "reactor.react_play",
+      {{"player_index", player_index}, {"order", order}, {"reacter", wc.reacter}});
   if (player_index != wc.reacter) return false;
 
   if (wc.inverted) {

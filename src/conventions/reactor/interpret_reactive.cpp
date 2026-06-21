@@ -10,6 +10,8 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/conventions/reactor/interpret_clue.h"
 #include "hanabi/conventions/reactor/interpret_reaction.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::reactor {
 
@@ -228,6 +230,11 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                                                        const ClueAction& action,
                                                        int focus_slot, int reacter,
                                                        bool looks_stable) {
+  hanabi::instr::ScopedTimer st("reactor.interpret_reactive_colour");
+  hanabi::logging::LogScope ls(
+      "reactor.interpret_reactive_colour",
+      {{"focus_slot", focus_slot}, {"reacter", reacter},
+        {"looks_stable", looks_stable}});
   const State& state = game.state;
   int receiver = action.target;
   ReactiveContext ctx = reactive_context(prev, game, action, reacter);
@@ -581,6 +588,10 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
 std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
                                                      const ClueAction& action,
                                                      int focus_slot, int reacter) {
+  hanabi::instr::ScopedTimer st("reactor.interpret_reactive_rank");
+  hanabi::logging::LogScope ls(
+      "reactor.interpret_reactive_rank",
+      {{"focus_slot", focus_slot}, {"reacter", reacter}});
   const State& state = game.state;
   int receiver = action.target;
   ReactiveContext ctx = reactive_context(prev, game, action, reacter);

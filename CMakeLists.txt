@@ -43,6 +43,10 @@ add_library(hanabi_core STATIC
   src/endgame/helper.cpp
   src/endgame/solver.cpp
   src/endgame/winnable.cpp
+  src/instrumentation/timer.cpp
+  src/logging/decide_trace.cpp
+  src/logging/game_logger.cpp
+  src/logging/state_snapshot.cpp
   src/net/auth.cpp
   src/net/codec.cpp
   src/net/commands.cpp
@@ -76,6 +80,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_reactive.cpp
   tests/test_basics/test_stable_ref_discard.cpp
   tests/test_basics/test_strike_preserves_ctp.cpp
+  tests/test_basics/test_snapshot_roundtrip.cpp
   tests/test_reactor/test_reactive_table.cpp
   tests/test_reactor/test_ctd_revives.cpp
   tests/test_reactor/test_reactive_inferred_narrow.cpp
@@ -168,3 +173,11 @@ hanabi_set_warnings(hanabi_bot)
 add_executable(bench_endgame apps/bench_endgame.cpp)
 target_link_libraries(bench_endgame PRIVATE hanabi_core)
 hanabi_set_warnings(bench_endgame)
+
+# Standalone tool: reconstruct a Game from a per-game JSONL log and either
+# re-run take_action with the current build (`--rerun`) or emit a regression
+# test scaffold (`--emit-test`). The point of the logging overhaul: turn
+# 30-minute "re-simulate from turn 1" loops into 1-second reruns.
+add_executable(replay_log apps/replay_log.cpp)
+target_link_libraries(replay_log PRIVATE hanabi_core)
+hanabi_set_warnings(replay_log)

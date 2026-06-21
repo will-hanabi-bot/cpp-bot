@@ -11,6 +11,8 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/endgame/winnable.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::endgame {
 
@@ -559,6 +561,10 @@ WinnableResult EndgameSolver::winnable(const Game& game, int player_turn,
 
 SolveResult EndgameSolver::solve(const Game& game,
                                    std::optional<PerformAction> only_action) {
+  hanabi::instr::ScopedTimer st("endgame.solve");
+  hanabi::logging::LogScope ls(
+      "endgame.solve",
+      {{"cards_left", game.state.cards_left}, {"clue_tokens", game.state.clue_tokens}});
   const State& state = game.state;
 
   // Trivial: one play wins.

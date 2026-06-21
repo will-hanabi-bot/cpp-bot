@@ -10,6 +10,7 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/instrumentation/timer.h"
 
 namespace hanabi::endgame {
 
@@ -252,6 +253,7 @@ std::vector<int> player_known_plays(const Game& game, int player_turn) {
 
 bool winnable_simpler(const Game& game, int player_turn, const RemainingMap& remaining,
                        std::optional<double> deadline, int depth) {
+  hanabi::instr::ScopedTimer st("endgame.winnable_simpler");
   const State& state = game.state;
   if (state.score() == state.max_score()) return true;
   if (unwinnable_state(state, player_turn, depth)) return false;

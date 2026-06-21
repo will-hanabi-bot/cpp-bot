@@ -13,6 +13,8 @@
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor/reactive_table.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::reactor {
 
@@ -861,6 +863,10 @@ bool bad_stable(const Game& prev, const Game& game, const ClueAction& action,
 
 std::optional<ClueInterp> interpret_stable(const Game& prev, Game& game,
                                               const ClueAction& action, bool stall) {
+  hanabi::instr::ScopedTimer st("reactor.interpret_stable");
+  hanabi::logging::LogScope ls(
+      "reactor.interpret_stable",
+      {{"giver", action.giver}, {"target", action.target}, {"stall", stall}});
   const State& state = game.state;
   int target = action.target;
   int bob = state.next_player_index(action.giver);
@@ -891,6 +897,11 @@ std::optional<ClueInterp> interpret_stable(const Game& prev, Game& game,
 std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                                                 const ClueAction& action,
                                                 int reacter, bool looks_stable) {
+  hanabi::instr::ScopedTimer st("reactor.interpret_reactive");
+  hanabi::logging::LogScope ls(
+      "reactor.interpret_reactive",
+      {{"giver", action.giver}, {"target", action.target}, {"reacter", reacter},
+        {"looks_stable", looks_stable}});
   const State& state = game.state;
   int giver = action.giver;
   int receiver = action.target;

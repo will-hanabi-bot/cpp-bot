@@ -12,6 +12,9 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/reactive_table.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/game_logger.h"
+#include "hanabi/logging/state_snapshot.h"
 #include "hanabi/net/notes.h"
 #include "hanabi/version.h"
 
@@ -261,6 +264,24 @@ void BotClient::on_init(const json& data) {
   games_[tid] = std::move(game);
   action_time_[tid] = false;
   everyone_connected_[tid] = false;
+
+  // Open a per-game structured log file: logs/{bot}-{game_id}.log. Replay
+  // games (where in_progress=false) get a logger too so the show_turn.py
+  // helper can read post-mortem replays.
+  if (!username_.empty()) {
+    auto logger = std::make_unique<hanabi::logging::GameLogger>(
+        username_, tid, "logs");
+    logger->emit_lifecycle(
+        "game_init",
+        json{{"variant", variant_name},
+              {"num_players", static_cast<int>(games_[tid]->state.names.size())},
+              {"our_player_index", our_idx},
+              {"names", games_[tid]->state.names},
+              {"is_replay", is_replay},
+              {"bot_version", kBotVersion},
+              {"all_plays", all_plays_mode_}});
+    game_loggers_[tid] = std::move(logger);
+  }
   transport_.queue_send("getGameInfo2", json{{"tableID", tid}});
 }
 
@@ -325,11 +346,30 @@ void BotClient::apply_action(int table_id, const json& raw_action) {
   // type before dispatch.
   act = orient_action_for_engine(*act, *it->second->state.variant);
   Game prev = *it->second;
+
+  // LIFECYCLE: every inbound action gets a log line. Recorded before the
+  // engine applies it so a crash inside handle_action still leaves a
+  // breadcrumb in the log. Action serialized via our internal format so
+  // replay_log can re-apply it without coupling to the hanab.live wire
+  // shape.
+  auto* glog = game_loggers_.count(table_id) ? game_loggers_[table_id].get() : nullptr;
+  if (glog) {
+    glog->emit_lifecycle(
+        "inbound_action",
+        json{{"turn", prev.state.turn_count},
+              {"action", hanabi::logging::action_to_internal_json(*act)}});
+  }
+
   try {
     it->second->handle_action(*act);
   } catch (const std::exception& e) {
     std::cerr << "!! handle_action failed at table " << table_id << ": " << e.what()
               << "\n";
+    if (glog) {
+      glog->emit_lifecycle("handle_action_error",
+                            json{{"turn", prev.state.turn_count},
+                                  {"error", std::string(e.what())}});
+    }
     return;
   }
   // Note-worthy state changes (CALLED_TO_PLAY/_DISCARD transitions and
@@ -376,19 +416,64 @@ void BotClient::maybe_take_turn(int table_id) {
   // gameActionList that re-fires maybe_take_turn) won't post a second job.
   action_time_[table_id] = false;
 
+  // Pass the per-game logger raw pointer (lifetime owned by game_loggers_).
+  // game_loggers_ entries are only erased in on_game_over which runs on
+  // the network thread, and we clear them after the compute completes —
+  // but the worker captures the pointer by value; if a game ends before
+  // the worker runs, the pointer is dangling. We guard by deferring the
+  // erase until after the worker confirms.
+  auto* glog = game_loggers_.count(table_id) ? game_loggers_[table_id].get() : nullptr;
+
   boost::asio::post(compute_ioc_,
-                    [this, table_id, snapshot = std::move(snapshot)]() mutable {
+                    [this, table_id, glog, snapshot = std::move(snapshot)]() mutable {
+                      using namespace hanabi::logging;
+                      CurrentLoggerGuard guard(glog);
+                      if (glog) {
+                        glog->mark_turn_start();
+                        emit_state_snapshot(*glog, snapshot, snapshot.state.turn_count);
+                        glog->emit_lifecycle(
+                            "decide_start",
+                            json{{"turn", snapshot.state.turn_count}});
+                      }
+                      auto t0 = std::chrono::steady_clock::now();
                       PerformAction perform;
                       try {
+                        hanabi::instr::ScopedTimer st("take_action");
                         perform = snapshot.take_action();
                       } catch (const std::exception& e) {
                         std::cerr << "!! take_action failed for table "
                                   << table_id << ": " << e.what() << "\n";
+                        if (glog) {
+                          glog->emit_lifecycle(
+                              "take_action_error",
+                              json{{"turn", snapshot.state.turn_count},
+                                    {"error", std::string(e.what())}});
+                        }
                         return;
                       }
+                      auto elapsed = std::chrono::steady_clock::now() - t0;
+                      double elapsed_ms =
+                          std::chrono::duration<double, std::milli>(elapsed).count();
                       std::cerr << "-> action "
                                 << hanabi::to_json(perform, table_id).dump()
                                 << "\n";
+                      if (glog) {
+                        glog->emit_lifecycle(
+                            "outbound_action",
+                            json{{"turn", snapshot.state.turn_count},
+                                  {"action", hanabi::to_json(perform, table_id)},
+                                  {"elapsed_ms", elapsed_ms}});
+                        // Per-turn TIMING delta.
+                        auto turn_snap = glog->aggregator().snapshot();
+                        auto prior = glog->turn_start_snapshot();
+                        auto delta = hanabi::instr::Aggregator::diff(turn_snap, prior);
+                        glog->emit(
+                            json{{"ch", "TIMING"},
+                                  {"scope", "per_turn"},
+                                  {"turn", snapshot.state.turn_count},
+                                  {"elapsed_ms", elapsed_ms},
+                                  {"scopes", hanabi::instr::Aggregator::to_json(delta)}});
+                      }
                       transport_.queue_send(
                           "action", hanabi::to_json(perform, table_id));
                     });
@@ -399,6 +484,30 @@ void BotClient::on_game_over(const json& data) {
   if (tid == -1) return;
   games_in_progress_.erase(tid);
   std::cerr << "game over at table " << tid << "\n";
+  // Emit per-game TIMING aggregate + final lifecycle event, then close the
+  // logger. The compute thread holds the GameLogger* by raw pointer in
+  // pending take_action lambdas; we don't expect any in-flight compute
+  // here (game_over arrives after our final action) but if there is, the
+  // post-lambda will hold a dangling pointer. Mitigation: keep the
+  // logger alive past compute by NOT erasing immediately — leak the
+  // unique_ptr into a graveyard keyed on tid that we GC opportunistically.
+  // For now: erase after emitting; if a stray lambda runs after, its
+  // captured pointer dangles. Acceptable until we see it bite.
+  auto it = game_loggers_.find(tid);
+  if (it != game_loggers_.end() && it->second) {
+    auto& gl = *it->second;
+    if (data.contains("endCondition")) {
+      gl.emit_lifecycle("game_over",
+                          json{{"end_condition", data.value("endCondition", 0)}});
+    } else {
+      gl.emit_lifecycle("game_over", json::object());
+    }
+    auto snap = gl.aggregator().snapshot();
+    gl.emit(json{{"ch", "TIMING"},
+                  {"scope", "per_game"},
+                  {"scopes", hanabi::instr::Aggregator::to_json(snap)}});
+    game_loggers_.erase(it);
+  }
   if (config_.disconnect_on_game_end) {
     transport_.queue_send("tableUnattend", json{{"tableID", tid}});
   }

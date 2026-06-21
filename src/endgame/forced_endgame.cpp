@@ -7,6 +7,8 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::endgame {
 
@@ -191,6 +193,8 @@ std::optional<PerformAction> any_legal_clue(const Game& game) {
 }  // namespace
 
 std::optional<PerformAction> forced_endgame_action(const Game& game) {
+  hanabi::instr::ScopedTimer st("endgame.forced_endgame_action");
+  hanabi::logging::LogScope ls("endgame.forced_endgame_action");
   const State& s = game.state;
   if (s.cards_left != 1) return std::nullopt;
 

@@ -11,6 +11,8 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::reactor {
 namespace {
@@ -316,6 +318,7 @@ double force_clue_inner(const Game& orig, const Game& game, int offset) {
 // --- advance -------------------------------------------------------------
 
 double advance(const Game& orig, const Game& game, int offset) {
+  hanabi::instr::ScopedTimer st("reactor.advance");
   const State& state = game.state;
   const Player& common = game.common;
   const auto& meta = game.meta;
@@ -452,6 +455,8 @@ double advance(const Game& orig, const Game& game, int offset) {
 // --- eval_action ---------------------------------------------------------
 
 double eval_action(const Game& game, const Action& action) {
+  hanabi::instr::ScopedTimer st("reactor.eval_action");
+  hanabi::logging::LogScope ls("reactor.eval_action");
   const State& state = game.state;
   Game hypo_game = game.simulate(action);
 
@@ -617,6 +622,7 @@ double eval_state(const State& state, bool in_endgame) {
 // --- eval_game -----------------------------------------------------------
 
 double eval_game(const Game& orig, const Game& game) {
+  hanabi::instr::ScopedTimer st("reactor.eval_game");
   const State& state = game.state;
   if (state.score() == orig.state.max_score()) return 100.0;
 

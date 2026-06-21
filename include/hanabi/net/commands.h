@@ -25,6 +25,7 @@
 #include <nlohmann/json.hpp>
 
 #include "hanabi/basics/game.h"
+#include "hanabi/logging/game_logger.h"
 #include "hanabi/net/ws_transport.h"
 #include "hanabi/settings.h"
 
@@ -57,6 +58,10 @@ class BotClient {
   // game.notes). compute_note_segments returns deltas; we append to the
   // full string here and re-send it on each change.
   std::unordered_map<int, std::unordered_map<int, std::string>> notes_;
+  // Per-table structured JSONL logger. Created in on_init, closed in
+  // on_game_over. See include/hanabi/logging/game_logger.h.
+  std::unordered_map<int, std::unique_ptr<hanabi::logging::GameLogger>>
+      game_loggers_;
 
   // Reactor /allplays toggle. Defaults to false (standard convention). When
   // set via "/allplays on" in chat, propagated into every active Game's
