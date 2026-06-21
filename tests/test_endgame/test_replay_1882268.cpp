@@ -3,17 +3,19 @@
 // (3 Suits)".
 //
 // At turn 7 (action index 7), will-bot67 (P1) gives a red color clue to
-// will-bot69 (P0). Stable interpretation (via ref_play) targets
-// will-bot69's slot 5 (order 0 = b3), marking it CALLED_TO_PLAY — but b3
-// isn't playable (blue stack is 0). yagami_black (P2) was already loaded
-// with a known red-2; under inverted-response interpretation, if she plays
-// an unexpected card, that signals the clue was reactive, not stable.
+// will-bot69 (P0) — target=P0=cathy from P1's POV, so this is a
+// reactive-shape clue. Pre-v0.39 the dispatcher's reacter-search loop
+// vacuously picked P0 (no obvious_playables → empty old_play → vacuous
+// match) and, because reacter==target, routed to interpret_stable.
+// try_stable's ref_play stamped CTP on slot 5 (order 0 = b3, NOT playable
+// since the blue stack is 0); when yagami at T8 played an unexpected
+// brown 3, the response-inversion rewind reverted the bad stable to
+// reactive.
 //
-// At turn 8 (action 8), yagami plays brown 3 from slot 4 (order 12),
-// which is NOT in her known_playables — the trigger for rewinding the
-// prior clue to a reactive interpretation. Pre-fix: the desync left the
-// bot believing slot 5 was a play, leading to a strike. Post-fix: the
-// rewind clears that bad CALLED_TO_PLAY.
+// Post-v0.39 the dispatcher's vacuous-truth guard blocks the
+// reacter==target pick when target != bob, so the clue routes directly
+// to interpret_reactive with reacter=bob=yagami. Slot 5 is never CTP'd
+// in the first place, and the rewind no longer needs to fire.
 #include <gtest/gtest.h>
 
 #include <variant>
@@ -96,22 +98,23 @@ TEST(EndgameReplay1882268, BadStableRewindsToReactiveOnUnexpectedPlay) {
             cathy_known_plays.end())
       << "yagami should already be loaded with known r2 (my-order 13)";
 
-  // Apply action 7 (the bad stable red clue from will-bot67 → will-bot69).
+  // Apply action 7 (the red clue from will-bot67 → will-bot69).
   apply_orig_action(g, kOrigActions[7], ctx);
 
-  // Pre-rewind state: stable interpretation marks slot 5 (my-order 0 = b3)
-  // as CALLED_TO_PLAY via ref_play. This is the bug — b3 isn't playable.
-  EXPECT_EQ(g.meta[0].status, CardStatus::CALLED_TO_PLAY)
-      << "stable interp before yagami's reaction should mark slot 5 b3";
+  // v0.39: with the dispatcher's vacuous-truth guard the bad stable
+  // never fires, so slot 5 (b3, NOT playable) is never CTP'd. The
+  // pre-fix test verified the buggy stable + rewind round-trip; post-
+  // fix the rewind isn't needed because the bad CTP doesn't happen.
+  EXPECT_NE(g.meta[0].status, CardStatus::CALLED_TO_PLAY)
+      << "v0.39: the dispatcher's vacuous-truth guard prevents the bad "
+         "stable CTP on slot 5; this state should never appear.";
 
-  // Apply action 8 (yagami plays brown 3 from slot 4 — UNEXPECTED, since her
-  // known playable was r2 at slot 2). This should trigger the rewind from
-  // react_play, re-interpreting the clue at action 7 as reactive.
+  // Apply action 8 (yagami plays brown 3 from slot 4).
   apply_orig_action(g, kOrigActions[8], ctx);
 
-  // Post-rewind expectation: slot 5 is no longer CALLED_TO_PLAY.
+  // Slot 5 should still not be CTP'd after action 8.
   EXPECT_NE(g.meta[0].status, CardStatus::CALLED_TO_PLAY)
-      << "after the rewind to reactive, slot 5 b3 should not be CALLED_TO_PLAY";
+      << "slot 5 b3 should never have been CTP'd";
 
   // And take_action on the bot's turn must NOT play order 0 (the misplay).
   ASSERT_EQ(g.state.current_player_index, static_cast<int>(TestPlayer::ALICE));

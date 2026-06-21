@@ -627,6 +627,26 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
   int hand_size = kHandSize[state.num_players];
   for (const auto& [target, index] : play_targets) {
     int target_slot = index + 1;
+    // Older-CTP guard: if the receiver has an already-CTP'd card at a
+    // HIGHER slot index (= older) than this play_target, the receiver
+    // will play the older CTP first, breaking the chain (the new
+    // target won't fire before the reacter acts). Replay 1899623 T7
+    // exhibits this: yagami had m2 (slot 5) CTP'd before the rank-3
+    // clue; the convention picked yagami's slot 1 (n1) as the chain
+    // target, but yagami played m2 at T8 (older CTP), leaving stack
+    // n=0 — wb69 then played the supposed n2 connector and bombed at
+    // T9. With this guard the play_target is skipped, falling through
+    // to the finesse fallback whose POV-invariant guard validates the
+    // chain.
+    bool older_ctp_blocks = false;
+    for (size_t i = index + 1; i < state.hands[receiver].size(); ++i) {
+      int o = state.hands[receiver][i];
+      if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+        older_ctp_blocks = true;
+        break;
+      }
+    }
+    if (older_ctp_blocks) continue;
     int react_slot = calc_slot(focus_slot, target_slot, hand_size);
     if (react_slot < 1 ||
         react_slot > static_cast<int>(state.hands[reacter].size())) {

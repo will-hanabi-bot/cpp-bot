@@ -111,6 +111,17 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
       interp = interpret_stable(prev, *this, action, /*stall=*/true);
     }
   } else {
+    int bob_idx = state.next_player_index(action.giver);
+    // Vacuous-truth guard. When a player's `old_play` is empty the
+    // for-loop below is vacuous and !any_kept is trivially true. That's
+    // harmless when the resulting `reacter != action.target` (routes to
+    // reactive — fine for a target!=bob clue). But when the vacuous
+    // match yields `reacter == action.target` AND target != bob, the
+    // dispatcher falsely routes a reactive-shape clue to stable, and
+    // `try_stable`'s `ref_discard` stamps a spurious CTD on the
+    // receiver. Replay 1899623 T16 was this case. Block the vacuous
+    // pick only there; (reacter != target) and (target == bob) vacuous
+    // matches still work because they route correctly.
     std::optional<int> reacter;
     for (int i = 1; i < state.num_players; ++i) {
       int pi = (action.giver + i) % state.num_players;
@@ -124,6 +135,10 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
         }
       }
       if (!any_kept) {
+        bool vacuous_self_target_offsuit = old_play.empty() &&
+                                               pi == action.target &&
+                                               pi != bob_idx;
+        if (vacuous_self_target_offsuit) continue;
         reacter = pi;
         break;
       }
@@ -137,11 +152,20 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
       fixed.insert(fixed.end(), f.duplicate_reveals.begin(),
                     f.duplicate_reveals.end());
     }
-    bool allowable_fix = action.target == state.next_player_index(action.giver) &&
-                          !fixed.empty();
+    bool allowable_fix = action.target == bob_idx && !fixed.empty();
 
     if (!reacter) {
-      interp = allowable_fix ? std::make_optional(ClueInterp::FIX) : std::nullopt;
+      // No reacter found AND the only candidate was the now-suppressed
+      // vacuous reacter==target with target!=bob. Route to reactive
+      // with bob as the canonical reacter — that's what the convention
+      // would have inferred had the response-inversion fallback fired
+      // a turn later, minus the spurious stable side-effects.
+      if (allowable_fix) {
+        interp = ClueInterp::FIX;
+      } else {
+        interp = interpret_reactive(prev, *this, action, bob_idx,
+                                       /*looks_stable=*/false);
+      }
     } else if (*reacter == action.target) {
       interp = interpret_stable(prev, *this, action, /*stall=*/false);
     } else {
