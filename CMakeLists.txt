@@ -23,6 +23,7 @@ add_library(hanabi_core STATIC
   src/basics/card.cpp
   src/basics/clue_result.cpp
   src/basics/connection.cpp
+  src/basics/decide.cpp
   src/basics/eval.cpp
   src/basics/fix.cpp
   src/basics/game.cpp

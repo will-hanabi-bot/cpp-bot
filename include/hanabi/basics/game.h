@@ -2,9 +2,9 @@
 // Original Scala: scala-bot/src/scala_bot/basics/Game.scala + basics.scala.
 //
 // Game is the full game tree at a point in time. Convention-specific hooks
-// (interpret_clue, interpret_play, etc.) default to identity at this layer;
-// they're filled in by the reactor implementation (Phase 4). Reactor-specific
-// fields (`waiting`, `zcs_turn`) live on Game directly — we don't subclass.
+// (interpret_clue, interpret_play, etc.) are implemented by the reactor
+// convention layer (src/conventions/reactor/). Reactor-specific fields
+// (`waiting`, `zcs_turn`) live on Game directly — we don't subclass.
 //
 // API departs from Python: methods that the Python returns-a-new-Game (on_*,
 // handle_action, with_*, elim) are *mutating* in C++. Use clone() / copy
@@ -39,9 +39,7 @@ struct Note {
 };
 
 // Reactor-specific waiting-connection record. Lives on Game to keep the
-// data model flat (we have one convention; subclassing isn't needed). Fully
-// populated in Phase 4 — for now the struct is declared so Game can hold a
-// vector of them.
+// data model flat (we have one convention; subclassing isn't needed).
 struct ReactorWC {
   int giver = 0;
   int reacter = 0;
@@ -96,14 +94,14 @@ class Game {
   // clues are play+play (standard Reactor convention).
   bool all_plays = false;
 
-  // Reactor-specific (used in Phase 4).
+  // Reactor-specific.
   std::vector<ReactorWC> waiting;
   int zcs_turn = -1;
 
   // --- Factory ---
   static Game create(int table_id, State state);
 
-  // --- Convention hooks (filled in by Phase 4) ---
+  // --- Convention hooks (implemented by src/conventions/reactor/) ---
   // Each hook mutates *this* in place. The Python signatures `(self, prev, action) -> Game`
   // become `(prev, action)` mutating self.
   void interpret_clue(const Game& prev, const ClueAction& action);
@@ -143,8 +141,7 @@ class Game {
   // forces the next clue handler to take the reactive path.
   Game rewind(int turn, const Action& new_action) const;
 
-  // --- Empathy elimination (real impl in Phase 2b once player_elim lands) ---
-  // For now this is a stub that just clears `dirty` so things compile.
+  // --- Empathy elimination (card_elim + good_touch_elim; port of game.py:613-710) ---
   void elim(std::optional<int> except = std::nullopt);
 
   // --- Simulation: return a new Game ---
@@ -199,10 +196,9 @@ class Game {
   // Whether Bob (next player after current) has permission to discard.
   bool has_ptd() const;
 
-  // Enumerate clue candidates the giver could give. With the reactor
-  // interpret_* hooks stubbed, this returns the unranked set of valid clues
-  // (faithful to the structure but not the heuristic ranking). The endgame
-  // solver only needs the enumeration, not the ordering.
+  // Enumerate clue candidates the giver could give, filtering out mistakes
+  // and useless duplicates (mirrors reactor.py find_all_clues). Unranked;
+  // callers (take_action, endgame solver) score the candidates themselves.
   std::vector<PerformAction> find_all_clues(int giver) const;
 
   // Returns one discard candidate: trash head, else chop, else locked_discard.

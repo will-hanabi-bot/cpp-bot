@@ -1,12 +1,22 @@
-# Phase 7 — Verification
+# Phase 7 — Verification (historical)
 
-Status as of this commit: the foundation is solid (154 GoogleTests passing,
+> **Status update (v1.0):** this document is a snapshot from the Phase 7
+> port era and its "pending" items have since shipped. The reactor
+> `interpret_clue` / `interpret_reactive` / `interpret_reaction` triple is
+> fully implemented (`src/conventions/reactor/`), the live-bot game
+> lifecycle runs in `src/net/commands.cpp`, and replay-based verification
+> is handled by per-game JSONL logs + `build/replay_log` plus the
+> `tests/test_endgame/test_replay_*.cpp` regression suite (which superseded
+> the planned `cli/replay`). The sections below are kept for the
+> microbenchmark data and methodology; read status claims as historical.
+
+Status as of Phase 7: the foundation is solid (154 GoogleTests passing,
 binary builds, primitives measured), but full end-to-end behavioral parity
 against Python is blocked on the remaining Phase 4 work (the reactor
 `interpret_clue` / `interpret_reactive` / `interpret_reaction` triple).
 
-This document records what *is* verified, what's pending, and the
-measurement methodology so subsequent sessions can pick up.
+This document records what *was* verified at that point, what was pending,
+and the measurement methodology.
 
 ## What's verified
 
@@ -56,7 +66,7 @@ upper end of that range.
 - `./build/hanabi_bot index=0` (the live-bot entry point) rejects missing
   `HANABI_USERNAME0` cleanly.
 
-## What's pending — gates to "30 s → < 1 s" claim
+## What was pending at Phase 7 — gates to "30 s → < 1 s" claim (since shipped)
 
 The verification target from the plan was:
 
@@ -110,15 +120,15 @@ When the above gates are in place:
    - Winrate within a small tolerance (Fractions are exact, so this
      should be exact equality)
 
-## Per-phase status snapshot
+## Per-phase status snapshot (as of v1.0)
 
 | Phase | Verification status |
 |---|---|
-| 0 — CMake | ✅ build clean, 154 tests green |
+| 0 — CMake | ✅ build clean, tests green |
 | 1 — basics/ leaves | ✅ ported pytest 1-to-1 |
 | 2 — basics/ core | ✅ ported pytest 1-to-1 |
 | 3 — Test harness | ✅ harness smoke green |
-| 4 — reactor convention | 🟡 reactive_table + state_eval verified; interpret_* untested (not yet ported) |
-| 5 — endgame solver | 🟡 trivial-win path verified at 9ms; full path untested (depends on Phase 4 tail) |
-| 6 — net + CLI | 🟡 codec verified; live bot connection untested |
-| 7 — this document | 🟡 primitive perf verified; end-to-end parity blocked on Phase 4/6 tail + snapshot-restore |
+| 4 — reactor convention | ✅ interpret_* triple implemented; covered by test_reactor/ + replay regression suite |
+| 5 — endgame solver | ✅ full solver live (6 s budget) + forced-endgame rules; test_endgame/ incl. per-game replay regressions |
+| 6 — net + CLI | ✅ live bot in production on hanab.live; codec/command parsing unit-tested (WebSocket transport itself untested) |
+| 7 — this document | ✅ historical; ongoing verification is per-game JSONL logs + replay_log reruns (see CLAUDE.md) |

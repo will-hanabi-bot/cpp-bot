@@ -16,6 +16,13 @@ Do not skip hooks (`--no-verify`) or bypass signing. Confirm with the user
 before pushing if there's any ambiguity about whether the change is ready to
 deploy.
 
+**On every version bump, check that the repo's `.md` docs are still accurate**
+(`VERIFICATION.md`, this file, and any other `.md` describing implementation
+status). Docs or code comments that claim work is "pending", "stubbed", or
+"Phase N" must be updated or marked historical once the work has shipped.
+VERIFICATION.md previously went stale this way — treat any status-bearing
+`.md` as part of the change surface.
+
 ## Test changes
 
 The `tests/` tree captures behavioural expectations for the bot. Before

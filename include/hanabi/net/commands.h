@@ -1,15 +1,11 @@
 // Port of python-bot/src/hanabi_bot/net/commands.py.
 //
-// Per-connection chat-command dispatcher. Handles inbound messages from
-// hanab.live (welcome, chat, table, tableList, ...) and outbound chat
-// commands (/join, /settings, /leaveall, /create, /start, /setvariant,
-// /terminate).
-//
-// Scope vs. Python: game lifecycle (init/gameAction/gameActionList/connected/
-// clock) is stubbed - we track only enough state for the chat commands to
-// behave correctly (whether a table has an in-progress game so /leaveall
-// picks tableLeave vs tableUnattend). Full game lifecycle + take_action
-// land once the reactor convention port is complete.
+// Per-connection message dispatcher. Handles inbound messages from
+// hanab.live (welcome, chat, table, tableList, init, gameAction,
+// gameActionList, connected, gameOver, ...), drives the full game lifecycle
+// (per-table Game instances, take_action on our turn via a dedicated compute
+// thread), and sends outbound chat commands (/join, /settings, /leaveall,
+// /create, /start, /setvariant, /terminate).
 #pragma once
 
 #include <memory>
