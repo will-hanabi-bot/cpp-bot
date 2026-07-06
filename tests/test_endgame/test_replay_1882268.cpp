@@ -12,10 +12,14 @@
 // brown 3, the response-inversion rewind reverted the bad stable to
 // reactive.
 //
-// Post-v0.39 the dispatcher's vacuous-truth guard blocks the
-// reacter==target pick when target != bob, so the clue routes directly
-// to interpret_reactive with reacter=bob=yagami. Slot 5 is never CTP'd
-// in the first place, and the rewind no longer needs to fire.
+// v1.2 (replay 1915981 fix): with bob (yagami) loaded via the T5
+// reveal (known r2), the clue-to-cathy reads STABLE unless the stable
+// interpretation is bad. The giver and bob can see the pushed b3 is
+// unplayable (bad stable → they read reactive); cathy can't see her own
+// hand, so she provisionally CTPs slot 5 and yagami's unexpected
+// brown-3 play at T8 triggers the response-inversion rewind back to the
+// reactive read. Bob always acts before cathy, so the provisional CTP
+// is never played.
 #include <gtest/gtest.h>
 
 #include <variant>
@@ -101,13 +105,16 @@ TEST(EndgameReplay1882268, BadStableRewindsToReactiveOnUnexpectedPlay) {
   // Apply action 7 (the red clue from will-bot67 → will-bot69).
   apply_orig_action(g, kOrigActions[7], ctx);
 
-  // v0.39: with the dispatcher's vacuous-truth guard the bad stable
-  // never fires, so slot 5 (b3, NOT playable) is never CTP'd. The
-  // pre-fix test verified the buggy stable + rewind round-trip; post-
-  // fix the rewind isn't needed because the bad CTP doesn't happen.
-  EXPECT_NE(g.meta[0].status, CardStatus::CALLED_TO_PLAY)
-      << "v0.39: the dispatcher's vacuous-truth guard prevents the bad "
-         "stable CTP on slot 5; this state should never appear.";
+  // v1.2 (replay 1915981 fix): with bob (yagami) loaded, a clue to
+  // cathy reads STABLE unless the stable interpretation is bad. Cathy
+  // can't see her own slot 5 to tell the ref_play push (b3) is bad, so
+  // from her POV she provisionally CTPs it and relies on bob's action
+  // to correct her — the giver and bob, who CAN see the b3, read the
+  // clue as reactive via bad_stable. Bob always acts before cathy, so
+  // the provisional CTP can never be played before the rewind fires.
+  EXPECT_EQ(g.meta[0].status, CardStatus::CALLED_TO_PLAY)
+      << "cathy's provisional stable read must CTP slot 5 until bob's "
+         "reaction corrects it";
 
   // Apply action 8 (yagami plays brown 3 from slot 4).
   apply_orig_action(g, kOrigActions[8], ctx);

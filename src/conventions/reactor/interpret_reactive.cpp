@@ -606,12 +606,27 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
     // T9. With this guard the play_target is skipped, falling through
     // to the finesse fallback whose POV-invariant guard validates the
     // chain.
+    //
+    // The guard only applies to targets that are already playable on
+    // the REAL stacks. A target that becomes playable only through the
+    // receiver's pending CTP plays (i.e. playable in `hypo_state` but
+    // not in `state`) is *enabled* by those older CTPs, not blocked:
+    // per the convention, the receiver's queued plays are simulated
+    // first and the leftmost post-sim playable is the intended target.
+    // Replay 1892197 T9: yagami's p3 sits behind the CTP'd p2 — the
+    // rank-4 read must map p3 (→ wb67's slot 2 = i2, a misplay the
+    // giver's eval then rejects), not skip it for the very queue that
+    // enables it.
+    auto guard_tid = state.deck[target].id();
+    bool target_needs_pending = guard_tid && !state.is_playable(*guard_tid);
     bool older_ctp_blocks = false;
-    for (size_t i = index + 1; i < state.hands[receiver].size(); ++i) {
-      int o = state.hands[receiver][i];
-      if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) {
-        older_ctp_blocks = true;
-        break;
+    if (!target_needs_pending) {
+      for (size_t i = index + 1; i < state.hands[receiver].size(); ++i) {
+        int o = state.hands[receiver][i];
+        if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+          older_ctp_blocks = true;
+          break;
+        }
       }
     }
     if (older_ctp_blocks) continue;

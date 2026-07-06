@@ -126,14 +126,29 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
     bool allowable_fix = action.target == bob_idx && !fixed.empty();
 
     if (!reacter) {
-      // No reacter found AND the only candidate was the now-suppressed
-      // vacuous reacter==target with target!=bob. Route to reactive
-      // with bob as the canonical reacter — that's what the convention
-      // would have inferred had the response-inversion fallback fired
-      // a turn later, minus the spurious stable side-effects.
+      // No reacter found: every candidate either kept its plays (loaded)
+      // or was the vacuous-truth-suppressed reacter==target pick.
       if (allowable_fix) {
         interp = ClueInterp::FIX;
+      } else if (action.target != bob_idx) {
+        // Clue to Cathy with everyone between the giver and the target
+        // loaded: the convention reads STABLE unless the stable
+        // interpretation is actually bad — interpret_stable's bad_stable
+        // check handles that fallback (restoring the game and rerouting
+        // to reactive with bob as the canonical reacter). Replay 1915981
+        // T11: bob is loaded (CTP'd b1) and the blue clue to cathy is a
+        // good ref_play (pushes a playable t2) → stable. Replay 1899623
+        // T16: the stable rank-4 read CTD's a giver-visibly useful n3 →
+        // bad_stable → reactive. Cathy herself can't verify stable-
+        // goodness (own hand hidden; bad_stable defers) — she reads
+        // stable provisionally, and bob's unexpected reaction triggers
+        // the response-inversion rewind (replay 1882268 T8/T9).
+        interp = interpret_stable(prev, *this, action, /*stall=*/false);
       } else {
+        // Clue to a loaded bob with no reacter: keep the reactive(bob)
+        // routing — reacter==receiver is degenerate and scores as a
+        // MISTAKE, which is what lets the giver's eval reject clue
+        // shapes the partners won't read cleanly (replay 1892197 T9).
         interp = interpret_reactive(prev, *this, action, bob_idx,
                                        /*looks_stable=*/false);
       }
