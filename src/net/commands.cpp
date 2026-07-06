@@ -11,7 +11,7 @@
 #include "hanabi/basics/options.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
-#include "hanabi/conventions/reactor/reactive_table.h"
+#include "hanabi/conventions/variants/reactive_table.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/game_logger.h"
 #include "hanabi/logging/state_snapshot.h"
@@ -665,7 +665,7 @@ void BotClient::chat_settings(const std::string& room) {
   auto game_it = games_.find(*tid);
   if (game_it != games_.end() && game_it->second) all_plays = game_it->second->all_plays;
 
-  std::string msg = hanabi::reactor::format_reactive_settings(*variant, hand_size, all_plays);
+  std::string msg = hanabi::reactor::variants::format_reactive_settings(*variant, hand_size, all_plays);
   transport_.queue_send(
       "chat",
       json{{"msg", msg}, {"recipient", ""}, {"room", "table" + std::to_string(*tid)}});

@@ -10,7 +10,7 @@ namespace hanabi {
 struct Variant;
 }  // namespace hanabi
 
-namespace hanabi::reactor {
+namespace hanabi::reactor::variants {
 
 inline constexpr std::array<const char*, 6> kVanillaOrder = {
     "Red", "Yellow", "Green", "Blue", "Purple", "Teal"};
@@ -26,4 +26,4 @@ std::vector<int> reactive_value_table(const Variant& variant, int hand_size);
 std::string format_reactive_settings(const Variant& variant, int hand_size,
                                        bool all_plays = false);
 
-}  // namespace hanabi::reactor
+}  // namespace hanabi::reactor::variants

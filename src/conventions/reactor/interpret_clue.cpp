@@ -12,7 +12,11 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
-#include "hanabi/conventions/reactor/reactive_table.h"
+#include "hanabi/conventions/variants/brownish.h"
+#include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/variants/pinkish.h"
+#include "hanabi/conventions/variants/predicates.h"
+#include "hanabi/conventions/variants/reactive_table.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -20,72 +24,8 @@ namespace hanabi::reactor {
 
 namespace {
 
-// Substring predicates matching the Python's regex variants. Each name set
-// here is the regex's alternation expanded as individual substrings.
-bool includes_rainbowish(const State& state) {
-  return state.includes_variant("Rainbow") || state.includes_variant("Omni");
-}
-bool includes_pinkish(const State& state) {
-  // Funnels and Chimneys variants share the "rank clue touches multiple
-  // ranks" property, so they should go through the same convention path
-  // as pinkish variants (focus_slot = clue.value, etc.).
-  if (state.variant->funnels || state.variant->chimneys) return true;
-  return state.includes_variant("Pink") || state.includes_variant("Omni");
-}
-bool includes_brownish(const State& state) {
-  return state.includes_variant("Brown") || state.includes_variant("Muddy") ||
-         state.includes_variant("Cocoa") || state.includes_variant("Null");
-}
-
 bool contains(const std::vector<int>& v, int x) {
   return std::find(v.begin(), v.end(), x) != v.end();
-}
-
-// Pink-promise: in a pinkish variant a rank clue that touches the receiver's
-// chop (rightmost unclued card) promises that the chop has that rank. Two
-// substitutions apply when the natural rank clue for the special rank is
-// unavailable (pink_s makes rank-K clue not touch rank-K cards):
-//   pink_s + special_rank=5: rank-4 promises rank-5
-//   pink_s + special_rank=1: rank-2 promises rank-1
-// Returns true when the giver can see that the chop's rank cannot satisfy
-// the promise — i.e., the clue is illegal.
-bool violates_pink_promise(const Game& prev, const ClueAction& action) {
-  if (action.clue.kind != ClueKind::RANK) return false;
-
-  const State& state = prev.state;
-  const Variant& v = *state.variant;
-
-  bool pinkish = v.pink_s;
-  for (const Suit& s : v.suits) {
-    if (s.suit_type.pinkish) { pinkish = true; break; }
-  }
-  if (!pinkish) return false;
-
-  // Chop = rightmost (oldest, last vector index) unclued card before the
-  // clue lands.
-  std::optional<int> chop;
-  for (auto it = state.hands[action.target].rbegin();
-        it != state.hands[action.target].rend(); ++it) {
-    if (!state.deck[*it].clued) { chop = *it; break; }
-  }
-  if (!chop) return false;
-
-  // Promise only applies when the chop itself is touched.
-  if (!contains(action.list_, *chop)) return false;
-
-  // Promised ranks (set, to handle pink_s substitutions where a clue can
-  // legitimately call either the spoken rank or the special rank).
-  std::vector<int> promised{action.clue.value};
-  if (v.pink_s && v.special_rank) {
-    int sr = *v.special_rank;
-    if (sr == 5 && action.clue.value == 4) promised.push_back(5);
-    else if (sr == 1 && action.clue.value == 2) promised.push_back(1);
-  }
-
-  auto chop_id = state.deck[*chop].id();
-  if (!chop_id) return false;  // observer's own hand — can't verify
-  return std::find(promised.begin(), promised.end(), chop_id->rank) ==
-         promised.end();
 }
 
 }  // namespace
@@ -117,14 +57,15 @@ int reactive_focus(const State& state, int receiver, const ClueAction& action) {
   int focus_i = focus_it->second;
 
   if (clue.kind == ClueKind::COLOUR) {
-    if (includes_rainbowish(state) || state.variant->rainbow_s) {
-      auto table = reactive_value_table(*state.variant, kHandSize[state.num_players]);
+    if (variants::includes_rainbowish(state) || state.variant->rainbow_s) {
+      auto table = variants::reactive_value_table(*state.variant,
+                                                  kHandSize[state.num_players]);
       return table[clue.value];
     }
     return focus_i + 1;
   }
   // Rank
-  if (includes_pinkish(state) || state.variant->pink_s) {
+  if (variants::includes_pinkish(state) || state.variant->pink_s) {
     return clue.value;
   }
   return focus_i + 1;
@@ -365,8 +306,7 @@ std::optional<ClueInterp> ref_play(const Game& prev, Game& game,
   // when the orange is playable). Reject so eval treats this clue as
   // a MISTAKE (−10 penalty) and the bot prefers the rank-clue
   // alternative.
-  if (target_id &&
-      game.state.variant->suits[target_id->suit_index].suit_type.inverted) {
+  if (target_id && variants::is_inverted_id(game.state, *target_id)) {
     return std::nullopt;
   }
   return target_play(game, action, target, /*urgent=*/false, /*stable=*/true);
@@ -403,16 +343,8 @@ std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
     if (prev.common.thinks_locked(prev, receiver)) return ClueInterp::MISTAKE;
     // Lock interpretation.
     int lo = *lock_order;
-    if (includes_pinkish(state)) {
-      int rv = clue.value;
-      game.with_thought(lo, [rv](const Thought& t) {
-        Thought out = t;
-        out.inferred = t.inferred.filter([rv](Identity i) { return i.rank == rv; });
-        return out;
-      });
-      game.with_meta(lo, [](ConvData& m) { m.focused = true; });
-      auto lock_id = state.deck[lo].id();
-      if (lock_id && lock_id->rank != clue.value) return std::nullopt;
+    if (variants::includes_pinkish(state)) {
+      if (!variants::apply_rank_promise(game, lo, clue)) return std::nullopt;
     }
     int turn = state.turn_count;
     int g = giver;
@@ -447,16 +379,10 @@ std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
                             : *std::min_element(promised_orders.begin(),
                                                   promised_orders.end());
 
-  if (includes_pinkish(state)) {
-    int rv = clue.value;
-    game.with_thought(promised_order, [rv](const Thought& t) {
-      Thought out = t;
-      out.inferred = t.inferred.filter([rv](Identity i) { return i.rank == rv; });
-      return out;
-    });
-    game.with_meta(promised_order, [](ConvData& m) { m.focused = true; });
-    auto p_id = state.deck[promised_order].id();
-    if (p_id && p_id->rank != clue.value) return std::nullopt;
+  if (variants::includes_pinkish(state)) {
+    if (!variants::apply_rank_promise(game, promised_order, clue)) {
+      return std::nullopt;
+    }
   } else {
     game.with_meta(focus, [](ConvData& m) { m.focused = true; });
   }
@@ -514,7 +440,7 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
   // doesn't match, the clue is illegal — short-circuit to MISTAKE before
   // running any of the trash_push / playable_rank / ref_play / ref_discard
   // branches (each of which would otherwise stamp a partial interpretation).
-  if (!newly_touched.empty() && violates_pink_promise(prev, action)) {
+  if (!newly_touched.empty() && variants::violates_pink_promise(prev, action)) {
     return std::nullopt;
   }
 
@@ -542,16 +468,8 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
       game.with_meta(focus, [](ConvData& m) { m.trash = true; });
     } else if (playable_rank) {
       int focus;
-      if (includes_pinkish(state)) {
-        std::vector<int> touched_unclued;
-        for (int o : state.hands[target]) {
-          if (!prev.state.deck[o].clued && contains(list_, o)) {
-            touched_unclued.push_back(o);
-          }
-        }
-        focus = !touched_unclued.empty()
-                    ? *std::min_element(touched_unclued.begin(), touched_unclued.end())
-                    : *std::max_element(newly_touched.begin(), newly_touched.end());
+      if (variants::includes_pinkish(state)) {
+        focus = variants::playable_rank_focus(prev, state, action, newly_touched);
       } else {
         focus = *std::max_element(newly_touched.begin(), newly_touched.end());
       }
@@ -581,22 +499,12 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
                               : std::nullopt;
           return out;
         });
-        // CTP/CTD are PHYSICAL action labels. For an orange (inverted)
-        // focus the convention wants the receiver to advance the orange
-        // stack — the orange game-rule inversion requires PerformDiscard
-        // to do that — so mark CTD instead of CTP. The receiver's
-        // urgent_action then dispatches PerformDiscard naturally.
-        bool focus_is_inverted = false;
-        for (Identity i : new_inferred) {
-          if (state.variant->suits[i.suit_index].suit_type.inverted) {
-            focus_is_inverted = true;
-            break;
-          }
-        }
-        game.with_meta(focus, [focus_is_inverted](ConvData& m) {
+        // CTP vs CTD depends on whether the focus can be an orange
+        // (inverted) card — see variants::called_focus_status.
+        CardStatus focus_status = variants::called_focus_status(state, new_inferred);
+        game.with_meta(focus, [focus_status](ConvData& m) {
           m.focused = true;
-          m.status = focus_is_inverted ? CardStatus::CALLED_TO_DISCARD
-                                        : CardStatus::CALLED_TO_PLAY;
+          m.status = focus_status;
         });
       }
     }
@@ -700,24 +608,9 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
 
   int max_nt = *std::max_element(newly_touched.begin(), newly_touched.end());
   if (game.common.order_kt(game, max_nt)) {
-    bool brownish_tcm = false;
-    if (includes_brownish(state) && clue.kind == ClueKind::RANK &&
-        !prev.common.obvious_loaded(game, target)) {
-      bool no_newest_in_touched =
-          !state.hands[target].empty() &&
-          !contains(newly_touched, state.hands[target][0]);
-      if (no_newest_in_touched) {
-        for (size_t i = 0; i < state.variant->suits.size(); ++i) {
-          const auto& s = state.variant->suits[i];
-          bool brown = s.suit_type.brownish;
-          if (brown && state.play_stacks[i] + 1 < state.max_ranks[i]) {
-            brownish_tcm = true;
-            break;
-          }
-        }
-      }
+    if (variants::brownish_tcm_applies(prev, game, action, newly_touched)) {
+      return ClueInterp::REVEAL;
     }
-    if (brownish_tcm) return ClueInterp::REVEAL;
     return ref_play(prev, game, action);
   }
   if (clue.kind == ClueKind::COLOUR) return ref_play(prev, game, action);

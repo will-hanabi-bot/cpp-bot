@@ -38,8 +38,12 @@ add_library(hanabi_core STATIC
   src/conventions/reactor/interpret_clue.cpp
   src/conventions/reactor/interpret_reaction.cpp
   src/conventions/reactor/interpret_reactive.cpp
-  src/conventions/reactor/reactive_table.cpp
   src/conventions/reactor/state_eval.cpp
+  src/conventions/variants/brownish.cpp
+  src/conventions/variants/inverted.cpp
+  src/conventions/variants/pinkish.cpp
+  src/conventions/variants/predicates.cpp
+  src/conventions/variants/reactive_table.cpp
   src/endgame/forced_endgame.cpp
   src/endgame/helper.cpp
   src/endgame/solver.cpp

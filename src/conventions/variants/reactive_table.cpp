@@ -1,4 +1,4 @@
-#include "hanabi/conventions/reactor/reactive_table.h"
+#include "hanabi/conventions/variants/reactive_table.h"
 
 #include <cassert>
 #include <cctype>
@@ -9,7 +9,7 @@
 
 #include "hanabi/basics/variant.h"
 
-namespace hanabi::reactor {
+namespace hanabi::reactor::variants {
 namespace {
 
 bool name_contains(const std::string& name, std::string_view needle) {
@@ -165,4 +165,4 @@ std::string format_reactive_settings(const Variant& variant, int hand_size,
   return "odd plays: " + colour_half + ", even plays: " + rank_half;
 }
 
-}  // namespace hanabi::reactor
+}  // namespace hanabi::reactor::variants

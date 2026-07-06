@@ -11,6 +11,8 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -100,17 +102,6 @@ bool chop_id_is_unique(const Game& game, int bob_chop_order) {
   return true;
 }
 
-bool is_clue_regain_rank(const State& s, Identity id) {
-  bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
-  return reversed ? (id.rank == 1) : (id.rank == 5);
-}
-
-bool is_first_or_second_rank(const State& s, Identity id) {
-  bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
-  if (reversed) return id.rank == 4 || id.rank == 5;
-  return id.rank == 1 || id.rank == 2;
-}
-
 bool is_high_value_clue(const Game& game, const Game& hypo,
                         const ClueAction& /*ca*/) {
   const State& s = game.state;
@@ -143,8 +134,10 @@ bool is_high_value_clue(const Game& game, const Game& hypo,
       auto id = s.deck[o].id();
       if (!id) continue;
       // (2) Critical first/second-rank in play direction.
-      if (s.is_critical(*id) && is_first_or_second_rank(s, *id)) return true;
-      if (is_clue_regain_rank(s, *id)) any_clue_regain_rank = true;
+      if (s.is_critical(*id) && variants::is_first_or_second_rank(s, *id)) {
+        return true;
+      }
+      if (variants::is_clue_regain_rank(s, *id)) any_clue_regain_rank = true;
     }
   }
   // (3) ≥ 2 plays AND at least one regains a clue token.
@@ -281,23 +274,6 @@ double get_result(const Game& game, const Game& hypo, const ClueAction& action) 
 
 namespace {
 
-// Build a DiscardAction for a known order in advance()'s simulation. For
-// inverted (Orange / Dark Orange) suits the engine's `on_discard` runs the
-// orange game-rule: failed=false advances the stack (via `with_play`),
-// failed=true strikes. If we hard-code `failed=false` for non-playable
-// inverted cards, `with_play` jumps the play stack to the (non-playable)
-// rank — corrupting the simulated state. So inverted + !playable must
-// use failed=true.
-DiscardAction make_discard_for_simulation(const State& state, int player_index,
-                                            int order) {
-  auto id = state.deck[order].id();
-  if (!id) return DiscardAction{player_index, order, -1, -1, /*failed=*/false};
-  bool inverted = state.variant->suits[id->suit_index].suit_type.inverted;
-  bool playable = state.is_playable(*id);
-  bool failed = inverted && !playable;
-  return DiscardAction{player_index, order, id->suit_index, id->rank, failed};
-}
-
 double force_clue_inner(const Game& orig, const Game& game, int offset) {
   const State& state = game.state;
   int giver = (state.our_player_index + offset) % state.num_players;
@@ -395,7 +371,7 @@ double advance(const Game& orig, const Game& game, int offset) {
   if (player.obvious_locked(game, player_index)) {
     if (!state.can_clue()) {
       int locked_dc = player.locked_discard(state, player_index);
-      Action act{make_discard_for_simulation(state, player_index, locked_dc)};
+      Action act{variants::make_discard_for_simulation(state, player_index, locked_dc)};
       return advance(orig, game.simulate(act), offset + 1);
     }
     return force_clue_inner(orig, game, offset);
@@ -404,12 +380,12 @@ double advance(const Game& orig, const Game& game, int offset) {
   if (state.clue_tokens == 8) return force_clue_inner(orig, game, offset);
 
   if (urgent_dc) {
-    Action act{make_discard_for_simulation(state, player_index, *urgent_dc)};
+    Action act{variants::make_discard_for_simulation(state, player_index, *urgent_dc)};
     return advance(orig, game.simulate(act), offset + 1);
   }
 
   auto try_discard = [&](int order) {
-    Action act{make_discard_for_simulation(state, player_index, order)};
+    Action act{variants::make_discard_for_simulation(state, player_index, order)};
     double dc_value = advance(orig, game.simulate(act), offset + 1);
     if (state.clue_tokens < 2) return dc_value;
     double clue_value = force_clue_inner(orig, game, offset);
@@ -536,17 +512,10 @@ double eval_action(const Game& game, const Action& action) {
     // an orange card into a play attempt — so discarding an orange-
     // playable card *is* a play, and discarding a card that could be
     // orange has upside that the baseline penalty doesn't capture.
-    bool target_id_is_orange =
-        id && state.variant->suits[id->suit_index].suit_type.inverted;
-    bool target_possible_has_orange = false;
-    for (Identity i : game.me().thoughts[da.order].possible) {
-      if (state.variant->suits[i.suit_index].suit_type.inverted) {
-        target_possible_has_orange = true;
-        break;
-      }
-    }
+    bool discard_is_play = variants::discard_advances_stack(state, id);
+    bool target_id_is_orange = id && variants::is_inverted_id(state, *id);
     if (!is_trash) {
-      if (target_id_is_orange && state.is_playable(*id)) {
+      if (discard_is_play) {
         // Discard advances the orange stack — value at the play tier
         // regardless of endgame. The known-id PlayAction baseline is
         // `0.02 * (5 - rank)` (line 370) ≈ 0.02..0.08, small enough
@@ -554,7 +523,9 @@ double eval_action(const Game& game, const Action& action) {
         // override the in_endgame baseline (-1.0) too — discarding
         // a known-orange playable in endgame is still a stack-advance.
         value = 1.0;
-      } else if (target_possible_has_orange && !target_id_is_orange) {
+      } else if (!target_id_is_orange &&
+                 variants::possible_has_inverted(
+                     state, game.me().thoughts[da.order].possible)) {
         // Possibly-orange unknown: in orange games the bot must be
         // willing to discard rather than fall back to clues that may
         // force a critical orange misplay. Floor materially above the
@@ -577,7 +548,7 @@ double eval_action(const Game& game, const Action& action) {
         // Known-orange-playable: the discard is also a play under the
         // inversion, so it isn't "blocking" the other playable — it's
         // a choice of which of two plays to take this turn.
-        if (target_id_is_orange && state.is_playable(*id)) break;
+        if (discard_is_play) break;
         auto pid = m.thoughts[o].id(/*infer=*/true);
         if (!pid || !state.is_playable(*pid)) continue;
         if (identity_called_to_play_elsewhere(game, *pid, o)) continue;

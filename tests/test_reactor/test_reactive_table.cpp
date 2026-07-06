@@ -2,11 +2,11 @@
 #include <gtest/gtest.h>
 
 #include "hanabi/basics/variant.h"
-#include "hanabi/conventions/reactor/reactive_table.h"
+#include "hanabi/conventions/variants/reactive_table.h"
 
 using namespace hanabi;
-using hanabi::reactor::format_reactive_settings;
-using hanabi::reactor::reactive_value_table;
+using hanabi::reactor::variants::format_reactive_settings;
+using hanabi::reactor::variants::reactive_value_table;
 
 namespace {
 
