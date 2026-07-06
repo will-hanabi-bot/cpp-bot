@@ -71,27 +71,35 @@ std::vector<int> reactive_value_table(const Variant& variant, int hand_size) {
   }
 
   std::vector<Suit> colourable = variant.colourable_suits();
-  bool has_red = false;
-  for (const auto& s : colourable) {
-    if (s.name == "Red") {
-      has_red = true;
-      break;
-    }
-  }
-  assert(has_red && "reactive_value_table requires Red in colourable_suits");
-  (void)has_red;
+  assert(!colourable.empty() &&
+         "reactive_value_table requires colourable suits");
 
   std::unordered_map<std::string, int> vanilla_value;
   for (size_t i = 0; i < kVanillaOrder.size(); ++i) {
     vanilla_value[kVanillaOrder[i]] = static_cast<int>(i % hand_size) + 1;
   }
 
+  // Key the vanilla lookup by the CLUE COLOUR name, not the suit name.
+  // Ambiguous variants collapse several suits onto one colour and name
+  // the representative suits Tomato / Berry / ... — but the clue a
+  // partner actually gives is "Red" / "Blue", so the reactive value must
+  // anchor to the colour (Ambiguous & Rainbow (5 Suits): {Red, Blue} →
+  // {1, 4}, not the positional fallback {1, 2}). `clue_colour_names[i]`
+  // is index-aligned with `colourable_suit_indices[i]` by construction.
+  // Synthetic test Variants populate `colourable_suit_indices` directly
+  // and leave `clue_colour_names` empty — fall back to the suit name,
+  // which coincides with the colour for real colour names.
+  const bool use_colour_names =
+      variant.clue_colour_names.size() == colourable.size();
+
   std::unordered_set<int> taken;
   int prev_value = 0;
   std::vector<int> result;
-  for (const Suit& suit : colourable) {
+  for (size_t idx = 0; idx < colourable.size(); ++idx) {
+    const std::string& key = use_colour_names ? variant.clue_colour_names[idx]
+                                              : colourable[idx].name;
     int value;
-    auto it = vanilla_value.find(suit.name);
+    auto it = vanilla_value.find(key);
     if (it != vanilla_value.end()) {
       value = it->second;
     } else {

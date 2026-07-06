@@ -65,6 +65,32 @@ TEST(ReactiveTable, FourPlayerSpecialsWrapToOne) {
   EXPECT_EQ(reactive_value_table(v, 4), (std::vector<int>{1, 2, 3, 4, 1}));
 }
 
+// --- Ambiguous rainbowy variants: values keyed by clue colour -------------
+// The representative suits are named Tomato / Berry / ..., but the clue a
+// partner gives is Red / Blue — the reactive value anchors to the colour.
+
+TEST(ReactiveTable, AmbiguousRainbowUsesClueColours) {
+  // Tomato + Mahogany clue as Red → 1; Berry + Navy clue as Blue → 4.
+  const Variant& v = get_variant("Ambiguous & Rainbow (5 Suits)");
+  EXPECT_EQ(reactive_value_table(v, 5), (std::vector<int>{1, 4}));
+}
+
+TEST(ReactiveTable, AmbiguousOmniUsesClueColours) {
+  const Variant& v = get_variant("Ambiguous & Omni (5 Suits)");
+  EXPECT_EQ(reactive_value_table(v, 5), (std::vector<int>{1, 4}));
+}
+
+TEST(ReactiveTable, VeryAmbiguousOmniAllBlue) {
+  // Berry / Navy / Sky all clue as Blue → single colour slot 4.
+  const Variant& v = get_variant("Very Ambiguous & Omni (4 Suits)");
+  EXPECT_EQ(reactive_value_table(v, 5), (std::vector<int>{4}));
+}
+
+TEST(ReactiveTable, ExtremelyAmbiguousOmniAllBlue) {
+  const Variant& v = get_variant("Extremely Ambiguous & Omni (6 Suits)");
+  EXPECT_EQ(reactive_value_table(v, 5), (std::vector<int>{4}));
+}
+
 // --- format_reactive_settings: /allplays on/off output --------------------
 
 TEST(ReactiveTableSettings, VanillaOff) {
