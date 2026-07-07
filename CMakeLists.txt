@@ -147,8 +147,8 @@ add_executable(hanabi_tests
   tests/test_endgame/test_replay_1899567.cpp
   tests/test_endgame/test_replay_1899623.cpp
   tests/test_endgame/test_replay_1900437.cpp
-  tests/test_endgame/test_replay_1915981.cpp
-  tests/test_endgame/test_replay_1916791.cpp
+  tests/test_bad_reaction/test_replay_1915981_loaded_bob_reacts_to_stable_clue.cpp
+  tests/test_receiver_misinterpretation/test_replay_1916791_stale_wc_misses_ctd_to_ctp_promise.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp
