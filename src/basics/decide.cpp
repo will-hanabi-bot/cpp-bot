@@ -68,6 +68,23 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
     int reacter = state.next_player_index(action.giver);
     interp = interpret_reactive(prev, *this, action, reacter,
                                    /*looks_stable=*/false);
+  } else if (!waiting.empty() && !waiting.front().inverted &&
+              waiting.front().reacter == state.next_player_index(action.giver) &&
+              action.target != waiting.front().reacter) {
+    // New clue re-tasks the pending reacter (replay 1916791 T27, rule
+    // confirmed by user): a clue given while a reactive is pending on X,
+    // where X is the new clue's bob, supersedes the old WC — X's next
+    // action always answers the NEWEST clue. This is the POV-invariant
+    // reading: the clue's target can't verify a stable reading anyway
+    // (1916791: the stable ref_discard would CTD the target's own,
+    // giver-visibly critical dark null 5 — giver and reacter both read
+    // reactive, and the target must reach the same conclusion from the
+    // pending-WC shape alone). interpret_reactive clears the old WC and
+    // installs the new one; the reacter's next play then decodes against
+    // it (e.g. the receiver's CTD'd slot flips to a CTP promise).
+    int reacter = state.next_player_index(action.giver);
+    interp = interpret_reactive(prev, *this, action, reacter,
+                                   /*looks_stable=*/false);
   } else if (prev.common.obvious_locked(prev, action.giver) || in_endgame() ||
               prev.state.clue_tokens == 8) {
     int bob = state.next_player_index(action.giver);

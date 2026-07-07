@@ -337,6 +337,7 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
         m = m.reason(turn).signal(turn);
       });
     }
+    if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
     return ClueInterp::REACTIVE;
   }
 
@@ -535,6 +536,7 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
     // sometimes producing multiple candidate dc-targets, a single
     // failure on the first one shouldn't abort the whole interp.
     if (!interp) continue;
+    if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
     return ClueInterp::REACTIVE;
   }
   return std::nullopt;
@@ -743,6 +745,7 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
         return out;
       });
     }
+    if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
     return ClueInterp::REACTIVE;
   }
 
@@ -830,6 +833,7 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
       out.inferred = IdentitySet::single(pi);
       return out;
     });
+    if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
     return ClueInterp::REACTIVE;
   }
 

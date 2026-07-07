@@ -357,7 +357,8 @@ json build_debug_section(const Game& game) {
                               {"focus_slot", wc.focus_slot},
                               {"inverted", wc.inverted},
                               {"turn", wc.turn},
-                              {"all_plays", wc.all_plays}});
+                              {"all_plays", wc.all_plays},
+                              {"react_order", wc.react_order}});
   }
   dbg["waiting"] = std::move(waiting);
 

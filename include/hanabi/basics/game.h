@@ -53,6 +53,13 @@ struct ReactorWC {
   // the reaction (play or discard by the reacter) is interpreted as
   // play+play regardless of clue.kind — see interpret_reaction.cpp.
   bool all_plays = false;
+  // The order the reactive interp called the reacter to act on (the
+  // urgent CTP/CTD stamp). -1 when unknown — e.g. the receiver's own POV
+  // interprets the clue without computing the reacter's slot. Diagnostic:
+  // published in the per-game log's STATE snapshot so reaction bugs can
+  // be triaged without re-deriving the reacter's called slot (added while
+  // debugging replay 1916791).
+  int react_order = -1;
 
   bool operator==(const ReactorWC&) const = default;
 };

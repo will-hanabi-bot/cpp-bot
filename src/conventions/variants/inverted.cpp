@@ -141,6 +141,9 @@ std::optional<ClueInterp> orange_chop_save(
       target_play(game, action, chop_react_order, /*urgent=*/true,
                   /*stable=*/false);
   if (!chop_interp) return std::nullopt;
+  if (!game.waiting.empty()) {
+    game.waiting.front().react_order = chop_react_order;
+  }
   return ClueInterp::REACTIVE;
 }
 
