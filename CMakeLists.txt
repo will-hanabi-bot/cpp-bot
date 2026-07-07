@@ -169,6 +169,7 @@ add_executable(hanabi_decision_tests
   tests/test_harness.cpp
   tests/test_decision_making/test_low_clue_count.cpp
   tests/test_decision_making/test_high_value_clue.cpp
+  tests/test_decision_making/test_replay_1916933_clue_forces_discard_of_queued_playable.cpp
 )
 target_include_directories(hanabi_decision_tests PRIVATE tests)
 target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)

@@ -248,13 +248,31 @@ double get_result(const Game& game, const Game& hypo, const ClueAction& action) 
     if (!hypo.state.deck[o].clued) ++untouched_plays;
   }
 
+  // A clue whose reading flips an existing CALLED_TO_PLAY into a
+  // CALLED_TO_DISCARD destroys a queued play (and whatever chain sits
+  // behind it). Replay 1916933 T31: the red reactive's leftmost play
+  // target mapped the reacter's slot onto their queued t3 — the read
+  // calls them to DISCARD it just to CTP a card that a plain stable
+  // push gets for free. Only exempt cards the giver can see are trash
+  // (then the "CTD" is a favour, not a loss).
+  int destroyed_plays = 0;
+  for (const auto& hand : state.hands) {
+    for (int o : hand) {
+      if (meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      if (hypo.meta[o].status != CardStatus::CALLED_TO_DISCARD) continue;
+      auto id = state.deck[o].id();
+      if (id && state.is_basic_trash(*id)) continue;
+      ++destroyed_plays;
+    }
+  }
+
   double value =
       good_touch + (static_cast<double>(playables.size()) - 2.0 * duped_playables) +
       0.2 * untouched_plays +
       (game.in_endgame() ? 0.01 : 0.05) * revealed_trash +
       (game.in_endgame() ? 0.1 : 0.05) * static_cast<double>(fill.size()) +
       (game.in_endgame() ? 0.05 : 0.02) * static_cast<double>(elim.size()) +
-      -0.1 * bad_count;
+      -0.1 * bad_count - 10.0 * destroyed_plays;
 
   if (move_is(ClueInterp::MISTAKE)) return value - 10.0;
   if (move_is(ClueInterp::FIX)) return value + 1.0;
