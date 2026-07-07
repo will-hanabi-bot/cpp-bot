@@ -67,13 +67,31 @@ When a bug report arrives with `(game_id, turn, expected vs actual)`:
 
 4. **Generate a regression test only after you understand the branch.**
    ```
-   scripts/bug_to_test.sh logs/<bot>-<game_id>.log <turn>
+   scripts/bug_to_test.sh logs/<bot>-<game_id>.log <turn> [category] [slug]
    ```
-   Emits `tests/test_endgame/test_replay_<game_id>.cpp`, builds, and runs
-   it. Manual replay-test authoring (typing out the deck + action sequence
-   in the test_endgame/replay_helpers.h style) is the **last** resort, not
-   the first — only fall back when no log exists.
+   Emits `tests/<category>/test_replay_<game_id>_<slug>.cpp` (defaults to
+   `tests/test_endgame/` with no slug), builds, and runs it. Manual
+   replay-test authoring (typing out the deck + action sequence in the
+   test_endgame/replay_helpers.h style) is the **last** resort, not the
+   first — only fall back when no log exists.
 
 Per-game logs are also useful for "what did the bot spend its time on"
 investigations. `scripts/log_summary.py logs/<bot>-<game_id>.log` prints
 the per-turn action + the per-game TIMING aggregate.
+
+## Replay-test standards
+
+- **Category folders.** Bug reports carry a `Category` field naming the
+  folder the regression test belongs to. The test goes in
+  `tests/<category>/` (e.g. `tests/test_bad_reactive_target/`). Create the
+  folder if it doesn't exist and add the new `.cpp` to the `hanabi_tests`
+  source list in `CMakeLists.txt` — no other wiring is needed.
+- **Descriptive filenames.** Replay tests are named
+  `test_replay_<game_id>_<short_slug>.cpp`, where the slug is a snake_case
+  3–6 word description of the issue, e.g.
+  `test_replay_1234567_focus_clued_trash_over_unclued_trash.cpp`.
+- **Export JSONs.** hanab.live export JSONs live in the central store
+  `tests/test_endgame/replays/<game_id>.json` regardless of category.
+- **Existing tests.** Uncategorized tests already in `tests/test_endgame/`
+  stay there until explicitly recategorized (moving/renaming them is an
+  existing-test change and needs approval, per "Test changes" above).

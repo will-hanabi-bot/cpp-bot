@@ -360,16 +360,24 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
     }
     if (is_trash) unknown_trash.emplace_back(o, static_cast<int>(i));
   }
-  // Prefer unclued trash (newly identifiable as trash via this clue's
-  // mapping) over already-clued trash. Re-CTD'ing a clued card adds no
-  // new information; an unclued trash slot is the one the receiver
-  // genuinely learns about. Example 2 in the convention spec: g1
-  // (clued, known trash) vs. b3 (unclued, same-hand-duped) — the
-  // convention should mark the unclued b3.
-  std::sort(unknown_trash.begin(), unknown_trash.end(),
+  // v1.4 dc-target rule (replay 1916813; ordering confirmed by user):
+  //   1.1 target the LEFTMOST CLUED trash card that is not already
+  //       globally known to be trash — marking it teaches the receiver
+  //       that a card they were keeping for its clue is actually trash
+  //       (1916813: the clued n2 behind a useful-looking {g2,g5,b2,b5}
+  //       empathy);
+  //   1.2 else the LEFTMOST UNCLUED not-known trash card;
+  //   2.1 else the LEFTMOST globally-known trash card (known_trash pool);
+  //   2.2 else sacrifice.
+  // `unknown_trash` is built slot-ascending, so a stable partition by
+  // clued-ness keeps "leftmost" within each group. Known-ness is
+  // evaluated on the PREV state (`prev_kt` filter above), so a pre-clued
+  // card that this clue disambiguates into trash sits at the front of
+  // the clued group (replay 1892505 T32).
+  std::stable_sort(unknown_trash.begin(), unknown_trash.end(),
              [&](const auto& a, const auto& b) {
-               int ka = prev.state.deck[a.first].clued ? 1 : -1;
-               int kb = prev.state.deck[b.first].clued ? 1 : -1;
+               int ka = prev.state.deck[a.first].clued ? -1 : 1;
+               int kb = prev.state.deck[b.first].clued ? -1 : 1;
                return ka < kb;
              });
 
@@ -415,30 +423,12 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                return ka < kb;
              });
 
-  // Pre-clued slots that post-clue common-knowledge `order_kt` marks
-  // as basic-trash. When the receiver has a slot that was clued
-  // *before* this turn AND the current clue's narrowing on
-  // `common.thoughts.possible` is enough to push every remaining id
-  // into `state.trash_set`, the clue's effect is to disambiguate
-  // that slot as trash. The reactive interp promotes the reacter to
-  // play the slot mapped via `calc_slot`, which:
-  //   (a) advances a stack (the reacter's mapped slot is currently
-  //       playable), vs. only revealing trash the receiver would
-  //       discard on chop anyway;
-  //   (b) gives the receiver the disambiguation that the giver's
-  //       clue was *about* that pre-clued slot — they can confidently
-  //       discard it in the future.
-  // POV invariance: the membership uses `game.common.thinks_trash`
-  // (post-clue, common-knowledge), so giver / receiver / reacter all
-  // compute the same candidate set. The clued-before-this-turn check
-  // uses `prev.state.deck[o].clued`, also POV-invariant.
-  // Replay 1892505 T32: a colour-red clue to wb69 narrows the pre-
-  // clued slot 4 (i2, prior possible {r2,r3,y2,g3,i2,i3}) to {y2,g3,
-  // i2,i3} via the red-untouched filter — every survivor is basic-
-  // trash at stacks y=5/g=5/i=3, so post-clue `order_kt(slot 4)` is
-  // true. focus_slot=3 (newest-demoted) + target_slot=4 ⟹ react_slot=
-  // 4, mapping to wb67's slot 4 = i4 (currently playable on prism
-  // stack=3).
+  // Pre-clued slots that post-clue common-knowledge `order_kt` marks as
+  // basic-trash: the clue's point is disambiguating that slot as trash,
+  // so it outranks the other pools (v0.38, replay 1892505 T32 — see
+  // tests/test_basics/test_reactive.cpp for the full narrative). POV
+  // invariance: membership uses `game.common.thinks_trash` (post-clue,
+  // common knowledge) and `prev.state.deck[o].clued`.
   auto game_kt = game.common.thinks_trash(game, receiver);
   std::vector<std::pair<int, int>> pre_clued_trash;
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
@@ -448,6 +438,7 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
     pre_clued_trash.emplace_back(o, static_cast<int>(i));
   }
 
+  // Cascade per the v1.4 rule above.
   std::vector<std::pair<int, int>> dc_targets;
   bool chose_sacrifices = false;
   if (!pre_clued_trash.empty()) dc_targets = pre_clued_trash;

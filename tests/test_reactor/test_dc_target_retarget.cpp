@@ -83,15 +83,17 @@ TEST(DCTargetRetarget, Example1RetargetsToOnlyKnownTrash) {
          "(r2) is currently playable and must be CTP'd";
 }
 
-// Example 2: Cathy holds the already-clued g1 (old trash) AND an
-// unclued same-hand-duplicated b3 on slot 3 (new trash). The
-// convention prefers the unclued/new trash. focus=1 + target=3 →
-// react_slot = calc_slot(1,3,5) = 3. Bob's slot 3 (g3) is playable.
-TEST(DCTargetRetarget, Example2PrefersUncluedNewTrashOverCluedKnownTrash) {
+// Example 2 (v1.4, replay 1916813): Cathy holds the clued-but-not-
+// globally-known trash g1 (colour-clued only — empathy {g1..g5}) AND an
+// unclued same-hand-duplicated b3 on slot 3. Per the dc-target rule the
+// LEFTMOST CLUED not-known trash outranks unclued trash: marking it
+// teaches Cathy that a card she was keeping for its clue is trash.
+// focus=1 + target=2 → react_slot = calc_slot(1,2,5) = 4.
+TEST(DCTargetRetarget, Example2PrefersCluedUnknownTrashOverUncluedDup) {
   SetupOptions opts = all_ones_played_base();
   opts.hands = {
       {"y2", "y3", "y4", "p2", "p3"},
-      {"r3", "r4", "r2", "g3", "g4"},   // Bob: slot 3 = g3 (playable).
+      {"r3", "r4", "r2", "g3", "g4"},
       {"r5", "g1", "b3", "b3", "b4"},   // Cathy: slots 3,4 = b3 dup.
   };
   Game g = setup(std::move(opts));
@@ -99,10 +101,10 @@ TEST(DCTargetRetarget, Example2PrefersUncluedNewTrashOverCluedKnownTrash) {
 
   g = take_turn(std::move(g), "Alice clues Red to Cathy");
 
-  EXPECT_EQ(find_ctp_slot(g, TestPlayer::BOB), 3)
-      << "Cathy's slot 3 (b3, unclued, same-hand-dup of slot 4 b3) is "
-         "the new trash the convention picks over the already-clued "
-         "g1 on slot 2. focus=1 + target=3 → react_slot=3 (Bob's g3)";
+  EXPECT_EQ(find_ctp_slot(g, TestPlayer::BOB), 4)
+      << "Cathy's slot 2 (g1, clued but not globally known trash) is the "
+         "convention's dc target — clued-unknown trash outranks the "
+         "unclued b3 dup. focus=1 + target=2 → react_slot=4";
 }
 
 // Example 3: Cathy's slot 2 (g3) was previously CTD'd. The new
