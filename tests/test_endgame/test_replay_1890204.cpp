@@ -88,29 +88,12 @@ void apply_prefix(Game& g, size_t count) {
 
 }  // namespace
 
-// v0.37 spec update: at T7 the convention CTPs will-bot69's slot 2
-// (order 14, actual b2). With the strict-singleton self_plays advance
-// (good-touch trash-elim no longer auto-advances hypo_state past the
-// receiver's apparently-natural plays), yagami slot 1's b1 is the
-// next unknown-leftmost playable connector for the chain. The old
-// Stage B chain-consistency guard rejected this CTP because yagami
-// slot 1's visible y2 didn't match the {b1} narrowing; under v0.37
-// the convention's chain is resolved correctly and slot 2 b2 is
-// legitimately the reactive target.
-TEST(EndgameReplay1890204, T7CTPsWillbot69Slot2ViaB1Connector) {
-  Game g = build_start();
-  apply_prefix(g, 7);  // T1..T7 applied.
-
-  // Will-bot69's slot 2 = order 14 = b2 (actual).
-  int wb69_slot2 = g.state.hands[2][1];
-  ASSERT_EQ(wb69_slot2, 14);
-  EXPECT_EQ(g.meta[wb69_slot2].status, CardStatus::CALLED_TO_PLAY)
-      << "v0.37: T7's rank-4 clue legitimately CTPs wb69's slot 2 (b2) "
-         "as the reactive target, with yagami slot 1's b1 supplying the "
-         "next-unknown-leftmost-playable chain connector. The old test "
-         "expected the chain-consistency guard to reject this — that "
-         "rejection was an artefact of the pre-v0.37 good-touch advance.";
-}
+// (The former T7 chain-expectation test — v0.37's "b1 connector" read
+// that CTP'd will-bot69's slot 2 — was DELETED at v1.5 with user
+// approval: the target it asserted stacked on yagami's already-CTP'd
+// queue, which the stacked-plays rule (replays 1916815 / 1892197)
+// forbids, and the underlying T3/T4 read predates the left-dupe rule.
+// The stacking rule is guarded by tests/test_stacked_plays/.)
 
 // Stage A regression: when the reactive interp DOES commit a CTP on
 // a receiver target, the target's inferred is narrowed (no longer

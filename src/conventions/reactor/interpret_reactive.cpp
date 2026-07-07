@@ -176,6 +176,29 @@ ReactiveContext reactive_context(const Game& prev, const Game& game,
       ctx.hypo_state = ctx.hypo_state.try_play(*id);
     }
   }
+  // v1.5 (replay 1916815): additionally simulate ALL of the receiver's
+  // pending CTP'd cards through the hypo stacks, using observer-visible
+  // deck ids — the receiver will play their queue on their own, so the
+  // convention's next play target is picked against the post-queue
+  // stacks. This both retires the CTP'd card from the play-target pool
+  // (m1 stops being hypo-playable once simulated) and surfaces its
+  // successor (the newly drawn m2 becomes hypo-playable). A play target
+  // must never stack on a card that is already CALLED_TO_PLAY. POV: the
+  // receiver's deck ids are visible to the giver and the reacter; the
+  // receiver's own POV never runs this path (interpret_reactive returns
+  // early for receiver == our_player_index). Fixpoint so CTP chains
+  // advance in stack order.
+  bool advanced = true;
+  while (advanced) {
+    advanced = false;
+    for (int o : state.hands[receiver]) {
+      if (prev.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      auto id = state.deck[o].id();
+      if (!id || !ctx.hypo_state.is_playable(*id)) continue;
+      ctx.hypo_state = ctx.hypo_state.try_play(*id);
+      advanced = true;
+    }
+  }
   return ctx;
 }
 
@@ -210,6 +233,11 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
     int o = state.hands[receiver][i];
     if (contains(ctx.known_plays, o)) continue;
+    // A play target never stacks on an already-CTP'd card (replay
+    // 1916815): its play is already queued, and the pending-CTP
+    // simulation in reactive_context makes its successor hypo-playable
+    // — the successor is the eligible target.
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
     auto id = state.deck[o].id();
     if (!id || !ctx.hypo_state.is_playable(*id)) continue;
     all_playable.emplace_back(o, static_cast<int>(i));
@@ -559,6 +587,11 @@ std::optional<ClueInterp> interpret_reactive_rank(const Game& prev, Game& game,
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
     int o = state.hands[receiver][i];
     if (contains(ctx.known_plays, o)) continue;
+    // A play target never stacks on an already-CTP'd card (replay
+    // 1916815): its play is already queued, and the pending-CTP
+    // simulation in reactive_context makes its successor hypo-playable
+    // — the successor is the eligible target.
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
     auto id = state.deck[o].id();
     if (!id || !ctx.hypo_state.is_playable(*id)) continue;
     all_playable.emplace_back(o, static_cast<int>(i));

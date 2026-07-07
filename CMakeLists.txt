@@ -96,6 +96,7 @@ add_executable(hanabi_tests
   tests/test_reactor/test_dc_target_retarget.cpp
   tests/test_reactor/test_same_hand_dupe_playables.cpp
   tests/test_bad_reactive_target/test_replay_1916813_clued_trash_over_unclued_trash.cpp
+  tests/test_stacked_plays/test_replay_1916815_play_target_stacked_on_ctp.cpp
   tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_replay_1874799.cpp
@@ -134,7 +135,7 @@ add_executable(hanabi_tests
   tests/test_endgame/test_replay_1890204.cpp
   tests/test_endgame/test_replay_1892112.cpp
   tests/test_endgame/test_replay_1892115.cpp
-  tests/test_endgame/test_replay_1892197.cpp
+  tests/test_stacked_plays/test_replay_1892197_reactive_4_targets_next_playable_after_ctp.cpp
   tests/test_endgame/test_replay_1892259.cpp
   tests/test_endgame/test_replay_1892397.cpp
   tests/test_endgame/test_replay_1892428.cpp
