@@ -298,10 +298,38 @@ void BotClient::on_game_action(const json& data) {
 void BotClient::on_game_action_list(const json& data) {
   int tid = data.value("tableID", -1);
   if (tid == -1) return;
+  auto* glog = game_loggers_.count(tid) ? game_loggers_[tid].get() : nullptr;
+  int catchup_actions = 0;
+  auto catchup_start = std::chrono::steady_clock::now();
   if (data.contains("list") && data["list"].is_array()) {
-    for (const auto& raw : data["list"]) apply_action(tid, raw);
+    for (const auto& raw : data["list"]) {
+      apply_action(tid, raw);
+      ++catchup_actions;
+    }
   }
-  // Done loading. Exit catchup mode and check if it's our turn.
+  double catchup_ms =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                catchup_start)
+          .count();
+  if (glog) {
+    // Loading latency diagnostic: how long the interpretation of the
+    // catch-up action list took. The gap between this record and
+    // `loaded_sent` / the first live inbound action separates compute
+    // cost from wire cost in a "slow to join" report.
+    glog->emit_lifecycle("catchup_done", json{{"actions", catchup_actions},
+                                              {"elapsed_ms", catchup_ms}});
+    // Scope breakdown of the catch-up work (interpretation, rewinds, ...).
+    auto snap = glog->aggregator().snapshot();
+    glog->emit(json{{"ch", "TIMING"},
+                     {"scope", "catchup"},
+                     {"scopes", hanabi::instr::Aggregator::to_json(snap)}});
+  }
+  // Send `loaded` FIRST: the server gates game start on every player's
+  // `loaded`, and the transport paces one message per send-interval —
+  // anything queued ahead of it (v1.6's note burst: one per dealt card)
+  // delays the whole table's start. Replay 2580: 16 queued notes stalled
+  // game start by ~8 s.
+  transport_.queue_send("loaded", json{{"tableID", tid}});
   auto it = games_.find(tid);
   if (it != games_.end()) {
     Game& g = *it->second;
@@ -314,6 +342,9 @@ void BotClient::on_game_action_list(const json& data) {
     // segments accumulated on order 0 are kept after it. Then send every
     // accumulated note — including the bare "o<order>" seeds from the
     // catchup draws — so each card is referenceable by order right away.
+    // Notes ride the LOW-priority lane: they drain only when nothing
+    // else is waiting, so they never delay handshakes or actions.
+    int notes_queued = 0;
     if (g.in_progress) {
       auto& table_notes = notes_[tid];
       std::string version_note = std::string("bot ") + kBotVersion;
@@ -323,11 +354,18 @@ void BotClient::on_game_action_list(const json& data) {
                             : version_note;
       for (const auto& [order, note] : table_notes) {
         transport_.queue_send(
-            "note", json{{"tableID", tid}, {"order", order}, {"note", note}});
+            "note", json{{"tableID", tid}, {"order", order}, {"note", note}},
+            /*low_priority=*/true);
+        ++notes_queued;
       }
     }
+    if (glog) {
+      glog->emit_lifecycle(
+          "loaded_sent",
+          json{{"notes_queued", notes_queued},
+                {"pending_sends", transport_.pending_sends()}});
+    }
   }
-  transport_.queue_send("loaded", json{{"tableID", tid}});
   maybe_take_turn(tid);
 }
 
@@ -396,7 +434,8 @@ void BotClient::apply_action(int table_id, const json& raw_action) {
       if (!it->second->catchup && it->second->in_progress) {
         transport_.queue_send(
             "note",
-            json{{"tableID", table_id}, {"order", da->order}, {"note", base}});
+            json{{"tableID", table_id}, {"order", da->order}, {"note", base}},
+            /*low_priority=*/true);
       }
     }
   }
@@ -415,7 +454,8 @@ void BotClient::apply_action(int table_id, const json& raw_action) {
       table_notes[order] = full;
       if (send_now) {
         transport_.queue_send(
-            "note", json{{"tableID", table_id}, {"order", order}, {"note", full}});
+            "note", json{{"tableID", table_id}, {"order", order}, {"note", full}},
+            /*low_priority=*/true);
       }
     }
   }
@@ -491,7 +531,12 @@ void BotClient::maybe_take_turn(int table_id) {
                             "outbound_action",
                             json{{"turn", snapshot.state.turn_count},
                                   {"action", hanabi::to_json(perform, table_id)},
-                                  {"elapsed_ms", elapsed_ms}});
+                                  {"elapsed_ms", elapsed_ms},
+                                  // Messages already waiting in the send
+                                  // lanes — each costs one send-interval
+                                  // (500 ms) before this action reaches
+                                  // the server.
+                                  {"send_queue_depth", transport_.pending_sends()}});
                         // Per-turn TIMING delta.
                         auto turn_snap = glog->aggregator().snapshot();
                         auto prior = glog->turn_start_snapshot();

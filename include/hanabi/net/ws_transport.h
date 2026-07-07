@@ -35,8 +35,19 @@ class BotTransport {
   ~BotTransport();
 
   // Enqueue an outbound message. Thread-safe (posts to the io_context).
+  // The write loop drains one message per `send_interval` (default 500 ms,
+  // hanab.live rate-limit pacing), so every queued message delays the ones
+  // behind it. `low_priority` messages (notes) go to a second lane that is
+  // drained only when the main lane is empty — cosmetic traffic must never
+  // delay handshakes ("loaded") or actions (replay 2580: a 16-message note
+  // burst at load stalled game start by ~8 s).
   void queue_send(const std::string& command,
-                    const nlohmann::json& payload = nlohmann::json::value_t::null);
+                    const nlohmann::json& payload = nlohmann::json::value_t::null,
+                    bool low_priority = false);
+
+  // Messages currently waiting in the send lanes (excludes the one in
+  // flight). Diagnostic for the per-game log's latency records.
+  int pending_sends() const { return pending_.load(); }
 
   // Request stop. Thread-safe; causes run() to return cleanly.
   void stop();
@@ -52,6 +63,7 @@ class BotTransport {
   std::chrono::milliseconds send_interval_;
   int max_retries_;
   std::atomic<bool> stop_{false};
+  std::atomic<int> pending_{0};
 
   // The session impl lives in ws_transport.cpp - we use the pimpl idiom so
   // we don't have to drag boost/asio headers into a public header.

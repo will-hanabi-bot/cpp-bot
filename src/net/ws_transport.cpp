@@ -78,18 +78,24 @@ struct BotTransport::Session : std::enable_shared_from_this<Session> {
   beast::flat_buffer buffer;
 
   std::deque<std::string> queue;
+  // Low-priority lane (notes): drained only when `queue` is empty so
+  // cosmetic traffic never delays handshakes or actions.
+  std::deque<std::string> low_queue;
   std::string msg_in_flight;
   bool write_in_flight = false;
   std::atomic<bool>* stop_flag;
+  std::atomic<int>* pending;  // owned by BotTransport; queued-message gauge
 
   std::chrono::milliseconds send_interval;
   OnMessageFn on_message;
   std::atomic<bool> connection_alive{true};
 
-  Session(std::chrono::milliseconds si, OnMessageFn on_msg, std::atomic<bool>* sf)
+  Session(std::chrono::milliseconds si, OnMessageFn on_msg, std::atomic<bool>* sf,
+          std::atomic<int>* pending_gauge)
       : signals(ioc, SIGINT, SIGTERM),
         write_timer(ioc),
         stop_flag(sf),
+        pending(pending_gauge),
         send_interval(si),
         on_message(std::move(on_msg)) {}
 
@@ -141,19 +147,25 @@ struct BotTransport::Session : std::enable_shared_from_this<Session> {
   }
 
   template <typename Stream>
-  void enqueue_send(Stream& ws, std::string msg) {
-    asio::post(ioc, [this, &ws, m = std::move(msg)]() mutable {
-      queue.push_back(std::move(m));
+  void enqueue_send(Stream& ws, std::string msg, bool low_priority) {
+    asio::post(ioc, [this, &ws, m = std::move(msg), low_priority]() mutable {
+      (low_priority ? low_queue : queue).push_back(std::move(m));
+      pending->fetch_add(1);
       try_write_next(ws);
     });
   }
 
   template <typename Stream>
   void try_write_next(Stream& ws) {
-    if (write_in_flight || queue.empty() || !connection_alive.load()) return;
+    if (write_in_flight || (queue.empty() && low_queue.empty()) ||
+        !connection_alive.load()) {
+      return;
+    }
     write_in_flight = true;
-    msg_in_flight = std::move(queue.front());
-    queue.pop_front();
+    auto& q = queue.empty() ? low_queue : queue;
+    msg_in_flight = std::move(q.front());
+    q.pop_front();
+    pending->fetch_sub(1);
     ws.async_write(asio::buffer(msg_in_flight),
                     [this, &ws](const boost::system::error_code& ec, std::size_t) {
                       if (ec) {
@@ -199,7 +211,8 @@ std::mutex g_active_mu;
 std::shared_ptr<BotTransport::Session> g_active_session;
 }  // namespace
 
-void BotTransport::queue_send(const std::string& command, const nlohmann::json& payload) {
+void BotTransport::queue_send(const std::string& command, const nlohmann::json& payload,
+                              bool low_priority) {
   std::string msg = encode(command, payload);
   std::shared_ptr<Session> sess;
   {
@@ -207,9 +220,11 @@ void BotTransport::queue_send(const std::string& command, const nlohmann::json& 
     sess = g_active_session;
   }
   if (!sess) return;  // not connected; drop silently
-  asio::post(sess->ioc, [sess, m = std::move(msg)]() mutable {
-    if (sess->ws_tls) sess->enqueue_send(*sess->ws_tls, std::move(m));
-    else if (sess->ws_plain) sess->enqueue_send(*sess->ws_plain, std::move(m));
+  asio::post(sess->ioc, [sess, m = std::move(msg), low_priority]() mutable {
+    if (sess->ws_tls) sess->enqueue_send(*sess->ws_tls, std::move(m), low_priority);
+    else if (sess->ws_plain) {
+      sess->enqueue_send(*sess->ws_plain, std::move(m), low_priority);
+    }
   });
 }
 
@@ -229,7 +244,8 @@ void BotTransport::stop() {
 
 bool BotTransport::run_one_connection() {
   ParsedUrl url = parse_ws_url(ws_url_);
-  auto sess = std::make_shared<Session>(send_interval_, on_message_, &stop_);
+  auto sess = std::make_shared<Session>(send_interval_, on_message_, &stop_,
+                                        &pending_);
 
   // Synchronous connect + handshake (single-shot, no concurrency).
   tcp::resolver resolver(sess->ioc);
@@ -279,11 +295,12 @@ bool BotTransport::run_one_connection() {
     std::cerr << "ws session error: " << e.what() << "\n";
   }
 
-  // Tear down.
+  // Tear down. Queued-but-unsent messages die with the session.
   {
     std::lock_guard<std::mutex> lock(g_active_mu);
     g_active_session.reset();
   }
+  pending_.store(0);
   return !stop_.load();
 }
 

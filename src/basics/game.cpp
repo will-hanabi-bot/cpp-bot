@@ -8,6 +8,7 @@
 #include "hanabi/basics/identity_set.h"
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/player_elim.h"
+#include "hanabi/instrumentation/timer.h"
 
 namespace hanabi {
 namespace {
@@ -564,6 +565,11 @@ void Game::elim(std::optional<int> except_) {
 // --- Rewind ---------------------------------------------------------------
 
 Game Game::rewind(int turn, const Action& new_action) const {
+  // Rewinds replay the WHOLE game from the base snapshot — O(game length)
+  // each, and they can fire repeatedly while interpreting a catch-up
+  // action list. Timed so the per-turn / per-game TIMING aggregates (and
+  // the catchup_done loading diagnostic) expose their cost.
+  hanabi::instr::ScopedTimer st("game.rewind");
   const int n_turns = static_cast<int>(state.action_list.size());
   if (turn < 1 || turn > n_turns + 1) {
     throw std::invalid_argument("rewind: invalid turn");

@@ -34,6 +34,53 @@ def main() -> int:
     print(f"  bot_version={init.get('bot_version')}  all_plays={init.get('all_plays')}")
     print()
 
+    # Loading latency breakdown: game_init -> catchup_done -> loaded_sent ->
+    # first live inbound action. Gaps here separate compute cost (catchup
+    # interpretation) from wire cost (send-queue pacing / other players).
+    def parse_ts(ts: str):
+        from datetime import datetime
+        return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%f")
+
+    def by_event(name: str):
+        return next((r for r in records if r.get("event") == name), None)
+
+    catchup = by_event("catchup_done")
+    loaded = by_event("loaded_sent")
+    first_live = next(
+        (r for r in records
+          if r.get("event") == "inbound_action" and r.get("turn", 0) >= 1),
+        None)
+    if init.get("ts"):
+        print("loading:")
+        t0 = parse_ts(init["ts"])
+        for label, rec in (("catchup_done", catchup), ("loaded_sent", loaded),
+                            ("first_live_action", first_live)):
+            if not rec or not rec.get("ts"):
+                continue
+            gap = (parse_ts(rec["ts"]) - t0).total_seconds()
+            extras = ""
+            if label == "catchup_done":
+                extras = (f"  actions={rec.get('actions')}"
+                          f"  interp_ms={rec.get('elapsed_ms', 0):.1f}")
+            elif label == "loaded_sent":
+                extras = (f"  notes_queued={rec.get('notes_queued')}"
+                          f"  pending_sends={rec.get('pending_sends')}")
+            print(f"  +{gap:7.3f}s  {label}{extras}")
+        catchup_timing = next(
+            (r for r in records
+              if r.get("ch") == "TIMING" and r.get("scope") == "catchup"),
+            None)
+        if catchup_timing:
+            rows = sorted(catchup_timing.get("scopes", {}).items(),
+                           key=lambda kv: -int(kv[1].get("total_ns", 0)))[:5]
+            for name, stats in rows:
+                if int(stats.get("total_ns", 0)) == 0:
+                    continue
+                print(f"    catchup scope {name}: "
+                      f"{int(stats.get('total_ns', 0)) / 1e6:.1f} ms "
+                      f"({stats.get('calls', 0)} calls)")
+        print()
+
     # Per-turn: STATE → outbound. We only see our-turn pairs since we only
     # log STATE before our take_action.
     print(f"  {'turn':>4}  {'action':40s}  {'elapsed_ms':>11s}")
