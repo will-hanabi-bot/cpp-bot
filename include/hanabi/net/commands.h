@@ -92,6 +92,7 @@ class BotClient {
   void on_game_action_list(const nlohmann::json& data);
   void on_connected(const nlohmann::json& data);
   void on_game_over(const nlohmann::json& data);
+  void on_database_id(const nlohmann::json& data);
 
   // Apply an inbound action through the game; updates per-table action_time.
   void apply_action(int table_id, const nlohmann::json& raw_action);

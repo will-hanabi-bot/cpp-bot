@@ -41,19 +41,45 @@ std::string iso_timestamp_now() {
   return os.str();
 }
 
+std::string GameLogger::log_path(const std::string& bot_name, int game_id,
+                                 const std::string& log_dir) {
+  return (std::filesystem::path(log_dir) /
+          (sanitize_for_filename(bot_name) + "-" + std::to_string(game_id) +
+           ".log"))
+      .string();
+}
+
 GameLogger::GameLogger(std::string bot_name, int game_id,
                          const std::string& log_dir)
     : bot_name_(std::move(bot_name)), game_id_(game_id) {
   std::filesystem::create_directories(log_dir);
-  std::filesystem::path p =
-      std::filesystem::path(log_dir) /
-      (sanitize_for_filename(bot_name_) + "-" + std::to_string(game_id_) +
-       ".log");
-  path_ = p.string();
+  path_ = log_path(bot_name_, game_id_, log_dir);
   stream_.open(path_, std::ios::app);
   if (!stream_.is_open()) {
     std::cerr << "!! GameLogger: failed to open " << path_ << " for append\n";
   }
+}
+
+bool GameLogger::rename_file(const std::string& new_path) {
+  std::lock_guard<std::mutex> lk(mu_);
+  if (new_path == path_) return true;
+  std::error_code ec;
+  if (std::filesystem::exists(new_path, ec)) {
+    std::cerr << "!! GameLogger: rename target already exists: " << new_path
+              << "\n";
+    return false;
+  }
+  if (stream_.is_open()) stream_.close();
+  std::filesystem::rename(path_, new_path, ec);
+  if (ec) {
+    std::cerr << "!! GameLogger: rename " << path_ << " -> " << new_path
+              << " failed: " << ec.message() << "\n";
+    stream_.open(path_, std::ios::app);
+    return false;
+  }
+  path_ = new_path;
+  stream_.open(path_, std::ios::app);
+  return true;
 }
 
 GameLogger::~GameLogger() {

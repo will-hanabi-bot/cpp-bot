@@ -47,6 +47,17 @@ TEST(Commands, WelcomeSetsUsername) {
   EXPECT_NO_THROW(client.handle_message("welcome", {{"username", "TestBot"}}));
 }
 
+TEST(Commands, DatabaseIdWithoutGameIsHarmless) {
+  BotConfig cfg = make_config();
+  BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});
+  BotClient client(transport, cfg);
+  client.handle_message("welcome", {{"username", "TestBot"}});
+  // No logger / no log file for this table — the handler must no-op.
+  EXPECT_NO_THROW(client.handle_message(
+      "databaseID", {{"tableID", 1}, {"databaseID", 1900123}}));
+  EXPECT_NO_THROW(client.handle_message("databaseID", {{"tableID", 1}}));
+}
+
 TEST(Commands, ChatNonCommandIsIgnored) {
   BotConfig cfg = make_config();
   BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});

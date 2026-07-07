@@ -37,7 +37,11 @@ still be listed before being applied.
 When a bug report arrives with `(game_id, turn, expected vs actual)`:
 
 1. **Look for an existing log first.** Per-game structured logs live at
-   `logs/{bot_name}-{game_id}.log`. Use:
+   `logs/{bot_name}-{game_id}.log`. During play `game_id` is the live
+   table id; once the game concludes the server's `databaseID` message
+   triggers a rename to the hanab.live database id — the same id replay
+   links use — so a `https://hanab.live/shared-replay/<id>` URL maps
+   straight to the log. Use:
    ```
    scripts/find_game.sh <game_id>
    ```

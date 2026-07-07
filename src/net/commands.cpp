@@ -1,6 +1,8 @@
 #include "hanabi/net/commands.h"
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -79,8 +81,9 @@ void BotClient::handle_message(const std::string& command, const json& payload) 
     else if (command == "gameActionList") on_game_action_list(payload);
     else if (command == "connected") on_connected(payload);
     else if (command == "gameOver") on_game_over(payload);
-    // Other game-tick events (clock, user, databaseID, noteListPlayer,
-    // voteChange, spectators) are informational and don't require a response.
+    else if (command == "databaseID") on_database_id(payload);
+    // Other game-tick events (clock, user, noteListPlayer, voteChange,
+    // spectators) are informational and don't require a response.
   } catch (const std::exception& e) {
     std::cerr << "!! handler for " << command << " raised: " << e.what() << "\n";
   }
@@ -536,6 +539,55 @@ void BotClient::on_game_over(const json& data) {
   }
   if (config_.disconnect_on_game_end) {
     transport_.queue_send("tableUnattend", json{{"tableID", tid}});
+  }
+}
+
+void BotClient::on_database_id(const json& data) {
+  int tid = data.value("tableID", -1);
+  int db_id = data.value("databaseID", -1);
+  if (tid == -1 || db_id == -1) return;
+  // Diagnostic: the live table id (used to name the per-game log while
+  // the game runs) maps to this database id — the id hanab.live replay
+  // links use. Rename the log to {bot}-{database_id}.log so a replay URL
+  // leads straight to the log via scripts/find_game.sh.
+  std::cerr << "table " << tid << " stored as database game " << db_id << "\n";
+  using hanabi::logging::GameLogger;
+  auto it = game_loggers_.find(tid);
+  if (it != game_loggers_.end() && it->second) {
+    // Logger still open (databaseID arrived before gameOver): record the
+    // mapping in-file, then rename under the open logger.
+    auto& gl = *it->second;
+    gl.emit_lifecycle("database_id", json{{"database_id", db_id}});
+    gl.rename_file(GameLogger::log_path(gl.bot_name(), db_id, "logs"));
+    return;
+  }
+  // gameOver already closed the logger — append the mapping record and
+  // rename on the filesystem directly.
+  namespace fs = std::filesystem;
+  std::string old_path = GameLogger::log_path(username_, tid, "logs");
+  std::string new_path = GameLogger::log_path(username_, db_id, "logs");
+  std::error_code ec;
+  if (!fs::exists(old_path, ec)) return;
+  if (fs::exists(new_path, ec)) {
+    std::cerr << "!! database-id rename target already exists: " << new_path
+              << "\n";
+    return;
+  }
+  {
+    std::ofstream out(old_path, std::ios::app);
+    out << json{{"ch", "LIFECYCLE"},
+                 {"event", "database_id"},
+                 {"database_id", db_id},
+                 {"game_id", tid},
+                 {"bot", username_},
+                 {"ts", hanabi::logging::iso_timestamp_now()}}
+                .dump()
+        << "\n";
+  }
+  fs::rename(old_path, new_path, ec);
+  if (ec) {
+    std::cerr << "!! database-id rename " << old_path << " -> " << new_path
+              << " failed: " << ec.message() << "\n";
   }
 }
 

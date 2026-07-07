@@ -39,6 +39,19 @@ class GameLogger {
   const std::string& bot_name() const { return bot_name_; }
   const std::string& path() const { return path_; }
 
+  // Canonical log path for (bot, id): `{log_dir}/{bot}-{id}.log` with the
+  // bot name sanitized. Used by the ctor and by the database-id rename at
+  // game end (the same id slot holds the live table id during play and
+  // the hanab.live database id afterwards).
+  static std::string log_path(const std::string& bot_name, int game_id,
+                              const std::string& log_dir);
+
+  // Rename the underlying log file (e.g. table-id name -> database-id
+  // name once the server reveals it at game end). Closes the stream,
+  // renames, reopens append. Refuses to clobber an existing target.
+  // Returns false (and keeps appending to the old path) on failure.
+  bool rename_file(const std::string& new_path);
+
   // Write one JSONL record. Adds `ts` if missing.
   void emit(nlohmann::json record);
 
