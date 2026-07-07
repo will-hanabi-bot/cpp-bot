@@ -96,6 +96,7 @@ add_executable(hanabi_tests
   tests/test_reactor/test_dc_target_retarget.cpp
   tests/test_reactor/test_same_hand_dupe_playables.cpp
   tests/test_bad_reactive_target/test_replay_1916813_clued_trash_over_unclued_trash.cpp
+  tests/test_bad_reactive_target/test_replay_1916888_known_trash_targeted_over_unknown.cpp
   tests/test_stacked_plays/test_replay_1916815_play_target_stacked_on_ctp.cpp
   tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_helper.cpp

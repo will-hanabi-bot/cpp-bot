@@ -212,30 +212,26 @@ TEST(ReactiveBasics, AllowsRankClueWhenReacterSlotIsPlayable) {
 
 // Reproducer for replay 1892505 T32 — the pre-clued-trash focus
 // convention. Variant: Funnels & Prism (4 Suits) — suits are Red,
-// Green, Blue, Prism. Stacks all set to 3 so every rank-1-to-3
-// identity is basic-trash from common knowledge. Alice = giver. Bob =
+// Green, Blue, Prism. Board mirrors the replay (v1.6 fixture fix,
+// user-specified): stacks r=1, g=5, b=5, i=3. Alice = giver. Bob =
 // reacter, slot 4 = i4 (currently playable, prism stack = 3). Cathy =
-// receiver, slot 4 = b2 pre-clued with rank ≤ 3 so its post-elim
-// `possible` reduces to a non-empty subset of basic-trash ids —
-// `common.order_kt(Cathy slot 4) == true` and the slot lands in
-// `prev_kt`.
+// receiver: i1/g2/r3 unclued on slots 1-3, b4 unclued on slot 5, and
+// slot 4 = i2 rank-clued with a "rank 2 or 3" empathy. Crucially the
+// slot is UNKNOWN trash pre-clue — its empathy still holds the useful
+// r2 (red stack = 1) — so it does NOT sit in `prev_kt`.
 //
 // Alice clues colour-red to Cathy. Red touches red cards + prism
-// rank 1 + prism rank 4. In Cathy that's slot 1 (r1) and slot 3 (r5)
-// — both newly clued. Newest-demoted focus rule: hand[0] (slot 1)
-// demoted, focus lands on slot 3 → focus_slot = 3.
+// ranks 1 and 4. In Cathy that's slot 1 (i1) and slot 3 (r3) — both
+// newly clued. Newest-demoted focus rule: hand[0] (slot 1) demoted,
+// focus lands on slot 3 → focus_slot = 3. The red-untouched elim on
+// slot 4 strips r2/r3, leaving {g2,g3,b2,b3,i2,i3} — all trash at
+// these stacks — so THIS clue is what disambiguates the slot into
+// common-knowledge trash. That is the `pre_clued_trash` pool's case
+// (clued before this turn, unknown pre-clue, known post-clue); a slot
+// already known pre-clue is globally-known trash instead and never
+// outranks unknown trash (replay 1916888).
 //
-// Pre-fix behaviour: `play_targets` in Cathy = ∅, `dc_targets`
-// cascade picks `unknown_trash` (the unclued basic-trash slots) as
-// the first pool — none of those react-slot maps to Bob's slot 4 =
-// i4, so any candidate that target_plays through hits a Bob slot
-// whose actual id isn't in the narrowed inferred. `get_result`'s
-// `hypo_plays.count` check filters those, and the red clue is
-// dropped from find_all_clues entirely.
-//
-// Post-fix behaviour: the new `pre_clued_trash` pool (cards in
-// `prev_kt` AND pre-clued before this turn) is consulted first in
-// the dc_targets cascade. Cathy slot 4 is the lone candidate.
+// The pool is consulted first: Cathy slot 4 is the lone candidate.
 // target_slot = 4, focus_slot = 3, react_slot = calc_slot(3, 4, 5) =
 // 4 → Bob's slot 4 = i4. `target_play(i4)` narrows inferred to a
 // subset that contains Bob's actual i4, so the convention's promise
@@ -243,35 +239,46 @@ TEST(ReactiveBasics, AllowsRankClueWhenReacterSlotIsPlayable) {
 TEST(ReactiveBasics, AllowsColourClueWithPreCluedTrashFocus) {
   SetupOptions opts;
   opts.hands = {
-      // Alice (giver, POV). Non-red filler so the red clue doesn't
-      // accidentally touch Alice's hand.
-      {"g4", "b4", "g5", "b5", "i5"},
+      // Alice (giver, POV). Filler consistent with the card counts at
+      // these stacks; crucially neither r2 copy is visible anywhere, so
+      // Cathy's slot-4 empathy keeps r2 as a useful possibility.
+      {"r4", "b1", "g1", "b2", "i5"},
       // Bob (reacter). Slot 4 = i4 (currently playable on prism
       // stack = 3). Other slots filler; none currently playable
       // (otherwise the reacter loop's vacuous any_kept calculation
       // wouldn't fire).
-      {"g3", "b3", "g2", "i4", "g1"},
-      // Cathy (receiver). Slot 1 = r1, slot 3 = r5 (both newly
-      // touched by red, drives focus_slot = 3 via newest-demoted).
-      // Slot 4 = b2 (will be pre-clued via rank-3 below to seed
-      // pre-clued basic-trash).
-      {"r1", "b1", "r5", "b2", "g1"},
+      {"g3", "b3", "b1", "i4", "g1"},
+      // Cathy (receiver), mirroring the 1892505 board (per user):
+      // i1 / g2 / r3 unclued on slots 1-3, b4 unclued on slot 5;
+      // slot 4 = i2, rank-clued and known to be rank 2-or-3. Red
+      // newly touches slots 1 (i1, prism rank 1) and 3 (r3), driving
+      // focus_slot = 3 via newest-demoted.
+      {"i1", "g2", "r3", "i2", "b4"},
   };
   opts.variant_name = "Funnels & Prism (4 Suits)";
-  opts.play_stacks = std::vector<int>{3, 3, 3, 3};
+  // 1892505 board: r=1, g=5, b=5, i=3. The low red stack is what keeps
+  // Cathy's slot 4 UNKNOWN pre-clue (its empathy contains the useful r2).
+  opts.play_stacks = std::vector<int>{1, 5, 5, 3};
   opts.starting = TestPlayer::ALICE;
   Game g = setup(std::move(opts));
 
-  // Pre-clue Cathy's slot 4 with rank-3 (Funnels rank ≤ 3 touches
-  // ranks 1-3). With stacks all at 3, every still-possible identity
-  // for slot 4 is basic-trash, so common-knowledge order_kt holds.
+  // Pre-clue Cathy's slot 4 with rank-3 (Funnels rank ≤ 3 touches ranks
+  // 1-3), then narrow to "rank 2 or 3" as in the replay (the rank-1 ids
+  // had been eliminated earlier in that game).
   g = pre_clue(std::move(g), TestPlayer::CATHY, /*slot=*/4, {"3"});
+  int cathy_s4 = g.state.hands[static_cast<int>(TestPlayer::CATHY)][3];
+  g.common = g.common.with_thought(cathy_s4, [](const Thought& t) {
+    Thought out = t;
+    out.possible = t.possible.filter([](Identity i) { return i.rank >= 2; });
+    out.inferred = out.possible;
+    return out;
+  });
   g.elim();
 
-  int cathy_s4 = g.state.hands[static_cast<int>(TestPlayer::CATHY)][3];
-  ASSERT_TRUE(g.common.order_kt(g, cathy_s4))
-      << "test setup must produce a pre-clued basic-trash slot for "
-         "the convention to focus on";
+  ASSERT_FALSE(g.common.order_kt(g, cathy_s4))
+      << "test setup must leave the pre-clued slot UNKNOWN pre-clue "
+         "(its empathy holds the useful r2) — the red clue is what "
+         "disambiguates it into known trash";
 
   auto clues = g.find_all_clues(static_cast<int>(TestPlayer::ALICE));
   bool found_red_to_cathy = false;

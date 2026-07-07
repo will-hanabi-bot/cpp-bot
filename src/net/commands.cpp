@@ -305,14 +305,23 @@ void BotClient::on_game_action_list(const json& data) {
     g.catchup = false;
     bool our_turn = g.state.current_player_index == g.state.our_player_index;
     action_time_[tid] = our_turn;
-    // Publish the bot's build version as the first note on card order 0
-    // so observers can verify which build is running. Seed notes_ too so
-    // subsequent convention-driven notes get prepended onto this string.
+    // Publish the bot's build version as the head of card order 0's note
+    // so observers can verify which build is running (order 0 carries no
+    // "o0" prefix — the version note serves as its head). Catchup
+    // segments accumulated on order 0 are kept after it. Then send every
+    // accumulated note — including the bare "o<order>" seeds from the
+    // catchup draws — so each card is referenceable by order right away.
     if (g.in_progress) {
+      auto& table_notes = notes_[tid];
       std::string version_note = std::string("bot ") + kBotVersion;
-      notes_[tid][0] = version_note;
-      transport_.queue_send(
-          "note", json{{"tableID", tid}, {"order", 0}, {"note", version_note}});
+      auto existing0 = table_notes.find(0);
+      table_notes[0] = existing0 != table_notes.end()
+                            ? version_note + " | " + existing0->second
+                            : version_note;
+      for (const auto& [order, note] : table_notes) {
+        transport_.queue_send(
+            "note", json{{"tableID", tid}, {"order", order}, {"note", note}});
+      }
     }
   }
   transport_.queue_send("loaded", json{{"tableID", tid}});
@@ -372,6 +381,23 @@ void BotClient::apply_action(int table_id, const json& raw_action) {
     }
     return;
   }
+  // Seed every drawn card's note with its order ("o13") for easy
+  // referencing in bug reports; convention segments append after it
+  // ("o13 | turn 14: [f] n3"). Order 0 is exempt — the bot-version note
+  // published at load is its head instead.
+  if (auto* da = std::get_if<DrawAction>(&*act); da && da->order > 0) {
+    auto& table_notes = notes_[table_id];
+    if (!table_notes.count(da->order)) {
+      std::string base = "o" + std::to_string(da->order);
+      table_notes[da->order] = base;
+      if (!it->second->catchup && it->second->in_progress) {
+        transport_.queue_send(
+            "note",
+            json{{"tableID", table_id}, {"order", da->order}, {"note", base}});
+      }
+    }
+  }
+
   // Note-worthy state changes (CALLED_TO_PLAY/_DISCARD transitions and
   // inferred-set narrowing while called-to-play) — accumulate and send.
   auto segments = compute_note_segments(prev, *it->second);

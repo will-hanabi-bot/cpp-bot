@@ -451,17 +451,22 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
                return ka < kb;
              });
 
-  // Pre-clued slots that post-clue common-knowledge `order_kt` marks as
-  // basic-trash: the clue's point is disambiguating that slot as trash,
-  // so it outranks the other pools (v0.38, replay 1892505 T32 — see
-  // tests/test_basics/test_reactive.cpp for the full narrative). POV
+  // Pre-clued slots that THIS clue's narrowing disambiguates into
+  // common-knowledge trash: the clue's point is that disambiguation, so
+  // it outranks the other pools (v0.38, replay 1892505 T32 — see
+  // tests/test_basics/test_reactive.cpp for the full narrative). v1.6
+  // (replay 1916888): the slot must NOT already be known trash pre-clue
+  // — a pre-known slot is globally-known trash (case 2.1) and only gets
+  // targeted when no unknown trash exists; without the prev_kt guard a
+  // known trash 1 outranked the receiver's lone unknown trash. POV
   // invariance: membership uses `game.common.thinks_trash` (post-clue,
-  // common knowledge) and `prev.state.deck[o].clued`.
+  // common knowledge), `prev_kt`, and `prev.state.deck[o].clued`.
   auto game_kt = game.common.thinks_trash(game, receiver);
   std::vector<std::pair<int, int>> pre_clued_trash;
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
     int o = state.hands[receiver][i];
     if (!prev.state.deck[o].clued) continue;
+    if (contains(prev_kt, o)) continue;
     if (!contains(game_kt, o)) continue;
     pre_clued_trash.emplace_back(o, static_cast<int>(i));
   }
