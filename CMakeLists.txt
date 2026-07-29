@@ -63,6 +63,14 @@ target_include_directories(hanabi_core PUBLIC include)
 target_include_directories(hanabi_core PRIVATE ${cpp_httplib_SOURCE_DIR})
 target_link_libraries(hanabi_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog
                                           OpenSSL::SSL OpenSSL::Crypto Boost::headers)
+if(WIN32)
+  # On macOS/Linux the socket API lives in libc, so no platform libraries are
+  # needed. On Windows it lives in Winsock: Boost.Asio/Beast and cpp-httplib
+  # both resolve select/WSARecv/WSASend/getaddrinfo/... from ws2_32, Asio's
+  # AcceptEx/ConnectEx from mswsock, and OpenSSL's Windows certificate-store
+  # loader from crypt32.
+  target_link_libraries(hanabi_core PUBLIC ws2_32 mswsock crypt32)
+endif()
 target_compile_definitions(hanabi_core PUBLIC
   HANABI_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
 )

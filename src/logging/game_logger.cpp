@@ -7,6 +7,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "hanabi/platform/compat.h"
+
 namespace hanabi::logging {
 
 namespace {
@@ -34,7 +36,7 @@ std::string iso_timestamp_now() {
   auto t = system_clock::to_time_t(now);
   auto ms = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
   std::tm tm{};
-  ::localtime_r(&t, &tm);
+  platform::localtime_local(t, tm);
   std::ostringstream os;
   os << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S") << "." << std::setw(3)
      << std::setfill('0') << ms;

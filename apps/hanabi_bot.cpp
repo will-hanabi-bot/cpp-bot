@@ -21,6 +21,7 @@
 #include "hanabi/net/auth.h"
 #include "hanabi/net/commands.h"
 #include "hanabi/net/ws_transport.h"
+#include "hanabi/platform/compat.h"
 #include "hanabi/settings.h"
 
 namespace {
@@ -63,7 +64,7 @@ class TeeBuf : public std::streambuf {
 std::string timestamp_now() {
   auto t = std::time(nullptr);
   std::tm tm{};
-  ::localtime_r(&t, &tm);
+  hanabi::platform::localtime_local(t, tm);
   std::ostringstream os;
   os << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S");
   return os.str();

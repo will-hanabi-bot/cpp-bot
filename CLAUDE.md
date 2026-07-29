@@ -17,11 +17,38 @@ before pushing if there's any ambiguity about whether the change is ready to
 deploy.
 
 **On every version bump, check that the repo's `.md` docs are still accurate**
-(`VERIFICATION.md`, this file, and any other `.md` describing implementation
-status). Docs or code comments that claim work is "pending", "stubbed", or
-"Phase N" must be updated or marked historical once the work has shipped.
-VERIFICATION.md previously went stale this way — treat any status-bearing
-`.md` as part of the change surface.
+(`CONVENTION.md`, `GLOSSARY.md`, `README.md`, `VERIFICATION.md`, this file, and
+any other `.md` describing implementation status). Docs or code comments that
+claim work is "pending", "stubbed", or "Phase N" must be updated or marked
+historical once the work has shipped. VERIFICATION.md previously went stale
+this way — treat any status-bearing `.md` as part of the change surface.
+
+## Convention documentation
+
+`CONVENTION.md` is the **ruling reference** for what a clue means and how the
+bot decides. `GLOSSARY.md` defines the project's terminology. Both are written
+for a reader with no prior context, and both cite `file:line` for every rule so
+that a claim can be checked against the code.
+
+**Every version bump that changes clue interpretation or decision-making must
+update `CONVENTION.md` in the same commit.** Specifically:
+
+- Changing an `interpret_*` branch, a target-selection pool or its ordering, a
+  variant rule, or the stable/reactive dispatcher → update the corresponding
+  rule in **§1 Convention**, including its `file:line` citation and the replay
+  that motivated it.
+- Changing `eval_action` / `get_result` / `advance` / `eval_state` /
+  `eval_game` terms, the `take_action` ladder, gates, thresholds, or the
+  endgame solver's parameters → update **§2 Decision Making**.
+- Introducing a new term, status, flag, or role → add it to `GLOSSARY.md`.
+- Line numbers shift constantly. When editing a documented file, re-check the
+  citations for the rules in it, not just the rule you changed.
+
+A `CONVENTION.md` that disagrees with the code is a bug in one of them. It is
+the document a human or a fresh agent is expected to read *instead of* reading
+2 900 lines of `src/conventions/`, so silent drift is expensive. If a change
+makes a documented rule obsolete, delete the rule — do not leave it alongside
+its replacement.
 
 ## Test changes
 

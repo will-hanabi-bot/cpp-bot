@@ -6,6 +6,8 @@
 #include <fstream>
 #include <stdexcept>
 
+#include "hanabi/platform/compat.h"
+
 namespace hanabi {
 
 namespace {
@@ -109,9 +111,7 @@ bool load_dotenv(const std::string& path) {
       value = value.substr(1, value.size() - 2);
     }
     // Only set if not already in env.
-    if (std::getenv(key.c_str()) == nullptr) {
-      ::setenv(key.c_str(), value.c_str(), /*overwrite=*/0);
-    }
+    platform::setenv_if_unset(key.c_str(), value.c_str());
   }
   return true;
 }

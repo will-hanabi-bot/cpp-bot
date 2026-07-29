@@ -1,5 +1,13 @@
 # Phase 7 — Verification (historical)
 
+> **Status update (v1.10.0):** the project now also builds and passes its full
+> correctness suite on **Windows** (MSYS2 / UCRT64, GCC 16). The benchmark
+> table below was measured on Apple M-series and has not been re-measured;
+> spot checks on Windows/GCC show `IdentitySet` operations matching the macOS
+> figures while `Fraction` operations are roughly an order of magnitude
+> slower, so treat the table as macOS-specific. Build instructions for both
+> platforms are in `README.md`.
+
 > **Status update (v1.0):** this document is a snapshot from the Phase 7
 > port era and its "pending" items have since shipped. The reactor
 > `interpret_clue` / `interpret_reactive` / `interpret_reaction` triple is
