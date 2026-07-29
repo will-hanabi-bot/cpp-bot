@@ -219,7 +219,46 @@ automatic. From PowerShell or Git Bash it is not — you will get a bare
 PATH="/c/msys64/ucrt64/bin:$PATH" ./build/hanabi_bot.exe index=0
 ```
 
-### 5.6 Troubleshooting
+### 5.6 Building from Git Bash instead of the MSYS2 shell
+
+You do not need the MSYS2 shell. The UCRT64 environment is essentially just a
+`PATH`, and the toolchain binaries in `C:\msys64\ucrt64\bin` are **native
+Windows PE executables linked against the UCRT** — none of them depends on
+`msys-2.0.dll` — so they run fine from Git Bash, PowerShell, or cmd.
+
+One directory is all you need, prepended so it wins over anything else:
+
+```bash
+export PATH="/c/msys64/ucrt64/bin:$PATH"
+cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build -j
+ctest --test-dir build --output-on-failure -LE decision_making
+```
+
+Verified from Git Bash (`MSYSTEM=MINGW64`): configure, full build, `ctest`, and
+the `scripts/*.sh` helpers all work, and the same `PATH` entry covers the
+runtime DLLs from §5.5.
+
+To make it permanent for Git Bash, append the `export` line to `~/.bashrc`. To
+make it permanent for every shell including PowerShell, add
+`C:\msys64\ucrt64\bin` to your user `PATH` via *System Properties → Environment
+Variables* (or `setx PATH "C:\msys64\ucrt64\bin;%PATH%"`, once, from a normal
+prompt). That directory holds only ~126 binaries and ships no `bash`/`sh`, so
+it is unlikely to disturb anything; the only common names it shadows are
+`cmake`, `curl`, and `openssl`.
+
+> **Do not add `C:\msys64\usr\bin`.** That is the MSYS (Cygwin-like)
+> environment, and it ships its own `msys-2.0.dll` — as does Git Bash. Having
+> both on one `PATH` is the classic way to get MSYS processes crashing on a
+> DLL-version mismatch. Git Bash already provides the coreutils the build
+> scripts need, so `ucrt64\bin` alone is sufficient.
+
+Two things that are *not* problems here: the Ninja generator sidesteps CMake's
+"`sh.exe` was found in your PATH" complaint, which only affects the *MinGW
+Makefiles* generator; and `cmake` resolves the relative `-B build` path fine
+from a Git Bash working directory.
+
+### 5.7 Troubleshooting
 
 Every item here is an error actually encountered bringing this build up on
 Windows.
@@ -233,6 +272,8 @@ Windows.
 | `scripts/find_game.sh` reports "no per-game log found" even though the log exists | Was calling BSD `stat -f "%m %N"`; MSYS2 ships GNU coreutils, which needs `-c "%Y %n"`. The script now probes for the right flavour at runtime. |
 | `pacman -Syuu` appears to hang or kills your terminal | Expected on the first pass — see §5.2. Reopen the shell and repeat. |
 | `collect2.exe: error: ld returned 1 exit status` when linking a test binary, with no preceding compile error | Windows locks a running executable, so a rebuild cannot relink `hanabi_tests.exe` while a `ctest` run is in progress. Wait for the test run to finish, then rebuild. |
+
+| MSYS or Git Bash processes crash with a DLL-version error after a `PATH` change | `C:\msys64\usr\bin` was added to `PATH` alongside Git Bash, giving two rival `msys-2.0.dll`s. Remove it — see §5.6, you only need `ucrt64\bin`. |
 
 The bash scripts (`build.sh`, `scripts/*.sh`) require a POSIX shell; run them
 from the MSYS2 shell or Git Bash, not from PowerShell.
