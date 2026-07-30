@@ -57,24 +57,6 @@ the next slot" retry (CONVENTION.md §1a.5).
 
 ---
 
-## 3. Chop should pick the most recent CTD by `signal_turn`
-
-**Convention.** When a hand holds several cards called to discard, the chop is
-the one signalled **most recently by `signal_turn`** — not the newest by hand
-position. An earlier CTD may be a sacrifice while a later one is not, and never
-the reverse, so preferring the newest signal keeps good cards around longer.
-
-**Today.** `Game::chop`'s first pass (`src/basics/decide.cpp:404-417`) scans the
-hand slot 1 → oldest and returns the first `CALLED_TO_DISCARD` it finds, i.e. the
-newest CTD *in the hand*. These usually coincide but need not.
-
-**Touchpoints.**
-- `find_all_discards` (`decide.cpp:902-926`, v0.30) already filters the candidate
-  pool by largest `signal_turn`, so the two mechanisms currently disagree; this
-  change makes `chop()` match the filter rather than inventing a new rule.
-- Every `chop()` consumer inherits the new choice: `has_ptd()`
-  (`decide.cpp:419-458`), the giver-side safety checks (`:622-625`, `:877-878`,
-  `:974-978`), and eval (`state_eval.cpp:44`, `:82-103`, `:118-120`, `:323`,
-  `:438-440`, `:521-524`).
-- `Player::chop_newest` (`player_game.cpp:38-45`, used only by `is_sieved`) has no
-  CTD pass at all and is out of scope.
+*(Chop selecting the most recent CTD by `signal_turn` shipped in v1.11.0 —
+`Game::chop`, `src/basics/decide.cpp:404-431`, pinned by
+`tests/test_basics/test_chop.cpp`.)*

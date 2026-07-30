@@ -108,20 +108,18 @@ the *pinkish* convention path. `src/basics/variant.cpp:243-244`;
 `predicates.cpp:16`.
 
 ### chop
-The card the hand is expected to get rid of next: the newest card stamped
-`CALLED_TO_DISCARD`, or — if the hand holds none — the **newest** unclued card
-whose status is `NONE`, gated by `zcs_turn`. Any non-`NONE` status
-(`CALLED_TO_PLAY`, `CHOP_MOVED`, `PERMISSION_TO_DISCARD`) disqualifies a card,
-so a locked hand has no chop at all. `Game::chop`, `decide.cpp:404-417`.
+The card the hand is expected to get rid of next: the card stamped
+`CALLED_TO_DISCARD` with the largest `signal_turn` (hand order breaks ties), or —
+if the hand holds none — the **newest** unclued card whose status is `NONE`,
+gated by `zcs_turn`. Any non-`NONE` status (`CALLED_TO_PLAY`, `CHOP_MOVED`,
+`PERMISSION_TO_DISCARD`) disqualifies a card, so a locked hand has no chop at
+all. `Game::chop`, `decide.cpp:404-431`.
 
 A player always *chucks* their chop, except when its inference is a known orange
 card, which is *pitched* instead — see *pitch / chuck*.
 
 Not to be confused with the *lock slot*, the **oldest** unclued card. That is a
 different position and is never a chop.
-
-Multiple `CALLED_TO_DISCARD` cards are meant to resolve by `signal_turn` rather
-than by hand position; see `TODO.md`.
 
 ### CHOP_MOVED (status)
 `CardStatus::CHOP_MOVED`: the card is protected from discard. The only thing

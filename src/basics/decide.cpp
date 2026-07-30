@@ -402,10 +402,25 @@ bool Game::in_endgame() const {
 }
 
 std::optional<int> Game::chop(int player_index) const {
-  // First pass: explicit CalledToDiscard.
+  // First pass: explicit CalledToDiscard. When several are live, the chop is
+  // the one signalled *most recently* by signal_turn rather than the newest
+  // by hand position: an earlier CTD may be a sacrifice while a later one is
+  // not, and never the reverse, so preferring the newest signal keeps good
+  // cards around longer. This also makes chop() agree with the
+  // most-recent-CTD filter find_all_discards applies to the candidate pool
+  // (see `:902-926`). Hand order breaks ties, so behaviour is unchanged when
+  // signal_turns are equal or absent.
+  std::optional<int> ctd;
+  int best_signal = -1;
   for (int o : state.hands[player_index]) {
-    if (meta[o].status == CardStatus::CALLED_TO_DISCARD) return o;
+    if (meta[o].status != CardStatus::CALLED_TO_DISCARD) continue;
+    int sig = meta[o].signal_turn.value_or(-1);
+    if (!ctd || sig > best_signal) {
+      ctd = o;
+      best_signal = sig;
+    }
   }
+  if (ctd) return ctd;
   // Second pass: newest unclued + status NONE, gated on zcs_turn.
   for (int o : state.hands[player_index]) {
     bool zcs_ok = zcs_turn == -1 || zcs_turn >= state.deck[o].turn_drawn;

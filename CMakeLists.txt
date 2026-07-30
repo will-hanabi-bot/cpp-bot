@@ -90,6 +90,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_variants.cpp
   tests/test_basics/test_state.cpp
   tests/test_basics/test_game.cpp
+  tests/test_basics/test_chop.cpp
   tests/test_basics/test_reactive.cpp
   tests/test_basics/test_stable_ref_discard.cpp
   tests/test_basics/test_strike_preserves_ctp.cpp

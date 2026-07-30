@@ -810,11 +810,13 @@ In the endgame the solver breaks all win-rate ties toward plays
 `potential_forced_play` — we hold a play whose successor is visibly in the
 pending reacter's hand, so discarding would break the chain (`:822-841`).
 
-**`chop()`** (`:404-417`): an explicitly CTD'd card wins — currently the newest
-such card *in the hand*, though the convention says the most recent by
-`signal_turn`, see [TODO.md](TODO.md); otherwise the **newest** unclued card with
-status NONE, gated by `zcs_turn` so cards drawn after the team hit zero clues are
-excluded. Any non-NONE status disqualifies a card, so a locked hand has no chop.
+**`chop()`** (`:404-431`): an explicitly CTD'd card wins — the one signalled most
+recently by `signal_turn`, with hand order breaking ties (v1.11.0); otherwise the
+**newest** unclued card with status NONE, gated by `zcs_turn` so cards drawn after
+the team hit zero clues are excluded. Any non-NONE status disqualifies a card, so
+a locked hand has no chop. An earlier CTD may be a sacrifice while a later one is
+not, and never the reverse, which is why the newest *signal* wins; this also makes
+`chop()` agree with the most-recent-CTD filter below rather than disagree with it.
 
 **A player always chucks their chop**, except when its inference is a known
 orange card, which is **pitched** instead (`:934-943`). Note the "except" is
@@ -1093,6 +1095,7 @@ Behavioural rules above are pinned by:
 |---|---|
 | `tests/test_reactor/` | Reactive table, all-plays, CTD revival, dc-target retargeting, same-hand dupes, reversed suits, orange dispatch, discard penalty |
 | `tests/test_basics/test_reactive.cpp` | Focus rules, slot arithmetic |
+| `tests/test_basics/test_chop.cpp` | `Game::chop` selection (§2.3): most-recent CTD by `signal_turn`, tie-breaks, status ineligibility, locked hand |
 | `tests/test_bad_reactive_target/` | dc-target pool ranking (§1a.5): 1916813 clued-over-unclued, 1916888 unknown-over-pre-known |
 | `tests/test_stacked_plays/` | "Never stack on a queued CTP" (1892197, 1916815) |
 | `tests/test_bad_reaction/` | Stable-first routing when Bob is loaded (1915981) |
