@@ -65,6 +65,48 @@ thousands of lines of `src/conventions/`, so silent drift is expensive. If a
 change makes a documented rule obsolete, delete the rule — do not leave it
 alongside its replacement.
 
+## Running tests
+
+Tests are split by convention so a scoped run is possible. **Run the test
+binaries directly** — `ctest` spawns one process per test, which costs ~1 s
+each and makes the full suite take ~7 minutes instead of ~23 seconds.
+
+```bash
+cmake --build build -j --target hanabi_reactor0_tests   # build what you need
+build/hanabi_reactor0_tests.exe   # reactor0 only          38 tests, 0.6 s
+build/hanabi_tests.exe            # convention-neutral    242 tests, 1.2 s
+build/hanabi_reactor_tests.exe    # reactor + replays     122 tests, 21 s
+build/hanabi_decision_tests.exe   # decision quality       12 tests
+```
+
+Pick the scope from the report's `Convention:` field:
+
+| Working on | Run |
+|---|---|
+| reactor0 | `hanabi_reactor0_tests` + `hanabi_tests` (1.8 s) |
+| reactor | `hanabi_reactor_tests` + `hanabi_tests` (22 s) |
+| shared engine (`src/basics/`, eval, elim) | all three |
+
+`ctest` remains available when you want label composition or CI-style output:
+
+```bash
+ctest --test-dir build --output-on-failure -L '^(core|reactor0)$'
+ctest --test-dir build --output-on-failure -LE decision_making   # full correctness
+ctest --test-dir build --output-on-failure -L  decision_making   # quality
+```
+
+Note `-L` takes a **regex**: unanchored `-L reactor` also matches `reactor0`
+(160 tests, not 122). Always anchor as `^reactor$`.
+
+Two rules:
+
+- **The scoped run is a fast inner loop, not the gate.** Run the full
+  correctness suite before committing — reactor0 leans on shared machinery
+  (`target_play`, `ref_discard`, `elim`, `chop`, snapshots), so a change that
+  looks convention-local can break the other convention's corpus.
+- On Windows a running test binary is locked, so a rebuild cannot relink it
+  while it is executing. Let the run finish first (see README §5.7).
+
 ## Test changes
 
 The `tests/` tree captures behavioural expectations for the bot. Before
@@ -77,6 +119,15 @@ still be listed before being applied.
 ## Debugging a bug report
 
 When a bug report arrives with `(game_id, turn, expected vs actual)`:
+
+0. **Establish which convention it is about.** This picks the tests you run,
+   the `CONVENTION.md` you update, and the folder a regression test goes in.
+   In order of authority:
+   - the log's `game_init` record or any STATE record's `replay.convention`
+     field — this is what *actually ran*, so it wins;
+   - the report's `Convention:` field;
+   - otherwise assume `reactor0` (the live default). Note a 4+ player game
+     always runs reactor regardless of the selected convention.
 
 1. **Look for an existing log first.** Per-game structured logs live at
    `logs/{bot_name}-{id}.log`. During play the id is the live **table id**;
@@ -121,10 +172,11 @@ When a bug report arrives with `(game_id, turn, expected vs actual)`:
    scripts/bug_to_test.sh logs/<bot>-<game_id>.log <turn> [category] [slug]
    ```
    Emits `tests/<category>/test_replay_<game_id>_<slug>.cpp` (defaults to
-   `tests/test_endgame/` with no slug), builds, and runs it. Manual
-   replay-test authoring (typing out the deck + action sequence in the
-   test_endgame/replay_helpers.h style) is the **last** resort, not the
-   first — only fall back when no log exists.
+   `tests/test_endgame/` with no slug), builds, and runs it. It reads the
+   convention from the log and builds/runs the matching target, so a reactor0
+   log exercises `hanabi_reactor0_tests`. Manual replay-test authoring (typing
+   out the deck + action sequence in the test_endgame/replay_helpers.h style)
+   is the **last** resort, not the first — only fall back when no log exists.
 
 Per-game logs are also useful for "what did the bot spend its time on"
 investigations. `scripts/log_summary.py logs/<bot>-<game_id>.log` prints
@@ -132,11 +184,21 @@ the per-turn action + the per-game TIMING aggregate.
 
 ## Replay-test standards
 
+- **Convention field.** Bug reports carry a `Convention` field
+  (`reactor0` | `reactor`) alongside `Category`; resolve it per step 0 of the
+  debugging workflow. It decides which CMake target the new test is wired
+  into, and therefore which scoped run covers it.
 - **Category folders.** Bug reports carry a `Category` field naming the
   folder the regression test belongs to. The test goes in
-  `tests/<category>/` (e.g. `tests/test_bad_reactive_target/`). Create the
-  folder if it doesn't exist and add the new `.cpp` to the `hanabi_tests`
-  source list in `CMakeLists.txt` — no other wiring is needed.
+  `tests/<category>/` (e.g. `tests/test_bad_reactive_target/`), and for a
+  reactor0 report in `tests/test_reactor0_<category>/`. Create the folder if
+  it doesn't exist and add the new `.cpp` to the **matching target's** source
+  list in `CMakeLists.txt` — `hanabi_reactor0_tests` for reactor0,
+  `hanabi_reactor_tests` for reactor, `hanabi_tests` only for a
+  convention-neutral engine test. No other wiring is needed.
+  A reactor0 replay test must also carry `"convention": "reactor0"` in its
+  snapshot, or `apply_snapshot` will replay it under reactor (the
+  missing-key default, which keeps historical logs correct).
 - **Descriptive filenames.** Replay tests are named
   `test_replay_<game_id>_<short_slug>.cpp`, where the slug is a snake_case
   3–6 word description of the issue, e.g.

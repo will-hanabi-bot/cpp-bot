@@ -86,6 +86,15 @@ hanabi_set_warnings(hanabi_core)
 enable_testing()
 include(GoogleTest)
 
+# Tests are split into three executables so a convention-scoped run is
+# possible. `gtest_discover_tests` applies PROPERTIES per TARGET (never per
+# source file), so the ctest labels below require the split — see CLAUDE.md
+# "Running tests" for the invocations. Note ctest's -L takes a REGEX, so an
+# unanchored `-L reactor` also matches `reactor0`; the documented commands
+# anchor as `-L '^(core|reactor0)$'`.
+#
+# hanabi_tests / label `core`: convention-NEUTRAL engine tests. These must
+# pass for either convention, so every scoped run includes them.
 add_executable(hanabi_tests
   tests/test_smoke.cpp
   tests/test_harness.cpp
@@ -98,19 +107,32 @@ add_executable(hanabi_tests
   tests/test_basics/test_game.cpp
   tests/test_basics/test_chop.cpp
   tests/test_basics/test_snapshot_convention.cpp
-  tests/test_reactor0/test_colour_value.cpp
-  tests/test_reactor0/test_dispatch.cpp
-  tests/test_reactor0/test_efficiency.cpp
-  tests/test_reactor0/test_giver_filters.cpp
-  tests/test_reactor0/test_reactive_colour.cpp
-  tests/test_reactor0/test_reactive_lock.cpp
-  tests/test_reactor0/test_reactive_rank.cpp
-  tests/test_reactor0/test_stable_colour.cpp
-  tests/test_reactor0/test_stable_rank.cpp
   tests/test_basics/test_reactive.cpp
   tests/test_basics/test_stable_ref_discard.cpp
   tests/test_basics/test_strike_preserves_ctp.cpp
   tests/test_basics/test_snapshot_roundtrip.cpp
+  tests/test_endgame/test_forced_endgame.cpp
+  tests/test_endgame/test_helper.cpp
+  tests/test_endgame/test_solver_smoke.cpp
+  tests/test_logging/test_game_logger_rename.cpp
+  tests/test_logging/test_game_logger_finalize.cpp
+  tests/test_net/test_codec.cpp
+  tests/test_net/test_commands.cpp
+  tests/test_net/test_finish_ongoing_game.cpp
+  tests/test_net/test_setall.cpp
+)
+target_include_directories(hanabi_tests PRIVATE tests)
+target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
+hanabi_set_warnings(hanabi_tests)
+gtest_discover_tests(hanabi_tests PROPERTIES LABELS "core")
+
+# hanabi_reactor_tests / label `reactor`: the reactor convention's own
+# behaviour, plus every replay regression — replays reconstruct under the
+# convention recorded in their snapshot, which for all existing fixtures is
+# reactor. A reactor0-only change cannot affect these; a shared-engine change
+# can, which is why the full suite is still the pre-commit gate.
+add_executable(hanabi_reactor_tests
+  tests/test_harness.cpp
   tests/test_reactor/test_reactive_table.cpp
   tests/test_reactor/test_ctd_revives.cpp
   tests/test_reactor/test_reactive_inferred_narrow.cpp
@@ -123,8 +145,6 @@ add_executable(hanabi_tests
   tests/test_bad_reactive_target/test_replay_1916813_clued_trash_over_unclued_trash.cpp
   tests/test_bad_reactive_target/test_replay_1916888_known_trash_targeted_over_unknown.cpp
   tests/test_stacked_plays/test_replay_1916815_play_target_stacked_on_ctp.cpp
-  tests/test_endgame/test_forced_endgame.cpp
-  tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_replay_1874799.cpp
   tests/test_endgame/test_replay_1875252.cpp
   tests/test_endgame/test_replay_1875304.cpp
@@ -174,18 +194,31 @@ add_executable(hanabi_tests
   tests/test_endgame/test_replay_1900437.cpp
   tests/test_bad_reaction/test_replay_1915981_loaded_bob_reacts_to_stable_clue.cpp
   tests/test_receiver_misinterpretation/test_replay_1916791_stale_wc_misses_ctd_to_ctp_promise.cpp
-  tests/test_endgame/test_solver_smoke.cpp
-  tests/test_logging/test_game_logger_rename.cpp
-  tests/test_logging/test_game_logger_finalize.cpp
-  tests/test_net/test_codec.cpp
-  tests/test_net/test_commands.cpp
-  tests/test_net/test_finish_ongoing_game.cpp
-  tests/test_net/test_setall.cpp
 )
-target_include_directories(hanabi_tests PRIVATE tests)
-target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
-hanabi_set_warnings(hanabi_tests)
-gtest_discover_tests(hanabi_tests)
+target_include_directories(hanabi_reactor_tests PRIVATE tests)
+target_link_libraries(hanabi_reactor_tests PRIVATE hanabi_core GTest::gtest_main)
+hanabi_set_warnings(hanabi_reactor_tests)
+gtest_discover_tests(hanabi_reactor_tests PROPERTIES LABELS "reactor")
+
+# hanabi_reactor0_tests / label `reactor0`: the reactor0 convention's own
+# behaviour. A reactor0 bug report's inner loop is
+# `ctest -L '^(core|reactor0)$'` — this target plus the neutral one.
+add_executable(hanabi_reactor0_tests
+  tests/test_harness.cpp
+  tests/test_reactor0/test_colour_value.cpp
+  tests/test_reactor0/test_dispatch.cpp
+  tests/test_reactor0/test_efficiency.cpp
+  tests/test_reactor0/test_giver_filters.cpp
+  tests/test_reactor0/test_reactive_colour.cpp
+  tests/test_reactor0/test_reactive_lock.cpp
+  tests/test_reactor0/test_reactive_rank.cpp
+  tests/test_reactor0/test_stable_colour.cpp
+  tests/test_reactor0/test_stable_rank.cpp
+)
+target_include_directories(hanabi_reactor0_tests PRIVATE tests)
+target_link_libraries(hanabi_reactor0_tests PRIVATE hanabi_core GTest::gtest_main)
+hanabi_set_warnings(hanabi_reactor0_tests)
+gtest_discover_tests(hanabi_reactor0_tests PROPERTIES LABELS "reactor0")
 
 # --- Decision-making tests -----------------------------------------------
 # Behavioural-quality tests. Failures here mean the bot made a suboptimal

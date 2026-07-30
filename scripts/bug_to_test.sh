@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: scripts/bug_to_test.sh <log_file> <turn> [category] [slug]
+# Usage: scripts/bug_to_test.sh <log_file> <turn> [category] [slug] [convention]
 #
 # End-to-end bug-report → reproducing test pipeline.
 #   1. Locate the STATE snapshot at <turn> in the log.
@@ -12,14 +12,15 @@
 #
 # Pre-requisites: replay_log binary built (cmake --build build --target replay_log).
 set -euo pipefail
-if [[ $# -lt 2 || $# -gt 4 ]]; then
-  echo "Usage: $0 <log_file> <turn> [category] [slug]" >&2
+if [[ $# -lt 2 || $# -gt 5 ]]; then
+  echo "Usage: $0 <log_file> <turn> [category] [slug] [convention]" >&2
   exit 2
 fi
 LOG=$1
 TURN=$2
-CATEGORY=${3:-test_endgame}
+CATEGORY=${3:-}
 SLUG=${4:-}
+CONVENTION=${5:-}
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$REPO_ROOT/build/replay_log"
@@ -41,6 +42,22 @@ if [[ -z "$GAME_ID" ]]; then
   echo "no database_id or game_id record found in $LOG" >&2
   exit 2
 fi
+# Which convention did this game actually run? The log is authoritative --
+# it records what executed -- so read it from the contents unless the caller
+# overrode it. Missing key means a log written before conventions were
+# recorded, which was always reactor.
+if [[ -z "$CONVENTION" ]]; then
+  CONVENTION=$(grep -o '"convention":"[a-z0-9]*"' "$LOG" | head -1 | cut -d'"' -f4)
+fi
+CONVENTION=${CONVENTION:-reactor}
+case "$CONVENTION" in
+  reactor0) TARGET=hanabi_reactor0_tests; LABEL='^reactor0$'; DEFAULT_CATEGORY=test_reactor0_endgame ;;
+  reactor)  TARGET=hanabi_reactor_tests;  LABEL='^reactor$';  DEFAULT_CATEGORY=test_endgame ;;
+  *) echo "unknown convention '$CONVENTION' (expected reactor or reactor0)" >&2; exit 2 ;;
+esac
+CATEGORY=${CATEGORY:-$DEFAULT_CATEGORY}
+echo "convention: $CONVENTION -> target $TARGET, category $CATEGORY"
+
 mkdir -p "$REPO_ROOT/tests/${CATEGORY}"
 OUT="$REPO_ROOT/tests/${CATEGORY}/test_replay_${GAME_ID}${SLUG:+_$SLUG}.cpp"
 
@@ -52,9 +69,13 @@ echo "=== emit-test → $OUT ==="
 "$BIN" "$LOG" --turn "$TURN" --emit-test "$OUT"
 
 echo
-echo "NOTE: add ${OUT#$REPO_ROOT/} to the hanabi_tests source list in CMakeLists.txt."
+echo "NOTE: add ${OUT#$REPO_ROOT/} to the ${TARGET} source list in CMakeLists.txt."
+if [[ "$CONVENTION" == "reactor0" ]]; then
+  echo "NOTE: the emitted snapshot must carry \"convention\": \"reactor0\", or"
+  echo "      apply_snapshot replays it under reactor (the missing-key default)."
+fi
 
 echo
 echo "=== building + running new test ==="
-(cd "$REPO_ROOT" && cmake --build build -j 8 --target hanabi_tests)
-(cd "$REPO_ROOT/build" && ctest -R "Game${GAME_ID}Turn${TURN}" --output-on-failure)
+(cd "$REPO_ROOT" && cmake --build build -j 8 --target "$TARGET")
+(cd "$REPO_ROOT/build" && ctest -L "$LABEL" -R "Game${GAME_ID}Turn${TURN}" --output-on-failure)

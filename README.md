@@ -226,6 +226,8 @@ cd /c/path/to/cpp-bot
 cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j
 ctest --test-dir build --output-on-failure -LE decision_making
+# ...or, much faster (ctest spawns a process per test):
+# build/hanabi_tests && build/hanabi_reactor_tests && build/hanabi_reactor0_tests
 ```
 
 Expect roughly two minutes to configure (dominated by the four dependency
@@ -261,6 +263,8 @@ export PATH="/c/msys64/ucrt64/bin:$PATH"
 cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j
 ctest --test-dir build --output-on-failure -LE decision_making
+# ...or, much faster (ctest spawns a process per test):
+# build/hanabi_tests && build/hanabi_reactor_tests && build/hanabi_reactor0_tests
 ```
 
 Verified from Git Bash (`MSYSTEM=MINGW64`): configure, full build, `ctest`, and
@@ -315,6 +319,8 @@ brew install cmake ninja boost openssl@3
 cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j
 ctest --test-dir build --output-on-failure -LE decision_making
+# ...or, much faster (ctest spawns a process per test):
+# build/hanabi_tests && build/hanabi_reactor_tests && build/hanabi_reactor0_tests
 ```
 
 `./build.sh` is a convenience wrapper that rebuilds just the `hanabi_bot`
@@ -341,17 +347,36 @@ All land in `build/`.
 | Target | What it does |
 |---|---|
 | `hanabi_bot` | The live bot. Logs into hanab.live, opens a WebSocket, joins/creates tables, plays. |
-| `hanabi_tests` | Correctness suite — 338 tests, including 52 replay regressions reconstructed from real games. A failure here is a bug. |
+| `hanabi_tests` | Convention-**neutral** correctness suite (ctest label `core`) — 242 tests. A failure here is a bug in shared engine code and affects both conventions. |
+| `hanabi_reactor_tests` | The reactor convention plus every replay regression (label `reactor`) — 122 tests, including 53 replays reconstructed from real games. |
+| `hanabi_reactor0_tests` | The reactor0 convention (label `reactor0`) — 38 tests. |
 | `hanabi_decision_tests` | Decision-**quality** suite, under the ctest label `decision_making`. A failure means the bot made a suboptimal but not necessarily incorrect choice, and needs manual review (see `CLAUDE.md`). |
 | `replay_log` | Reconstructs a `Game` from a per-game JSONL log and re-runs `take_action` with the current build, or emits a regression-test scaffold. |
 | `bench_endgame` | Microbenchmark of `IdentitySet` and `Fraction` primitives. |
 
-Run the two test suites separately:
+The correctness suite is split by convention so you can run only what a change
+can affect. **Run the binaries directly** — `ctest` spawns one process per
+test, which turns a 23-second suite into a 7-minute one:
 
 ```bash
-ctest --test-dir build --output-on-failure -LE decision_making   # correctness
-ctest --test-dir build --output-on-failure -L  decision_making   # quality
+build/hanabi_reactor0_tests   # reactor0            38 tests, 0.6 s
+build/hanabi_tests           # convention-neutral 242 tests, 1.2 s
+build/hanabi_reactor_tests   # reactor + replays  122 tests,  21 s
+build/hanabi_decision_tests  # decision quality    12 tests
 ```
+
+Working on reactor0? `hanabi_reactor0_tests` + `hanabi_tests` (1.8 s) is the
+inner loop; run all three before committing. Use `ctest` when you want label
+composition or CI-style output:
+
+```bash
+ctest --test-dir build --output-on-failure -L '^(core|reactor0)$'  # reactor0 scope
+ctest --test-dir build --output-on-failure -LE decision_making     # correctness
+ctest --test-dir build --output-on-failure -L  decision_making     # quality
+```
+
+`-L` takes a regex, so unanchored `-L reactor` also matches `reactor0` — anchor
+it as `^reactor$`.
 
 ## 8. Running the bot
 
