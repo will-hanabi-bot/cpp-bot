@@ -89,7 +89,7 @@ So one clue can produce two plays, and the information is carried as much by
 *which slot the reacter chooses to act on* as by the clue itself.
 
 The bot decides between the two families per clue
-(`src/basics/decide.cpp:31-220`), and can rewind and re-read a clue as
+(`src/basics/decide.cpp:33-227`), and can rewind and re-read a clue as
 reactive if the next player's response contradicts the stable reading.
 
 Cards are kept alive by the two stable readings rather than by a dedicated save

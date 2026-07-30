@@ -20,6 +20,8 @@
 #include "hanabi/conventions/reactor/interpret_clue.h"
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/state_eval.h"
+#include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/endgame/fraction.h"
 #include "hanabi/endgame/forced_endgame.h"
 #include "hanabi/endgame/solver.h"
@@ -49,7 +51,12 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
 
   std::optional<ClueInterp> interp;
 
-  if (next_interp) {
+  if (convention == Convention::REACTOR0) {
+    // Reactor0's dispatcher is purely positional and self-contained; the
+    // shared tail below (MISTAKE default, with_move, signalled-plays
+    // demotion, elim, zcs bookkeeping) applies to both conventions.
+    interp = hanabi::reactor0::interpret_clue(prev, *this, action);
+  } else if (next_interp) {
     if (std::holds_alternative<ClueInterp>(*next_interp)) {
       ClueInterp forced = std::get<ClueInterp>(*next_interp);
       if (forced == ClueInterp::REACTIVE) {
@@ -264,7 +271,11 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
 
   if (!waiting.empty()) {
     bool rewound =
-        react_discard(prev, *this, action.player_index_v, action.order, waiting.front());
+        convention == Convention::REACTOR0
+            ? hanabi::reactor0::react_discard(prev, *this, action.player_index_v,
+                                              action.order, waiting.front())
+            : react_discard(prev, *this, action.player_index_v, action.order,
+                            waiting.front());
     if (rewound) {
       // The rewind already replayed the action end-to-end (including
       // with_move + elim + reset_zcs); doing it again here would
@@ -318,7 +329,11 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   check_missed(action.player_index_v, action.order);
   if (!waiting.empty()) {
     bool rewound =
-        react_play(prev, *this, action.player_index_v, action.order, waiting.front());
+        convention == Convention::REACTOR0
+            ? hanabi::reactor0::react_play(prev, *this, action.player_index_v,
+                                           action.order, waiting.front())
+            : react_play(prev, *this, action.player_index_v, action.order,
+                         waiting.front());
     if (rewound) {
       // The rewind already replayed the action end-to-end (including
       // with_move + elim); skip the post-react bookkeeping.

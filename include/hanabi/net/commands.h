@@ -131,6 +131,8 @@ class BotClient {
   void chat_settings(const std::string& room);
   void chat_allplays(const std::vector<std::string>& args, const nlohmann::json& data,
                        const std::string& room);
+  void chat_rlocks(const std::vector<std::string>& args, const nlohmann::json& data,
+                     const std::string& room);
   void chat_version(const nlohmann::json& data, const std::string& room);
 
   // Helper: for commands that work from PM or a table room, pick the target table.

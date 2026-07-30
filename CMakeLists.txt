@@ -40,6 +40,11 @@ add_library(hanabi_core STATIC
   src/conventions/reactor/interpret_reaction.cpp
   src/conventions/reactor/interpret_reactive.cpp
   src/conventions/reactor/state_eval.cpp
+  src/conventions/reactor0/colour_value.cpp
+  src/conventions/reactor0/efficiency.cpp
+  src/conventions/reactor0/interpret_clue.cpp
+  src/conventions/reactor0/interpret_reaction.cpp
+  src/conventions/reactor0/interpret_reactive.cpp
   src/conventions/variants/brownish.cpp
   src/conventions/variants/inverted.cpp
   src/conventions/variants/pinkish.cpp
@@ -93,6 +98,15 @@ add_executable(hanabi_tests
   tests/test_basics/test_game.cpp
   tests/test_basics/test_chop.cpp
   tests/test_basics/test_snapshot_convention.cpp
+  tests/test_reactor0/test_colour_value.cpp
+  tests/test_reactor0/test_dispatch.cpp
+  tests/test_reactor0/test_efficiency.cpp
+  tests/test_reactor0/test_giver_filters.cpp
+  tests/test_reactor0/test_reactive_colour.cpp
+  tests/test_reactor0/test_reactive_lock.cpp
+  tests/test_reactor0/test_reactive_rank.cpp
+  tests/test_reactor0/test_stable_colour.cpp
+  tests/test_reactor0/test_stable_rank.cpp
   tests/test_basics/test_reactive.cpp
   tests/test_basics/test_stable_ref_discard.cpp
   tests/test_basics/test_strike_preserves_ctp.cpp

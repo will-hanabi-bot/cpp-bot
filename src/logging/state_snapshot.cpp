@@ -13,6 +13,7 @@
 #include "hanabi/basics/options.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor0/efficiency.h"
 #include "hanabi/logging/game_logger.h"
 
 namespace hanabi::logging {
@@ -413,7 +414,9 @@ Game apply_snapshot(const json& record) {
   game.convention =
       parse_convention(replay.value("convention", "reactor"))
           .value_or(Convention::REACTOR);
-  game.allow_reactive_locks = replay.value("rlocks", true);
+  game.allow_reactive_locks = replay.value(
+      "rlocks", hanabi::reactor0::default_allow_reactive_locks(
+                    variant, static_cast<int>(game.state.names.size())));
 
   for (const auto& a_json : replay.at("actions")) {
     Action a = action_from_internal_json(a_json);

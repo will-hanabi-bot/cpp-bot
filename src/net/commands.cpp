@@ -13,6 +13,7 @@
 #include "hanabi/basics/options.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor0/efficiency.h"
 #include "hanabi/conventions/variants/reactive_table.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/game_logger.h"
@@ -172,6 +173,10 @@ void BotClient::on_chat(const json& data) {
     chat_allplays(args, data, room);
     return;
   }
+  if (cmd == "rlocks") {
+    chat_rlocks(args, data, room);
+    return;
+  }
   if (cmd == "getversion") {
     chat_version(data, room);
     return;
@@ -289,6 +294,9 @@ void BotClient::on_init(const json& data) {
       (convention_mode_ == Convention::REACTOR0 && np == 3)
           ? Convention::REACTOR0
           : Convention::REACTOR;
+  game->allow_reactive_locks =
+      rlocks_mode_ ? *rlocks_mode_
+                   : hanabi::reactor0::default_allow_reactive_locks(*variant, np);
   games_[tid] = std::move(game);
   action_time_[tid] = false;
   everyone_connected_[tid] = false;
@@ -879,6 +887,49 @@ void BotClient::chat_allplays(const std::vector<std::string>& args, const json& 
     (void)tid;
   }
   reply(std::string("allplays is now ") + (turning_on ? "on" : "off"));
+}
+
+void BotClient::chat_rlocks(const std::vector<std::string>& args, const json& data,
+                              const std::string& room) {
+  std::string sender = data.value("who", "");
+  bool in_pm = data.value("recipient", "") == username_;
+
+  auto reply = [&](const std::string& text) {
+    if (in_pm) {
+      chat_reply(text, sender);
+    } else {
+      transport_.queue_send(
+          "chat", json{{"msg", text}, {"recipient", ""}, {"room", room}});
+    }
+  };
+
+  if (args.size() < 2) {
+    // Username-prefixed: both bots answer in the room, like /getversion.
+    std::string state = rlocks_mode_
+                            ? (*rlocks_mode_ ? "on" : "off")
+                            : "variant default";
+    reply(username_ + ": rlocks is " + state);
+    return;
+  }
+  const std::string& arg = args[1];
+  bool turning_on;
+  if (arg == "on" || arg == "true" || arg == "1") {
+    turning_on = true;
+  } else if (arg == "off" || arg == "false" || arg == "0") {
+    turning_on = false;
+  } else {
+    reply("usage: /rlocks on|off");
+    return;
+  }
+
+  rlocks_mode_ = turning_on;
+  // Retro-apply to running games (like /allplays). In-flight reactives are
+  // insulated: the reading binds at clue time via ReactorWC::rlocks.
+  for (auto& [tid, game] : games_) {
+    if (game) game->allow_reactive_locks = turning_on;
+    (void)tid;
+  }
+  reply(username_ + ": rlocks is now " + (turning_on ? "on" : "off"));
 }
 
 void BotClient::chat_version(const json& data, const std::string& room) {

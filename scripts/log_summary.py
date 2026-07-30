@@ -31,7 +31,8 @@ def main() -> int:
     variant = init.get("variant")
     print(f"game_id={game_id}  bot={bot}  variant={variant}  "
           f"players={init.get('num_players')}  our_pi={init.get('our_player_index')}")
-    print(f"  bot_version={init.get('bot_version')}  all_plays={init.get('all_plays')}")
+    print(f"  bot_version={init.get('bot_version')}  all_plays={init.get('all_plays')}"
+          f"  convention={init.get('convention', 'reactor')}  rlocks={init.get('rlocks')}")
     print()
 
     # Loading latency breakdown: game_init -> catchup_done -> loaded_sent ->
