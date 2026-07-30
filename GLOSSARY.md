@@ -1,12 +1,14 @@
 # Glossary
 
-Every domain term this project uses, in one alphabetical list. Each entry
-gives the definition **as the code actually implements it** plus where to find
-it. Terms that mean something different here than in mainstream Hanabi theory
-are flagged **⚠**.
+Every domain term this project uses, in one alphabetical list. Each entry gives
+the definition **as this convention uses it** plus where to find it in the code.
+Definitions from other Hanabi conventions do not apply — where a term is shared,
+only the reactor / referential-sieve meaning is recorded here. Entries flagged
+**⚠** describe something the code declares but does not do.
 
 For how the terms fit together see [CONVENTION.md](CONVENTION.md); for the
-project overview see [README.md](README.md).
+project overview see [README.md](README.md); for convention that is legal but not
+yet implemented see [TODO.md](TODO.md).
 
 Two orientation facts that most entries depend on:
 
@@ -46,8 +48,8 @@ probability, and maximises expected win rate. `src/endgame/solver.cpp:638-714`.
 
 ### bad touch
 Newly-touched cards that are trash or duplicates of already-known cards.
-Penalised in clue scoring; **not** used as an inference rule here (see *good
-touch*). `src/basics/clue_result.cpp:82-175`; `state_eval.cpp:237-244`.
+Penalised in clue scoring. `src/basics/clue_result.cpp:82-175`;
+`state_eval.cpp:237-244`.
 
 ### base_count
 Per-identity count of copies already visible or played, used to compute what
@@ -65,10 +67,16 @@ discarded and no visible duplicate. Rank-weighted: `−n²` for 1s, `−3.0` for
 `state_eval.cpp:658-709`.
 
 ### bluff
-**⚠ Not implemented.** `CardStatus::BLUFFED` / `MAYBE_BLUFFED` /
-`F_MAYBE_BLUFFED` and `FinesseKind::BLUFF` exist from the Python/Scala port
-and are never set by reactor code.
-`include/hanabi/basics/card.h:30-32`; `connection.h:20-26`.
+A rare reactive move in which the reacter *believes* they are playing a card
+that connects with a one-away-from-playable card in the receiver's hand, but
+plays a different card. Legal so long as the receiver can tell **after** the
+reaction that their target is not actually playable, and therefore marks it
+one-away-from-playable and chucks their chop as normal.
+
+**⚠ Not implemented** — the interpreter neither initiates nor decodes one; see
+`TODO.md`. `CardStatus::BLUFFED` / `MAYBE_BLUFFED` / `F_MAYBE_BLUFFED`
+(`card.h:30-32`) and `FinesseKind::BLUFF` (`connection.h:20-26`) exist from the
+Python/Scala port and are never set.
 
 ### Bob
 The player after the current one. In a reactive clue Bob is normally the
@@ -91,26 +99,34 @@ accounted for, including cross-elimination over sets of cards.
 ### Cathy
 The player two seats after the current one. `decide.cpp:90-92`.
 
+### chuck
+See *pitch / chuck*. Pressing the **Discard** button.
+
 ### chimneys
 Variant where a rank-K clue touches all cards of rank **≥ K**. Routed through
 the *pinkish* convention path. `src/basics/variant.cpp:243-244`;
 `predicates.cpp:16`.
 
 ### chop
-**⚠ Three different definitions coexist in this codebase.**
+The card the hand is expected to get rid of next: the newest card stamped
+`CALLED_TO_DISCARD`, or — if the hand holds none — the **newest** unclued card
+whose status is `NONE`, gated by `zcs_turn`. Any non-`NONE` status
+(`CALLED_TO_PLAY`, `CHOP_MOVED`, `PERMISSION_TO_DISCARD`) disqualifies a card,
+so a locked hand has no chop at all. `Game::chop`, `decide.cpp:404-417`.
 
-| Definition | Used by | Cite |
-|---|---|---|
-| CTD'd card, else the **newest** unclued status-NONE card, gated by `zcs_turn` | `Game::chop` — the discard decision | `decide.cpp:404-417` |
-| **Oldest** unclued card (`lock_order`) | `ref_discard`'s lock detection | `interpret_clue.cpp:330-337` |
-| **Oldest** unclued card | the pink promise | `pinkish.cpp:31-37` |
+A player always *chucks* their chop, except when its inference is a known orange
+card, which is *pitched* instead — see *pitch / chuck*.
 
-Note the first is the *newest* unclued card — the opposite of the H-group
-convention.
+Not to be confused with the *lock slot*, the **oldest** unclued card. That is a
+different position and is never a chop.
 
-### chop moved (CM)
-`CardStatus::CHOP_MOVED`: the card is protected from discard. Applied to an
-entire hand by a LOCK. `card.h:23`, `:124`.
+Multiple `CALLED_TO_DISCARD` cards are meant to resolve by `signal_turn` rather
+than by hand position; see `TODO.md`.
+
+### CHOP_MOVED (status)
+`CardStatus::CHOP_MOVED`: the card is protected from discard. The only thing
+that stamps it is a `LOCK`, which stamps every card in the hand at once.
+`card.h:23`, `:124`; `interpret_clue.cpp:339-358`.
 
 ### clue starved
 Variant where playing a 5 returns only half a clue token.
@@ -137,8 +153,8 @@ receiver has to act. `src/basics/fix.cpp:157-183`.
 
 ### Connection
 **⚠ Mostly unused.** The variant type `KnownConn | PlayableConn | PromptConn |
-FinesseConn | PositionalConn`, inherited from the H-group port.
-`include/hanabi/basics/connection.h:116-117`.
+FinesseConn | PositionalConn`, inherited from the Python/Scala port — see
+CONVENTION.md §1a.8. `include/hanabi/basics/connection.h:116-117`.
 
 ### critical
 An identity with exactly one copy left undiscarded that is still useful.
@@ -218,11 +234,13 @@ What a given observer believes about a card: the `Thought` triple `possible` /
 even number of plays. `reactive_table.cpp:167-173`.
 
 ### finesse
-**⚠ Narrow meaning here.** Reactor's only finesse is the rank-reactive
-fallback: when no direct play target resolves, react slots are tried in the
-fixed order `{1, 5, 4, 3, 2}` looking for a receiver card exactly one away
-from playable. `interpret_reactive.cpp:781-867`. The `FINESSED` card status
-and `FinesseConn` type are port leftovers and are never set.
+A reactive move in which the reacter must play a card that **connects with** a
+one-away-from-playable card in the receiver's hand. Phase B of the rank-reactive
+path, reached when no direct play target resolves: react slots are tried in the
+fixed order `{1, 5, 4, 3, 2}`, and the candidate must hold `prev_id`, the
+predecessor of the receiver's one-away target. `interpret_reactive.cpp:781-867`.
+The `FINESSED` card status and `FinesseConn` type are inherited leftovers and are
+never set — see CONVENTION.md §1a.8.
 
 ### fix clue
 A clue that corrects a wrong earlier inference — a CTP'd card now provably
@@ -252,11 +270,10 @@ Deliberately discarding a known-playable card to hand the play to a teammate.
 ### giver
 The player who gave the clue (`ClueAction::giver`).
 
-### good touch (GTP)
-The principle that clued cards are never trash, so trash identities can be
-eliminated from touched cards. **⚠ Disabled in this bot** — `Game::good_touch`
-is left `false` (`game.h:97`), so `good_touch_elim` never runs (v0.39). It
-survives only as an evaluation term. `src/basics/player_elim.cpp:319-352`.
+### good_touch (clue scoring)
+A clue-scoring term over `(new_touched − bad_touch)`, stepping
+`[0, .125, .25, .35, .45, .55]` and capped at 5. Purely an evaluation input — it
+draws no inferences. `state_eval.cpp:237-244`; formula in CONVENTION.md §2.4.
 
 ### half clue token
 Clue-starved bookkeeping: playing a 5 sets a half-token flag; two of them make
@@ -292,10 +309,11 @@ narrowing. Enforced in arrangement validity and playability checks.
 `card.h:83`; `decide.cpp:385-390`.
 
 ### inverted suits (Orange, Dark Orange)
-Suits where the game rule **swaps the play and discard buttons**:
-`PerformPlay` discards, `PerformDiscard` is a play attempt. Because CTP/CTD are
-physical labels, the convention must stamp CTD to get an orange card onto its
-stack. `src/conventions/variants/inverted.cpp`; `src/basics/game.cpp:228-247`.
+Suits where the game rule **swaps what the two buttons do**: a *chuck* is the
+play attempt and a *pitch* sends the card to the discard pile (with a clue
+regain). Because CTP/CTD name buttons rather than outcomes, the convention must
+stamp CTD to get an orange card onto its stack. See *pitch / chuck*.
+`src/conventions/variants/inverted.cpp`; `src/basics/game.cpp:228-247`, `:312-326`.
 
 ### known trash (kt)
 A card whose every possibility is basic trash, or which is duplicated by an
@@ -312,12 +330,21 @@ A relation between several cards sharing one identity set — `PromisedLink`,
 
 ### loaded / unloaded
 Loaded = has an obvious playable or known trash, i.e. has something safe to
-do. `obvious_loaded`, `player_game.cpp:221-246`.
+do. `obvious_loaded`, `player_game.cpp:233-236`; the full-empathy variant is
+`thinks_loaded`, `:216-219`.
 
 ### lock / locked
-A player with no safe action and every unclued card chop-moved. Produced by
-the LOCK clue interpretation, which touches the oldest unclued card.
+A player with no safe action and every unclued card stamped `CHOP_MOVED`.
+Produced by the LOCK clue interpretation, which is a rank clue touching the
+*lock slot*. A lock protects the whole hand: nothing in it is safe to discard.
 `interpret_clue.cpp:334-359`; `player_game.cpp:221-246`.
+
+### lock slot
+The **oldest** (lowest-`order`, rightmost) unclued card. A rank clue that
+touches it is read as a LOCK (`lock_order`, `interpret_clue.cpp:330-337`), and
+in pinkish variants it is the card the *pink promise* binds
+(`pinkish.cpp:30-37`). Distinct from the *chop*, which is the **newest** unclued
+card.
 
 ### locked discard
 The sacrifice choice when locked: minimise critical probability, then maximise
@@ -381,9 +408,32 @@ Suit family matched by Pink and Omni — **and**, in this codebase, Funnels and
 Chimneys. Rank clues touch every rank. `predicates.cpp:12-18`.
 
 ### pink promise
-In pinkish variants, a rank clue that newly touches the receiver's chop (here
-the **oldest** unclued card) promises the chop has that rank. Violating it
-kills the stable reading. `src/conventions/variants/pinkish.cpp:18-55`.
+In pinkish variants, a rank clue that newly touches the receiver's *lock slot*
+promises that card has that rank. Violating it kills the stable reading.
+`src/conventions/variants/pinkish.cpp:18-55`.
+
+### pitch / chuck
+The two buttons, named so that prose never has to say "play" and mean "discard".
+**Pitch** = pressing the **Play** button (`PerformPlay`). **Chuck** = pressing
+the **Discard** button (`PerformDiscard`). Which one moves a card where depends
+on the suit:
+
+| | **pitch** (press Play) | **chuck** (press Discard) |
+|---|---|---|
+| Normal suit, outcome | onto the stack; strike if unplayable | to the discard pile, clue regained |
+| Inverted suit, outcome | to the discard pile, clue regained | onto the stack; strike if unplayable |
+| Outbound `PerformAction` | `PerformPlay` | `PerformDiscard` |
+| Inbound wire, normal suit | `type: "play"` | `type: "discard"` |
+| Inbound wire, **inverted** suit | `type: "discard"` | `type: "play"` |
+| Engine dispatch | `Game::on_play` | `Game::on_discard` |
+
+The last three rows are the trap. The **server reports outcomes** while the
+**engine is button-oriented**, so an inbound `type: "play"` on an orange card
+means the player *chucked* it. `orient_action_for_engine`
+(`src/basics/action.cpp:56-72`) flips inverted-suit actions before dispatch;
+see the comment at `src/net/commands.cpp:393-397`. Note
+`PerformPlay` / `PerformDiscard` exist only **outbound** — inbound actions are
+`PlayAction` / `DiscardAction`.
 
 ### play-target
 The receiver slot a reactive clue designates for play. Rightmost copy of each
@@ -392,7 +442,7 @@ identity is primary; never stacks on an already-CTP'd card.
 
 ### playable_away
 How many ranks short of playable a card is. 0 = playable, 1 = one away (the
-finesse-fallback criterion). Direction-aware. `state.h:102-123`.
+finesse criterion). Direction-aware. `state.h:102-123`.
 
 ### possible
 The hard-eliminated identity set — what a card could still be given all
@@ -412,11 +462,6 @@ narrowing disambiguates into common-knowledge trash.
 ### prism
 Suits where colour touch is `(rank − 1) % num_colours == clue.value`.
 `src/basics/variant.cpp:211-213`.
-
-### prompt
-A clued card asked to play as a link in a chain. `valid_prompt` /
-`find_prompt`, with a pink-prompt exception.
-`src/basics/player_game.cpp:302-381`.
 
 ### rainbowish
 Suit family matched by Rainbow and Omni. Every colour clue touches them —
@@ -450,7 +495,9 @@ The player the reactive clue was physically given to (`action.target`).
 ### ref play / ref discard (referential)
 Stable interpretations. Referential play targets the card one slot **left**
 (newer) of a newly-touched card, skipping touched cards. Referential discard
-targets the first unclued slot **right** (older) of the focus.
+targets the first unclued slot **right** (older) of the focus; by naming one card
+to discard it implicitly protects everything in the hand it does not name, which
+together with the *lock* is how this convention keeps cards alive.
 `interpret_clue.cpp:276-313`, `:317-420`.
 
 ### refer
@@ -488,11 +535,6 @@ dc-target pool. `interpret_reactive.cpp:438-452`.
 ### sarcastic discard
 Discarding a card to tell a teammate they hold its duplicate.
 `DiscardInterp::SARCASTIC`; `src/basics/sarcastic.cpp`.
-
-### save clue
-**⚠ Does not exist in this convention.** `ClueInterp::SAVE` is declared but
-never emitted. Card protection comes from `has_ptd()`, LOCK, referential
-discard, and giver-side critical filters. See CONVENTION.md §1a.8.
 
 ### scarce ones
 Variant flag reducing the rank-1 count from 3 to 2.
@@ -534,11 +576,6 @@ argument — hence usable in both directions.
 ### target_slot
 The receiver slot the reactive clue points at.
 
-### TCM (trash chop move)
-Brownish-variant rule: a rank clue to an unloaded target that misses their
-newest slot reads as REVEAL.
-`src/conventions/variants/brownish.cpp:19-40`.
-
 ### Thought
 Per-observer belief about one card: `possible`, `inferred`, `info_lock`,
 `old_inferred`, `reset`. Distinct from `Card` (the physical card) and
@@ -547,11 +584,19 @@ Per-observer belief about one card: `possible`, `inferred`, `info_lock`,
 
 ### touched
 A card that is clued, CTP'd, gentleman's-discarded, or finessed.
-`Game::is_touched`, `src/basics/game.cpp:121-125`.
+`Game::is_touched`, `src/basics/game.cpp:121-125`. The `FINESSED` clause is
+unreachable in practice — nothing stamps that status.
 
 ### trash push
-A rank clue where every touchable identity is basic trash.
-`interpret_clue.cpp:447-468`.
+A rank clue where every touchable identity is basic trash. Today this only
+narrows the focus's `inferred` to the trash set and sets `meta.trash`: no status
+is stamped and no play is called (`interpret_clue.cpp:447-468`). The convention
+says it should be read as a referential play clue; see `TODO.md`.
+
+### trash reveal (brownish)
+Brownish-variant rule: a rank clue to an unloaded target that misses their
+newest slot reads as REVEAL. `brownish_trash_reveal`,
+`src/conventions/variants/brownish.cpp:19-40`.
 
 ### unnecessary focus
 A playable-rank focus whose every possibility is either basic trash or already

@@ -17,11 +17,15 @@ before pushing if there's any ambiguity about whether the change is ready to
 deploy.
 
 **On every version bump, check that the repo's `.md` docs are still accurate**
-(`CONVENTION.md`, `GLOSSARY.md`, `README.md`, `VERIFICATION.md`, this file, and
-any other `.md` describing implementation status). Docs or code comments that
-claim work is "pending", "stubbed", or "Phase N" must be updated or marked
-historical once the work has shipped. VERIFICATION.md previously went stale
-this way — treat any status-bearing `.md` as part of the change surface.
+(`CONVENTION.md`, `GLOSSARY.md`, `README.md`, `TODO.md`, `VERIFICATION.md`, this
+file, and any other `.md` describing implementation status). Docs or code
+comments that claim work is "pending", "stubbed", or "Phase N" must be updated or
+marked historical once the work has shipped. VERIFICATION.md previously went
+stale this way — treat any status-bearing `.md` as part of the change surface.
+
+`TODO.md` lists convention that is legal but not implemented. When a change
+closes one of its entries, delete the entry and update the `CONVENTION.md` /
+`GLOSSARY.md` wording that pointed at it in the same commit.
 
 ## Convention documentation
 

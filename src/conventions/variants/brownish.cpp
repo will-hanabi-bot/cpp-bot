@@ -16,9 +16,9 @@ bool contains(const std::vector<int>& v, int x) {
 
 }  // namespace
 
-bool brownish_tcm_applies(const Game& prev, const Game& game,
-                          const ClueAction& action,
-                          const std::vector<int>& newly_touched) {
+bool brownish_trash_reveal(const Game& prev, const Game& game,
+                           const ClueAction& action,
+                           const std::vector<int>& newly_touched) {
   const State& state = game.state;
   int target = action.target;
   if (!includes_brownish(state) || action.clue.kind != ClueKind::RANK ||

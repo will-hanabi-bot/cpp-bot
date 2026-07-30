@@ -608,7 +608,7 @@ std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
 
   int max_nt = *std::max_element(newly_touched.begin(), newly_touched.end());
   if (game.common.order_kt(game, max_nt)) {
-    if (variants::brownish_tcm_applies(prev, game, action, newly_touched)) {
+    if (variants::brownish_trash_reveal(prev, game, action, newly_touched)) {
       return ClueInterp::REVEAL;
     }
     return ref_play(prev, game, action);

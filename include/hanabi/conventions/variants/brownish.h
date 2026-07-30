@@ -8,12 +8,11 @@
 
 namespace hanabi::reactor::variants {
 
-// Brownish Touch-Chop-Move: a rank clue whose focus is known trash but
-// which leaves the newest card untouched, while a brownish suit still has
-// unplayed cards, reads as a chop-move-style REVEAL rather than a
-// referential play.
-bool brownish_tcm_applies(const Game& prev, const Game& game,
-                          const ClueAction& action,
-                          const std::vector<int>& newly_touched);
+// Brownish trash reveal: a rank clue whose focus is known trash but which
+// leaves the newest card untouched, while a brownish suit still has unplayed
+// cards, reads as a REVEAL rather than a referential play.
+bool brownish_trash_reveal(const Game& prev, const Game& game,
+                           const ClueAction& action,
+                           const std::vector<int>& newly_touched);
 
 }  // namespace hanabi::reactor::variants

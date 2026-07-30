@@ -27,17 +27,17 @@ bool violates_pink_promise(const Game& prev, const ClueAction& action) {
   }
   if (!pinkish) return false;
 
-  // Chop = rightmost (oldest, last vector index) unclued card before the
-  // clue lands.
-  std::optional<int> chop;
+  // Lock slot = rightmost (oldest, last vector index) unclued card before the
+  // clue lands. Note this is NOT the chop, which is the *newest* unclued card.
+  std::optional<int> lock_slot;
   for (auto it = state.hands[action.target].rbegin();
        it != state.hands[action.target].rend(); ++it) {
-    if (!state.deck[*it].clued) { chop = *it; break; }
+    if (!state.deck[*it].clued) { lock_slot = *it; break; }
   }
-  if (!chop) return false;
+  if (!lock_slot) return false;
 
-  // Promise only applies when the chop itself is touched.
-  if (!contains(action.list_, *chop)) return false;
+  // Promise only applies when the lock slot itself is touched.
+  if (!contains(action.list_, *lock_slot)) return false;
 
   // Promised ranks (set, to handle pink_s substitutions where a clue can
   // legitimately call either the spoken rank or the special rank).
@@ -48,9 +48,9 @@ bool violates_pink_promise(const Game& prev, const ClueAction& action) {
     else if (sr == 1 && action.clue.value == 2) promised.push_back(1);
   }
 
-  auto chop_id = state.deck[*chop].id();
-  if (!chop_id) return false;  // observer's own hand — can't verify
-  return std::find(promised.begin(), promised.end(), chop_id->rank) ==
+  auto lock_slot_id = state.deck[*lock_slot].id();
+  if (!lock_slot_id) return false;  // observer's own hand — can't verify
+  return std::find(promised.begin(), promised.end(), lock_slot_id->rank) ==
          promised.end();
 }
 

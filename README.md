@@ -18,6 +18,7 @@ roughly 50× faster per primitive operation. See
 | **README.md** (this file) | Overview, build, and run instructions |
 | [CONVENTION.md](CONVENTION.md) | **The ruling reference** for what a clue means and how the bot decides |
 | [GLOSSARY.md](GLOSSARY.md) | Every domain term, defined, with code references |
+| [TODO.md](TODO.md) | Convention that is legal but not yet implemented |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for agents: version bumps, test policy, the bug-report workflow |
 | [VERIFICATION.md](VERIFICATION.md) | Historical port-era verification notes and benchmarks |
 
@@ -67,8 +68,8 @@ Every clue is read as one of two families.
   the **left** (newer) of a newly-touched card.
 - A **rank** clue is a *referential discard*: it points at the first unclued
   slot to the **right** (older) of the focus. If it instead touches the
-  receiver's oldest unclued card, it's a **lock** — nothing in that hand is
-  safe to discard.
+  receiver's **lock slot** (their oldest unclued card), it's a **lock** —
+  nothing in that hand is safe to discard.
 
 **Reactive clues** are the convention's distinctive mechanism. A reactive clue
 is given to a **receiver**, but it is decoded by a third player — the
@@ -91,8 +92,11 @@ The bot decides between the two families per clue
 (`src/basics/decide.cpp:31-220`), and can rewind and re-read a clue as
 reactive if the next player's response contradicts the stable reading.
 
-Notably, this convention has **no save clues** and **no finesses or bluffs** in
-the H-group sense — see [CONVENTION.md §1a.8](CONVENTION.md).
+Cards are kept alive by the two stable readings rather than by a dedicated save
+clue: a referential discard implicitly protects everything it does not name, and
+a lock protects a whole hand. The reactive family has its own **finesse** — the
+reacter plays a card that connects with a one-away-from-playable card in the
+receiver's hand — see [CONVENTION.md §1a.5](CONVENTION.md).
 
 ## 3. Repository layout
 
@@ -423,7 +427,7 @@ Full details, including the replay-test naming and category conventions, are in
 - **Modifying or deleting any existing test requires prior approval**; adding
   tests does not. New test files must be added to the source list in
   `CMakeLists.txt` by hand — there is no globbing.
-- On every version bump, check that `CONVENTION.md`, `GLOSSARY.md`, and this
-  file still match the code.
+- On every version bump, check that `CONVENTION.md`, `GLOSSARY.md`, `TODO.md`,
+  and this file still match the code.
 
 `CLAUDE.md` has the full working agreement.

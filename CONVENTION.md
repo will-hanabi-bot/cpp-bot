@@ -6,7 +6,8 @@ one of them — every rule below cites the `file:line` that implements it, so
 the disagreement can be settled.
 
 Terminology is defined in [GLOSSARY.md](GLOSSARY.md). A high-level overview is
-in [README.md](README.md).
+in [README.md](README.md). Convention that is legal but not yet implemented is
+tracked in [TODO.md](TODO.md) — this document describes only what the code does.
 
 Two conventions of the document itself:
 
@@ -37,8 +38,8 @@ Every clue is read as exactly one of two families:
   decodes it: the reacter's chosen slot plus the clue's focus slot together
   name the slot the receiver must act on.
 
-The reactive family is what makes this "reactor" rather than a conventional
-H-group derivative. The rest of section 1a builds up to it.
+The reactive family is what makes this "reactor" rather than a purely stable,
+referential convention. The rest of section 1a builds up to it.
 
 ## 1a. Base Interpretation
 
@@ -47,6 +48,22 @@ Everything in this section describes **No Variant** (5 normal suits, ranks
 
 ### 1a.1 The interpretation vocabulary
 
+Six terms are used throughout without further comment; the rest are in
+[GLOSSARY.md](GLOSSARY.md).
+
+- **critical** — an identity with exactly one copy left undiscarded that is still
+  useful. Losing it lowers the maximum achievable score
+  (`src/basics/state.cpp:163-167`).
+- **loaded / unloaded** — loaded means the player has an obvious playable or a
+  known trash, i.e. something safe to do (`obvious_loaded`,
+  `player_game.cpp:233-236`).
+- **CTP** — `CardStatus::CALLED_TO_PLAY`. **CTD** —
+  `CardStatus::CALLED_TO_DISCARD` (`card.h:21-33`). Both name a *button*, not an
+  outcome; see the next two terms.
+- **pitch / chuck** — a pitch presses the **Play** button, a chuck presses the
+  **Discard** button. On a normal suit a pitch reaches the stack and a chuck
+  reaches the discard pile; on an inverted suit that is reversed (§1b.5).
+
 `ClueInterp` (`include/hanabi/basics/interp.h:11-23`) enumerates every verdict
 the interpreter can reach:
 
@@ -54,14 +71,14 @@ the interpreter can reach:
 |---|---|
 | `PLAY` | A referential play clue; some card is now called to play. |
 | `DISCARD` | A referential discard clue; some card is now called to discard. |
-| `LOCK` | The whole hand is chop-moved; nothing is safe to discard. |
+| `LOCK` | Every card in the hand is stamped `CHOP_MOVED`; nothing is safe to discard. |
 | `REACTIVE` | A reactive clue; resolution waits on the reacter's next action. |
 | `REVEAL` | An already-clued card became newly actionable. |
 | `FIX` | The clue corrects a wrong earlier inference. |
 | `STALL` | The clue conveys no instruction; it burns a token. |
 | `USELESS` | An empty clue, where the variant permits them. |
 | `MISTAKE` | No legal reading. Scores −100 and is filtered out of candidates. |
-| `SAVE`, `DISTRIBUTION` | **Defined but never emitted** — see §1a.8. |
+| `SAVE`, `DISTRIBUTION` | Declared (`interp.h:15`, `:21`) and parsed back from logs (`src/logging/state_snapshot.cpp:93`, `:99`), never emitted. See §1a.8. |
 
 ### 1a.2 Focus
 
@@ -153,7 +170,10 @@ ordered chain. The first branch that yields a verdict wins.
 **2. Trash push** (`:447-468`). A **rank** clue with new touches where *every*
 identity the clue could touch is basic trash. The focus's `inferred` is
 intersected with the trash set and `meta.trash` is set. No status is stamped —
-the card is known garbage. Note the loop iterates
+the card is known garbage, and **no play is called**. The convention says this
+should instead be read as a referential play clue, as if the trash cards had been
+touched by a colour clue; that is not implemented, see
+[TODO.md](TODO.md). Note the loop iterates
 `variant->touch_possibilities(kind, value)` rather than assuming
 `Identity(s, clue.value)`, so e.g. Pink-Fives can't be misread as a trash push
 (`:450-458`).
@@ -183,7 +203,7 @@ having been clued and never reset, or when the clue reveals a duplicate.
   - no new touches, not stalling, but a new connectable appears (`:574-582`);
   - no new touches, connecting through an unknown one-away playable
     (`:585-602`);
-  - the brownish trash-chop-move rule (`:611-613`, §1b.4).
+  - the brownish trash-reveal rule (`:611-613`, §1b.4).
 
 **7. STALL** — three sites: `try_stable` with no new touches while stalling
 (`:572`); `ref_discard` when a chop-touching clue comes from the player
@@ -202,10 +222,12 @@ The target then goes through `target_play`.
 **9. Referential discard** (`ref_discard`, `:317-420`). Taken for **rank**
 clues. Two outcomes:
 
-  - **LOCK** (`:334-359`): if the clue touches `lock_order` — the *lowest*
-    order (oldest, rightmost) unclued card — every card in the receiver's hand
-    is stamped `CHOP_MOVED`. If the receiver was already locked, this is a
-    `MISTAKE` (`:343`).
+  - **LOCK** (`:334-359`): if the clue touches the **lock slot** — `lock_order`,
+    the *lowest* order (oldest, rightmost) unclued card — every card in the
+    receiver's hand is stamped `CHOP_MOVED`. If the receiver was already locked,
+    this is a `MISTAKE` (`:343`). A lock protects the whole hand; together with
+    the referential discard below, which implicitly protects everything it does
+    not name, this is how the convention keeps cards alive.
   - **DISCARD** (`:361-419`): otherwise the target is the **first unclued slot
     to the right (older) of the focus** (`:364-371`). It is stamped
     `CALLED_TO_DISCARD`. If no such slot exists, the branch fails (`:371`).
@@ -376,11 +398,14 @@ narrowed against `hypo_state.playable_set ∪ connectors` — falling back to
 stamped CTP, and the target's identity **removed from the reacter's
 `inferred`** (`:768-776`).
 
-**Phase B — finesse fallback**, `:781-867`. Reached when no play target
-resolved. Candidates are receiver slots exactly one away from playable
-(`state.playable_away(id) == 1`, `:782-789`). React slots are then tried in
-the **fixed order `{1, 5, 4, 3, 2}`** (`:792`), mapping each through
-`calc_slot` to see whether a finesse target sits at the resulting slot.
+**Phase B — finesse**, `:781-867`. A **finesse** is a reactive move in which the
+reacter must play a card that *connects with* a one-away-from-playable card in
+the receiver's hand.
+
+Reached when no play target resolved. Candidates are receiver slots exactly one
+away from playable (`state.playable_away(id) == 1`, `:782-789`). React slots are
+then tried in the **fixed order `{1, 5, 4, 3, 2}`** (`:792`), mapping each
+through `calc_slot` to see whether a finesse target sits at the resulting slot.
 
 Requirements (`:808-823`): the reacter's slot wasn't already an obvious
 playable; its `effective_possible` intersects `playable_set ∪ possible_conns`;
@@ -392,7 +417,16 @@ reactive interpretation returns `nullopt`. There is deliberately **no "try the
 next slot"** — the reacter, reasoning from her own POV, will still pick this
 slot, so no later iteration could rescue it.
 
-**Phase C — orange chop-save**, `:870-871` → §1b.5.
+That abort is also what rules out the **bluff**: a rare reactive move in which
+the reacter believes they are playing a card that connects with a
+one-away-from-playable card in the receiver's hand, but plays a different card.
+It is legal convention — the receiver can tell *after* the reaction that their
+target is not actually playable, so they mark it one-away-from-playable and chuck
+their chop as normal — but this implementation neither initiates nor decodes one,
+because `:824-838` is exactly the bluff case and returns `nullopt`. Tracked in
+[TODO.md](TODO.md).
+
+**Phase C — orange chop rescue**, `:870-871` → §1b.5.
 
 #### POV invariance
 
@@ -495,45 +529,26 @@ this check on a clue given to herself, because it depends on seeing her own
 hand. She reads stable provisionally; if she was wrong, Bob's unexpected
 reaction triggers the response-inversion rewind.
 
-### 1a.8 What this convention does *not* have
+### 1a.8 Inherited machinery and where rules hide
 
-A ruling document has to be explicit about absences, because several familiar
-Hanabi concepts are present in the type system but never used.
+- **Machinery from the Python/Scala port that is never set.** These names exist
+  in the type system and will mislead anyone reading the code as if they were
+  moves this convention plays. Nothing writes any of them:
+  - `CardStatus::FINESSED`, `BLUFFED`, `MAYBE_BLUFFED`, `F_MAYBE_BLUFFED`
+    (`include/hanabi/basics/card.h:27-32`);
+  - the entire `Connection` variant set, including `PromptConn`, `FinesseConn`
+    and `PositionalConn` (`include/hanabi/basics/connection.h:20-117`);
+  - `Player::valid_prompt` / `Player::find_prompt`
+    (`src/basics/player_game.cpp:302-381`) — dead code with **no callers**;
+    `find_prompt` only calls `valid_prompt`, and nothing calls `find_prompt`;
+  - `ClueInterp::SAVE` and `ClueInterp::DISTRIBUTION` (§1a.1);
+  - `good_touch_elim` (`src/basics/player_elim.cpp:319-352`), unreachable because
+    `Game::good_touch` is left `false` (`include/hanabi/basics/game.h:97`) — so
+    Good Touch draws no inferences here (v0.39, commit `6219f17`) and survives
+    only as the clue-scoring term of §2.4 and via `bad_touch_result`.
 
-- **There is no save clue.** `ClueInterp::SAVE` and `ClueInterp::DISTRIBUTION`
-  are declared (`interp.h:15`, `:21`) and parsed back from logs
-  (`src/logging/state_snapshot.cpp:93`, `:99`) but are **never emitted**.
-  There is no 5-save, no 2-save, no critical-save. Card protection is instead
-  emergent from four mechanisms:
-  - `has_ptd()` — the permission-to-discard gate (§2.3), which refuses to let
-    Bob discard when his chop is critical, playable, or a 2;
-  - `LOCK`, which chop-moves an entire hand;
-  - the referential discard, which implicitly protects everything it does not
-    name;
-  - hard giver-side filters: the critical-discard guard in `find_all_clues`
-    (`decide.cpp:498-537`), `bad_stable` condition 4, the all-critical reacter
-    skip (`interpret_reactive.cpp:286-289`), and the urgent Bob-save override
-    (`decide.cpp:615-640`).
-- **There are no finesses, prompts, or bluffs in the H-group sense.**
-  `CardStatus::FINESSED`, `BLUFFED`, `MAYBE_BLUFFED`, `F_MAYBE_BLUFFED`
-  (`include/hanabi/basics/card.h:27-32`) and the entire `Connection` variant
-  set (`include/hanabi/basics/connection.h:20-117`) are inherited from the
-  Python/Scala port and are **never set by reactor code**. The one "finesse"
-  the convention plays is the rank-reactive fallback of §1a.5.
-- **Good Touch inference is disabled.** `Game::good_touch` is left `false`
-  (`include/hanabi/basics/game.h:97`), so `good_touch_elim`
-  (`src/basics/player_elim.cpp:319-352`) never runs in production
-  (v0.39, commit `6219f17`). Good touch survives only as an *evaluation* term
-  (`state_eval.cpp:237-244`) and via `bad_touch_result`.
-- **Three different definitions of "chop" coexist.** This is a genuine
-  hazard when reading the code:
-
-  | Definition | Used by | Cite |
-  |---|---|---|
-  | CTD'd card, else **newest** unclued status-NONE card, gated by `zcs_turn` | `Game::chop` — the discard decision | `decide.cpp:404-417` |
-  | **Oldest** unclued card (`lock_order`) | `ref_discard`'s lock detection | `interpret_clue.cpp:330-337` |
-  | **Oldest** unclued card | the pink promise | `src/conventions/variants/pinkish.cpp:31-37` |
-
+  The contrast matters: `CardStatus::SARCASTIC` and `GENTLEMANS_DISCARD` **are**
+  live (`decide.cpp:296-305`, `game.cpp:522-523`). They are not port leftovers.
 - **Some conventional rules live outside the `interpret_*` files** — notably
   the critical-discard clue filter (`decide.cpp:498-537`), most-recent-CTD
   enforcement (`decide.cpp:902-926`), and the force-play override
@@ -600,8 +615,8 @@ section applies to them too — easy to miss.
 Also pinkish-only:
 
 - **Pink promise** (`pinkish.cpp:18-55`). A rank clue that newly touches the
-  receiver's chop — here the **oldest** unclued card (`:30-37`) — promises
-  that the chop has that rank. If the observer can see the chop and the rank
+  receiver's **lock slot** — the oldest unclued card (`:30-37`), *not* the chop —
+  promises that card has that rank. If the observer can see it and the rank
   doesn't match, the whole stable reading is aborted before any branch can
   stamp a partial interpretation (`interpret_clue.cpp:443-445`). With
   `pink_s`, a special rank of 5 also permits a spoken 4, and a special rank of
@@ -634,25 +649,33 @@ at `state_eval.cpp:137-140`).
 `reversed` is orthogonal to `inverted` — a suit could in principle be both
 (`include/hanabi/basics/variant.h:32-35`).
 
-### 1b.4 Brownish (Brown, Muddy, Cocoa, Null) — trash chop move
+### 1b.4 Brownish (Brown, Muddy, Cocoa, Null) — trash reveal
 
-`brownish_tcm_applies` (`src/conventions/variants/brownish.cpp:19-40`): a
+`brownish_trash_reveal` (`src/conventions/variants/brownish.cpp:19-40`): a
 **rank** clue to an **unloaded** target that does **not** touch their newest
 slot, in a game where some brown suit still has cards left to play, is read as
-`REVEAL` (a trash chop move) instead of falling through to `ref_play`
+`REVEAL` (a trash reveal) instead of falling through to `ref_play`
 (`interpret_clue.cpp:611-613`).
 
 ### 1b.5 Inverted suits (Orange, Dark Orange) — the buttons swap
 
 This is the most invasive variant in the codebase. For an inverted suit the
-*game rule* swaps the two action buttons: `PerformPlay` sends the card to the
-discard pile, and `PerformDiscard` is a play attempt onto the stack
+*game rule* swaps what the two buttons do: a **pitch** (press Play,
+`PerformPlay`) sends the card to the discard pile and regains a clue, and a
+**chuck** (press Discard, `PerformDiscard`) is a play attempt onto the stack
 (`src/basics/game.cpp:228-247`, `:312-326`).
 
-Critically: **`CALLED_TO_PLAY` and `CALLED_TO_DISCARD` are physical action
-labels, not semantic ones** (`decide.cpp:644-653`). To get an orange card onto
-its stack the convention must stamp **CTD**, because CTD dispatches
-`PerformDiscard`, which the inversion turns into a play.
+Critically: **`CALLED_TO_PLAY` and `CALLED_TO_DISCARD` name buttons, not
+outcomes** (`decide.cpp:644-653`). CTP means *pitch*, CTD means *chuck*, and the
+game rule decides where the card lands. So to get an orange card onto its stack
+the convention must stamp **CTD**.
+
+A third orientation lurks on the wire. The **server reports outcomes** — an
+orange chuck of a playable card arrives as `type: "play"` — while the engine's
+`on_play` / `on_discard` are button-oriented, so `orient_action_for_engine`
+(`src/basics/action.cpp:56-72`) flips inverted-suit actions before dispatch
+(`src/net/commands.cpp:393-397`). An inbound `type: "play"` on an orange card
+therefore means the player *chucked* it.
 
 Every place the convention compensates, all in
 `src/conventions/variants/inverted.cpp`:
@@ -661,10 +684,10 @@ Every place the convention compensates, all in
 |---|---|---|
 | `is_inverted_id` / `target_is_inverted` | Is this identity / this card on an inverted suit? | `:21-29` |
 | `called_focus_status` | Return CTD instead of CTP when the focus could be orange. | `:53-61` |
-| `would_lose_inverted_reacter` | Reject a candidate whose resolution would `target_play` an orange reacter card — that would `PerformPlay` it into the discard pile, losing the copy for nothing. Also rejects `target_discard` on a *non-playable* orange, which would strike. | `:31-51` |
-| `orange_chop_save` | Rank-reactive Phase C. Only fires when the receiver's chop is orange; encodes "receiver `PerformPlay`s their chop" — a clean voluntary loss that avoids the misplay strike a `PerformDiscard` of a non-playable orange would cause. Non-orange chops deliberately bail, because the observer can't run the critical check on their own card. | `:85-148` |
+| `would_lose_inverted_reacter` | Reject a candidate whose resolution would `target_play` an orange reacter card — that would *pitch* it into the discard pile, losing the copy for nothing. Also rejects `target_discard` on a *non-playable* orange, which would strike. | `:31-51` |
+| `orange_chop_save` | Rank-reactive Phase C. Only fires when the receiver's chop is orange; encodes "receiver **pitches** their chop" — a clean voluntary loss that avoids the misplay strike a chuck of a non-playable orange would cause. Non-orange chops deliberately bail, because the observer can't run the critical check on their own card. The chop here is `Game::chop`'s positional fallback: `:91-96` scans for the newest unclued status-`NONE` card. | `:85-148` |
 | `make_discard_for_simulation` | In `advance()`'s simulation, an inverted non-playable card must use `failed=true`, or `with_play` would jump the stack to a non-playable rank and corrupt the simulated state. | `:63-71` |
-| `discard_advances_stack`, `possible_has_inverted` | Used by the discard-safety filters of §2.3. | `:73-83` |
+| `discard_advances_stack`, `possible_has_inverted` | Used by the chuck-safety filters of §2.3. | `:73-83` |
 
 In both reactive paths, `target_is_inverted(target)` **swaps the reacter's
 intended action** so that the receiver's standard reading of
@@ -731,7 +754,7 @@ returns short-circuits the rest.
 | Stage | What it does | Cite |
 |---|---|---|
 | 0 | **Compute** (not yet return) the urgent action: the first card in our hand with `meta.urgent`, converted to a Play or Discard. Guarded by empathy sanity checks — never play a card whose every possibility is basic trash, never discard one whose every possibility is critical. | `:605-662` |
-| 0b | **Urgent Bob-save override.** If we can clue, a reactive is pending with us as reacter, the receiver isn't Bob, Bob is unloaded, and Bob's chop is *actually* critical from our full visibility → replace our urgent action with the best clue to Bob. | `:615-640` |
+| 0b | **Urgent Bob-protection override.** If we can clue, a reactive is pending with us as reacter, the receiver isn't Bob, Bob is unloaded, and Bob's chop is *actually* critical from our full visibility → replace our urgent action with the best clue to Bob. | `:615-640` |
 | 1 | **Endgame fork**, when `rem_score() <= num_suits + 1`: first `forced_endgame_action`, then the endgame solver. | `:664-684` |
 | 2 | **Return the urgent action.** Note the ordering: the endgame solver *outranks* the convention's urgent signal. | `:686` |
 | 3–5 | Build the candidate lists: plays, clues, discards. | `:688-820` |
@@ -787,12 +810,23 @@ In the endgame the solver breaks all win-rate ties toward plays
 `potential_forced_play` — we hold a play whose successor is visibly in the
 pending reacter's hand, so discarding would break the chain (`:822-841`).
 
-**`chop()`** (`:404-417`): any explicitly CTD'd card wins; otherwise the
-**newest** unclued card with status NONE, gated by `zcs_turn` so cards drawn
-after the team hit zero clues are excluded.
+**`chop()`** (`:404-417`): an explicitly CTD'd card wins — currently the newest
+such card *in the hand*, though the convention says the most recent by
+`signal_turn`, see [TODO.md](TODO.md); otherwise the **newest** unclued card with
+status NONE, gated by `zcs_turn` so cards drawn after the team hit zero clues are
+excluded. Any non-NONE status disqualifies a card, so a locked hand has no chop.
+
+**A player always chucks their chop**, except when its inference is a known
+orange card, which is **pitched** instead (`:934-943`). Note the "except" is
+narrower than it looks and is enforced *structurally*: the chop only enters the
+candidate pool when `all_plays` is empty (`:875-878`), so a chop is never
+playable, and a known-orange **playable** is routed through `all_plays` as a chuck
+that advances the stack (`:808-813`). Don't add a playability test at `:934` — and
+don't remove the `all_plays.empty()` gate without noticing that `:934` would then
+pitch a playable orange away.
 
 **`has_ptd()`** — "does Bob have permission to discard?" (`:419-458`), the
-convention's entire save mechanism compressed into one ladder:
+discard-permission gate, one ladder:
 
 | Condition | Verdict | Cite |
 |---|---|---|
@@ -804,8 +838,9 @@ convention's entire save mechanism compressed into one ladder:
 
 Candidate construction (`:848-945`), in order: known trash → the
 **orange-safety filter**, which drops empathy-trash candidates whose
-`possible` still contains an inverted-suit identity, since discarding those is
-a play attempt that can strike (`:860-871`) → chop discard, only when not
+`possible` still contains an inverted-suit identity, since chucking those is
+a play attempt that can strike (`:860-871`) — note it guards only the
+known-trash pool, the chop being added after it → chop discard, only when not
 locked, no plays available, and `has_ptd()` (`:875-879`) → ordering, where a
 pending reactive restricts us to the `expected` set (`:880-901`).
 
@@ -1022,7 +1057,8 @@ Concrete protections:
   explicitly CTP'd cards (`decide.cpp:232-257`), pinned by
   `tests/test_basics/test_strike_preserves_ctp.cpp`.
 - Critical protection: the `−20`-per-lost-point term, the CTD-on-critical
-  penalty, the `find_all_clues` critical guard, the urgent Bob-save, `bdr_val`,
+  penalty, the `find_all_clues` critical guard, the urgent Bob-protection
+  override, `bdr_val`,
   and `locked_discard`'s critical minimisation.
 
 **Where the bot accepts risk**: it will take an endgame line at a 1% win rate
