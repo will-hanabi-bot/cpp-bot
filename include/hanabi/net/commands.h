@@ -64,6 +64,19 @@ class BotClient {
   // all_plays field; new games inherit it at on_init.
   bool all_plays_mode_ = false;
 
+  // Which convention NEW games run (seeded from BotConfig::convention in
+  // the ctor; changed via "/setall reactor|reactor0" in chat). Deliberately
+  // NOT propagated into running games — a mid-game convention switch would
+  // desync the table's shared interpretation, so the change lands at the
+  // next on_init. 4+ player games always run REACTOR (reactor0 is a
+  // 3-player convention for now); the per-game resolution happens in
+  // on_init.
+  Convention convention_mode_ = Convention::REACTOR;
+  // reactor0 /rlocks override. nullopt = use the variant's default
+  // (starting required efficiency <= 1.42). Set via "/rlocks on|off";
+  // propagated into every active Game like all_plays.
+  std::optional<bool> rlocks_mode_;
+
   // Dedicated compute thread for take_action. Without this, the long-running
   // endgame solver blocks the network io_context (held by BotTransport), the
   // server's WS heartbeat goes unanswered, and the connection is closed (the

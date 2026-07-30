@@ -1,13 +1,19 @@
 # The Reactor Convention, as implemented
 
 This is the **ruling reference** for how this bot interprets clues and how it
-chooses actions. Where this document and the code disagree, that is a bug in
-one of them — every rule below cites the `file:line` that implements it, so
-the disagreement can be settled.
+chooses actions **when a game runs the reactor convention**. Where this
+document and the code disagree, that is a bug in one of them — every rule
+below cites the `file:line` that implements it, so the disagreement can be
+settled.
+
+Each convention owns its docs in `src/conventions/<name>/`. The sibling
+[reactor0](../reactor0/CONVENTION.md) is the simpler convention. Which one a
+game runs is `Game::convention`; see the repo-root README for selection.
 
 Terminology is defined in [GLOSSARY.md](GLOSSARY.md). A high-level overview is
-in [README.md](README.md). Convention that is legal but not yet implemented is
-tracked in [TODO.md](TODO.md) — this document describes only what the code does.
+in [README.md](../../../README.md). Convention that is legal but not yet
+implemented is tracked in [TODO.md](../../../TODO.md) — this document
+describes only what the code does.
 
 Two conventions of the document itself:
 
@@ -173,7 +179,7 @@ intersected with the trash set and `meta.trash` is set. No status is stamped —
 the card is known garbage, and **no play is called**. The convention says this
 should instead be read as a referential play clue, as if the trash cards had been
 touched by a colour clue; that is not implemented, see
-[TODO.md](TODO.md). Note the loop iterates
+[TODO.md](../../../TODO.md). Note the loop iterates
 `variant->touch_possibilities(kind, value)` rather than assuming
 `Identity(s, clue.value)`, so e.g. Pink-Fives can't be misread as a trash push
 (`:450-458`).
@@ -424,7 +430,7 @@ It is legal convention — the receiver can tell *after* the reaction that their
 target is not actually playable, so they mark it one-away-from-playable and chuck
 their chop as normal — but this implementation neither initiates nor decodes one,
 because `:824-838` is exactly the bluff case and returns `nullopt`. Tracked in
-[TODO.md](TODO.md).
+[TODO.md](../../../TODO.md).
 
 **Phase C — orange chop rescue**, `:870-871` → §1b.5.
 

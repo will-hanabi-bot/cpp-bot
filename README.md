@@ -16,8 +16,8 @@ roughly 50× faster per primitive operation. See
 | File | What it is for |
 |---|---|
 | **README.md** (this file) | Overview, build, and run instructions |
-| [CONVENTION.md](CONVENTION.md) | **The ruling reference** for what a clue means and how the bot decides |
-| [GLOSSARY.md](GLOSSARY.md) | Every domain term, defined, with code references |
+| [CONVENTION.md](src/conventions/reactor/CONVENTION.md) | **The ruling reference** for what a clue means and how the bot decides |
+| [GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) | Every domain term, defined, with code references |
 | [TODO.md](TODO.md) | Convention that is legal but not yet implemented |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for agents: version bumps, test policy, the bug-report workflow |
 | [VERIFICATION.md](VERIFICATION.md) | Historical port-era verification notes and benchmarks |
@@ -47,11 +47,11 @@ everyone's hand **except their own**.
 The whole difficulty is that a clue's literal content ("these two cards are
 red") is far less than what the team needs. Conventions assign *extra* agreed
 meaning to a clue based on which cards it touched and the situation — that
-shared meaning is what [CONVENTION.md](CONVENTION.md) specifies.
+shared meaning is what [CONVENTION.md](src/conventions/reactor/CONVENTION.md) specifies.
 
 ## 2. The Reactor convention in one page
 
-[CONVENTION.md](CONVENTION.md) is authoritative; this is orientation.
+[CONVENTION.md](src/conventions/reactor/CONVENTION.md) is authoritative; this is orientation.
 
 Two orientation facts first:
 
@@ -96,7 +96,7 @@ Cards are kept alive by the two stable readings rather than by a dedicated save
 clue: a referential discard implicitly protects everything it does not name, and
 a lock protects a whole hand. The reactive family has its own **finesse** — the
 reacter plays a card that connects with a one-away-from-playable card in the
-receiver's hand — see [CONVENTION.md §1a.5](CONVENTION.md).
+receiver's hand — see [CONVENTION.md §1a.5](src/conventions/reactor/CONVENTION.md).
 
 ## 3. Repository layout
 

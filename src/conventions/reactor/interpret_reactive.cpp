@@ -68,6 +68,27 @@ IdentitySet effective_possible_for(const Game& game, int self_order) {
   });
 }
 
+std::vector<std::pair<int, int>> sacrifice_targets(
+    const Game& game, int receiver, const std::vector<int>& prev_kt) {
+  const State& state = game.state;
+  std::vector<std::pair<int, int>> sacrifices;
+  for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
+    int o = state.hands[receiver][i];
+    if (contains(prev_kt, o)) continue;
+    auto id = state.deck[o].id();
+    if (id && !state.is_critical(*id)) sacrifices.emplace_back(o, static_cast<int>(i));
+  }
+  std::sort(sacrifices.begin(), sacrifices.end(),
+             [&](const auto& a, const auto& b) {
+               auto ai = state.deck[a.first].id();
+               auto bi = state.deck[b.first].id();
+               int ka = -game.common.playable_away(*ai) * 10 + (5 - ai->rank);
+               int kb = -game.common.playable_away(*bi) * 10 + (5 - bi->rank);
+               return ka < kb;
+             });
+  return sacrifices;
+}
+
 namespace {
 
 struct ReactiveContext {
@@ -435,21 +456,8 @@ std::optional<ClueInterp> interpret_reactive_colour(const Game& prev, Game& game
     }
   }
 
-  std::vector<std::pair<int, int>> sacrifices;
-  for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
-    int o = state.hands[receiver][i];
-    if (contains(prev_kt, o)) continue;
-    auto id = state.deck[o].id();
-    if (id && !state.is_critical(*id)) sacrifices.emplace_back(o, static_cast<int>(i));
-  }
-  std::sort(sacrifices.begin(), sacrifices.end(),
-             [&](const auto& a, const auto& b) {
-               auto ai = state.deck[a.first].id();
-               auto bi = state.deck[b.first].id();
-               int ka = -game.common.playable_away(*ai) * 10 + (5 - ai->rank);
-               int kb = -game.common.playable_away(*bi) * 10 + (5 - bi->rank);
-               return ka < kb;
-             });
+  std::vector<std::pair<int, int>> sacrifices =
+      sacrifice_targets(game, receiver, prev_kt);
 
   // Pre-clued slots that THIS clue's narrowing disambiguates into
   // common-knowledge trash: the clue's point is that disambiguation, so

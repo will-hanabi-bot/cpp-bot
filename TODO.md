@@ -1,12 +1,12 @@
 # TODO — convention that is legal but not implemented
 
-[CONVENTION.md](CONVENTION.md) describes the bot **as it behaves**. This file is
+[CONVENTION.md](src/conventions/reactor/CONVENTION.md) describes the bot **as it behaves**. This file is
 the other half: rules that are part of the convention and legal to play, but that
 the current build does not produce or decode. Anything here is a known gap, not a
 disagreement about what the convention says.
 
 Delete an entry when it ships, and update the corresponding
-`CONVENTION.md` / [GLOSSARY.md](GLOSSARY.md) wording in the same commit.
+`CONVENTION.md` / [GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) wording in the same commit.
 
 ---
 

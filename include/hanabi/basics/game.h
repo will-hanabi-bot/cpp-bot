@@ -22,6 +22,7 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/clue.h"
+#include "hanabi/basics/convention.h"
 #include "hanabi/basics/identity.h"
 #include "hanabi/basics/identity_set.h"
 #include "hanabi/basics/interp.h"
@@ -38,8 +39,10 @@ struct Note {
   bool operator==(const Note&) const = default;
 };
 
-// Reactor-specific waiting-connection record. Lives on Game to keep the
-// data model flat (we have one convention; subclassing isn't needed).
+// Waiting-connection record for the reactive family. Lives on Game to keep
+// the data model flat (conventions share the struct; we don't subclass).
+// Under reactor, focus_slot is the reactive focus slot; under reactor0 it
+// is the clue-value anchor — both feed the same slot arithmetic.
 struct ReactorWC {
   int giver = 0;
   int reacter = 0;
@@ -60,6 +63,11 @@ struct ReactorWC {
   // be triaged without re-deriving the reacter's called slot (added while
   // debugging replay 1916791).
   int react_order = -1;
+  // Snapshot of Game::allow_reactive_locks at WC creation (reactor0 only):
+  // resolution happens a turn later and /rlocks can be flipped mid-game,
+  // so the reading must bind at clue time. Reactor never reads it. Kept
+  // LAST — reactor aggregate-initializes the struct positionally.
+  bool rlocks = false;
 
   bool operator==(const ReactorWC&) const = default;
 };
@@ -101,7 +109,18 @@ class Game {
   // clues are play+play (standard Reactor convention).
   bool all_plays = false;
 
-  // Reactor-specific.
+  // Which convention this game interprets clues under. Defaults to REACTOR
+  // so historical snapshots (which predate the field) and existing tests
+  // replay under the convention they were played with; new live games get
+  // BotClient's convention_mode_ at on_init.
+  Convention convention = Convention::REACTOR;
+  // reactor0 only: the reactive-lock reading (a reactive dc-target on the
+  // receiver's oldest slot reads as a whole-hand lock). Set at game init
+  // from the variant's starting required efficiency, or the /rlocks
+  // override. Reactor ignores it.
+  bool allow_reactive_locks = true;
+
+  // Reactive-family state (shared by reactor and reactor0).
   std::vector<ReactorWC> waiting;
   int zcs_turn = -1;
 

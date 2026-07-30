@@ -21,6 +21,7 @@ find_package(Boost CONFIG REQUIRED)
 add_library(hanabi_core STATIC
   src/basics/action.cpp
   src/basics/card.cpp
+  src/basics/convention.cpp
   src/basics/clue_result.cpp
   src/basics/connection.cpp
   src/basics/decide.cpp
@@ -91,6 +92,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_state.cpp
   tests/test_basics/test_game.cpp
   tests/test_basics/test_chop.cpp
+  tests/test_basics/test_snapshot_convention.cpp
   tests/test_basics/test_reactive.cpp
   tests/test_basics/test_stable_ref_discard.cpp
   tests/test_basics/test_strike_preserves_ctp.cpp

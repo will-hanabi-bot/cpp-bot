@@ -11,6 +11,16 @@ namespace hanabi::reactor {
 // Reactor's slot arithmetic: target/react slot mapping. 1-indexed.
 int calc_slot(int focus_slot, int slot, int hand_size);
 
+// Compute (react_slot, target_slot) for the reacter's played/discarded
+// order. Returns nullopt if the mapping fails (order not in reacter's prev
+// hand, target slot out of range, or the target card already left the
+// receiver's hand). Anchor-agnostic — wc.focus_slot may hold reactor's
+// focus slot or reactor0's clue-value anchor.
+std::optional<std::pair<int, int>> calc_target_slot(const Game& prev,
+                                                    const Game& game,
+                                                    int order,
+                                                    const ReactorWC& wc);
+
 // Mark receiver-slot as CalledToDiscard, filtering out criticals from inferred.
 // Mutates game.common and game.meta. target_slot is 1-indexed.
 void target_i_discard(const Game& prev, Game& game, const ReactorWC& wc,

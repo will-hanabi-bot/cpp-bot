@@ -7,8 +7,11 @@ When a game starts, the bot publishes that version as a note on card order 0
 so observers can confirm which build is running.
 
 **Every deployed change must bump `kBotVersion`** (patch bump for fixes, minor
-bump for behavioural changes). After making the change, **write the new version
-number in the change summary** you return to the user.
+bump for behavioural changes, **major bump for a cross-version compatibility
+break** — changing the default convention, or anything else that changes what
+existing clues mean to partners running an older build). After making the
+change, **write the new version number in the change summary** you return to
+the user.
 
 **Every version bump must be committed and pushed to `origin/master`** with a
 commit message summarising the changes. Use a HEREDOC for multi-line messages.
@@ -17,7 +20,8 @@ before pushing if there's any ambiguity about whether the change is ready to
 deploy.
 
 **On every version bump, check that the repo's `.md` docs are still accurate**
-(`CONVENTION.md`, `GLOSSARY.md`, `README.md`, `TODO.md`, `VERIFICATION.md`, this
+(each convention's `CONVENTION.md` / `GLOSSARY.md` under
+`src/conventions/<name>/`, plus `README.md`, `TODO.md`, `VERIFICATION.md`, this
 file, and any other `.md` describing implementation status). Docs or code
 comments that claim work is "pending", "stubbed", or "Phase N" must be updated or
 marked historical once the work has shipped. VERIFICATION.md previously went
@@ -29,30 +33,37 @@ closes one of its entries, delete the entry and update the `CONVENTION.md` /
 
 ## Convention documentation
 
-`CONVENTION.md` is the **ruling reference** for what a clue means and how the
-bot decides. `GLOSSARY.md` defines the project's terminology. Both are written
-for a reader with no prior context, and both cite `file:line` for every rule so
-that a claim can be checked against the code.
+Each convention owns its docs: `src/conventions/<name>/CONVENTION.md` is the
+**ruling reference** for what a clue means and how the bot decides under that
+convention, and `src/conventions/<name>/GLOSSARY.md` defines its terminology.
+Both are written for a reader with no prior context, and both cite `file:line`
+for every rule so that a claim can be checked against the code. Which
+convention a game runs is `Game::convention`; replay tests replay under the
+convention recorded in their snapshot.
 
 **Every version bump that changes clue interpretation or decision-making must
-update `CONVENTION.md` in the same commit.** Specifically:
+update the `CONVENTION.md` of every convention whose behaviour changed, in the
+same commit.** A change to shared engine code (the `decide.cpp` seam, `elim`,
+the eval layer) updates all conventions' docs. Specifically:
 
 - Changing an `interpret_*` branch, a target-selection pool or its ordering, a
-  variant rule, or the stable/reactive dispatcher → update the corresponding
-  rule in **§1 Convention**, including its `file:line` citation and the replay
-  that motivated it.
+  variant rule, or a convention's dispatcher → update the corresponding
+  rule in that convention's **§1 Convention**, including its `file:line`
+  citation and the replay that motivated it.
 - Changing `eval_action` / `get_result` / `advance` / `eval_state` /
   `eval_game` terms, the `take_action` ladder, gates, thresholds, or the
-  endgame solver's parameters → update **§2 Decision Making**.
-- Introducing a new term, status, flag, or role → add it to `GLOSSARY.md`.
+  endgame solver's parameters → update **§2 Decision Making** (shared by all
+  conventions; each convention's doc states its deltas).
+- Introducing a new term, status, flag, or role → add it to the owning
+  convention's `GLOSSARY.md`.
 - Line numbers shift constantly. When editing a documented file, re-check the
   citations for the rules in it, not just the rule you changed.
 
 A `CONVENTION.md` that disagrees with the code is a bug in one of them. It is
 the document a human or a fresh agent is expected to read *instead of* reading
-2 900 lines of `src/conventions/`, so silent drift is expensive. If a change
-makes a documented rule obsolete, delete the rule — do not leave it alongside
-its replacement.
+thousands of lines of `src/conventions/`, so silent drift is expensive. If a
+change makes a documented rule obsolete, delete the rule — do not leave it
+alongside its replacement.
 
 ## Test changes
 

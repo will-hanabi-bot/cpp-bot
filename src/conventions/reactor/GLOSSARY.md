@@ -7,8 +7,8 @@ only the reactor / referential-sieve meaning is recorded here. Entries flagged
 **⚠** describe something the code declares but does not do.
 
 For how the terms fit together see [CONVENTION.md](CONVENTION.md); for the
-project overview see [README.md](README.md); for convention that is legal but not
-yet implemented see [TODO.md](TODO.md).
+project overview see [README.md](../../../README.md); for convention that is legal but not
+yet implemented see [TODO.md](../../../TODO.md).
 
 Two orientation facts that most entries depend on:
 

@@ -18,11 +18,10 @@ int calc_slot(int focus_slot, int slot, int hand_size) {
   return other == 0 ? hand_size : other;
 }
 
-namespace {
-
 // Compute (react_slot, target_slot) for the reacter's played/discarded order.
 // Returns nullopt if the mapping fails (order not in reacter's prev hand or
-// target slot out of range).
+// target slot out of range). Exported: reactor0's reaction resolution uses
+// the same mapping with a clue-value anchor in wc.focus_slot.
 std::optional<std::pair<int, int>> calc_target_slot(const Game& prev, const Game& game,
                                                        int order, const ReactorWC& wc) {
   const auto& prev_hand = prev.state.hands[wc.reacter];
@@ -41,6 +40,8 @@ std::optional<std::pair<int, int>> calc_target_slot(const Game& prev, const Game
   }
   return std::make_pair(react_slot, target_slot);
 }
+
+namespace {
 
 // Mark receive_order as trash in game.meta if its inferred set is empty.
 void mark_trash_if_empty(Game& game, int receive_order) {

@@ -51,6 +51,15 @@ std::string replace_all(std::string s, const std::string& from, const std::strin
 
 BotClient::BotClient(BotTransport& transport, const BotConfig& config)
     : transport_(transport), config_(config) {
+  // Seed the convention for new games from config. Unknown names keep the
+  // built-in default rather than dying — a typo'd `convention=` argv should
+  // not take the bot down.
+  if (auto c = parse_convention(config.convention)) {
+    convention_mode_ = *c;
+  } else if (!config.convention.empty()) {
+    std::cerr << "unknown convention '" << config.convention
+              << "', keeping " << convention_name(convention_mode_) << "\n";
+  }
   // Keep the compute io_context alive even when its queue is momentarily
   // empty, and run it on a dedicated thread so long take_action calls don't
   // block the network io_context.
@@ -271,6 +280,15 @@ void BotClient::on_init(const json& data) {
   game->in_progress = !is_replay;
   game->catchup = true;
   game->all_plays = all_plays_mode_;
+  // Per-game convention resolution: reactor0 is (for now) a 3-player
+  // convention, so any other seat count falls back to reactor for this
+  // game. The resolved value — not convention_mode_ — is what the order-0
+  // note and the game_init record report.
+  int np = static_cast<int>(game->state.names.size());
+  game->convention =
+      (convention_mode_ == Convention::REACTOR0 && np == 3)
+          ? Convention::REACTOR0
+          : Convention::REACTOR;
   games_[tid] = std::move(game);
   action_time_[tid] = false;
   everyone_connected_[tid] = false;
@@ -298,7 +316,10 @@ void BotClient::on_init(const json& data) {
               {"names", games_[tid]->state.names},
               {"is_replay", is_replay},
               {"bot_version", kBotVersion},
-              {"all_plays", all_plays_mode_}});
+              {"all_plays", all_plays_mode_},
+              {"convention",
+               std::string(convention_name(games_[tid]->convention))},
+              {"rlocks", games_[tid]->allow_reactive_locks}});
     game_loggers_[tid] = std::move(logger);
   }
   transport_.queue_send("getGameInfo2", json{{"tableID", tid}});

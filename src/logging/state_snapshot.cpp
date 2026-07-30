@@ -243,6 +243,8 @@ json build_replay_section(const Game& game) {
   replay["names"] = s.names;
   replay["our_player_index"] = s.our_player_index;
   replay["all_plays"] = game.all_plays;
+  replay["convention"] = std::string(convention_name(game.convention));
+  replay["rlocks"] = game.allow_reactive_locks;
   replay["zcs_turn"] = game.zcs_turn;
 
   // Ground-truth deck: for every order that has a known identity in
@@ -358,6 +360,7 @@ json build_debug_section(const Game& game) {
                               {"inverted", wc.inverted},
                               {"turn", wc.turn},
                               {"all_plays", wc.all_plays},
+                              {"rlocks", wc.rlocks},
                               {"react_order", wc.react_order}});
   }
   dbg["waiting"] = std::move(waiting);
@@ -405,6 +408,12 @@ Game apply_snapshot(const json& record) {
   Game game = Game::create(0, std::move(state));
   game.catchup = true;
   game.all_plays = replay.value("all_plays", false);
+  // Missing key => "reactor": snapshots predating the field were played
+  // under reactor, and every historical replay test depends on that.
+  game.convention =
+      parse_convention(replay.value("convention", "reactor"))
+          .value_or(Convention::REACTOR);
+  game.allow_reactive_locks = replay.value("rlocks", true);
 
   for (const auto& a_json : replay.at("actions")) {
     Action a = action_from_internal_json(a_json);

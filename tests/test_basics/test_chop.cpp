@@ -1,4 +1,4 @@
-// Game::chop selection rules (CONVENTION.md §2.3).
+// Game::chop selection rules (src/conventions/reactor/CONVENTION.md §2.3).
 //
 // Two passes: an explicit CALLED_TO_DISCARD wins, and among several the one
 // with the largest signal_turn is the chop -- not the newest by hand position.
