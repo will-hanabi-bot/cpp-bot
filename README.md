@@ -1,7 +1,8 @@
-# cpp-bot — a Hanabi bot playing the Reactor convention
+# cpp-bot — a Hanabi bot playing the Reactor conventions
 
 A C++20 bot that plays [Hanabi](https://hanab.live) on hanab.live using the
-**Reactor** convention. It logs in over HTTPS, holds a WebSocket session, joins
+**Reactor** conventions — **reactor0** (the default, a minimalist 3-player
+convention) and **reactor** (the original). It logs in over HTTPS, holds a WebSocket session, joins
 or creates tables, and plays full games — including an exact-win-probability
 endgame solver.
 
@@ -16,8 +17,10 @@ roughly 50× faster per primitive operation. See
 | File | What it is for |
 |---|---|
 | **README.md** (this file) | Overview, build, and run instructions |
-| [CONVENTION.md](src/conventions/reactor/CONVENTION.md) | **The ruling reference** for what a clue means and how the bot decides |
-| [GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) | Every domain term, defined, with code references |
+| [reactor0/CONVENTION.md](src/conventions/reactor0/CONVENTION.md) | **The ruling reference** for the default convention |
+| [reactor0/GLOSSARY.md](src/conventions/reactor0/GLOSSARY.md) | reactor0 terms, defined, with code references |
+| [reactor/CONVENTION.md](src/conventions/reactor/CONVENTION.md) | **The ruling reference** for the reactor convention |
+| [reactor/GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) | Every domain term, defined, with code references |
 | [TODO.md](TODO.md) | Convention that is legal but not yet implemented |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for agents: version bumps, test policy, the bug-report workflow |
 | [VERIFICATION.md](VERIFICATION.md) | Historical port-era verification notes and benchmarks |
@@ -47,11 +50,31 @@ everyone's hand **except their own**.
 The whole difficulty is that a clue's literal content ("these two cards are
 red") is far less than what the team needs. Conventions assign *extra* agreed
 meaning to a clue based on which cards it touched and the situation — that
-shared meaning is what [CONVENTION.md](src/conventions/reactor/CONVENTION.md) specifies.
+shared meaning is what the convention specifies — see §2.
 
-## 2. The Reactor convention in one page
+## 2. The conventions in one page
 
-[CONVENTION.md](src/conventions/reactor/CONVENTION.md) is authoritative; this is orientation.
+Two conventions ship. Which one a game runs is decided at game start:
+**reactor0** is the default, but only for 3-player games — 4+ players fall
+back to **reactor**. `/setall reactor|reactor0` switches it for new games,
+and the card-order-0 note names the convention actually in use.
+
+### Reactor0 (default)
+
+[reactor0/CONVENTION.md](src/conventions/reactor0/CONVENTION.md) is
+authoritative. Dispatch is purely positional — a clue to Bob is stable, a
+clue to anyone else is reactive. Stable colour clues are *direct* play
+clues (play the leftmost touched card that could be playable); stable rank
+clues run a six-priority ladder ending in reactor's referential discard.
+Reactive clues drop the focus concept: the anchor of
+`react_slot + target_slot ≡ anchor (mod hand size)` is the **clue value**
+itself — the rank, or a fixed per-colour value (red=1, yellow=2, green=3,
+blue=4, purple=5). Rank clues promise an even number of plays (2, or 0 for
+the double discard), colour clues exactly one.
+
+### Reactor
+
+[reactor/CONVENTION.md](src/conventions/reactor/CONVENTION.md) is authoritative; this is orientation.
 
 Two orientation facts first:
 
@@ -103,7 +126,8 @@ receiver's hand — see [CONVENTION.md §1a.5](src/conventions/reactor/CONVENTIO
 | Path | Contents |
 |---|---|
 | `src/basics/` | Game state, empathy/card knowledge, elimination, the clue dispatcher (`decide.cpp`) and action selection |
-| `src/conventions/reactor/` | The convention proper: `interpret_clue`, `interpret_reactive`, `interpret_reaction`, `state_eval` |
+| `src/conventions/reactor/` | The reactor convention: `interpret_clue`, `interpret_reactive`, `interpret_reaction`, `state_eval`, plus its `CONVENTION.md` / `GLOSSARY.md` |
+| `src/conventions/reactor0/` | The reactor0 convention (default): interpretation, colour values, efficiency, plus its `CONVENTION.md` / `GLOSSARY.md` |
 | `src/conventions/variants/` | Variant-specific convention rules: rainbow/pink tables, brownish, inverted (Orange), reversed |
 | `src/endgame/` | Exact win-probability solver, forced-endgame rules, winnability helpers |
 | `src/net/` | hanab.live client: HTTPS login, WebSocket transport, protocol codec, command dispatcher, notes |
@@ -371,7 +395,7 @@ Arguments are `key=value` pairs (matching the earlier Scala and Python bots):
 | `bot_to_join` | — | Absent = idle; `create` = make a table; otherwise the username to join |
 | `table` | `bots` | Table name when creating |
 | `max_players` | `5` | Start the game once this many players are seated |
-| `convention` | `Reactor1` | Convention name reported to the server |
+| `convention` | `reactor0` | Which convention new games use (`reactor0` or `reactor`); `/setall` overrides it at runtime |
 | `disconnect_on_game_end` | `false` | Exit after one game |
 
 Ctrl+C shuts the socket down cleanly. Connection failures retry with
@@ -384,8 +408,10 @@ available anywhere; the rest only in a private message.
 
 | Command | Where | Effect |
 |---|---|---|
-| `/settings` | anywhere | Print the variant's reactive slot tables |
-| `/allplays [on\|off]` | anywhere | Promote colour reactives to play+play. With no argument, reports the current setting |
+| `/settings` | anywhere | Print the active convention's reactive tables (reactor: slot tables; reactor0: colour values + rlocks) |
+| `/setall reactor\|reactor0` | anywhere | Switch which convention **new** games use, for every bot in the room. Running games keep theirs. Unrecognised values are ignored silently — other bot families answer `/setall` too |
+| `/rlocks [on\|off]` | anywhere | reactor0: enable/disable reactive locks, overriding the per-variant default. Retro-applies to running games. With no argument, reports the current setting |
+| `/allplays [on\|off]` | anywhere | reactor: promote colour reactives to play+play. With no argument, reports the current setting |
 | `/getversion` | anywhere | Report the running `kBotVersion` |
 | `/leaveall` | anywhere | Leave every table |
 | `/join [user]` | PM only | Join a table |
@@ -394,8 +420,10 @@ available anywhere; the rest only in a private message.
 | `/setvariant <name>` | PM only | Set the variant. `_` becomes a space, `+` becomes ` & ` |
 | `/terminate [table_id]` | PM only | Terminate a game |
 
-At the start of every game the bot writes its version as a note on card
-order 0, so observers can confirm which build is running.
+At the start of every game the bot writes its version **and the convention
+that game resolved to** as a note on card order 0 (e.g. `bot v2.0.0
+reactor0`), so observers can confirm which build is running and what its
+clues mean.
 
 ## 9. Debugging a game
 

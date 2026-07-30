@@ -13,7 +13,11 @@ struct BotConfig {
   std::string host = "hanab.live";
   int index = 0;
   std::optional<std::string> bot_to_join;  // nullopt = idle; "create" = make table; else username
-  std::string convention = "Reactor1";
+  // Which convention new games run: "reactor0" (default) or "reactor".
+  // Seeds BotClient::convention_mode_; "/setall reactor|reactor0" overrides
+  // it for the rest of the process. reactor0 additionally requires a
+  // 3-player game (see BotClient::on_init).
+  std::string convention = "reactor0";
   std::string table_name = "bots";
   int max_num_players = 5;
   bool disconnect_on_game_end = false;

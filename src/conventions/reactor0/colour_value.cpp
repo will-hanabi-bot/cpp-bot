@@ -86,6 +86,18 @@ std::vector<int> colour_value_table(const Variant& variant) {
   return table;
 }
 
+std::string format_settings(const Variant& variant, bool rlocks) {
+  auto table = colour_value_table(variant);
+  std::string out = "reactor0 — colour values: {";
+  for (size_t i = 0; i < table.size(); ++i) {
+    if (i) out += ", ";
+    out += variant.clue_colour_names[i] + "=" + std::to_string(table[i]);
+  }
+  out += "}, rank value: the rank, rlocks: ";
+  out += rlocks ? "on" : "off";
+  return out;
+}
+
 int colour_clue_value(const Variant& variant, int colour_index) {
   auto table = colour_value_table(variant);
   if (colour_index < 0 || colour_index >= static_cast<int>(table.size())) {

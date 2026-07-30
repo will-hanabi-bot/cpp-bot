@@ -71,7 +71,7 @@ class BotClient {
   // next on_init. 4+ player games always run REACTOR (reactor0 is a
   // 3-player convention for now); the per-game resolution happens in
   // on_init.
-  Convention convention_mode_ = Convention::REACTOR;
+  Convention convention_mode_ = Convention::REACTOR0;
   // reactor0 /rlocks override. nullopt = use the variant's default
   // (starting required efficiency <= 1.42). Set via "/rlocks on|off";
   // propagated into every active Game like all_plays.
@@ -133,10 +133,23 @@ class BotClient {
                        const std::string& room);
   void chat_rlocks(const std::vector<std::string>& args, const nlohmann::json& data,
                      const std::string& room);
+  void chat_setall(const std::vector<std::string>& args, const nlohmann::json& data,
+                     const std::string& room);
   void chat_version(const nlohmann::json& data, const std::string& room);
 
   // Helper: for commands that work from PM or a table room, pick the target table.
   std::optional<int> resolve_target_table(const std::string& room) const;
+
+ public:
+  // Test seam: the convention-selection state a game was created with.
+  // Games_ is private and Game is large; this exposes just the two mode
+  // fields so tests/test_net/test_setall.cpp can assert what on_init
+  // resolved without a friend declaration or a Game copy.
+  struct GameModes {
+    Convention convention;
+    bool allow_reactive_locks;
+  };
+  std::optional<GameModes> debug_game_snapshot(int table_id) const;
 };
 
 }  // namespace hanabi::net

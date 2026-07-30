@@ -13,6 +13,7 @@
 #include "hanabi/basics/options.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor0/colour_value.h"
 #include "hanabi/conventions/reactor0/efficiency.h"
 #include "hanabi/conventions/variants/reactive_table.h"
 #include "hanabi/instrumentation/timer.h"
@@ -175,6 +176,10 @@ void BotClient::on_chat(const json& data) {
   }
   if (cmd == "rlocks") {
     chat_rlocks(args, data, room);
+    return;
+  }
+  if (cmd == "setall") {
+    chat_setall(args, data, room);
     return;
   }
   if (cmd == "getversion") {
@@ -392,7 +397,12 @@ void BotClient::on_game_action_list(const json& data) {
     int notes_queued = 0;
     if (g.in_progress) {
       auto& table_notes = notes_[tid];
-      std::string version_note = std::string("bot ") + kBotVersion;
+      // Announce the version AND the convention this game resolved to
+      // (a 4+ player game says "reactor" even when reactor0 is selected),
+      // so observers can tell what a clue meant without asking. Costs no
+      // extra message — order 0's note is already sent.
+      std::string version_note = std::string("bot ") + kBotVersion + " " +
+                                 std::string(convention_name(g.convention));
       auto existing0 = table_notes.find(0);
       table_notes[0] = existing0 != table_notes.end()
                             ? version_note + " | " + existing0->second
@@ -843,10 +853,24 @@ void BotClient::chat_settings(const std::string& room) {
   // actually doing at this table). Fall back to the bot-wide setting if no
   // game exists for this table yet (e.g., between init events).
   bool all_plays = all_plays_mode_;
+  Convention conv = convention_mode_;
+  bool rlocks = rlocks_mode_.value_or(
+      hanabi::reactor0::default_allow_reactive_locks(*variant, num_players));
   auto game_it = games_.find(*tid);
-  if (game_it != games_.end() && game_it->second) all_plays = game_it->second->all_plays;
+  if (game_it != games_.end() && game_it->second) {
+    all_plays = game_it->second->all_plays;
+    conv = game_it->second->convention;
+    rlocks = game_it->second->allow_reactive_locks;
+  }
 
-  std::string msg = hanabi::reactor::variants::format_reactive_settings(*variant, hand_size, all_plays);
+  // Reactor0 has no reactive value table — its anchors are clue values —
+  // so it gets its own line. Reactor's output is left byte-identical
+  // (tests/test_reactor/test_reactive_table.cpp pins it verbatim).
+  std::string msg =
+      conv == Convention::REACTOR0
+          ? hanabi::reactor0::format_settings(*variant, rlocks)
+          : hanabi::reactor::variants::format_reactive_settings(*variant, hand_size,
+                                                                all_plays);
   transport_.queue_send(
       "chat",
       json{{"msg", msg}, {"recipient", ""}, {"room", "table" + std::to_string(*tid)}});
@@ -887,6 +911,37 @@ void BotClient::chat_allplays(const std::vector<std::string>& args, const json& 
     (void)tid;
   }
   reply(std::string("allplays is now ") + (turning_on ? "on" : "off"));
+}
+
+std::optional<BotClient::GameModes> BotClient::debug_game_snapshot(int table_id) const {
+  auto it = games_.find(table_id);
+  if (it == games_.end() || !it->second) return std::nullopt;
+  return GameModes{it->second->convention, it->second->allow_reactive_locks};
+}
+
+void BotClient::chat_setall(const std::vector<std::string>& args, const json& data,
+                              const std::string& room) {
+  // NOTE: `/setall` is not ours alone — other bot families in the same
+  // table room answer it with their own grammar (will-bot2 responds to
+  // "/setall 3"). Anything we don't recognise must be ignored SILENTLY:
+  // no usage reply, no state change. Only "reactor" / "reactor0" are ours.
+  if (args.size() < 2) return;
+  auto parsed = parse_convention(args[1]);
+  if (!parsed) return;
+
+  convention_mode_ = *parsed;
+  // Deliberately NOT propagated into running games: a mid-game convention
+  // switch would desync the table's shared interpretation. The change
+  // lands at the next on_init.
+  std::string text = username_ + ": convention " +
+                     std::string(convention_name(convention_mode_)) +
+                     " (from next game)";
+  if (data.value("recipient", "") == username_) {
+    chat_reply(text, data.value("who", ""));
+  } else {
+    transport_.queue_send(
+        "chat", json{{"msg", text}, {"recipient", ""}, {"room", room}});
+  }
 }
 
 void BotClient::chat_rlocks(const std::vector<std::string>& args, const json& data,
