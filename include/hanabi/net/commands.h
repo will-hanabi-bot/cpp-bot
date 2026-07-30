@@ -94,6 +94,14 @@ class BotClient {
   void on_game_over(const nlohmann::json& data);
   void on_database_id(const nlohmann::json& data);
 
+  // Game-end bookkeeping, shared by the two paths that can report it: the
+  // `gameOver` gameAction (the one that actually arrives) and a top-level
+  // `gameOver` command. Idempotent -- gated on games_in_progress_ -- so a
+  // table that reports both only finishes once. Deliberately leaves the
+  // logger open; it is closed by on_database_id once the database id
+  // arrives, which is strictly later than game end.
+  void finish_game(int tid, std::optional<int> end_condition);
+
   // Apply an inbound action through the game; updates per-table action_time.
   void apply_action(int table_id, const nlohmann::json& raw_action);
   // Check the gating conditions and queue an action if it's our turn.

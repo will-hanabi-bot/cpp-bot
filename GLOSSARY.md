@@ -154,6 +154,15 @@ receiver has to act. `src/basics/fix.cpp:157-183`.
 FinesseConn | PositionalConn`, inherited from the Python/Scala port — see
 CONVENTION.md §1a.8. `include/hanabi/basics/connection.h:116-117`.
 
+### database id
+The hanab.live id a finished game is stored under — the number in a
+`https://hanab.live/shared-replay/<id>` URL, and the one bug reports quote.
+Large (> 1 800 000). The server reveals it only at game end, in
+`finishOngoingGame`; the per-game log is then rewritten as
+`logs/{bot}-{database_id}.log` with `database_id` stamped on every record
+(`GameLogger::finalize_with_database_id`, `src/logging/game_logger.cpp`).
+Distinct from the *table id*.
+
 ### critical
 An identity with exactly one copy left undiscarded that is still useful.
 Losing it lowers the maximum achievable score. `src/basics/state.cpp:163-167`.
@@ -570,6 +579,13 @@ The reactive slot arithmetic:
 `hand_size`. Implemented by `calc_slot`, which is an involution in its second
 argument — hence usable in both directions.
 `src/conventions/reactor/interpret_reaction.cpp:16-19`.
+
+### table id
+The id of a live hanab.live table, small (hundreds or low thousands) and
+reused across games. It is what `init.tableID` carries, what `game_loggers_`
+is keyed on, and what a per-game log is named after **while the game runs**;
+it stays in every record as `game_id`. Replaced in the filename by the
+*database id* once the game ends.
 
 ### target_slot
 The receiver slot the reactive clue points at.

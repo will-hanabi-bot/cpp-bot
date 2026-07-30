@@ -214,14 +214,24 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  // Pull game_id + bot name from the first record we find that has them.
+  // Pull ids + bot name from the first record we find that has them. A
+  // finished log carries both: `game_id` is the live table id the game ran
+  // under, `database_id` is the hanab.live id its replay URL uses. Prefer
+  // the database id everywhere it is user-facing — that is the number in a
+  // bug report — but fall back to the table id for logs written before
+  // finalization (an in-flight game, or a build predating v1.12.0).
   int game_id = -1;
+  int database_id = -1;
   std::string bot_name;
   for (const auto& r : records) {
     if (game_id < 0 && r.contains("game_id")) game_id = r.value("game_id", -1);
+    if (database_id < 0 && r.contains("database_id")) {
+      database_id = r.value("database_id", -1);
+    }
     if (bot_name.empty() && r.contains("bot")) bot_name = r.value("bot", "");
-    if (game_id >= 0 && !bot_name.empty()) break;
+    if (game_id >= 0 && database_id >= 0 && !bot_name.empty()) break;
   }
+  const int report_id = database_id >= 0 ? database_id : game_id;
 
   const json* state_rec = find_state_record(records, args.turn);
   if (!state_rec) {
@@ -240,8 +250,9 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  std::cout << "loaded " << args.log_path << " — game " << game_id
-            << " bot " << bot_name << " turn " << turn << "\n";
+  std::cout << "loaded " << args.log_path << " — game " << report_id;
+  if (database_id >= 0 && game_id >= 0) std::cout << " (table " << game_id << ")";
+  std::cout << " bot " << bot_name << " turn " << turn << "\n";
   std::cout << "reconstructed Game: turn_count=" << game.state.turn_count
             << " current_player_index=" << game.state.current_player_index
             << " clue_tokens=" << game.state.clue_tokens
@@ -284,7 +295,9 @@ int main(int argc, char** argv) {
 
   if (args.emit_test_path) {
     try {
-      emit_test_scaffold(*args.emit_test_path, game_id, *state_rec, game);
+      // Named with report_id so the emitted TEST name matches the id
+      // scripts/bug_to_test.sh derives from the same log for its `ctest -R`.
+      emit_test_scaffold(*args.emit_test_path, report_id, *state_rec, game);
       std::cout << "wrote scaffold: " << *args.emit_test_path << "\n";
     } catch (const std::exception& e) {
       std::cerr << "emit-test failed: " << e.what() << "\n";

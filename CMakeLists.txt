@@ -160,8 +160,10 @@ add_executable(hanabi_tests
   tests/test_receiver_misinterpretation/test_replay_1916791_stale_wc_misses_ctd_to_ctp_promise.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_logging/test_game_logger_rename.cpp
+  tests/test_logging/test_game_logger_finalize.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp
+  tests/test_net/test_finish_ongoing_game.cpp
 )
 target_include_directories(hanabi_tests PRIVATE tests)
 target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)

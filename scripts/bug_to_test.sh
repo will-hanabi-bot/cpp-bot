@@ -28,7 +28,19 @@ if [[ ! -x "$BIN" ]]; then
   exit 2
 fi
 
-GAME_ID=$(basename "$LOG" .log | awk -F- '{print $NF}')
+# Take the id from the log's *contents*, not its filename: a finished log
+# carries both `database_id` (the hanab.live replay id) and `game_id` (the
+# live table id), and replay_log names the emitted TEST after the database
+# id when present. Deriving it from the filename instead would break the
+# ctest -R match below the moment a log is finalized under its replay id.
+GAME_ID=$(grep -o '"database_id":[0-9]*' "$LOG" | head -1 | cut -d: -f2)
+if [[ -z "$GAME_ID" ]]; then
+  GAME_ID=$(grep -o '"game_id":[0-9]*' "$LOG" | head -1 | cut -d: -f2)
+fi
+if [[ -z "$GAME_ID" ]]; then
+  echo "no database_id or game_id record found in $LOG" >&2
+  exit 2
+fi
 mkdir -p "$REPO_ROOT/tests/${CATEGORY}"
 OUT="$REPO_ROOT/tests/${CATEGORY}/test_replay_${GAME_ID}${SLUG:+_$SLUG}.cpp"
 

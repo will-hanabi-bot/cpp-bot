@@ -36,8 +36,10 @@ class GameLogger {
   GameLogger& operator=(const GameLogger&) = delete;
 
   int game_id() const { return game_id_; }
+  std::optional<int> database_id() const { return database_id_; }
   const std::string& bot_name() const { return bot_name_; }
   const std::string& path() const { return path_; }
+  const std::string& log_dir() const { return log_dir_; }
 
   // Canonical log path for (bot, id): `{log_dir}/{bot}-{id}.log` with the
   // bot name sanitized. Used by the ctor and by the database-id rename at
@@ -46,11 +48,26 @@ class GameLogger {
   static std::string log_path(const std::string& bot_name, int game_id,
                               const std::string& log_dir);
 
-  // Rename the underlying log file (e.g. table-id name -> database-id
-  // name once the server reveals it at game end). Closes the stream,
-  // renames, reopens append. Refuses to clobber an existing target.
-  // Returns false (and keeps appending to the old path) on failure.
+  // Rename the underlying log file. Closes the stream, renames, reopens
+  // append. Refuses to clobber an existing target. Returns false (and keeps
+  // appending to the old path) on failure. Used as the fallback path of
+  // finalize_with_database_id().
   bool rename_file(const std::string& new_path);
+
+  // Game-end finalization: the server reveals the hanab.live database id
+  // (in the `finishOngoingGame` command) only once the game is over, by
+  // which point every record a consumer cares about -- game_init, STATE,
+  // DECIDE, TIMING -- is already on disk. So this rewrites the log rather
+  // than renaming it: each existing record is re-emitted with
+  // `database_id` added, a `database_id` LIFECYCLE record is appended, and
+  // the result lands at `{log_dir}/{bot}-{database_id}.log`. Afterwards
+  // emit() stamps `database_id` too, so the whole file is uniform.
+  //
+  // The new file is written and closed before the old one is removed, so a
+  // crash mid-rewrite loses nothing. On any failure the partial new file is
+  // deleted and we fall back to a plain rename_file(), which at least gets
+  // the name right. Refuses to clobber an existing target.
+  bool finalize_with_database_id(int database_id);
 
   // Write one JSONL record. Adds `ts` if missing.
   void emit(nlohmann::json record);
@@ -78,8 +95,14 @@ class GameLogger {
   }
 
  private:
+  // Rewrite body, assumes mu_ is already held.
+  bool rewrite_with_database_id_locked(int database_id,
+                                       const std::string& new_path);
+
   std::string bot_name_;
   int game_id_;
+  std::optional<int> database_id_;
+  std::string log_dir_;
   std::string path_;
   std::ofstream stream_;
   std::mutex mu_;

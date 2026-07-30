@@ -81,7 +81,14 @@ void BotClient::handle_message(const std::string& command, const json& payload) 
     else if (command == "gameActionList") on_game_action_list(payload);
     else if (command == "connected") on_connected(payload);
     else if (command == "gameOver") on_game_over(payload);
-    else if (command == "databaseID") on_database_id(payload);
+    // `finishOngoingGame` is what the server actually sends when a game we
+    // played in is stored and converted to a shared replay -- it carries
+    // {tableID, databaseID}. A bare `databaseID` command is kept in the
+    // chain because the handler is id-source agnostic and other socket
+    // modes may still deliver one, but it has never been observed live.
+    else if (command == "databaseID" || command == "finishOngoingGame") {
+      on_database_id(payload);
+    }
     // Other game-tick events (clock, user, noteListPlayer, voteChange,
     // spectators) are informational and don't require a response.
   } catch (const std::exception& e) {
@@ -272,6 +279,15 @@ void BotClient::on_init(const json& data) {
   // games (where in_progress=false) get a logger too so the show_turn.py
   // helper can read post-mortem replays.
   if (!username_.empty()) {
+    // A table id can be reused before its predecessor's database id ever
+    // arrives (abandoned game, reconnect). Drop the stale logger rather
+    // than leaking it — the old log keeps its table-id name and can be
+    // recovered later with scripts/backfill_database_ids.sh.
+    if (auto stale = game_loggers_.find(tid); stale != game_loggers_.end()) {
+      std::cerr << "!! table " << tid
+                << " reused before its database id arrived; closing old log\n";
+      game_loggers_.erase(stale);
+    }
     auto logger = std::make_unique<hanabi::logging::GameLogger>(
         username_, tid, "logs");
     logger->emit_lifecycle(
@@ -422,6 +438,15 @@ void BotClient::apply_action(int table_id, const json& raw_action) {
     }
     return;
   }
+  // Game end arrives here, as a `gameOver` gameAction -- the server does not
+  // send a top-level `gameOver` command to a socket that played in the game.
+  // Game::handle_action only flips in_progress, so the client-side
+  // bookkeeping (TIMING aggregate, games_in_progress_, tableUnattend) has to
+  // hang off this branch.
+  if (auto* go = std::get_if<GameOverAction>(&*act)) {
+    finish_game(table_id, go->end_condition);
+    return;
+  }
   // Seed every drawn card's note with its order ("o13") for easy
   // referencing in bug reports; convention segments append after it
   // ("o13 | turn 14: [f] n3"). Order 0 is exempt — the bot-version note
@@ -553,26 +578,23 @@ void BotClient::maybe_take_turn(int table_id) {
                     });
 }
 
-void BotClient::on_game_over(const json& data) {
-  int tid = data.value("tableID", -1);
-  if (tid == -1) return;
-  games_in_progress_.erase(tid);
+void BotClient::finish_game(int tid, std::optional<int> end_condition) {
+  // Idempotence gate. Game end reaches us as a `gameOver` gameAction; a
+  // top-level `gameOver` command has never been observed but is still
+  // dispatched, so guard against both firing for one table.
+  if (games_in_progress_.erase(tid) == 0) return;
   std::cerr << "game over at table " << tid << "\n";
-  // Emit per-game TIMING aggregate + final lifecycle event, then close the
-  // logger. The compute thread holds the GameLogger* by raw pointer in
-  // pending take_action lambdas; we don't expect any in-flight compute
-  // here (game_over arrives after our final action) but if there is, the
-  // post-lambda will hold a dangling pointer. Mitigation: keep the
-  // logger alive past compute by NOT erasing immediately — leak the
-  // unique_ptr into a graveyard keyed on tid that we GC opportunistically.
-  // For now: erase after emitting; if a stray lambda runs after, its
-  // captured pointer dangles. Acceptable until we see it bite.
+  // Emit the per-game TIMING aggregate + final lifecycle event. The logger
+  // is deliberately left OPEN: the database id arrives later (in
+  // `finishOngoingGame`) and on_database_id needs the logger to rewrite the
+  // file under its replay id. Keeping it alive also means the raw
+  // GameLogger* that in-flight take_action lambdas captured stays valid,
+  // which erasing here did not guarantee.
   auto it = game_loggers_.find(tid);
   if (it != game_loggers_.end() && it->second) {
     auto& gl = *it->second;
-    if (data.contains("endCondition")) {
-      gl.emit_lifecycle("game_over",
-                          json{{"end_condition", data.value("endCondition", 0)}});
+    if (end_condition) {
+      gl.emit_lifecycle("game_over", json{{"end_condition", *end_condition}});
     } else {
       gl.emit_lifecycle("game_over", json::object());
     }
@@ -580,11 +602,18 @@ void BotClient::on_game_over(const json& data) {
     gl.emit(json{{"ch", "TIMING"},
                   {"scope", "per_game"},
                   {"scopes", hanabi::instr::Aggregator::to_json(snap)}});
-    game_loggers_.erase(it);
   }
   if (config_.disconnect_on_game_end) {
     transport_.queue_send("tableUnattend", json{{"tableID", tid}});
   }
+}
+
+void BotClient::on_game_over(const json& data) {
+  int tid = data.value("tableID", -1);
+  if (tid == -1) return;
+  std::optional<int> end_condition;
+  if (data.contains("endCondition")) end_condition = data.value("endCondition", 0);
+  finish_game(tid, end_condition);
 }
 
 void BotClient::on_database_id(const json& data) {
@@ -593,21 +622,21 @@ void BotClient::on_database_id(const json& data) {
   if (tid == -1 || db_id == -1) return;
   // Diagnostic: the live table id (used to name the per-game log while
   // the game runs) maps to this database id — the id hanab.live replay
-  // links use. Rename the log to {bot}-{database_id}.log so a replay URL
+  // links use. Rewrite the log to {bot}-{database_id}.log so a replay URL
   // leads straight to the log via scripts/find_game.sh.
   std::cerr << "table " << tid << " stored as database game " << db_id << "\n";
   using hanabi::logging::GameLogger;
   auto it = game_loggers_.find(tid);
   if (it != game_loggers_.end() && it->second) {
-    // Logger still open (databaseID arrived before gameOver): record the
-    // mapping in-file, then rename under the open logger.
-    auto& gl = *it->second;
-    gl.emit_lifecycle("database_id", json{{"database_id", db_id}});
-    gl.rename_file(GameLogger::log_path(gl.bot_name(), db_id, "logs"));
+    // The normal path: finish_game() left the logger open for exactly this.
+    // Rewrite stamps database_id onto every record, appends the mapping
+    // record, and moves the file; then the game is fully done with.
+    it->second->finalize_with_database_id(db_id);
+    game_loggers_.erase(it);
     return;
   }
-  // gameOver already closed the logger — append the mapping record and
-  // rename on the filesystem directly.
+  // No logger — a run that reconnected, or the on_init guard already closed
+  // it. Append the mapping record and rename on the filesystem directly.
   namespace fs = std::filesystem;
   std::string old_path = GameLogger::log_path(username_, tid, "logs");
   std::string new_path = GameLogger::log_path(username_, db_id, "logs");

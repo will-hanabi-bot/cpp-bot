@@ -68,14 +68,19 @@ still be listed before being applied.
 When a bug report arrives with `(game_id, turn, expected vs actual)`:
 
 1. **Look for an existing log first.** Per-game structured logs live at
-   `logs/{bot_name}-{game_id}.log`. During play `game_id` is the live
-   table id; once the game concludes the server's `databaseID` message
-   triggers a rename to the hanab.live database id — the same id replay
-   links use — so a `https://hanab.live/shared-replay/<id>` URL maps
-   straight to the log. Use:
+   `logs/{bot_name}-{id}.log`. During play the id is the live **table id**;
+   when the game concludes the server's `finishOngoingGame` message reveals
+   the **database id** — the one replay links use — and the log is rewritten
+   under it, with both ids stamped on every record (`game_id` = table id,
+   `database_id` = replay id). So a `https://hanab.live/shared-replay/<id>`
+   URL maps straight to a log. Use:
    ```
-   scripts/find_game.sh <game_id>
+   scripts/find_game.sh <id>
    ```
+   which accepts either id, and falls back to searching log contents and
+   the `logs/bot-*.log` transcripts for logs written before v1.12.0. Those
+   older logs can be renamed in bulk with
+   `scripts/backfill_database_ids.sh --apply`.
    If a log exists, **do NOT re-simulate from turn 1**. The log already
    captures the state and the decision branch the bot took.
 

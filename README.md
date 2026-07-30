@@ -399,10 +399,12 @@ order 0, so observers can confirm which build is running.
 
 ## 9. Debugging a game
 
-Each game writes a structured JSONL log to
-`logs/{bot_name}-{game_id}.log`. When the game ends the server's `databaseID`
-message renames it to the hanab.live database id, so a
-`https://hanab.live/shared-replay/<id>` URL maps directly onto a log file.
+Each game writes a structured JSONL log to `logs/{bot_name}-{id}.log`. While
+the game runs the id is the live **table id**; when it ends the server's
+`finishOngoingGame` message reveals the **database id** — the one replay links
+use — and the log is rewritten under that name with both ids on every record
+(`game_id` and `database_id`). So a `https://hanab.live/shared-replay/<id>` URL
+maps directly onto a log file.
 
 The workflow — **do not re-simulate from turn 1**; the log already has the
 state and the branch the bot took:
