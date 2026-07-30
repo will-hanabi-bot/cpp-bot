@@ -22,7 +22,7 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/identity.h"
-#include "test_endgame/replay_helpers.h"
+#include "replay_helpers.h"
 #include "test_harness.h"
 
 using namespace hanabi;
@@ -31,8 +31,7 @@ using namespace hanabi::test::replay;
 
 namespace {
 
-// 45-card deck from the hanab.live export (tests/test_endgame/replays/
-// 1916933.json). Suits: Tomato(0) Mahogany(1) Berry(2) Navy(3) Dark Null(4).
+// 45-card deck from the hanab.live export (tests/replays/// 1916933.json). Suits: Tomato(0) Mahogany(1) Berry(2) Navy(3) Dark Null(4).
 const std::vector<std::pair<int, int>> kDeck = {
     {0,2}, {1,4}, {4,3}, {1,1}, {4,1},  // 0-4: t2 m4 u3 m1 u1
     {0,4}, {3,1}, {2,1}, {0,3}, {3,2},  // 5-9: t4 n1 b1 t3 n2

@@ -172,10 +172,10 @@ When a bug report arrives with `(game_id, turn, expected vs actual)`:
    scripts/bug_to_test.sh logs/<bot>-<game_id>.log <turn> [category] [slug]
    ```
    Emits `tests/<category>/test_replay_<game_id>_<slug>.cpp` (defaults to
-   `tests/test_endgame/` with no slug), builds, and runs it. It reads the
+   the convention's `test_misc` folder with no slug), builds, and runs it. It reads the
    convention from the log and builds/runs the matching target, so a reactor0
    log exercises `hanabi_reactor0_tests`. Manual replay-test authoring (typing
-   out the deck + action sequence in the test_endgame/replay_helpers.h style)
+   out the deck + action sequence in the tests/replay_helpers.h style)
    is the **last** resort, not the first — only fall back when no log exists.
 
 Per-game logs are also useful for "what did the bot spend its time on"
@@ -189,13 +189,17 @@ the per-turn action + the per-game TIMING aggregate.
   debugging workflow. It decides which CMake target the new test is wired
   into, and therefore which scoped run covers it.
 - **Category folders.** Bug reports carry a `Category` field naming the
-  folder the regression test belongs to. The test goes in
-  `tests/<category>/` (e.g. `tests/test_bad_reactive_target/`), and for a
-  reactor0 report in `tests/test_reactor0_<category>/`. Create the folder if
-  it doesn't exist and add the new `.cpp` to the **matching target's** source
+  folder the regression test belongs to. Categories are convention-qualified:
+  the test goes in `tests/test_reactor/<category>/` (e.g.
+  `tests/test_reactor/test_bad_reactive_target/`) or
+  `tests/test_reactor0/<category>/`, defaulting to that convention's
+  `test_misc/` when the report names no category. Create the folder if it
+  doesn't exist and add the new `.cpp` to the **matching target's** source
   list in `CMakeLists.txt` — `hanabi_reactor0_tests` for reactor0,
   `hanabi_reactor_tests` for reactor, `hanabi_tests` only for a
-  convention-neutral engine test. No other wiring is needed.
+  convention-neutral engine test. **The folder decides the target**: anything
+  under `tests/test_reactor/` belongs to `hanabi_reactor_tests`. No other
+  wiring is needed.
   A reactor0 replay test must also carry `"convention": "reactor0"` in its
   snapshot, or `apply_snapshot` will replay it under reactor (the
   missing-key default, which keeps historical logs correct).
@@ -204,7 +208,14 @@ the per-turn action + the per-game TIMING aggregate.
   3–6 word description of the issue, e.g.
   `test_replay_1234567_focus_clued_trash_over_unclued_trash.cpp`.
 - **Export JSONs.** hanab.live export JSONs live in the central store
-  `tests/test_endgame/replays/<game_id>.json` regardless of category.
-- **Existing tests.** Uncategorized tests already in `tests/test_endgame/`
-  stay there until explicitly recategorized (moving/renaming them is an
-  existing-test change and needs approval, per "Test changes" above).
+  `tests/replays/<game_id>.json` regardless of category. Nothing reads them at
+  runtime — decks are hardcoded in each `.cpp` — they are a human reference
+  corpus.
+- **Shared fixtures.** `tests/replay_helpers.h` (included as
+  `#include "replay_helpers.h"`) provides `OrigAction` / `ReplayContext` /
+  `apply_orig_action`. `replay_log --emit-test` generates that include, so
+  moving the header means updating `apps/replay_log.cpp` in the same commit.
+- **Suite names track the folder.** `tests/test_reactor/test_misc/` uses
+  `MiscReplay<id>`, `test_reactor/test_endgame/` uses `EndgameReplay<id>`, and
+  the category folders use their category (`BadReaction1915981`,
+  `StackedPlays1916815`). Keep them in step when adding or moving a test.

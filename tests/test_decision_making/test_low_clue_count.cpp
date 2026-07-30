@@ -38,7 +38,7 @@
 #include <variant>
 
 #include "hanabi/basics/action.h"
-#include "test_endgame/replay_helpers.h"
+#include "replay_helpers.h"
 #include "test_harness.h"
 
 using namespace hanabi;

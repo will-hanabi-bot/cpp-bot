@@ -97,7 +97,7 @@ TEST(DiscardPenalty, DoesNotForcePlayWhenDuplicateB3IsCTPdInBobHand) {
   // not crashing and reaching the eval-based fallback. The override's
   // correctness is covered indirectly by the bookend test
   // `PlaysKnownB3WhenDuplicateNotCTPdElsewhere` and by
-  // EndgameReplay1899552 (which exercises the same code path on a
+  // MiscReplay1899552 (which exercises the same code path on a
   // realistic replay).
   PerformAction perform = g.take_action();
   (void)perform;

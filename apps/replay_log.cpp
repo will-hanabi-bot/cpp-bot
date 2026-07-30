@@ -154,8 +154,8 @@ std::string perform_action_summary(const hanabi::PerformAction& p) {
 }
 
 // Format the action_history as a constexpr `OrigAction` array for the
-// emit-test path. The emitted file leans on tests/test_endgame/
-// replay_helpers.h so the action conversion machinery is already factored.
+// emit-test path. The emitted file leans on tests/replay_helpers.h
+// so the action conversion machinery is already factored.
 void emit_test_scaffold(const std::string& path, int game_id, const json& state_rec,
                           const hanabi::Game& reconstructed_game) {
   std::ofstream out(path);
@@ -177,7 +177,7 @@ void emit_test_scaffold(const std::string& path, int game_id, const json& state_
   out << "#include \"hanabi/basics/game.h\"\n";
   out << "#include \"hanabi/basics/identity.h\"\n";
   out << "#include \"hanabi/logging/state_snapshot.h\"\n";
-  out << "#include \"test_endgame/replay_helpers.h\"\n";
+  out << "#include \"replay_helpers.h\"\n";
   out << "#include \"test_harness.h\"\n\n";
   out << "// Variant: " << variant << ". " << num_players
       << " players, our_player_index=" << our_pi << ".\n\n";

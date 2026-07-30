@@ -1102,11 +1102,13 @@ Behavioural rules above are pinned by:
 | `tests/test_reactor/` | Reactive table, all-plays, CTD revival, dc-target retargeting, same-hand dupes, reversed suits, orange dispatch, discard penalty |
 | `tests/test_basics/test_reactive.cpp` | Focus rules, slot arithmetic |
 | `tests/test_basics/test_chop.cpp` | `Game::chop` selection (§2.3): most-recent CTD by `signal_turn`, tie-breaks, status ineligibility, locked hand |
-| `tests/test_bad_reactive_target/` | dc-target pool ranking (§1a.5): 1916813 clued-over-unclued, 1916888 unknown-over-pre-known |
-| `tests/test_stacked_plays/` | "Never stack on a queued CTP" (1892197, 1916815) |
-| `tests/test_bad_reaction/` | Stable-first routing when Bob is loaded (1915981) |
-| `tests/test_receiver_misinterpretation/` | Re-tasking a pending reacter (1916791) |
+| `tests/test_reactor/test_bad_reactive_target/` | dc-target pool ranking (§1a.5): 1916813 clued-over-unclued, 1916888 unknown-over-pre-known |
+| `tests/test_reactor/test_stacked_plays/` | "Never stack on a queued CTP" (1892197, 1916815) |
+| `tests/test_reactor/test_bad_reaction/` | Stable-first routing when Bob is loaded (1915981) |
+| `tests/test_reactor/test_receiver_misinterpretation/` | Re-tasking a pending reacter (1916791) |
 | `tests/test_decision_making/` | Low-clue-count gate, high-value-clue conditions, the v1.7.0 destroyed-play rule |
-| `tests/test_endgame/` | Forced-endgame rules, solver, and 46 replay regressions (the historical catch-all folder — many are not endgame-specific) |
+| `tests/test_reactor/test_endgame/` | 10 endgame replay regressions: solver winrate, forced-endgame 5-lockout / two-critical, final-round stall-vs-play |
+| `tests/test_reactor/test_misc/` | 36 mid-game convention replay regressions: empathy narrowing, focus/target selection, pink promise, play-queue order, clue eval |
+| `tests/test_endgame/` | Convention-neutral solver unit tests (forced-endgame rules, helper, smoke) |
 
 See `CLAUDE.md` for how to turn a bug report into a regression test.

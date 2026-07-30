@@ -6,8 +6,8 @@
 #   2. Re-run with current code (replay_log --rerun) and print the action.
 #   3. Emit a regression-test scaffold at
 #      tests/<category>/test_replay_<gid>[_<slug>].cpp
-#      (category defaults to test_endgame; slug is the bug report's short
-#      snake_case issue description, per CLAUDE.md "Replay-test standards").
+#      (category defaults to the convention's test_misc folder; slug is the
+#      bug report's short snake_case issue description, per CLAUDE.md).
 #   4. Build + run that one test.
 #
 # Pre-requisites: replay_log binary built (cmake --build build --target replay_log).
@@ -51,8 +51,8 @@ if [[ -z "$CONVENTION" ]]; then
 fi
 CONVENTION=${CONVENTION:-reactor}
 case "$CONVENTION" in
-  reactor0) TARGET=hanabi_reactor0_tests; LABEL='^reactor0$'; DEFAULT_CATEGORY=test_reactor0_endgame ;;
-  reactor)  TARGET=hanabi_reactor_tests;  LABEL='^reactor$';  DEFAULT_CATEGORY=test_endgame ;;
+  reactor0) TARGET=hanabi_reactor0_tests; LABEL='^reactor0$'; DEFAULT_CATEGORY=test_reactor0/test_misc ;;
+  reactor)  TARGET=hanabi_reactor_tests;  LABEL='^reactor$';  DEFAULT_CATEGORY=test_reactor/test_misc ;;
   *) echo "unknown convention '$CONVENTION' (expected reactor or reactor0)" >&2; exit 2 ;;
 esac
 CATEGORY=${CATEGORY:-$DEFAULT_CATEGORY}

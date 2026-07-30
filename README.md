@@ -135,7 +135,7 @@ receiver's hand — see [CONVENTION.md §1a.5](src/conventions/reactor/CONVENTIO
 | `src/instrumentation/` | Scoped timers feeding the per-turn `TIMING` records |
 | `include/hanabi/` | Public headers, mirroring `src/` |
 | `apps/` | Executable entry points |
-| `tests/` | GoogleTest suites, including 53 replay regressions |
+| `tests/` | GoogleTest suites. Convention-specific tests nest under `test_reactor/` and `test_reactor0/`; `test_basics/`, `test_endgame/`, `test_logging/`, `test_net/` are convention-neutral. Shared replay fixtures: `tests/replay_helpers.h`, `tests/replays/` |
 | `scripts/` | Developer tools for log inspection and test generation |
 | `data/` | `variants.json` + `suits.json`, hanab.live's variant definitions, loaded at runtime |
 
