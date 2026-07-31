@@ -3,6 +3,8 @@
 // stack direction — only `reversed` does.
 #pragma once
 
+#include <optional>
+
 #include "hanabi/basics/identity.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
@@ -22,6 +24,16 @@ inline bool is_first_or_second_rank(const State& s, Identity id) {
   bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
   if (reversed) return id.rank == 4 || id.rank == 5;
   return id.rank == 1 || id.rank == 2;
+}
+
+// The card that must play immediately BEFORE `id` — its connector.
+// `State::with_play` (src/basics/state.cpp:102-118) advances a reversed stack
+// with `id.prev()`, so the prerequisite runs the other way: `id.next()` on a
+// reversed suit, `id.prev()` everywhere else. Returns nullopt when `id` is the
+// first card in its suit's play direction (rank 1 normal, rank 5 reversed).
+inline std::optional<Identity> connector_of(const State& s, Identity id) {
+  bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
+  return reversed ? id.next() : id.prev();
 }
 
 }  // namespace hanabi::reactor::variants

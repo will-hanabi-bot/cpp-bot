@@ -24,38 +24,65 @@ see the card reject the clue otherwise. `interpret_reactive.cpp:379-382`.
 
 ### colour value
 The fixed value a colour name contributes as the reactive anchor: Red=1,
-Yellow=2, Green=3, Blue=4, Purple=5, Teal=1; Black/Pink/Brown fill in from
-{4,3,5,2,1}, Orange from {2,5,4,3,1}. Keyed on the clue colour name, so
-Ambiguous variants resolve by what a partner actually says. Collisions are
-legal (Teal duplicates Red). `src/conventions/reactor0/colour_value.cpp`.
+Yellow=2, Green=3, Blue=4, Purple=5, Teal=1; then **Orange** fills in from
+{2,5,4,3,1}; then Black/Pink/Brown from {4,3,2,5,1}; then any other name from
+the same list. The order matters — each rule marks the value it takes, so
+Orange gets first refusal on what the fixed colours left. Keyed on the clue
+colour name, so Ambiguous variants resolve by what a partner actually says.
+Collisions are legal (Teal duplicates Red).
+`src/conventions/reactor0/colour_value.cpp`.
 
 ### direct play clue
 A stable clue whose meaning is "play this touched card" — reactor0's
 stable colour reading and rank priority 1. Contrast reactor, where a stable
 colour clue is *referential* (points one slot left of a touched card).
 There is **no referential play in reactor0**.
-`src/conventions/reactor0/interpret_clue.cpp:115-156`, `:187-238`.
+`src/conventions/reactor0/interpret_clue.cpp:115-156`, `:187-236`.
 
 ### double discard (clue)
 The rank-reactive fallback when no play or finesse target exists: zero
 plays — the reacter discards the react slot and the receiver discards the
-dc-target (or locks). `interpret_reactive.cpp:282-309`.
+dc-target (or locks). `interpret_reactive.cpp:366-398`.
+
+### call invariants
+The two rules constraining a hand's outstanding calls, enforced after every
+reactor0 interpretation: play calls run newest slot → oldest in play order
+(a newer call on an older slot **erases** the earlier call on a newer slot),
+and a hand holds **at most one** `CALLED_TO_DISCARD` at a time. Revealed
+trash (`meta.trash`) is not a call. See CONVENTION.md §1h;
+`include/hanabi/conventions/reactor0/call_invariants.h`.
+
+### connector
+The card that must play immediately **before** another — the prerequisite of
+a finesse target. Direction-aware: rank−1 on a normal suit, rank**+1** on a
+reversed one, since a reversed stack runs 5 → 1.
+`variants::connector_of`, `include/hanabi/conventions/variants/reversed.h`.
+
+### contradicted inference
+An inference chain proven false, detected as a card's `inferred` becoming
+empty. The card is reset to its global empathy immediately — before any
+convention interprets the action — and the call resting on the chain is
+voided with it. Engine-wide, not reactor0-specific. See CONVENTION.md §1i;
+`src/basics/game.cpp:163-168`, `:196-215`, `:236-244`.
 
 ### finesse
 As in reactor — the reacter plays a card that connects with a
 one-away-from-playable card in the receiver's hand — but reactor0 walks
 **targets** leftmost-first (reactor walks react slots in the fixed order
-{1,5,4,3,2}). `interpret_reactive.cpp:229-280`.
+{1,5,4,3,2}). `interpret_reactive.cpp:301-364`.
 
 ### play reveal
 A stable clue that fills in a previously-clued card as a new obvious
-playable. The receiver just plays it; no status is stamped.
-`interpret_clue.cpp:59-84`.
+playable. The receiver just plays it; no status is stamped. Terminal in both
+stable branches, and on the rank ladder it sits at **priority 2** — ahead of
+every other reveal and ahead of the lock / referential discard, because a
+play to make outranks being told what to discard.
+`interpret_clue.cpp:59-84`, `:131`, `:238-243`.
 
 ### positional dispatch
 Reactor0's whole dispatcher: clue to Bob ⇒ stable, clue to anyone else ⇒
 reactive with Bob as reacter — regardless of loadedness, stall context, or
-pending reactives. `interpret_clue.cpp:292-328`.
+pending reactives. `interpret_clue.cpp:294-330`.
 
 ### reactive clue
 As in reactor, a clue decoded jointly with the reacter's next action — but

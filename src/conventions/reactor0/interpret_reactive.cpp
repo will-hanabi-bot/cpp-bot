@@ -1,6 +1,7 @@
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -15,6 +16,7 @@
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -32,6 +34,41 @@ namespace {
 bool contains(const std::vector<int>& v, int x) {
   return std::find(v.begin(), v.end(), x) != v.end();
 }
+
+// Candidate loops stamp the reacter before they know the whole candidate
+// works: `target_play` / `target_discard` mutate even when they return
+// nullopt (documented in reactor/interpret_clue.h), and a later stage can
+// still fail after a successful stamp.
+//
+// An abandoned stamp is a play call no clue ever made. The reacter's hand
+// may legitimately carry several CALLED_TO_PLAY cards — they are actioned
+// most-recently-stamped first — which is exactly why a stray one is
+// dangerous: it is same-turn, so it competes with the real call for being
+// actioned first, and when it is played the receiver has nothing to
+// interpret, because no clue ever named it.
+//
+// So each phase captures the game lazily, immediately before its first
+// mutation, and restores on every abandoning path — including the terminal
+// nullopt, which is the MISTAKE case that used to leave marks behind.
+class Rollback {
+ public:
+  explicit Rollback(Game& game) : game_(game) {}
+  Rollback(const Rollback&) = delete;
+  Rollback& operator=(const Rollback&) = delete;
+
+  // Call immediately before the first mutation of a candidate.
+  void arm() {
+    if (!clean_) clean_ = game_;
+  }
+  // Undo every mutation since arm(). Cheap no-op until something armed.
+  void undo() {
+    if (clean_) game_ = *clean_;
+  }
+
+ private:
+  Game& game_;
+  std::optional<Game> clean_;
+};
 
 // (order, 0-based hand index) pairs, slot-ascending (leftmost first).
 using SlotList = std::vector<std::pair<int, int>>;
@@ -62,26 +99,31 @@ struct DcTarget {
   bool lock = false;
 };
 
-// The reactor0 dc-target pool: slots ascending, every card whose actual
-// identity is basic trash OR duplicated elsewhere in the same hand. Cards
-// already CTD'd are skipped (re-CTD conveys nothing), as are inverted
-// (orange) cards — a CTD on orange is a chuck-as-play-attempt and strikes
-// on trash. If the pool is empty: with rlocks on, the single candidate is
-// the OLDEST slot with lock=true (the reactive-lock reading); with rlocks
-// off, the reactor sacrifice ordering applies. A trash candidate that
-// happens to sit on the oldest slot is also lock=true under rlocks — the
-// receiver cannot tell trash-on-slot-5 apart from the lock signal and must
-// take the conservative reading, so the giver must account for it too.
+// The reactor0 dc-target: the LEFTMOST card whose actual identity is basic
+// trash or duplicated elsewhere in the same hand — always, regardless of
+// cluedness or of any status already stamped on it. This is a deliberate
+// divergence from reactor, which reorders and filters: here the receiver
+// derives the target from hand position alone, so a second red 1 further
+// right cannot move it and an existing CALLED_TO_DISCARD cannot skip it.
+//
+// The one exclusion is inverted (orange) cards: a CTD on orange is a
+// chuck-as-play-attempt, which strikes on trash, so such a card can never be
+// named — it is not a naming preference but an illegal target.
+//
+// With no such card: under rlocks the single candidate is the OLDEST slot
+// with lock=true (the reactive-lock reading); otherwise the reactor
+// sacrifice ordering applies. A trash candidate that happens to sit on the
+// oldest slot is also lock=true under rlocks — the receiver cannot tell
+// trash-on-slot-5 apart from the lock signal and must take the conservative
+// reading, so the giver must account for it too.
 std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
                                     int receiver, bool rlocks) {
   const State& state = game.state;
   const auto& hand = state.hands[receiver];
   int oldest_index = static_cast<int>(hand.size()) - 1;
 
-  std::vector<DcTarget> pool;
   for (size_t i = 0; i < hand.size(); ++i) {
     int o = hand[i];
-    if (game.meta[o].status == CardStatus::CALLED_TO_DISCARD) continue;
     auto id = state.deck[o].id();
     if (!id) continue;
     if (variants::is_inverted_id(state, *id)) continue;
@@ -99,10 +141,9 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
     }
     if (trash || dupe) {
       bool lock = rlocks && static_cast<int>(i) == oldest_index;
-      pool.push_back(DcTarget{o, static_cast<int>(i), lock});
+      return {DcTarget{o, static_cast<int>(i), lock}};
     }
   }
-  if (!pool.empty()) return pool;
 
   if (rlocks) {
     if (oldest_index < 0) return {};
@@ -115,8 +156,10 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
   for (const auto& [o, i] :
        hanabi::reactor::sacrifice_targets(game, receiver, prev_kt)) {
     auto id = game.state.deck[o].id();
+    // Inverted cards can never be named (see above). A standing CTD is NOT
+    // a reason to skip: a new call simply replaces it, since a player holds
+    // at most one CALLED_TO_DISCARD at a time (call_invariants.h).
     if (id && variants::is_inverted_id(game.state, *id)) continue;
-    if (game.meta[o].status == CardStatus::CALLED_TO_DISCARD) continue;
     sac.push_back(DcTarget{o, i, /*lock=*/false});
   }
   return sac;
@@ -175,10 +218,12 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
   int receiver = action.target;
   int hand_size = kHandSize[state.num_players];
   auto conns = delayed_plays(game, action.giver, receiver, /*stable=*/false);
+  Rollback rb(game);
 
   // Phase A — double play. Leftmost playable first, next-leftmost when the
   // react slot is visibly unworkable.
   for (const auto& [target, index] : play_pool(prev, game, receiver)) {
+    rb.undo();
     int target_slot = index + 1;
     int react_slot = calc_slot(anchor, target_slot, hand_size);
     if (react_slot < 1 ||
@@ -197,11 +242,38 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       return false;
     });
     if (!ok) continue;
+    // Beyond this point the vetting reads the reacter's ACTUAL deck id,
+    // which the reacter cannot see. Shared knowledge may retarget — the
+    // reacter walks to the next candidate too — but giver-only knowledge may
+    // only REJECT, because the reacter would still act on this pairing.
+    auto react_actual_id = state.deck[react_order].id();
+    if (react_actual_id) {
+      bool workable = prev.state.is_playable(*react_actual_id);
+      if (!workable) {
+        for (const auto& [_, c] : conns) {
+          if (c == *react_actual_id) {
+            workable = true;
+            break;
+          }
+        }
+      }
+      // Phase A calls the reacter to play. If the giver can see the card is
+      // neither playable nor a connector, the call strikes — reject the clue
+      // rather than offer it. (Colour mode 2 and Phase B already do this.)
+      if (!workable) {
+        rb.undo();
+        return std::nullopt;
+      }
+    }
     if (variants::would_lose_inverted_reacter(
             state, react_order, variants::target_is_inverted(state, target),
             /*standard_is_target_play=*/true)) {
-      continue;
+      // Giver-only: the guard reads the react card's suit. The reacter does
+      // not know their card is inverted, so they would chuck it and strike.
+      rb.undo();
+      return std::nullopt;
     }
+    rb.arm();
     game.with_thought(react_order, [](const Thought& t) {
       Thought out = t;
       out.old_inferred = t.inferred;
@@ -230,10 +302,14 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
   // receiver's hand); the reacter must hold the connector at the computed
   // react slot.
   for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
+    rb.undo();
     int receive_order = state.hands[receiver][i];
     auto deck_id = state.deck[receive_order].id();
     if (!deck_id || state.playable_away(*deck_id) != 1) continue;
-    auto prev_id = deck_id->prev();
+    // Direction-aware: on a reversed suit the connector is rank+1, not
+    // rank-1 (variants/reversed.h). Hardcoding prev() looked for a card that
+    // can never be the prerequisite and rejected every reversed finesse.
+    auto prev_id = variants::connector_of(state, *deck_id);
     if (!prev_id) continue;
     int target_slot = static_cast<int>(i) + 1;
     int react_slot = calc_slot(anchor, target_slot, hand_size);
@@ -251,14 +327,19 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     // own card) will still act on THIS pairing.
     auto react_actual_id = state.deck[react_order].id();
     if (react_actual_id && *react_actual_id != *prev_id) {
+      rb.undo();
       return std::nullopt;
     }
     if (variants::would_lose_inverted_reacter(
             state, react_order,
             variants::target_is_inverted(state, receive_order),
             /*standard_is_target_play=*/true)) {
-      continue;
+      // Giver-only knowledge (the react card's suit) — reject, never
+      // retarget; the reacter cannot see it and would act on this pairing.
+      rb.undo();
+      return std::nullopt;
     }
+    rb.arm();
     game.with_thought(react_order, [](const Thought& t) {
       Thought out = t;
       out.old_inferred = t.inferred;
@@ -268,7 +349,10 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
                       ? target_discard(game, action, react_order, /*urgent=*/true)
                       : target_play(game, action, react_order, /*urgent=*/true,
                                     /*stable=*/false);
-    if (!interp) return std::nullopt;
+    if (!interp) {
+      rb.undo();
+      return std::nullopt;
+    }
     Identity pi = *prev_id;
     game.with_thought(react_order, [pi](const Thought& t) {
       Thought out = t;
@@ -283,6 +367,7 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
   // slot, the receiver discards the dc-target (or locks).
   for (const auto& cand : dc_candidates(prev, game, receiver,
                                         game.allow_reactive_locks)) {
+    rb.undo();
     int target_slot = cand.index + 1;
     int react_slot = calc_slot(anchor, target_slot, hand_size);
     if (react_slot < 1 ||
@@ -295,6 +380,7 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
             [&](Identity i) { return state.is_critical(i); })) {
       continue;
     }
+    rb.arm();
     game.with_thought(react_order, [](const Thought& t) {
       Thought out = t;
       out.old_inferred = t.inferred;
@@ -305,6 +391,7 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
     return ClueInterp::REACTIVE;
   }
+  rb.undo();
   return std::nullopt;
 }
 
@@ -319,12 +406,14 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
   const State& state = game.state;
   int receiver = action.target;
   int hand_size = kHandSize[state.num_players];
+  Rollback rb(game);
 
   // Mode 1 — the receiver has a playable: the reacter DISCARDS the react
   // slot and the receiver plays the target.
   SlotList plays = play_pool(prev, game, receiver);
   if (!plays.empty()) {
     for (const auto& [target, index] : plays) {
+      rb.undo();
       int target_slot = index + 1;
       int react_slot = calc_slot(anchor, target_slot, hand_size);
       if (react_slot < 1 ||
@@ -341,8 +430,13 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
       if (variants::would_lose_inverted_reacter(
               state, react_order, variants::target_is_inverted(state, target),
               /*standard_is_target_play=*/false)) {
-        continue;
+        // Giver-only knowledge (the react card's suit) — reject, never
+        // retarget. The critical-card guard above is different: that one is
+        // common knowledge, so the reacter walks to the next candidate too.
+        rb.undo();
+        return std::nullopt;
       }
+      rb.arm();
       game.with_thought(react_order, [](const Thought& t) {
         Thought out = t;
         out.old_inferred = t.inferred;
@@ -357,6 +451,7 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
       if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
       return ClueInterp::REACTIVE;
     }
+    rb.undo();
     return std::nullopt;
   }
 
@@ -385,6 +480,7 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
           /*standard_is_target_play=*/true)) {
     return std::nullopt;
   }
+  rb.arm();
   game.with_thought(react_order, [](const Thought& t) {
     Thought out = t;
     out.old_inferred = t.inferred;
@@ -392,7 +488,10 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
   });
   auto interp = target_play(game, action, react_order, /*urgent=*/true,
                             /*stable=*/false);
-  if (!interp) return std::nullopt;
+  if (!interp) {
+    rb.undo();
+    return std::nullopt;
+  }
   if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
   return ClueInterp::REACTIVE;
 }
@@ -424,7 +523,11 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                /*focus_slot=*/anchor,
                /*inverted=*/false,
                state.turn_count,
-               /*all_plays=*/game.all_plays};
+               // /allplays is a reactor concept. reactor0's parity is fixed
+               // by clue kind, so the flag must never travel in a reactor0
+               // WC — carrying it would let reaction resolution contradict
+               // the reading every seat already agreed on at clue time.
+               /*all_plays=*/false};
   wc.rlocks = game.allow_reactive_locks;
   game.waiting.clear();
   game.waiting.push_back(std::move(wc));

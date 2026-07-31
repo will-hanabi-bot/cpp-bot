@@ -41,6 +41,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor/interpret_reactive.cpp
   src/conventions/reactor/state_eval.cpp
   src/conventions/reactor0/colour_value.cpp
+  src/conventions/reactor0/call_invariants.cpp
   src/conventions/reactor0/efficiency.cpp
   src/conventions/reactor0/interpret_clue.cpp
   src/conventions/reactor0/interpret_reaction.cpp
@@ -116,6 +117,7 @@ add_executable(hanabi_tests
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_logging/test_game_logger_rename.cpp
   tests/test_logging/test_game_logger_finalize.cpp
+  tests/test_net/test_allplays_scope.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp
   tests/test_net/test_finish_ongoing_game.cpp
@@ -205,15 +207,23 @@ gtest_discover_tests(hanabi_reactor_tests PROPERTIES LABELS "reactor")
 # `ctest -L '^(core|reactor0)$'` — this target plus the neutral one.
 add_executable(hanabi_reactor0_tests
   tests/test_harness.cpp
+  tests/test_reactor0/test_allplays_parity.cpp
+  tests/test_reactor0/test_candidate_rollback.cpp
   tests/test_reactor0/test_colour_value.cpp
+  tests/test_reactor0/test_call_invariants.cpp
   tests/test_reactor0/test_dispatch.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp
+  tests/test_reactor0/test_pov_reject.cpp
   tests/test_reactor0/test_reactive_colour.cpp
   tests/test_reactor0/test_reactive_lock.cpp
+  tests/test_reactor0/test_dc_target_leftmost.cpp
   tests/test_reactor0/test_reactive_rank.cpp
+  tests/test_reactor0/test_reversed_finesse.cpp
   tests/test_reactor0/test_stable_colour.cpp
+  tests/test_reactor0/test_stable_colour_baseline.cpp
   tests/test_reactor0/test_stable_rank.cpp
+  tests/test_reactor0/test_urgent_skips_known_trash.cpp
 )
 target_include_directories(hanabi_reactor0_tests PRIVATE tests)
 target_link_libraries(hanabi_reactor0_tests PRIVATE hanabi_core GTest::gtest_main)
@@ -229,9 +239,9 @@ gtest_discover_tests(hanabi_reactor0_tests PROPERTIES LABELS "reactor0")
 # test change) before being silenced.
 add_executable(hanabi_decision_tests
   tests/test_harness.cpp
-  tests/test_decision_making/test_low_clue_count.cpp
-  tests/test_decision_making/test_high_value_clue.cpp
-  tests/test_decision_making/test_replay_1916933_clue_forces_discard_of_queued_playable.cpp
+  tests/test_reactor/test_decision_making/test_low_clue_count.cpp
+  tests/test_reactor/test_decision_making/test_high_value_clue.cpp
+  tests/test_reactor/test_decision_making/test_replay_1916933_clue_forces_discard_of_queued_playable.cpp
 )
 target_include_directories(hanabi_decision_tests PRIVATE tests)
 target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)

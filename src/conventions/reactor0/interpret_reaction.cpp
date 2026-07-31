@@ -60,7 +60,10 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
   if (!slots) return false;
   auto [react_slot, target_slot] = *slots;
   (void)react_slot;
-  if (wc.clue.kind == ClueKind::RANK || wc.all_plays) {
+  // Parity is fixed by clue kind alone — `wc.all_plays` is deliberately not
+  // consulted (reactor0 never sets it; see interpret_reactive.cpp). Reading
+  // it here is what made resolution contradict clue-time selection.
+  if (wc.clue.kind == ClueKind::RANK) {
     // Even parity: reacter played → double play.
     target_i_play(prev, game, wc, target_slot);
     elim_play_play(prev.state, game, wc.receiver_hand, wc.reacter,
@@ -90,6 +93,17 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
     return false;
   }
 
+  // reactor0 never sets `all_plays` (see interpret_reactive.cpp), so this only
+  // guards a WC inherited from elsewhere — a replayed snapshot, or a reactor
+  // WC resolved under reactor0. Under /allplays the agreement is play+play:
+  // the reacter has no discard available to them at all, so a discard is a
+  // known mistake rather than the other half of a parity. Read it as such and
+  // apply no marks — the receiver learns nothing about their target.
+  if (wc.all_plays) {
+    game.with_move(DiscardInterp::MISTAKE);
+    return false;
+  }
+
   auto slots = calc_target_slot(prev, game, order, wc);
   if (!slots) {
     game.with_move(DiscardInterp::NONE);
@@ -97,7 +111,8 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
   }
   auto [react_slot, target_slot] = *slots;
   (void)react_slot;
-  if (wc.clue.kind == ClueKind::COLOUR && !wc.all_plays) {
+  // Parity is fixed by clue kind alone; see react_play.
+  if (wc.clue.kind == ClueKind::COLOUR) {
     // Odd parity: reacter discarded → the receiver plays the target.
     target_i_play(prev, game, wc, target_slot);
     elim_dc_play(prev.state, game, wc.receiver_hand, wc.reacter,

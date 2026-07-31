@@ -289,7 +289,6 @@ void BotClient::on_init(const json& data) {
   auto game = std::make_unique<Game>(Game::create(tid, std::move(s)));
   game->in_progress = !is_replay;
   game->catchup = true;
-  game->all_plays = all_plays_mode_;
   // Per-game convention resolution: reactor0 is (for now) a 3-player
   // convention, so any other seat count falls back to reactor for this
   // game. The resolved value — not convention_mode_ — is what the order-0
@@ -299,6 +298,13 @@ void BotClient::on_init(const json& data) {
       (convention_mode_ == Convention::REACTOR0 && np == 3)
           ? Convention::REACTOR0
           : Convention::REACTOR;
+  // /allplays is a reactor concept — it promotes colour reactives to
+  // play+play. reactor0's parity is fixed by clue kind (colour = one play,
+  // rank = even), so the flag has no meaning there and must never be set on
+  // a reactor0 game: a set flag would make reaction resolution disagree with
+  // clue-time selection.
+  game->all_plays =
+      game->convention == Convention::REACTOR0 ? false : all_plays_mode_;
   game->allow_reactive_locks =
       rlocks_mode_ ? *rlocks_mode_
                    : hanabi::reactor0::default_allow_reactive_locks(*variant, np);
@@ -906,17 +912,32 @@ void BotClient::chat_allplays(const std::vector<std::string>& args, const json& 
   }
 
   all_plays_mode_ = turning_on;
+  // /allplays is reactor-only. reactor0 fixes parity by clue kind, so the
+  // flag is meaningless there and setting it would make reaction resolution
+  // disagree with clue-time selection — skip those games entirely.
+  int skipped = 0;
   for (auto& [tid, game] : games_) {
-    if (game) game->all_plays = turning_on;
+    if (!game) continue;
+    if (game->convention == Convention::REACTOR0) {
+      ++skipped;
+      continue;
+    }
+    game->all_plays = turning_on;
     (void)tid;
   }
-  reply(std::string("allplays is now ") + (turning_on ? "on" : "off"));
+  std::string text = std::string("allplays is now ") + (turning_on ? "on" : "off");
+  if (skipped > 0) {
+    text += " (reactor only; " + std::to_string(skipped) +
+            " reactor0 game(s) unaffected)";
+  }
+  reply(text);
 }
 
 std::optional<BotClient::GameModes> BotClient::debug_game_snapshot(int table_id) const {
   auto it = games_.find(table_id);
   if (it == games_.end() || !it->second) return std::nullopt;
-  return GameModes{it->second->convention, it->second->allow_reactive_locks};
+  return GameModes{it->second->convention, it->second->allow_reactive_locks,
+                   it->second->all_plays};
 }
 
 void BotClient::chat_setall(const std::vector<std::string>& args, const json& data,

@@ -200,6 +200,13 @@ the per-turn action + the per-game TIMING aggregate.
   convention-neutral engine test. **The folder decides the target**: anything
   under `tests/test_reactor/` belongs to `hanabi_reactor_tests`. No other
   wiring is needed.
+  **One exception**: `test_decision_making/` under either convention
+  (`tests/test_reactor/test_decision_making/`, and
+  `tests/test_reactor0/test_decision_making/` once its first test is written)
+  belongs to `hanabi_decision_tests`, which carries the ctest label
+  `decision_making` so quality failures can be excluded from a correctness
+  run. These tests are convention-specific — the existing ones are all built
+  on reactor — but they share one target because they share that label.
   A reactor0 replay test must also carry `"convention": "reactor0"` in its
   snapshot, or `apply_snapshot` will replay it under reactor (the
   missing-key default, which keeps historical logs correct).

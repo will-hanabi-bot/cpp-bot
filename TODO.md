@@ -21,9 +21,9 @@ been touched by a colour clue: it calls the card one slot to the **left** (newer
 of a newly-touched card to play.
 
 **Reactor0 explicitly does NOT adopt this** — its trash reveal (stable rank
-priority 2) is terminal by spec: the leftmost newly touched card is marked
+priority 3) is terminal by spec: the leftmost newly touched card is marked
 trash and no play is called
-(`src/conventions/reactor0/interpret_clue.cpp:240-251`).
+(`src/conventions/reactor0/interpret_clue.cpp:245-256`).
 
 **Today (reactor).** `try_stable`'s branch 2
 (`src/conventions/reactor/interpret_clue.cpp:447-468`) only intersects the
@@ -53,7 +53,7 @@ it one-away-from-playable and chuck their chop as normal.
 **Today.** Neither convention initiates or decodes one. The POV-invariant
 abort in reactor's finesse phase
 (`src/conventions/reactor/interpret_reactive.cpp:832-846`) — mirrored by
-reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:248-255`) —
+reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:328-332`) —
 returns `nullopt` whenever the observer can see that the reacter's card is
 *not* the required `prev_id`, which is exactly the bluff case; there is
 deliberately no "try the next slot" retry.
@@ -93,7 +93,7 @@ often) needs live-game evidence before tuning.
 The spec gates the colour play+dc mode's target walk on one condition only:
 "if the target would make Bob discard a known **critical** card, target the
 next leftmost playable". Implemented literally
-(`src/conventions/reactor0/interpret_reactive.cpp:335-340`) — so a react slot
+(`src/conventions/reactor0/interpret_reactive.cpp:424-429`) — so a react slot
 the reacter *knows* is playable is still eligible to be discarded, losing a
 play. Reactor's equivalent loop additionally skips react slots in the
 reacter's `obvious_playables`
@@ -105,12 +105,43 @@ Decide whether reactor0 adopts the known-playable skip.
 
 ---
 
-## 6. `[reactor0]` `/allplays` semantics undefined
+## 6. `[reactor]` `target_discard` stamps before it checks
 
-`/allplays` is a reactor concept. Under reactor0 the `wc.all_plays` snapshot
-mechanically routes colour reactions down the rank (play+play) path, but the
-convention assigns it no meaning. Either define it or make `chat_allplays`
-warn when the active convention is reactor0.
+`reactor::target_discard` (`src/conventions/reactor/interpret_clue.cpp:246-272`)
+writes `CALLED_TO_DISCARD` + `urgent` + `signal_turn` and only *then* tests
+whether the narrowing emptied, returning `std::nullopt` with the stamp left
+behind. `target_play` has the same shape. Reactor0 works around this by
+snapshotting and rolling back its candidate walks (`Rollback`,
+`src/conventions/reactor0/interpret_reactive.cpp:53-72`); reactor itself does
+not, so an abandoned candidate can keep a call no clue ever made.
+
+Fixing it in the shared primitives would touch every reactor path at once, so
+it wants its own change with the 122-replay corpus as the gate.
+
+---
+
+## 7. `[reactor]` Giver-only knowledge retargets instead of rejecting
+
+Reactor's reactive walks `continue` past a candidate rejected by
+`would_lose_inverted_reacter`
+(`src/conventions/reactor/interpret_reactive.cpp:316, 548, 689, 849`). That
+guard reads `state.deck[react_order]`, which the reacter cannot see, so the
+giver silently retargets on knowledge the reacter lacks and the two decode
+different pairings. Reactor0 rejects instead (CONVENTION.md §1g); reactor
+should be reviewed the same way, but its replay corpus pins the current
+behaviour, so it needs its own change.
+
+---
+
+## 8. `[reactor0]` `stable_rank`'s no-newly-touched play promise
+
+`stable_rank`'s direct-play branch can pick a focus via
+`leftmost_could_be_playable` and then empty its `inferred` when filtering to
+playables, returning `std::nullopt` → `MISTAKE`
+(`src/conventions/reactor0/interpret_clue.cpp:201`, `:218-220`). Since §1i now
+guarantees no layer is handed an empty `inferred`, the remaining empty case
+means "this focus genuinely cannot be playable", where `MISTAKE` may still be
+right — but the branch has no test either way. Decide and pin it.
 
 ---
 

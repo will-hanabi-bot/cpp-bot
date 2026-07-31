@@ -157,6 +157,16 @@ bool Game::known_as(int order, std::string_view needle,
 
 // --- Action handlers -------------------------------------------------------
 
+// A card whose `inferred` just emptied has had its inference chain
+// contradicted, so any call resting on that chain is void. Mirrors the meta
+// half of `elim`'s step-1 reset.
+void Game::clear_contradicted_call(int order) {
+  with_meta(order, [](ConvData& m) {
+    m.status = CardStatus::NONE;
+    m.by = std::nullopt;
+  });
+}
+
 void Game::on_clue(const ClueAction& action) {
   const Variant& v = *state.variant;
   IdentitySet new_possible = IdentitySet::create(
@@ -176,6 +186,7 @@ void Game::on_clue(const ClueAction& action) {
         c.clues.emplace_back(action.clue.kind, action.clue.value, action.giver,
                               state.turn_count);
       });
+      bool did_reset = false;
       with_thought(order, [&](const Thought& t) {
         Thought out = t;
         out.inferred = t.inferred.intersect(new_possible);
@@ -184,8 +195,24 @@ void Game::on_clue(const ClueAction& action) {
           IdentitySet new_lock = t.info_lock->intersect(new_possible);
           out.info_lock = new_lock.is_empty() ? std::optional<IdentitySet>{} : new_lock;
         }
+        // An emptied `inferred` means an earlier inference chain has been
+        // contradicted. Reset the card to its global empathy IMMEDIATELY —
+        // before any convention interprets this clue — so interpretation
+        // reasons about a coherent card instead of an empty one. Because
+        // `possible` is already clue-narrowed here, this is exactly "reset to
+        // global empathy, then apply the clue's empathy".
+        if (out.inferred.is_empty() && !out.reset) {
+          out = out.reset_inferences();
+          did_reset = true;
+        }
         return out;
       });
+      // `elim`'s step 1 (see Game::elim) performs this same reset at the END
+      // of the action, and clears the card's status with it: the call was
+      // justified by the chain that just turned out to be false, so it is
+      // void. Doing the reset earlier must carry that with it, or a stale
+      // call survives into interpretation.
+      if (did_reset) clear_contradicted_call(order);
 
       const Thought& after = common.thoughts[order];
       if (after.possible.length() == 1) {
@@ -197,6 +224,7 @@ void Game::on_clue(const ClueAction& action) {
       }
     } else {
       // Untouched: difference out new_possible.
+      bool did_reset = false;
       with_thought(order, [&](const Thought& t) {
         Thought out = t;
         out.inferred = t.inferred.difference(new_possible);
@@ -205,8 +233,15 @@ void Game::on_clue(const ClueAction& action) {
           IdentitySet new_lock = t.info_lock->difference(new_possible);
           out.info_lock = new_lock.is_empty() ? std::optional<IdentitySet>{} : new_lock;
         }
+        // Not being touched can contradict an inference just as much as
+        // being touched — same immediate reset.
+        if (out.inferred.is_empty() && !out.reset) {
+          out = out.reset_inferences();
+          did_reset = true;
+        }
         return out;
       });
+      if (did_reset) clear_contradicted_call(order);
     }
   }
 

@@ -1,6 +1,6 @@
 // Regression test for replay 1916933 T31/T32 (Ambiguous & Dark Null
 // (5 Suits), 3-player). Players: orig P0=will-bot69, P1=yagami_black,
-// P2=will-bot67. Category: test_decision_making.
+// P2=will-bot67. Category: test_reactor/test_decision_making.
 //
 // wb69's red clue to wb67 reads (correctly, per the convention) as a
 // reactive whose leftmost play target is wb67's slot-1 m4; the react

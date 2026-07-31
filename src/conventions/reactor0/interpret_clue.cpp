@@ -235,7 +235,14 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
     // stall tail below.
   }
 
-  // 2. Trash reveal: every touchable identity is trash. Terminal — never a
+  // 2. Play reveal: the clue fills a previously-clued card in as an obvious
+  //    playable, without the whole rank being playable. Terminal, and ranked
+  //    above every other reveal and above the referential readings — the
+  //    receiver has a play to make, which outranks being told what to
+  //    discard.
+  if (find_play_reveal(prev, game, action)) return ClueInterp::REVEAL;
+
+  // 3. Trash reveal: every touchable identity is trash. Terminal — never a
   //    referential reading.
   if (all_trash) {
     if (newly_touched.empty()) return ClueInterp::STALL;
@@ -250,7 +257,7 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
     return ClueInterp::REVEAL;
   }
 
-  // 3. Reveals a previously-clued card as trash or a same-hand dupe.
+  // 4. Reveals a previously-clued card as trash or a same-hand dupe.
   FixResult fix_result = check_fix(prev, game, action);
   if (std::holds_alternative<FixResultNormal>(fix_result)) {
     return ClueInterp::FIX;
@@ -272,18 +279,13 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
     }
   }
 
-  // A play reveal also fires on rank clues (e.g. the clue fills in a
-  // previously-clued card as playable without the whole rank being
-  // playable).
-  if (find_play_reveal(prev, game, action)) return ClueInterp::REVEAL;
-
-  // 4./5. Lock slot → LOCK, else referential discard — reactor's
+  // 5./6. Lock slot → LOCK, else referential discard — reactor's
   // ref_discard implements both, including the pink promise.
   if (!newly_touched.empty()) {
     return hanabi::reactor::ref_discard(prev, game, action, stall);
   }
 
-  // 6. Touches no new cards, conveys nothing else.
+  // 7. Touches no new cards, conveys nothing else.
   return ClueInterp::STALL;
 }
 

@@ -53,8 +53,11 @@ struct ReactorWC {
   bool inverted = false;
   int turn = 0;
   // Snapshot of Game::all_plays at the time the WC was created. When true,
-  // the reaction (play or discard by the reacter) is interpreted as
-  // play+play regardless of clue.kind — see interpret_reaction.cpp.
+  // the reaction is play+play regardless of clue.kind — so the reacter has
+  // no discard available to them, and one is read as a known mistake. See
+  // interpret_reaction.cpp. Reactor only: /allplays is never set on a
+  // reactor0 game (commands.cpp) and reactor0 always stores false here,
+  // because its parity is fixed by clue.kind alone.
   bool all_plays = false;
   // The order the reactive interp called the reacter to act on (the
   // urgent CTP/CTD stamp). -1 when unknown — e.g. the receiver's own POV
@@ -190,6 +193,10 @@ class Game {
   // Clear the urgent flag on any card the current player was supposed to act
   // on but didn't (restoring old_inferred). Port of reactor.scala check_missed.
   void check_missed(int player_index, int action_order);
+
+  // Void the call on a card whose `inferred` just emptied — the chain that
+  // justified it has been contradicted. Meta half of elim's step-1 reset.
+  void clear_contradicted_call(int order);
 
   // Reset the zcs_turn marker (zero-clue-starved tracking).
   void reset_zcs() { zcs_turn = -1; }

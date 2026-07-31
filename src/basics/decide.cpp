@@ -20,6 +20,7 @@
 #include "hanabi/conventions/reactor/interpret_clue.h"
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/state_eval.h"
+#include "hanabi/conventions/reactor0/call_invariants.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/endgame/fraction.h"
@@ -56,6 +57,10 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
     // shared tail below (MISTAKE default, with_move, signalled-plays
     // demotion, elim, zcs bookkeeping) applies to both conventions.
     interp = hanabi::reactor0::interpret_clue(prev, *this, action);
+    // A hand may now hold several CALLED_TO_PLAY cards. reactor0 keeps them
+    // in play order by erasing calls that a newer clue pointed past — see
+    // conventions/reactor0/call_invariants.h. Reactor is unaffected.
+    hanabi::reactor0::enforce_call_invariants(*this);
   } else if (next_interp) {
     if (std::holds_alternative<ClueInterp>(*next_interp)) {
       ClueInterp forced = std::get<ClueInterp>(*next_interp);
@@ -276,6 +281,9 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
                                               action.order, waiting.front())
             : react_discard(prev, *this, action.player_index_v, action.order,
                             waiting.front());
+    if (convention == Convention::REACTOR0) {
+      hanabi::reactor0::enforce_call_invariants(*this);
+    }
     if (rewound) {
       // The rewind already replayed the action end-to-end (including
       // with_move + elim + reset_zcs); doing it again here would
@@ -334,6 +342,9 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
                                            action.order, waiting.front())
             : react_play(prev, *this, action.player_index_v, action.order,
                          waiting.front());
+    if (convention == Convention::REACTOR0) {
+      hanabi::reactor0::enforce_call_invariants(*this);
+    }
     if (rewound) {
       // The rewind already replayed the action end-to-end (including
       // with_move + elim); skip the post-react bookkeeping.
@@ -669,8 +680,6 @@ PerformAction Game::take_action() const {
       }
     }
     if (!urgent_action) {
-      CardStatus status = meta[*urgent_order].status;
-      const Thought& thought = m.thoughts[*urgent_order];
       // CTP/CTD are PHYSICAL action labels: CTP → PerformPlay, CTD →
       // PerformDiscard. For an inverted (Orange / Dark Orange) suit the
       // game-rule inversion in on_play / on_discard converts the physical
@@ -681,12 +690,28 @@ PerformAction Game::take_action() const {
       // physical action it wants — e.g. try_stable's playable_rank branch
       // marks CTD on an orange focus so PerformDiscard advances the
       // stack.
-      if (status == CardStatus::CALLED_TO_PLAY &&
-          !thought.possible.forall([&](Identity i) { return s.is_basic_trash(i); })) {
-        urgent_action = PerformPlay{*urgent_order};
-      } else if (status == CardStatus::CALLED_TO_DISCARD &&
-                  !thought.possible.forall([&](Identity i) { return s.is_critical(i); })) {
-        urgent_action = PerformDiscard{*urgent_order};
+      //
+      // A hand may carry several play calls at once, kept in play order
+      // (newest slot first — see conventions/reactor0/call_invariants.h). A call
+      // the holder can now see must be trash is skipped and the next call
+      // down considered, rather than abandoning the urgent path entirely.
+      // Any other unactionable call still stops the scan, as before.
+      for (int o : s.our_hand()) {
+        if (!meta[o].urgent) continue;
+        CardStatus status = meta[o].status;
+        const Thought& thought = m.thoughts[o];
+        if (status == CardStatus::CALLED_TO_PLAY) {
+          if (thought.possible.forall(
+                  [&](Identity i) { return s.is_basic_trash(i); })) {
+            continue;  // known trash — try the next call
+          }
+          urgent_action = PerformPlay{o};
+        } else if (status == CardStatus::CALLED_TO_DISCARD &&
+                    !thought.possible.forall(
+                        [&](Identity i) { return s.is_critical(i); })) {
+          urgent_action = PerformDiscard{o};
+        }
+        break;
       }
     }
   }

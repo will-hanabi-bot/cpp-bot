@@ -5,17 +5,20 @@
 // (Variant::clue_colour_names) so Ambiguous variants resolve by the colour
 // a partner actually says.
 //
-// Assignment rules (values may collide — Teal duplicates Red by design):
+// Assignment rules, applied IN THIS ORDER (values may collide — Teal
+// duplicates Red by design):
 //   1. Fixed for present colours: Red=1, Yellow=2, Green=3, Blue=4,
 //      Purple=5, Teal=1.
-//   2. Black, then Pink, then Brown: the first value not already taken, in
-//      preference order {4, 3, 5, 2, 1}; if all are taken, 1.
-//   3. Orange: first untaken from {2, 5, 4, 3, 1}; if all taken, 2.
-//   4. Any other colour name: assigned after Brown via rule 2's list, in
+//   2. Orange: first untaken from {2, 5, 4, 3, 1}; if all taken, 2. Orange
+//      is placed before the darks, so it gets first refusal on whatever the
+//      fixed colours left.
+//   3. Black, then Pink, then Brown: the first value not already taken, in
+//      preference order {4, 3, 2, 5, 1}; if all are taken, 1.
+//   4. Any other colour name: assigned last, via rule 3's list, in
 //      clue_colour_names order. (Realistic variants only produce the ten
 //      names above — whitish / rainbowish / prism colours never enter
 //      clue_colour_names.)
-// Worked example: Red/Blue/Brown/Orange → Red=1, Blue=4, Brown=3, Orange=2.
+// Worked example: Red/Blue/Brown/Orange → Red=1, Blue=4, Orange=2, Brown=3.
 #pragma once
 
 #include <string>

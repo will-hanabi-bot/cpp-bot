@@ -52,20 +52,21 @@ std::vector<int> build_table(const Variant& variant) {
     values[idx] = exhausted;  // all taken; do NOT mark (collision allowed).
   };
 
-  constexpr std::array<int, 5> kDarkPrefs{4, 3, 5, 2, 1};
+  constexpr std::array<int, 5> kDarkPrefs{4, 3, 2, 5, 1};
   constexpr std::array<int, 5> kOrangePrefs{2, 5, 4, 3, 1};
 
-  // Rule 2: Black, then Pink, then Brown — the assignment PRIORITY is
+  // Rule 2: Orange — assigned after the fixed colours but BEFORE the darks,
+  // so it gets first refusal on what the fixed colours left.
+  for (size_t i = 0; i < names.size(); ++i) {
+    if (values[i] == 0 && names[i] == "Orange") {
+      assign_from(static_cast<int>(i), kOrangePrefs, 2);
+    }
+  }
+  // Rule 3: Black, then Pink, then Brown — the assignment PRIORITY is
   // black > pink > brown regardless of their order in clue_colour_names.
   for (const char* dark : {"Black", "Pink", "Brown"}) {
     for (size_t i = 0; i < names.size(); ++i) {
       if (values[i] == 0 && names[i] == dark) assign_from(static_cast<int>(i), kDarkPrefs, 1);
-    }
-  }
-  // Rule 3: Orange.
-  for (size_t i = 0; i < names.size(); ++i) {
-    if (values[i] == 0 && names[i] == "Orange") {
-      assign_from(static_cast<int>(i), kOrangePrefs, 2);
     }
   }
   // Rule 4: anything else, in clue_colour_names order.

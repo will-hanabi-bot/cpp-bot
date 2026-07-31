@@ -148,6 +148,7 @@ class BotClient {
   struct GameModes {
     Convention convention;
     bool allow_reactive_locks;
+    bool all_plays;
   };
   std::optional<GameModes> debug_game_snapshot(int table_id) const;
 };
