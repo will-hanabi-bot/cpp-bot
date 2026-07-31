@@ -754,8 +754,10 @@ worse play.
 
 ## 2.1 The `take_action` ladder
 
-`Game::take_action` (`src/basics/decide.cpp:629-1070`). Each stage that
-returns short-circuits the rest.
+`Game::take_action` (`src/basics/decide.cpp:650-1103`). Each stage that
+returns short-circuits the rest. It scores actions through the convention seam
+`eval_for` (`:628-634`), which routes reactor0 games to
+`reactor0::eval_action` and everything else to `reactor::eval_action`.
 
 | Stage | What it does | Cite |
 |---|---|---|
@@ -794,10 +796,10 @@ Candidates are built by three mutually exclusive branches (`:688-780`):
 3. **Fallback**: `thinks_playables` (`:779`).
 
 There is **no explicit "play 5s first" rule**. Rank enters the play score only
-weakly, through `0.02 * (5 - rank)` (`state_eval.cpp:514`) — which actually
+weakly, through `0.02 * (5 - rank)` (`state_eval.cpp:524`) — which actually
 prefers *low* ranks — and through `eval_game`'s future-value term, where a
 CTP'd 5 is worth `+0.8` against `+0.4` for anything else
-(`state_eval.cpp:631-632`).
+(`state_eval.cpp:641-642`).
 
 **Force-play override** (`:948-1021`) is the strongest "just play it" rule: if
 no available clue creates a playable anywhere, *and* Bob is safe (he has known
@@ -902,28 +904,38 @@ a card a plain stable push gets for free.
 
 ## 2.5 Scoring any action: `eval_action`
 
-`state_eval.cpp:451-581`. Simulate, then:
+`state_eval.cpp:463-591`. Simulate, then:
 
-- `MISTAKE` interpretation → `−100` (`:458-471`).
-- **Clue branch** (`:474-497`): the low-clue-count gate (below), then
+- `MISTAKE` interpretation → `−100` (`:470-483`).
+- **Clue branch** (`:486-507`): the low-clue-count gate (below), then
+  `clue_branch_value` (`:456-461`) —
   `mult = playables_us.empty() ? 0.5 : (in_endgame ? 0.1 : 0.25)` and
   `value = get_result × (result > 0 ? mult : 1.0) − 0.5`. So **positive clue
   value is damped hard once we already hold a play, negative value is not
-  damped, and every clue pays a flat 0.5 tempo tax.**
-- **Play branch** (`:498-514`): unknown identity `+1.5`; known
+  damped, and every clue pays a flat 0.5 tempo tax.** `clue_branch_value` is
+  factored out because reactor0 reuses it behind its own gate.
+- **Play branch** (`:508-524`): unknown identity `+1.5`; known
   `0.02 × (5 − rank)`; a known dupe `−0.25`.
-- **Discard branch** (`:515-576`): base tiers — endgame `−1.0`, known trash
+- **Discard branch** (`:525-586`): base tiers — endgame `−1.0`, known trash
   `0.0`, own chop `−0.25`, unknown identity `−1.5`, else `−0.5`. Orange
   tiering raises a stack-advancing discard to `1.0` and floors a
-  possibly-orange unknown at `0.5` (`:533-558`). A **`−10.0` block penalty**
+  possibly-orange unknown at `0.5` (`:543-568`). A **`−10.0` block penalty**
   applies if we hold a real obvious playable that this discard would skip
-  (`:560-575`).
-- Every action finally adds `advance(game, hypo_game, 1)` (`:580`) — a
+  (`:570-585`).
+- Every action finally adds `advance(game, hypo_game, 1)` (`:590`) — a
   one-full-round-forward lookahead.
 
 ### The low-clue-count gate
 
-`state_eval.cpp:483-494`. When `clue_tokens < 3` **and** `pace() >= 3` **and**
+**Reactor only.** Reactor0 replaces this wholesale with its pace-clue tier
+gate — a wider window, a three-way tier and no "we hold a play" conjunct (see
+`src/conventions/reactor0/CONVENTION.md` §2a). Under reactor0 this gate never
+runs, because `reactor0::eval_action` owns the clue branch; the play and
+discard branches, `get_result`, `advance`, `eval_state` and `eval_game` remain
+common to both conventions. The clue-branch arithmetic below is shared via
+`clue_branch_value` (`state_eval.cpp:456-461`).
+
+`state_eval.cpp:495-506`. When `clue_tokens < 3` **and** `pace() >= 3` **and**
 we hold a real (non-duplicated) obvious playable, a clue must be *high value*
 or `eval_action` returns a flat `−1.0`, below any play. The gate is skipped
 when every play is a dupe (`:479-482`), because suppressing the clue would
@@ -961,7 +973,7 @@ mild bias making "a clue exists" attractive.
 
 ## 2.7 The leaf evaluation
 
-`eval_state` (`:585-609`):
+`eval_state` (`:595-619`):
 - score term `min(score, 2 × num_suits) × 0.5 + score`;
 - clue term: 0 in endgame / at 0 tokens / when unable to clue;
   `3.0 + (tokens − 6) × 0.25` above 6; else `tokens / 2`;
@@ -969,17 +981,17 @@ mild bias making "a clue exists" attractive.
   term, and the reason the bot treats discarding a critical as near-fatal;
 - strikes: `−1.5` / `−3.5` / `−100.0`.
 
-`eval_game` (`:613-744`) adds:
-- an instant `+100` on reaching the original max score (`:616`);
-- `future_val` (`:623-656`): CTP `+0.4`, CTP'd 5 `+0.8`, CTP'd trash `−1.5`;
+`eval_game` (`:623-754`) adds:
+- an instant `+100` on reaching the original max score (`:626`);
+- `future_val` (`:633-666`): CTP `+0.4`, CTP'd 5 `+0.8`, CTP'd trash `−1.5`;
   CTD trash `+0.3`, CTD sieved `+0.2`, **CTD critical
   `−(5 − playable_away) × 10.0`**, CTD useful-to-us `−(5 − playable_away) × 0.5`;
-- `bdr_val` — bad-discard risk (`:658-709`): per non-duplicated useful
+- `bdr_val` — bad-discard risk (`:668-719`): per non-duplicated useful
   identity with copies already discarded, `−n²` (rank 1), `−3.0` (rank 2),
   `−1.5` (rank 3), `−0.5` (rank 4), the whole term scaled `× 2.5`;
-- `lock_penalty` `0 / −1 / −3 / −10` for 0/1/2/3+ locked players (`:711-721`);
+- `lock_penalty` `0 / −1 / −3 / −10` for 0/1/2/3+ locked players (`:721-731`);
 - `endgame_penalty`: projects the final round's plays and charges
-  `(stacks_sum − max_score) × 5.0` (`:723-741`).
+  `(stacks_sum − max_score) × 5.0` (`:733-751`).
 
 ## 2.8 Enumerating clues: `find_all_clues`
 

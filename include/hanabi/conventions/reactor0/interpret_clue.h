@@ -8,11 +8,22 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/interp.h"
 
 namespace hanabi::reactor0 {
+
+// The leftmost (slot-ascending) order in `candidates` whose common empathy
+// intersects the playable set or a delayed-play successor. POV-safe: only
+// common thoughts are consulted. This is the target a stable colour clue
+// names (step 2 of `stable_colour` below); it is exported so the decision
+// layer can ask what a hypothetical stable colour clue would name without
+// paying for a full `simulate()`.
+std::optional<int> leftmost_could_be_playable(
+    const Game& game, const ClueAction& action,
+    const std::vector<int>& candidates);
 
 // Top-level entry: called from Game::interpret_clue when
 // game.convention == Convention::REACTOR0. Returns the interpretation, or

@@ -22,4 +22,11 @@ bool includes_brownish(const State& state) {
          state.includes_variant("Cocoa") || state.includes_variant("Null");
 }
 
+bool includes_inverted(const State& state) {
+  for (const Suit& suit : state.variant->suits) {
+    if (suit.suit_type.inverted) return true;
+  }
+  return false;
+}
+
 }  // namespace hanabi::reactor::variants

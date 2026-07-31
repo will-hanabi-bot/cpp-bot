@@ -448,6 +448,18 @@ double advance(const Game& orig, const Game& game, int offset) {
 
 // --- eval_action ---------------------------------------------------------
 
+// The clue branch's arithmetic, factored out of `eval_action` so reactor0's
+// own `eval_action` (src/conventions/reactor0/state_eval.cpp) scores a clue
+// identically once its gate has passed. Positive clue value is damped hard
+// once we already hold a play, negative value is not damped, and every clue
+// pays a flat 0.5 tempo tax.
+double clue_branch_value(const Game& game, const Game& hypo,
+                         const ClueAction& ca, bool we_hold_a_play) {
+  double mult = !we_hold_a_play ? 0.5 : (game.in_endgame() ? 0.1 : 0.25);
+  double result = get_result(game, hypo, ca);
+  return result * (result > 0 ? mult : 1.0) - 0.5;
+}
+
 double eval_action(const Game& game, const Action& action) {
   hanabi::instr::ScopedTimer st("reactor.eval_action");
   hanabi::logging::LogScope ls("reactor.eval_action");
@@ -492,9 +504,7 @@ double eval_action(const Game& game, const Action& action) {
         return -1.0;
       }
     }
-    double mult = playables_us.empty() ? 0.5 : (game.in_endgame() ? 0.1 : 0.25);
-    double result = get_result(game, hypo_game, ca);
-    value = result * (result > 0 ? mult : 1.0) - 0.5;
+    value = clue_branch_value(game, hypo_game, ca, !playables_us.empty());
   } else if (std::holds_alternative<PlayAction>(action)) {
     const auto& pa = std::get<PlayAction>(action);
     std::optional<Identity> id;

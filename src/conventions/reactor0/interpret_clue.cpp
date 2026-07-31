@@ -83,9 +83,12 @@ std::optional<int> find_play_reveal(const Game& prev, Game& game,
   return std::nullopt;
 }
 
-// The leftmost (slot-ascending) order in `candidates` whose common empathy
-// intersects the playable set or a delayed-play successor. POV-safe: only
-// common thoughts are consulted.
+}  // namespace
+
+// Exported (declared in interpret_clue.h) so the decision layer can ask
+// "what would this stable colour clue name?" without simulating it —
+// src/conventions/reactor0/state_eval.cpp uses it for the NOT-LOW rule that
+// checks whether Bob already has a colour stable play clue for Cathy.
 std::optional<int> leftmost_could_be_playable(
     const Game& game, const ClueAction& action,
     const std::vector<int>& candidates) {
@@ -107,8 +110,6 @@ std::optional<int> leftmost_could_be_playable(
   }
   return std::nullopt;
 }
-
-}  // namespace
 
 // --- stable colour --------------------------------------------------------
 

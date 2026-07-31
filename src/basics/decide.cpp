@@ -23,6 +23,7 @@
 #include "hanabi/conventions/reactor0/call_invariants.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
+#include "hanabi/conventions/reactor0/state_eval.h"
 #include "hanabi/endgame/fraction.h"
 #include "hanabi/endgame/forced_endgame.h"
 #include "hanabi/endgame/solver.h"
@@ -623,12 +624,21 @@ std::vector<PerformAction> Game::find_all_clues(int giver) const {
 
 namespace {
 
+// The convention seam for scoring an action. Reactor0 owns its own clue gate
+// (src/conventions/reactor0/state_eval.cpp) and delegates everything else back
+// to reactor; reactor games are unaffected.
+double eval_for(const Game& game, const Action& action) {
+  return game.convention == Convention::REACTOR0
+             ? hanabi::reactor0::eval_action(game, action)
+             : hanabi::reactor::eval_action(game, action);
+}
+
 double clue_eval_value(const Game& game, const Clue& clue) {
   const State& state = game.state;
   ClueAction act{state.our_player_index, clue.target,
                   state.clue_touched(state.hands[clue.target], clue.kind, clue.value),
                   clue.base()};
-  return hanabi::reactor::eval_action(game, Action{act});
+  return eval_for(game, Action{act});
 }
 
 bool contains_v(const std::vector<int>& v, int x) {
@@ -1038,8 +1048,7 @@ PerformAction Game::take_action() const {
         auto best_play = std::max_element(
             all_plays.begin(), all_plays.end(),
             [&](const auto& a, const auto& b) {
-              return hanabi::reactor::eval_action(*this, a.second) <
-                     hanabi::reactor::eval_action(*this, b.second);
+              return eval_for(*this, a.second) < eval_for(*this, b.second);
             });
         // Don't force-play a card whose inferred id is already CTP'd
         // (or visibly known to be played) in another player's hand —
@@ -1088,8 +1097,7 @@ PerformAction Game::take_action() const {
   auto best = std::max_element(
       all_actions.begin(), all_actions.end(),
       [&](const auto& a, const auto& b) {
-        return hanabi::reactor::eval_action(*this, a.second) <
-               hanabi::reactor::eval_action(*this, b.second);
+        return eval_for(*this, a.second) < eval_for(*this, b.second);
       });
   return best->first;
 }

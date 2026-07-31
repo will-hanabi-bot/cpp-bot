@@ -15,6 +15,43 @@ is the **clue value** — the rank for rank clues, the *colour value* for
 colour clues. Stored in `ReactorWC::focus_slot` (the field name is
 reactor's; reactor0 never computes a focus).
 `src/conventions/reactor0/interpret_reactive.cpp:419-430`.
+Not to be confused with *clue tier*, which is how worthwhile **giving** a clue
+is. "Value" in reactor0 always means this anchor.
+
+### at-risk chop (endangered chop)
+A chop the team cannot afford its holder to pitch, judged from Alice's full
+visibility. All four must hold: Alice knows the identity and it is not basic
+trash; there is **no second copy in the holder's own hand**; no copy is
+visible in the third player's hand; and Alice cannot prove she is holding a
+copy (see *group elim*). Input to §2a's H1 and N2/N3.
+`src/conventions/reactor0/state_eval.cpp:107-133`. Stricter than reactor's
+`chop_is_nontrash` (`src/conventions/reactor/state_eval.cpp:44-49`), which
+tests basic trash only.
+
+### clue tier
+How worthwhile it is to spend a token on a candidate clue: `LOW`, `MEDIUM` or
+`HIGH`. Consumed by the *pace-clue tier gate*. **Not** the "clue value" of
+*anchor (value)* / *colour value* — those are what a clue *means*, this is
+what giving it is *worth*. `include/hanabi/conventions/reactor0/state_eval.h`;
+definitions in CONVENTION.md §2a.
+
+### group elim (sudoku elim)
+Proving Alice holds a copy of an identity without any of her cards being a
+singleton: for a subset S of her hand with combined possibilities `u`, if
+fewer than |S| copies of `u \ {id}` remain unaccounted for, one of them must
+be `id`. |S| = 1 is the ordinary singleton case.
+`src/conventions/reactor0/state_eval.cpp:58-99`. Distinct from `cross_elim`
+(`src/basics/player_elim.cpp:165-226`), which strips locked identities from
+cards *outside* such a group rather than identifying one inside it.
+
+### pace-clue tier gate
+Reactor0's replacement for reactor's low-clue-count gate. At
+`pace() >= 3 && clue_tokens <= 3`, a clue must be HIGH when Alice already
+holds a card stamped `CALLED_TO_PLAY` (or, in a variant with an inverted
+suit, `CALLED_TO_DISCARD`), and otherwise must be at least MEDIUM; anything
+lower scores a flat `-1.0`. One token wider than reactor's window and,
+unlike it, fires even when Alice holds no play.
+`src/conventions/reactor0/state_eval.cpp:266-281`; CONVENTION.md §2a.
 
 ### blind play (react slot)
 The reacter playing the computed react slot without knowing its identity.
@@ -31,13 +68,15 @@ Orange gets first refusal on what the fixed colours left. Keyed on the clue
 colour name, so Ambiguous variants resolve by what a partner actually says.
 Collisions are legal (Teal duplicates Red).
 `src/conventions/reactor0/colour_value.cpp`.
+Not to be confused with *clue tier* — this is a decoding input, not a measure
+of how good the clue is.
 
 ### direct play clue
 A stable clue whose meaning is "play this touched card" — reactor0's
 stable colour reading and rank priority 1. Contrast reactor, where a stable
 colour clue is *referential* (points one slot left of a touched card).
 There is **no referential play in reactor0**.
-`src/conventions/reactor0/interpret_clue.cpp:115-156`, `:187-236`.
+`src/conventions/reactor0/interpret_clue.cpp:116-157`, `:188-237`.
 
 ### double discard (clue)
 The rank-reactive fallback when no play or finesse target exists: zero
@@ -77,12 +116,12 @@ playable. The receiver just plays it; no status is stamped. Terminal in both
 stable branches, and on the rank ladder it sits at **priority 2** — ahead of
 every other reveal and ahead of the lock / referential discard, because a
 play to make outranks being told what to discard.
-`interpret_clue.cpp:59-84`, `:131`, `:238-243`.
+`interpret_clue.cpp:59-84`, `:132`, `:239-244`.
 
 ### positional dispatch
 Reactor0's whole dispatcher: clue to Bob ⇒ stable, clue to anyone else ⇒
 reactive with Bob as reacter — regardless of loadedness, stall context, or
-pending reactives. `interpret_clue.cpp:294-330`.
+pending reactives. `interpret_clue.cpp:295-331`.
 
 ### reactive clue
 As in reactor, a clue decoded jointly with the reacter's next action — but
@@ -123,7 +162,7 @@ card is marked known trash and nothing else happens — it is **terminal**,
 never a referential discard, and (unlike the aspirational reactor
 trash-push entry in TODO.md) never a play. Priority 2 of the stable rank
 ladder; priority 3 extends it to previously-clued cards revealed as trash.
-`interpret_clue.cpp:240-273`.
+`interpret_clue.cpp:241-274`.
 
 ### Absent by design
 Concepts reactor has that reactor0 deliberately lacks: **reactive focus**

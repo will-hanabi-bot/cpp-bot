@@ -78,9 +78,26 @@ not the seat after the reacter.
 
 ---
 
+## 3b. `[reactor, reactor0]` The clue gates are invisible to the lookahead
+
+`advance` / `force_clue` score hypothetical **partner** clues through
+`get_result`, never `eval_action` (`src/basics/eval.cpp:11-52`,
+`src/conventions/reactor/state_eval.cpp:295-308`). So neither reactor's
+low-clue-count gate nor reactor0's pace-clue tier gate applies inside the
+lookahead: the bot models its partners as clueing freely at a low clue count
+while throttling itself. Pre-existing for reactor; more pronounced under
+reactor0, whose window is a token wider and has no "we hold a play" conjunct.
+
+Closing it means threading the hypothetical giver's Alice/Bob/Cathy assignment
+down through `advance`, which has real regression surface for reactor — worth
+live-game evidence first.
+
+---
+
 ## 4. `[reactor0]` Eval tuning for double-discard and lock clue shapes
 
-Reactor0 reuses reactor's eval layer unchanged. Double-discard clues score as
+Reactor0 reuses reactor's eval layer except for `eval_action`'s clue branch
+(see reactor0 CONVENTION.md §2a). Double-discard clues score as
 ordinary discards (0 plays), reactive locks have no dedicated `get_result`
 term, and blind-play clues rely on the urgent CTP being visible to
 `hypo_plays`. Whether the search picks these clues often enough (or too

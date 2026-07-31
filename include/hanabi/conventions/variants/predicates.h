@@ -14,4 +14,10 @@ bool includes_rainbowish(const State& state);
 bool includes_pinkish(const State& state);
 bool includes_brownish(const State& state);
 
+// True when any suit in the variant is inverted (Orange / Dark Orange),
+// i.e. the play and discard buttons swap for that suit. Unlike the three
+// above this reads the real `SuitType::inverted` flag rather than matching
+// suit names, since `SuitType::of_name` already owns that classification.
+bool includes_inverted(const State& state);
+
 }  // namespace hanabi::reactor::variants
