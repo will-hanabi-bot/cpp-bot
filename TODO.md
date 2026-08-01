@@ -128,6 +128,10 @@ play. Reactor's equivalent loop additionally skips react slots in the
 reacter's `obvious_playables`
 (`src/conventions/reactor/interpret_reactive.cpp:536-537`).
 
+Note as of v3.0.0 colour **mode 2** now walks its dc-candidates, skipping a
+pairing dead by shared knowledge (§1d). Mode 1 still walks only past a
+known *critical* react slot, which is the gap described here.
+
 Deliberately not "fixed" without a ruling: adding the guard changes which
 clue the convention selects, which is a convention change, not a bug fix.
 Decide whether reactor0 adopts the known-playable skip.

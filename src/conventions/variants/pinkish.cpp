@@ -76,8 +76,19 @@ int playable_rank_focus(const Game& prev, const State& state,
       touched_unclued.push_back(o);
     }
   }
+  // Leftmost = slot 1 = the NEWEST card = the HIGHEST order, so this is
+  // `max_element`. It was `min_element` — the oldest, i.e. the rightmost —
+  // which contradicted this function's own header contract ("the leftmost
+  // newly-touched unclued card"), reactor0 CONVENTION.md §1c, and reactor's.
+  // It only became visible once reactor0's rank classification was fixed and
+  // priority 1 started firing in omni variants at all (bug_report_1.txt 1.2
+  // and 1.3, which both expect the LEFT card to be called).
+  //
+  // Note `touched_unclued` is built with the same predicate as
+  // `newly_touched`, so the two are always equal and the fallback below is
+  // unreachable; it is kept only as a guard against an empty range.
   return !touched_unclued.empty()
-             ? *std::min_element(touched_unclued.begin(), touched_unclued.end())
+             ? *std::max_element(touched_unclued.begin(), touched_unclued.end())
              : *std::max_element(newly_touched.begin(), newly_touched.end());
 }
 

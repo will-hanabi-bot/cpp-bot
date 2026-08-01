@@ -193,3 +193,22 @@ saved or played. Weaker than *at-risk chop* — it ignores copies in Cathy's
 hand and in Alice's — which is the point: the card need not be in danger to be
 worth a clue. `src/conventions/reactor0/state_eval.cpp:151-161`;
 CONVENTION.md §2a. Added after replay 1942330 T33.
+
+### touched-card rank classification
+How reactor0 decides whether a rank clue is a direct play clue (§1c priority
+1): over the identities the **cards this clue actually touched** can hold —
+`reactor::effective_possible_for` per card, then the pink promise in pinkish
+variants — rather than over the variant-wide `touch_possibilities`.
+**Reactor still uses the variant-wide set**, so the two conventions diverge
+here. Introduced in v3.0.0 because an omni suit is touched by *every* rank
+clue, which made the variant-wide set contain the omni suit at all five ranks
+and stopped priority 1 firing at all in those variants.
+`src/conventions/reactor0/interpret_clue.cpp:178-229`.
+
+### dc-target walk
+Colour mode 2 tries each trash/dupe dc-candidate in turn instead of committing
+to the leftmost, skipping a pairing whose react slot is dead **by shared
+knowledge** and rejecting the clue outright when only the giver can tell (the
+§1g split). Rank Phase C does *not* walk — it keeps the strict leftmost
+dc-target. `src/conventions/reactor0/interpret_reactive.cpp:476-521`;
+CONVENTION.md §1d.

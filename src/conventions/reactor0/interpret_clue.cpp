@@ -13,6 +13,7 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/interpret_clue.h"
+#include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/brownish.h"
 #include "hanabi/conventions/variants/inverted.h"
@@ -174,15 +175,55 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
     return std::nullopt;
   }
 
-  // Classify the rank over every identity the clue can actually touch
-  // (variant-aware — a rank-5 clue under Pink-Fives touches pink cards of
-  // other ranks too).
+  // Classify the rank over what the cards this clue ACTUALLY TOUCHED can be,
+  // not over the whole variant's touch set. **This is where reactor0 diverges
+  // from reactor** (which still scans `variant->touch_possibilities`, see
+  // reactor/interpret_clue.cpp:447-458 and its §1c).
+  //
+  // Why: in an omni variant a rank clue touches the omni suit at EVERY rank
+  // (`Variant::id_touched` returns true for any pinkish suit on any rank
+  // clue, src/basics/variant.cpp:230). So the variant-wide set for a rank-N
+  // clue contains the omni suit at ranks 1-5, and a single useful-but-
+  // unplayable omni rank made `playable_rank` false — which meant priority 1
+  // essentially never fired in those variants and every rank clue degraded to
+  // the referential discard at the bottom of this ladder. Replays 1942517 #1
+  // (rank 1 at all-zero stacks read as a ref discard) and 1942525 T53 (a
+  // playable Sky 4 never called) are the two worked examples.
+  //
+  // Two steps, and BOTH are needed:
+  //   1. the pink promise. A rank clue in a pinkish variant promises the
+  //      rank, so the omni suit's other ranks are off the table. Without this
+  //      1942517 is not fixed: at turn 1 nothing has eliminated Dark Omni 2-5
+  //      from the touched card's `possible`.
+  //   2. per-card visibility, via `reactor::effective_possible_for`. That
+  //      narrows the card's `possible` by the copies visible in every
+  //      non-holder hand, which is POV-invariant by construction (it is
+  //      defined from the HOLDER's viewpoint, so giver, receiver and every
+  //      observer compute the same set) — the same helper the reactive vets
+  //      use. Plain `common.thoughts` is NOT enough: without this 1942525 is
+  //      not fixed, because Dark Omni 4 is a rank-4 identity and only its
+  //      visibility in a third hand rules it out. Note the whole set can be
+  //      empty for a card whose copies are all accounted for.
+  IdentitySet touchable = IdentitySet::empty();
+  for (int o : action.list_) {
+    touchable |= hanabi::reactor::effective_possible_for(game, o);
+  }
+  if (variants::includes_pinkish(state)) {
+    const int rv = clue.value;
+    touchable = touchable.filter([rv](Identity i) { return i.rank == rv; });
+  }
   bool all_trash = true;
   bool playable_rank = true;
-  for (Identity id : state.variant->touch_possibilities(clue.kind, clue.value)) {
+  for (Identity id : touchable) {
     bool basic = state.is_basic_trash(id);
     if (!basic) all_trash = false;
     if (!basic && !state.is_playable(id)) playable_rank = false;
+  }
+  // An empty set teaches nothing — fall through rather than claim every
+  // identity is playable vacuously.
+  if (!touchable.non_empty()) {
+    all_trash = false;
+    playable_rank = false;
   }
 
   // 1. Direct play clue: all remaining useful identities of the rank are

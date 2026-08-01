@@ -185,7 +185,16 @@ touched by a colour clue; that is not implemented, see
 (`:450-458`).
 
 **3. Playable rank** (`:469-510`). A **rank** clue with new touches where every
-non-trash touchable identity is currently playable. The focus is narrowed to
+non-trash touchable identity is currently playable.
+
+> **Reactor0 diverges here as of v3.0.0.** It classifies over what the cards
+> the clue actually TOUCHED can hold (`effective_possible_for` per card, plus
+> the pink promise) rather than over the variant-wide touch set — see
+> `src/conventions/reactor0/CONVENTION.md` §1c. The variant-wide set contains
+> an omni suit at every rank, which blocked reactor0's direct-play reading
+> entirely in those variants. Reactor keeps the behaviour described here; the
+> shared `playable_rank_focus` fix (leftmost, not rightmost) does apply to
+> both. The focus is narrowed to
 its playable possibilities, `info_lock` is set to that narrowing, and the focus
 is stamped `CALLED_TO_PLAY`. Skipped when the focus is *unnecessary* — every
 possibility is either basic trash or already visible somewhere

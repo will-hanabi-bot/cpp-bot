@@ -116,12 +116,18 @@ struct DcTarget {
 // oldest slot is also lock=true under rlocks — the receiver cannot tell
 // trash-on-slot-5 apart from the lock signal and must take the conservative
 // reading, so the giver must account for it too.
+// `all_trash_targets` (colour mode 2 only, §1d): collect EVERY trash/dupe
+// card slot-ascending instead of stopping at the leftmost, so mode 2 can walk
+// on to the next one when a pairing is dead by shared knowledge. Rank Phase C
+// leaves it false and keeps the strict leftmost rule.
 std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
-                                    int receiver, bool rlocks) {
+                                    int receiver, bool rlocks,
+                                    bool all_trash_targets) {
   const State& state = game.state;
   const auto& hand = state.hands[receiver];
   int oldest_index = static_cast<int>(hand.size()) - 1;
 
+  std::vector<DcTarget> found;
   for (size_t i = 0; i < hand.size(); ++i) {
     int o = hand[i];
     auto id = state.deck[o].id();
@@ -141,9 +147,11 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
     }
     if (trash || dupe) {
       bool lock = rlocks && static_cast<int>(i) == oldest_index;
-      return {DcTarget{o, static_cast<int>(i), lock}};
+      found.push_back(DcTarget{o, static_cast<int>(i), lock});
+      if (!all_trash_targets) return found;
     }
   }
+  if (!found.empty()) return found;
 
   if (rlocks) {
     if (oldest_index < 0) return {};
@@ -364,9 +372,13 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
   }
 
   // Phase C — double discard (0 plays): the reacter discards the react
-  // slot, the receiver discards the dc-target (or locks).
+  // slot, the receiver discards the dc-target (or locks). Unlike colour
+  // mode 2 this keeps the strict leftmost dc-target rule: it asks only for
+  // ONE candidate, so the loop below still walks nothing but the rlocks-off
+  // sacrifice list.
   for (const auto& cand : dc_candidates(prev, game, receiver,
-                                        game.allow_reactive_locks)) {
+                                        game.allow_reactive_locks,
+                                        /*all_trash_targets=*/false)) {
     rb.undo();
     int target_slot = cand.index + 1;
     int react_slot = calc_slot(anchor, target_slot, hand_size);
@@ -461,39 +473,64 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
   // react-slot card is visibly playable, and any observer who can see the
   // reacter's card rejects the clue when it isn't (MISTAKE). The reacter's
   // own POV sees no id and trusts the giver.
-  auto cands = dc_candidates(prev, game, receiver, game.allow_reactive_locks);
-  if (cands.empty()) return std::nullopt;
-  const DcTarget& cand = cands.front();
-  int target_slot = cand.index + 1;
-  int react_slot = calc_slot(anchor, target_slot, hand_size);
-  if (react_slot < 1 ||
-      react_slot > static_cast<int>(state.hands[reacter].size())) {
-    return std::nullopt;
-  }
-  int react_order = state.hands[reacter][react_slot - 1];
-  auto react_actual_id = state.deck[react_order].id();
-  if (react_actual_id && !prev.state.is_playable(*react_actual_id)) {
-    return std::nullopt;
-  }
-  if (variants::would_lose_inverted_reacter(
-          state, react_order, /*receiver_target_inverted=*/false,
-          /*standard_is_target_play=*/true)) {
-    return std::nullopt;
-  }
-  rb.arm();
-  game.with_thought(react_order, [](const Thought& t) {
-    Thought out = t;
-    out.old_inferred = t.inferred;
-    return out;
-  });
-  auto interp = target_play(game, action, react_order, /*urgent=*/true,
-                            /*stable=*/false);
-  if (!interp) {
+  // The dc-target is walked, not fixed: a pairing whose react slot EVERY seat
+  // can already see cannot play teaches nothing, so the reading moves on to
+  // the next trash/dupe candidate rightward (replay 1942458 T47 — the
+  // leftmost target mapped onto a react slot the reacter knew was {b5,p5},
+  // both dead, while the next candidate mapped onto a live slot).
+  //
+  // The split is §1g's, and it is the whole reason this is safe:
+  //   - `effective_possible_for` is SHARED — the reacter computes the same
+  //     set for its own card — so a `continue` here keeps every seat walking
+  //     in step;
+  //   - `state.deck[react_order]` is GIVER-ONLY (the reacter sees no id in
+  //     its own hand), so failing that check must still REJECT the whole
+  //     clue. Retargeting on it would leave the reacter blind-playing the
+  //     original pairing while giver and receiver had agreed on another.
+  auto cands = dc_candidates(prev, game, receiver, game.allow_reactive_locks,
+                             /*all_trash_targets=*/true);
+  for (const DcTarget& cand : cands) {
     rb.undo();
-    return std::nullopt;
+    int target_slot = cand.index + 1;
+    int react_slot = calc_slot(anchor, target_slot, hand_size);
+    if (react_slot < 1 ||
+        react_slot > static_cast<int>(state.hands[reacter].size())) {
+      continue;
+    }
+    int react_order = state.hands[reacter][react_slot - 1];
+    // Shared: nothing the reacter could hold here can play → retarget.
+    IdentitySet react_poss =
+        hanabi::reactor::effective_possible_for(game, react_order);
+    if (!react_poss.exists(
+            [&](Identity i) { return prev.state.is_playable(i); })) {
+      continue;
+    }
+    // Giver-only: reject, never retarget.
+    auto react_actual_id = state.deck[react_order].id();
+    if (react_actual_id && !prev.state.is_playable(*react_actual_id)) {
+      rb.undo();
+      return std::nullopt;
+    }
+    if (variants::would_lose_inverted_reacter(
+            state, react_order, /*receiver_target_inverted=*/false,
+            /*standard_is_target_play=*/true)) {
+      rb.undo();
+      return std::nullopt;
+    }
+    rb.arm();
+    game.with_thought(react_order, [](const Thought& t) {
+      Thought out = t;
+      out.old_inferred = t.inferred;
+      return out;
+    });
+    auto interp = target_play(game, action, react_order, /*urgent=*/true,
+                              /*stable=*/false);
+    if (!interp) continue;
+    if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
+    return ClueInterp::REACTIVE;
   }
-  if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
-  return ClueInterp::REACTIVE;
+  rb.undo();
+  return std::nullopt;
 }
 
 }  // namespace

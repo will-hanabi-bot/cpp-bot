@@ -31,8 +31,12 @@ bool violates_pink_promise(const Game& prev, const ClueAction& action);
 bool apply_rank_promise(Game& game, int order, const BaseClue& clue);
 
 // Pinkish focus selection for the playable-rank stable path: the focus is
-// the leftmost (lowest order) newly-touched unclued card, falling back to
-// the rightmost newly-touched card.
+// the leftmost newly-touched unclued card. Leftmost is slot 1, the NEWEST
+// card, which carries the HIGHEST order — the old wording here said "lowest
+// order", and the implementation matched the wording rather than the intent
+// until v3.0.0. Falls back to the leftmost newly-touched card when the
+// unclued set is empty (unreachable in practice — the two sets are built
+// from the same predicate).
 int playable_rank_focus(const Game& prev, const State& state,
                         const ClueAction& action,
                         const std::vector<int>& newly_touched);

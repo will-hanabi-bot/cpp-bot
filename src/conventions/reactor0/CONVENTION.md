@@ -91,42 +91,68 @@ contradicted card to its global empathy the moment the contradiction happens
 
 ## §1c Stable rank — seven priorities
 
-`stable_rank` (`interpret_clue.cpp:161-291`). The pink-promise gate runs
-first (`:172-175`), and the rank is classified over
-`variant->touch_possibilities` exactly as reactor does (`:177-186`).
+`stable_rank` (`interpret_clue.cpp:162-330`). The pink-promise gate runs
+first (`:174-176`), then the rank is classified (`:178-229`).
 
-1. **Direct play clue** (`:188-237`) — every remaining useful identity of
-   the rank is playable (assuming good touch). Focus = leftmost **newly**
-   touched card (pinkish variants: `variants::playable_rank_focus`); with no
+**The classification is over what the touched cards can actually be — this is
+a deliberate divergence from reactor**, which still scans
+`variant->touch_possibilities` (reactor's §1c). Two steps, both load-bearing:
+
+1. **the pink promise.** A rank clue in a pinkish variant promises the rank,
+   so the omni suit's *other* ranks are off the table (`:216-219`).
+2. **per-card visibility**, via `reactor::effective_possible_for` (`:207-210`)
+   — the card's `possible` narrowed by the copies visible in every non-holder
+   hand. That is POV-invariant by construction (defined from the **holder's**
+   viewpoint, so every seat computes the same set), which is why it is safe to
+   read here at all. Plain `common.thoughts` is not enough.
+
+Why it matters: an omni suit is pinkish, so `Variant::id_touched` returns true
+for it on **every** rank clue (`src/basics/variant.cpp:230`), and the
+variant-wide set for a rank-N clue therefore contains the omni suit at ranks
+1-5. A single useful-but-unplayable omni rank made `playable_rank` false, so
+priority 1 essentially never fired in omni variants and every rank clue
+degraded to the referential discard at the bottom of this ladder. Replays
+1942517 #1 (a rank 1 at all-zero stacks read as a referential discard) and
+1942525 T53 (a playable Sky 4 never called) are the worked examples.
+
+An empty narrowed set teaches nothing and is treated as neither
+all-trash nor playable-rank (`:225-229`), rather than vacuously true.
+
+1. **Direct play clue** (`:231-280`) — every remaining useful identity the
+   touched cards can hold is playable (assuming good touch). Focus = leftmost
+   **newly** touched card — highest order, since slot 1 is newest — in both
+   the plain branch (`:240`) and the pinkish one
+   (`variants::playable_rank_focus`, `:235`; that helper returned the
+   *rightmost* until v3.0.0); with no
    newly touched cards, the leftmost **touched** card that could be playable.
    The focus is narrowed to its playable identities, `info_lock` set, and
    stamped via `variants::called_focus_status` (CTD for a possibly-orange
    focus). Returns `PLAY`. An *unnecessary* focus (every possibility trash or
-   visible elsewhere) makes the clue a `STALL` instead (`:207-217`).
-2. **Play reveal** (`:239-244`) — the clue fills a previously-clued card in
+   visible elsewhere) makes the clue a `STALL` instead (`:250-260`).
+2. **Play reveal** (`:282-287`) — the clue fills a previously-clued card in
    as a new obvious playable, without the whole rank being playable →
    `REVEAL`, no stamp; empathy carries it. **Terminal, and ranked above every
    other reveal and above the referential readings**: the receiver has a play
    to make, which outranks being told what to discard. So a rank clue that
    both fills in a playable and touches the lock slot is a `REVEAL`, not a
    `LOCK`.
-3. **Trash reveal** (`:246-257`) — every touchable identity is trash. The
+3. **Trash reveal** (`:289-300`) — every touchable identity is trash. The
    leftmost newly touched card is marked known trash (`inferred ∩= trash_set`,
    `meta.trash`); `REVEAL`. No newly touched cards → `STALL`. **Terminal**:
    never falls through to a referential reading (unlike reactor, where an
    all-trash rank clue is the trash push and this is where reactor0 and
    reactor deliberately diverge — see TODO.md's reactor-only trash-push
    entry).
-4. **Previously-clued trash / dupe reveal** (`:259-280`) — `check_fix` →
+4. **Previously-clued trash / dupe reveal** (`:302-323`) — `check_fix` →
    `FIX`; a previously-clued card newly known trash → `REVEAL`; the brownish
    trash reveal (`variants::brownish_trash_reveal`) → `REVEAL`.
-5. **Lock** and 6. **Referential discard** (`:283-287`) — a clue touching at
+5. **Lock** and 6. **Referential discard** (`:325-329`) — a clue touching at
    least one new card falls into reactor's `ref_discard`
    (`src/conventions/reactor/interpret_clue.cpp:317-420`): touching the lock
    slot (oldest unclued) stamps the whole hand `CHOP_MOVED` → `LOCK`;
    otherwise the first unclued slot right of the focus is stamped
    `CALLED_TO_DISCARD` → `DISCARD`, pink promise included.
-7. **Stall** (`:290`) — no new cards and nothing above fired.
+7. **Stall** (`:332`) — no new cards and nothing above fired.
 
 ## §1d Reactive — the clue value is the anchor
 
@@ -211,12 +237,23 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
 - **Mode 1 — receiver has a playable** (`:411-456`): the reacter **discards**
   the react slot and the receiver plays the target (leftmost playable;
   a react slot holding a known critical advances the target, `:424-429`).
-- **Mode 2 — no playable** (`:458-500`): the reacter **blind-plays** the
-  react slot. The single dc-candidate is determined by the receiver's hand
-  (below); the giver only gives this clue when the react-slot card is
-  visibly playable — any observer who can see the reacter's card and finds
-  it unplayable reads `MISTAKE` (`:479-482`), while the reacter's own POV
-  sees no identity and trusts the giver.
+- **Mode 2 — no playable** (`:476-521`): the reacter **blind-plays** the
+  react slot. The dc-candidates are **walked**, not fixed (`:492`): a pairing
+  whose react slot every seat can already see cannot play teaches nothing, so
+  the reading moves on to the next trash/dupe candidate rightward. The split
+  is §1g's, and it is the whole reason this is safe:
+    - `effective_possible_for(react_order)` holds no playable → **retarget**
+      (`:503-508`). Shared: the reacter computes the same set for its own
+      card, so every seat walks in step.
+    - the react slot's **actual** identity is unplayable, or
+      `would_lose_inverted_reacter` → **reject the clue** (`:510-521`), never
+      retarget. Giver-only: the reacter sees no identity in its own hand and
+      would still compute the original pairing, blind-play it and strike.
+
+  Before v3.0.0 mode 2 committed to `dc_candidates().front()` with no walk,
+  so replay 1942458 T47 — where the leftmost target mapped onto a react slot
+  every seat knew was dead, while the next candidate mapped onto a live one —
+  was rejected outright as a `MISTAKE`.
 
 The receiver disambiguates the two modes by the reacter's **action type**:
 discard → mode 1 (play your target), play → mode 2 (discard your target /
@@ -224,16 +261,19 @@ lock).
 
 ### The dc-target
 
-`dc_candidates` (`interpret_reactive.cpp:119-170`):
+`dc_candidates` (`interpret_reactive.cpp:123-176`):
 
-1. the **leftmost** card whose actual identity is **basic trash** or a
-   **same-hand dupe** — *always*, regardless of cluedness or of any status
-   already stamped on it. This is a deliberate divergence from reactor, which
-   reorders and filters its pool: here the receiver derives the target from
-   hand position alone, so a second copy further right cannot move it and a
-   standing `CALLED_TO_DISCARD` cannot skip it. The one exclusion is
-   inverted-suit cards, which can never be named at all (a CTD on orange is a
-   chuck that strikes on trash);
+1. cards whose actual identity is **basic trash** or a **same-hand dupe**,
+   slot-ascending — regardless of cluedness or of any status already stamped
+   on them. This is a deliberate divergence from reactor, which reorders and
+   filters its pool: here the receiver derives the target from hand position
+   alone, so a standing `CALLED_TO_DISCARD` cannot skip a card. The one
+   exclusion is inverted-suit cards, which can never be named at all (a CTD
+   on orange is a chuck that strikes on trash).
+   **Only colour mode 2 sees more than the leftmost** — it passes
+   `all_trash_targets=true` (`:491`) so it has something to walk. Rank Phase C
+   passes false (`:381`) and keeps the strict leftmost rule, so a second copy
+   further right still cannot move its target;
 2. no such card and **rlocks on** → the single candidate is the **oldest
    slot**, flagged as the lock;
 3. no such card and **rlocks off** → reactor's sacrifice ordering
@@ -575,6 +615,9 @@ the penalty must not make a clue that only buries trash look acceptable.
 | `tests/test_reactor0/test_reactive_colour.cpp` | both colour modes, critical skip, dupe targets, MISTAKE rejection |
 | `tests/test_reactor0/test_reactive_lock.cpp` | lock in both modes, rlocks-off sacrifice, trash-on-oldest-slot |
 | `tests/test_reactor0/test_colour_value.cpp` | the colour-value table incl. the spec's worked example |
+| `tests/test_reactor0/test_stable_rank_omni.cpp` | §1c in an omni variant — rank 1 and rank 4 read as direct plays, an unplayable useful identity still blocks, and the pinkish focus is the leftmost |
+| `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
+| `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
 | `tests/test_reactor0/test_efficiency.cpp` | efficiency formula + rlocks defaults |
 | `tests/test_reactor0/test_giver_filters.cpp` | MISTAKE clues never offered |
 | `tests/test_basics/test_snapshot_convention.cpp` | convention/rlocks snapshot round-trip + reactor back-compat |
