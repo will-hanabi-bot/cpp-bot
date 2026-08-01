@@ -261,3 +261,19 @@ holder and every observer compute the same answer, so a convention rule may
 branch on it without desyncing (§1g). Selects which touched orange the pitch
 branch names.
 `src/basics/player_game.cpp`, declared in `include/hanabi/basics/player.h`.
+
+### react-slot vetting
+The check a reactive path runs on the reacter's slot before committing to a
+pairing, and the reason it has three outcomes rather than two: `OK`,
+`RETARGET` (shared knowledge — the reacter walks to the next candidate too, so
+every seat stays in step) and `REJECT` (giver-only knowledge — the reacter
+would still act on this pairing, so the clue must not be offered at all). The
+split is §1g.
+
+**It follows the inverted swap.** Rank Phase A normally calls the reacter to
+play but calls it to *discard* for an orange target; colour mode 1 does the
+reverse. A play call is vetted for playability (POV-invariantly via
+`effective_possible_for`, plus a giver-only "would strike" reject); a discard
+call is vetted only for "not every possibility is critical". Vetting the
+un-swapped call is bug_report_4.txt 4.1.
+`src/conventions/reactor0/interpret_reactive.cpp:186-244`.

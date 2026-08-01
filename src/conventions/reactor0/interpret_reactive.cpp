@@ -177,6 +177,71 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
 // delayed-play successors and stamp it CTP (CTD for inverted suits), the
 // same double-stamp reactor's reactive paths perform so hypo_plays sees
 // the second play. Returns false when the narrowing empties.
+// --- react-slot vetting ---------------------------------------------------
+
+// What vetting the react slot decided. The three outcomes are §1g's split:
+// shared knowledge may RETARGET (the reacter walks to the next candidate too,
+// so every seat stays in step), giver-only knowledge may only REJECT (the
+// reacter would still act on this pairing, so the clue must not be offered).
+enum class ReactVet { OK, RETARGET, REJECT };
+
+// Vet the react slot against the call the reacter will ACTUALLY receive.
+//
+// Both reactive paths swap the reacter's action when the receiver's target is
+// on an inverted suit (`variants::target_is_inverted`), so that the receiver's
+// standard reading of (clue kind + reacter action) still lands on the
+// physically correct button: rank Phase A normally calls `target_play` but
+// calls `target_discard` for an orange target, and colour mode 1 does the
+// reverse. **The vetting has to follow that swap**, which is what
+// `reacter_plays` carries.
+//
+// Getting it wrong is bug_report_4.txt 4.1 in both directions. Vetting a
+// DISCARD call for playability throws away perfectly good clues — at replay
+// 1942777 T10 the receiver's only playable was an Orange 2, whose react slot
+// held a Blue card with both Blue 3s visible across the table, so the
+// playability vet failed and the clue degraded to the Phase C lock. Vetting a
+// PLAY call for criticality is worse: it lets a blind play through with no
+// playability check at all, which strikes.
+//
+// `variants::would_lose_inverted_reacter` is already swap-aware at both call
+// sites, so it stays where it is — only this vet was missing the swap.
+ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
+                        const std::vector<std::pair<int, Identity>>& conns,
+                        bool reacter_plays) {
+  const State& state = game.state;
+
+  if (!reacter_plays) {
+    // The reacter is being told to discard. It need not be playable — it must
+    // merely be safe to throw away. Common knowledge, so a failure retargets.
+    if (game.common.thoughts[react_order].possible.forall(
+            [&](Identity i) { return state.is_critical(i); })) {
+      return ReactVet::RETARGET;
+    }
+    return ReactVet::OK;
+  }
+
+  auto is_workable = [&](Identity i) {
+    if (prev.state.playable_set.contains(i)) return true;
+    for (const auto& [_, c] : conns) {
+      if (c == i) return true;
+    }
+    return false;
+  };
+
+  // POV-invariant: the reacter's card must possibly be playable (or a
+  // connector) from the holder's own knowledge.
+  if (!effective_possible_for(game, react_order).exists(is_workable)) {
+    return ReactVet::RETARGET;
+  }
+
+  // Beyond this point the vetting reads the reacter's ACTUAL deck id, which
+  // the reacter cannot see. If the giver can tell the card is neither playable
+  // nor a connector, the call strikes — reject the clue rather than offer it.
+  auto react_actual_id = state.deck[react_order].id();
+  if (react_actual_id && !is_workable(*react_actual_id)) return ReactVet::REJECT;
+  return ReactVet::OK;
+}
+
 bool stamp_receiver_play(const Game& prev, Game& game, const ClueAction& action,
                          int target) {
   const State& state = game.state;
@@ -239,42 +304,25 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       continue;
     }
     int react_order = state.hands[reacter][react_slot - 1];
-    // POV-invariant vetting: the reacter's card must possibly be playable
-    // (or a connector) from the holder's own knowledge.
-    IdentitySet effective = effective_possible_for(game, react_order);
-    bool ok = effective.exists([&](Identity i) {
-      if (prev.state.playable_set.contains(i)) return true;
-      for (const auto& [_, c] : conns) {
-        if (c == i) return true;
-      }
-      return false;
-    });
-    if (!ok) continue;
-    // Beyond this point the vetting reads the reacter's ACTUAL deck id,
-    // which the reacter cannot see. Shared knowledge may retarget — the
-    // reacter walks to the next candidate too — but giver-only knowledge may
-    // only REJECT, because the reacter would still act on this pairing.
-    auto react_actual_id = state.deck[react_order].id();
-    if (react_actual_id) {
-      bool workable = prev.state.is_playable(*react_actual_id);
-      if (!workable) {
-        for (const auto& [_, c] : conns) {
-          if (c == *react_actual_id) {
-            workable = true;
-            break;
-          }
-        }
-      }
-      // Phase A calls the reacter to play. If the giver can see the card is
-      // neither playable nor a connector, the call strikes — reject the clue
-      // rather than offer it. (Colour mode 2 and Phase B already do this.)
-      if (!workable) {
+    // Phase A normally calls the reacter to PLAY, but swaps to a discard when
+    // the receiver's target is inverted (see the `target_discard` branch
+    // below) — so the vetting has to ask about the call that will actually be
+    // issued, not the default one. Vetting the discard case for playability is
+    // bug_report_4.txt 4.1: at replay 1942777 T10 it skipped the receiver's
+    // only playable (an Orange 2) and the clue degraded to the Phase C lock.
+    const bool target_inverted = variants::target_is_inverted(state, target);
+    switch (vet_react_slot(prev, game, react_order, conns,
+                           /*reacter_plays=*/!target_inverted)) {
+      case ReactVet::RETARGET:
+        continue;
+      case ReactVet::REJECT:
         rb.undo();
         return std::nullopt;
-      }
+      case ReactVet::OK:
+        break;
     }
     if (variants::would_lose_inverted_reacter(
-            state, react_order, variants::target_is_inverted(state, target),
+            state, react_order, target_inverted,
             /*standard_is_target_play=*/true)) {
       // Giver-only: the guard reads the react card's suit. The reacter does
       // not know their card is inverted, so they would chuck it and strike.
@@ -387,9 +435,11 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       continue;
     }
     int react_order = state.hands[reacter][react_slot - 1];
-    // Don't make the reacter discard a known critical.
-    if (game.common.thoughts[react_order].possible.forall(
-            [&](Identity i) { return state.is_critical(i); })) {
+    // Phase C always discards — there is no target to be inverted, since the
+    // dc-target is not a play. Routed through the shared helper for uniformity
+    // only; `reacter_plays=false` is exactly the old critical check.
+    if (vet_react_slot(prev, game, react_order, conns,
+                       /*reacter_plays=*/false) != ReactVet::OK) {
       continue;
     }
     rb.arm();
@@ -418,6 +468,10 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
   const State& state = game.state;
   int receiver = action.target;
   int hand_size = kHandSize[state.num_players];
+  // Mirrors reactive_rank's call exactly, `receiver` argument included — it
+  // feeds the play half of `vet_react_slot`, which mode 1 reaches when the
+  // receiver's target is inverted and the reacter is told to blind-play.
+  auto conns = delayed_plays(game, action.giver, receiver, /*stable=*/false);
   Rollback rb(game);
 
   // Mode 1 — the receiver has a playable: the reacter DISCARDS the react
@@ -433,14 +487,25 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
         continue;
       }
       int react_order = state.hands[reacter][react_slot - 1];
-      // "If the target would make Bob discard a known critical card, Bob
-      // targets the next leftmost playable."
-      if (game.common.thoughts[react_order].possible.forall(
-              [&](Identity i) { return state.is_critical(i); })) {
-        continue;
+      // Mode 1 normally calls the reacter to DISCARD — "if the target would
+      // make Bob discard a known critical card, Bob targets the next leftmost
+      // playable" — but swaps to `target_play` when the receiver's target is
+      // inverted (see below). Vetting the swapped case for criticality alone
+      // is the mirror of bug_report_4.txt 4.1, and the worse half: it lets a
+      // blind play through with no playability check, which strikes.
+      const bool target_inverted = variants::target_is_inverted(state, target);
+      switch (vet_react_slot(prev, game, react_order, conns,
+                             /*reacter_plays=*/target_inverted)) {
+        case ReactVet::RETARGET:
+          continue;
+        case ReactVet::REJECT:
+          rb.undo();
+          return std::nullopt;
+        case ReactVet::OK:
+          break;
       }
       if (variants::would_lose_inverted_reacter(
-              state, react_order, variants::target_is_inverted(state, target),
+              state, react_order, target_inverted,
               /*standard_is_target_play=*/false)) {
         // Giver-only knowledge (the react card's suit) — reject, never
         // retarget. The critical-card guard above is different: that one is

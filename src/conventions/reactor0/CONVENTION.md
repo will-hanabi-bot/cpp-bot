@@ -53,7 +53,7 @@ giver, Bob the next player, Cathy the one after.
   meaning here. It is never set on a reactor0 game
   (`src/net/commands.cpp:292-302`), `chat_allplays` skips reactor0 games when
   retro-applying (`:914-933`), and a reactor0 waiting connection always stores
-  `all_plays = false` (`interpret_reactive.cpp:524-530`).
+  `all_plays = false` (`interpret_reactive.cpp:626-635`).
 
 ## §1a Dispatch — purely positional
 
@@ -215,18 +215,18 @@ all-trash nor playable-rank (`:420-424`), rather than vacuously true.
 
 ## §1d Reactive — the clue value is the anchor
 
-`reactor0::interpret_reactive` (`interpret_reactive.cpp:503-544`). There is
+`reactor0::interpret_reactive` (`interpret_reactive.cpp:605-646`). There is
 no reactive focus. The anchor is:
 
 > **react_slot + target_slot ≡ anchor (mod hand size)** where
 > **anchor = the rank** for rank clues, and **the fixed colour value** for
-> colour clues (`:515-517`; `calc_slot` is reactor's,
+> colour clues (`:617-625`; `calc_slot` is reactor's,
 > `src/conventions/reactor/interpret_reaction.cpp:16-19`).
 
 The waiting connection stores the anchor in `ReactorWC::focus_slot` plus a
 clue-time snapshot of `allow_reactive_locks` in `ReactorWC::rlocks`
-(`:518-531`). The receiver never selects targets — their POV returns
-`REACTIVE` immediately and decodes positionally at reaction time (`:538`).
+(`:626-635`). The receiver never selects targets — their POV returns
+`REACTIVE` immediately and decodes positionally at reaction time (`:643-645`).
 
 **Candidate walks are transactional** (`Rollback`, `:53-72`). Every phase
 snapshots the game immediately before its first mutation and restores on each
@@ -263,40 +263,72 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
 
 ### Rank reactive — an even number of plays (2 or 0)
 
-`reactive_rank` (`interpret_reactive.cpp:211-398`):
+`reactive_rank` (`interpret_reactive.cpp:284-460`):
 
-- **Phase A — double play** (`:223-299`). The target pool is the receiver's
+- **Phase A — double play** (`:296-355`). The target pool is the receiver's
   playable cards, slots ascending — **including already-CTP'd cards**
-  (`play_pool`, `:90-101`; the include-CTP'd rule is a deliberate reactor
-  divergence). For each target leftmost-first: compute the react slot; vet it
-  POV-invariantly (`effective_possible_for` must intersect playables ∪
-  delayed-play connectors, `:234-243`) — a failed vet advances to the
-  next-leftmost target; inverted-suit swaps as in reactor; the reacter is
-  stamped urgent CTP (blind play) and the receiver target CTP
-  (`stamp_receiver_play`, `:172-207`). A react card the **giver can see** is
-  neither playable nor a connector rejects the clue (`:249-268`) — it would
-  strike.
-- **Phase B — finesse** (`:301-364`). Walked by **target**, leftmost one-away
+  (`play_pool`, `:83-92`; the include-CTP'd rule is a deliberate reactor
+  divergence). For each target leftmost-first: compute the react slot, vet it
+  (`vet_react_slot`, below), then stamp — the reacter urgent CTP (blind play)
+  and the receiver target CTP (`stamp_receiver_play`, `:245-280`).
+  **Inverted-suit swap:** when the receiver's target is on an inverted suit the
+  reacter is stamped **CTD** instead (`:338-341`), so that the receiver's
+  standard even-parity reading ("the reacter discarded → I discard my target")
+  lands on the chuck that advances the orange stack; `stamp_receiver_play`
+  stamps the target CTD to match.
+- **Phase B — finesse** (`:357-420`). Walked by **target**, leftmost one-away
   first (reactor walks react slots in a fixed order instead). The reacter
   must hold the connector — direction-aware, so `next()` on a reversed suit
   and `prev()` elsewhere (`variants::connector_of`,
   `include/hanabi/conventions/variants/reversed.h`) — via
   `effective_possible_for(react).contains(connector)`, else the next one-away
   is tried.
-- **Phase C — double discard** (`:366-398`). Zero plays: the reacter
+- **Phase C — double discard** (`:422-457`). Zero plays: the reacter
   **discards** the react slot (urgent CTD; a known-critical react slot
-  advances to the next dc-candidate, `:377-381`) and the receiver's
+  advances to the next dc-candidate, `:441-444`) and the receiver's
   dc-target — chosen by the same rules as colour mode 2 below — resolves at
-  reaction time.
+  reaction time. There is no target to be inverted here, so this phase always
+  vets as a discard.
+
+### Vetting the react slot follows the swap
+
+`vet_react_slot` (`:186-243`). Both reactive paths swap the reacter's action
+when the receiver's target is inverted — rank Phase A goes play → **discard**,
+colour mode 1 goes discard → **play** — so the question asked of the react slot
+has to swap with it:
+
+| the reacter will | the vet asks | on failure |
+|---|---|---|
+| **play** | `effective_possible_for(react)` intersects playables ∪ delayed-play connectors | RETARGET (shared) |
+| **play** | the react card's **actual** id is playable or a connector | REJECT (giver-only) |
+| **discard** | not every possibility is critical | RETARGET (shared) |
+
+The three outcomes are §1g's split, and each call site derives `reacter_plays`
+from the same `variants::target_is_inverted` test that drives its swap
+(`:306-320` rank, `:490-505` colour).
+
+Vetting the un-swapped call is bug_report_4.txt 4.1, in both directions.
+Asking a **discard** call for playability throws good clues away: at replay
+1942777 #10 ("Funnels & Orange") the receiver's only playable was an Orange 2,
+whose react slot held a clued Blue card with both Blue 3s visible across the
+table — the vet failed, Phase A skipped the only play target, and the clue
+collapsed into Phase C's lock, so the reacter discarded slot 3 instead of
+slot 5. Asking a **play** call for criticality is worse: colour mode 1 would
+blind-play a react slot with no playability check at all, which strikes.
+`variants::would_lose_inverted_reacter` was already swap-aware at both sites,
+which is why only this vet was wrong. **Reactor still vets the un-swapped call
+at all four of its reactive sites** — see TODO.md.
 
 ### Colour reactive — one play
 
-`reactive_colour` (`interpret_reactive.cpp:400-500`):
+`reactive_colour` (`interpret_reactive.cpp:462-599`):
 
-- **Mode 1 — receiver has a playable** (`:411-456`): the reacter **discards**
+- **Mode 1 — receiver has a playable** (`:477-533`): the reacter **discards**
   the react slot and the receiver plays the target (leftmost playable;
-  a react slot holding a known critical advances the target, `:424-429`).
-- **Mode 2 — no playable** (`:476-521`): the reacter **blind-plays** the
+  a react slot holding a known critical advances the target). **Inverted-suit
+  swap:** for an orange target the reacter is called to **play** instead
+  (`:522-525`), and the vet swaps with it — see above.
+- **Mode 2 — no playable** (`:535-598`): the reacter **blind-plays** the
   react slot. The dc-candidates are **walked**, not fixed (`:492`): a pairing
   whose react slot every seat can already see cannot play teaches nothing, so
   the reading moves on to the next trash/dupe candidate rightward. The split
@@ -320,7 +352,7 @@ lock).
 
 ### The dc-target
 
-`dc_candidates` (`interpret_reactive.cpp:123-176`):
+`dc_candidates` (`interpret_reactive.cpp:123-174`):
 
 1. cards whose actual identity is **basic trash** or a **same-hand dupe**,
    slot-ascending — regardless of cluedness or of any status already stamped
@@ -595,7 +627,7 @@ TODO.md.
 `Game::take_action` (`src/basics/decide.cpp:867-878`) immediately after the
 candidate clues are built and **before** the argmax.
 
-A rank Phase C reactive (§1d, `interpret_reactive.cpp:366-393`) says only
+A rank Phase C reactive (§1d, `interpret_reactive.cpp:422-457`) says only
 "you two both discard". That is worth a token when the receiver would
 otherwise lose something — and worth nothing when they were going to act
 safely anyway. Reactor0 therefore **drops** such a clue from its own candidate
@@ -609,7 +641,7 @@ A candidate is dropped when **all** of (`is_pointless_double_discard`, `:486`):
    the receiver's and mode 2 the reacter's blind play, so they can never be
    0-play;
 3. the variant contains **no inverted suit**. On an inverted suit a *play*
-   call is stamped `CALLED_TO_DISCARD` (`interpret_reactive.cpp:198-200`), so
+   call is stamped `CALLED_TO_DISCARD` (`interpret_reactive.cpp:271-278`), so
    the CTP-transition count below would read a genuine two-play Phase A as
    zero plays. Rather than mis-fire, the rule sits those variants out;
 4. the interpretation is `REACTIVE` and it produces **zero** new
@@ -690,6 +722,8 @@ the penalty must not make a clue that only buries trash look acceptable.
 | `tests/test_reactor0/test_reactive_colour.cpp` | both colour modes, critical skip, dupe targets, MISTAKE rejection |
 | `tests/test_reactor0/test_reactive_lock.cpp` | lock in both modes, rlocks-off sacrifice, trash-on-oldest-slot |
 | `tests/test_reactor0/test_colour_value.cpp` | the colour-value table incl. the spec's worked example |
+| `tests/test_reactor0/test_reactive_inverted_vet.cpp` | §1d — the react-slot vet follows the inverted swap, each swapped case paired with its un-swapped control, plus the giver-only reject |
+| `tests/test_reactor0/test_bad_reactive_target/test_replay_1942777_orange_reactive_vet_follows_swap.cpp` | bug 4.1 end to end — the reacter discards slot 5, not the Phase C lock's slot 3 |
 | `tests/test_reactor0/test_orange.cpp` | §1b/§1c in inverted variants — bug 3.1's rank-2 lock, a rank clue still revealing a playable orange, pitch at pace > 3, chuck at pace <= 3, chuck in Dark Orange, play reveal outranking the pitch, and the stall when nothing can reach the stacks |
 | `tests/test_endgame/test_orange_chuck.cpp` | bug 3.2 — the solver offers a known playable orange as a chuck, and `perform_to_action` models a chuck of a non-playable orange as a misplay |
 | `tests/test_reactor0/test_stable_rank_omni.cpp` | §1c in an omni variant — rank 1 and rank 4 read as direct plays, an unplayable useful identity still blocks, and the pinkish focus is the leftmost |

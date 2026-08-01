@@ -255,3 +255,20 @@ non-inverted suit (say `{o1, r1}` at zero stacks) falls through to
 `PerformPlay`, which discards it if it really was orange. Reactor0's §1b
 stamps sidestep this by narrowing `inferred` to the inverted playable set, but
 a bare rank play reveal in an inverted variant does not.
+
+## 13. `[reactor]` Reactive vetting does not follow the inverted swap
+
+The defect reactor0 fixed in v4.1.0 (bug_report_4.txt 4.1) exists unfixed in
+reactor. Its four reactive sites all swap the reacter's action for an inverted
+receiver target — `src/conventions/reactor/interpret_reactive.cpp:317`, `:549`,
+`:690`, `:850` — while vetting the react slot for the un-swapped call, exactly
+as reactor0 used to. Two consequences, one per direction:
+
+- a reacter called to **discard** (because the target is orange) is rejected
+  for not being possibly playable, so the clue degrades to a weaker reading;
+- a reacter called to **play** is accepted on a criticality check alone, with
+  no playability vet and no giver-only strike guard.
+
+Left alone deliberately: fixing it is a second cross-version behaviour change
+and puts reactor's 120-test corpus at risk. reactor0's `vet_react_slot`
+(`reactor0/interpret_reactive.cpp:186-244`) is the shape to copy.

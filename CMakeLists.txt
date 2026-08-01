@@ -226,6 +226,8 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_stable_colour_baseline.cpp
   tests/test_reactor0/test_stable_rank.cpp
   tests/test_reactor0/test_orange.cpp
+  tests/test_reactor0/test_reactive_inverted_vet.cpp
+  tests/test_reactor0/test_bad_reactive_target/test_replay_1942777_orange_reactive_vet_follows_swap.cpp
   tests/test_reactor0/test_stable_rank_omni.cpp
   tests/test_reactor0/test_urgent_skips_known_trash.cpp
   tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp
