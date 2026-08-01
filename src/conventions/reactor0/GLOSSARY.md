@@ -24,7 +24,7 @@ visibility. All four must hold: Alice knows the identity and it is not basic
 trash; there is **no second copy in the holder's own hand**; no copy is
 visible in the third player's hand; and Alice cannot prove she is holding a
 copy (see *group elim*). Input to §2a's H1 and N2/N3.
-`src/conventions/reactor0/state_eval.cpp:109-135`. Stricter than reactor's
+`src/conventions/reactor0/state_eval.cpp:121-145`. Stricter than reactor's
 `chop_is_nontrash` (`src/conventions/reactor/state_eval.cpp:44-49`), which
 tests basic trash only.
 
@@ -184,3 +184,12 @@ Concepts reactor has that reactor0 deliberately lacks: **reactive focus**
 **response inversion / rewinds** (dispatch is unambiguous), **loadedness
 dispatch**, **deferral-carries-reactive**, **re-tasking**, **/allplays**
 (mechanically tolerated, not part of the convention).
+
+### playable chop (N5)
+Bob holding a **playable** card on his chop that is not duplicated in his own
+hand. A NOT-LOW condition of the *pace-clue tier gate*: it lifts every clue
+that turn to at least MEDIUM, because the team is expecting that card to be
+saved or played. Weaker than *at-risk chop* — it ignores copies in Cathy's
+hand and in Alice's — which is the point: the card need not be in danger to be
+worth a clue. `src/conventions/reactor0/state_eval.cpp:151-161`;
+CONVENTION.md §2a. Added after replay 1942330 T33.

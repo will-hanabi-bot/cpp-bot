@@ -388,7 +388,7 @@ differences from reactor's gate: it is one token wider (`<= 3`, not `< 3`),
 and it has **no "we hold a real play" conjunct** — it fires whether or not
 Alice has anything queued.
 
-**The required tier** (`requires_high_tier`, `:367-379`):
+**The required tier** (`requires_high_tier`, `:391-403`):
 
 | Alice's hand | Required |
 |---|---|
@@ -402,7 +402,7 @@ know. (Reactor's gate keys on `obvious_playables` instead; this is the
 deliberate divergence.) A clue below its required tier scores a flat `-1.0`,
 reactor's rejection convention: below any play, above `-100`.
 
-**The tiers** (`clue_tier`, `:381-417`). HIGH iff **any** of:
+**The tiers** (`clue_tier`, `:405-447`). HIGH iff **any** of:
 
 1. **H1 — Bob's chop is endangered.** Bob is not locked, has no safe action
    (no obvious play, no known trash, no CTD — all three are covered by
@@ -413,19 +413,31 @@ reactor's rejection convention: below any play, above `-100`.
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain
    rank (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:400-401`.
 
-NOT-LOW iff any of H1–H3, or, when **Cathy's** chop is endangered (`:404-415`):
+NOT-LOW iff any of H1–H3, or:
 
-4. **N3** — the clue gets two new plays. `:406-407`.
+6. **N5 — Bob's chop is playable** and is not duplicated in his own hand
+   (`has_playable_chop`, `:151-161`; applied at `:428-432`). Like H1 this is a
+   property of the **position, not of the candidate clue**, so it lifts every
+   clue that turn to at least MEDIUM. Deliberately weaker than
+   `at_risk_chop`: it asks only "playable, and Bob cannot just pitch a spare
+   copy", and does *not* care whether a copy sits in Cathy's hand or is
+   provable in Alice's — the point is not that the card is in danger but that
+   it is a play the team should be collecting, and Cathy is already expecting
+   Alice to save it or get it played.
+
+…or, when **Cathy's** chop is endangered (`:434-445`):
+
+4. **N3** — the clue gets two new plays. `:436-437`.
 5. **N2** — the clue is **reactive** and Bob has no colour stable play clue he
    could give Cathy. Reactive is a single integer compare, `action.target !=
-   bob`, since dispatch is positional (§1a). `:408-414`.
+   bob`, since dispatch is positional (§1a). `:438-444`.
 
 MEDIUM is NOT-LOW and not HIGH; LOW is everything else. "New plays" are counted
 as CTP-status transitions between the real game and the clue's hypo
-(`new_play_facts`, `:146-163`) — the same walk reactor's `is_high_value_clue`
+(`new_play_facts`, `:170-187`) — the same walk reactor's `is_high_value_clue`
 uses.
 
-**Endangered chop** (`at_risk_chop`, `:109-135`), judged from Alice's full
+**Endangered chop** (`at_risk_chop`, `:121-145`), judged from Alice's full
 visibility. All four must hold: the identity is known to Alice and not basic
 trash; there is **no second copy in the holder's own hand**; no copy sits in
 the third player's hand; and Alice cannot prove she holds a copy herself. The
@@ -447,7 +459,7 @@ non-empty subsets are enumerated directly; `cross_elim`
 (`src/basics/player_elim.cpp:165-226`) solves the dual problem (it strips
 locked ids from cards *outside* the group) and cannot answer this.
 
-**Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:170-188`)
+**Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:194-212`)
 is a structural check, not a simulation: for each colour clue Bob could give
 Cathy it replays `stable_colour`'s target choice (§1b step 2,
 `interpret_clue.cpp:135`) plus its three guards (`:142-150`), then asks whether
@@ -486,7 +498,7 @@ A candidate is dropped when **all** of (`is_pointless_double_discard`, `:486`):
    the CTP-transition count below would read a genuine two-play Phase A as
    zero plays. Rather than mis-fire, the rule sits those variants out;
 4. the interpretation is `REACTIVE` and it produces **zero** new
-   `CALLED_TO_PLAY` stamps (`new_play_facts`, `:146-163`) — the discriminator,
+   `CALLED_TO_PLAY` stamps (`new_play_facts`, `:170-187`) — the discriminator,
    since Phase C returns the same `ClueInterp` as a two-play reactive;
 5. it is **not a reactive lock** (`predicts_reactive_lock`,
    `interpret_reaction.cpp:31-49`). A lock protects a whole hand, so it keeps
@@ -570,3 +582,4 @@ the penalty must not make a clue that only buries trash look acceptable.
 | `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | §2a window (both boundaries, incl. `clue_tokens == 3`), required tier, and that reactor's own gate is unchanged |
 | `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | §2b predicates — every `receiver_is_safe` clause, and the negatives that keep the filter off stable clues, colour reactives and endangered receivers |
 | `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | §2b/§2c end to end on the replay that motivated them, plus both predicates on a real Phase C |
+| `tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp` | §2a N5 end to end — a playable non-duped chop on Bob lifts every clue, so a direct play clue beats the lock the flattened gate used to pick |

@@ -106,6 +106,18 @@ bool alice_provably_holds(const Game& game, int alice, Identity id) {
 // `chop_is_nontrash` / `chop_id_is_unique` (reactor/state_eval.cpp:44-49,
 // :82-103) in one respect: a second copy of the identity in the holder's OWN
 // hand makes the chop expendable, so it counts as trash here.
+// True when a card other than `chop_order` in `player`'s OWN hand carries
+// `id` — the holder can pitch one copy safely, so that card is expendable.
+bool has_same_hand_dupe(const State& s, int player, int chop_order,
+                        Identity id) {
+  for (int o : s.hands[player]) {
+    if (o == chop_order) continue;
+    auto other = s.deck[o].id();
+    if (other && *other == id) return true;
+  }
+  return false;
+}
+
 bool at_risk_chop(const Game& game, int alice, int player) {
   const State& s = game.state;
   auto chop = game.chop(player);
@@ -115,11 +127,7 @@ bool at_risk_chop(const Game& game, int alice, int player) {
   if (s.is_basic_trash(*id)) return false;
 
   // Same-hand duplicate: the holder can pitch one copy safely.
-  for (int o : s.hands[player]) {
-    if (o == *chop) continue;
-    auto other = s.deck[o].id();
-    if (other && *other == *id) return false;
-  }
+  if (has_same_hand_dupe(s, player, *chop, *id)) return false;
   // A copy sitting in a hand we can see (everyone but ourselves and the
   // holder). At 3 players this is exactly "Cathy's hand" when player == Bob.
   for (int p = 0; p < s.num_players; ++p) {
@@ -132,6 +140,22 @@ bool at_risk_chop(const Game& game, int alice, int player) {
   // A copy we can prove we are holding ourselves.
   if (alice_provably_holds(game, alice, *id)) return false;
   return true;
+}
+
+// N5: does `player` hold a **playable** card on their chop that is not a
+// same-hand duplicate? Deliberately weaker than `at_risk_chop` — it does not
+// care whether a copy sits in another hand or is provable in Alice's, because
+// the point is not that the card is in danger but that it is a play the team
+// should be collecting. Cathy is likely already expecting Alice to save it or
+// get it played, so any clue this turn carries at least MEDIUM value.
+bool has_playable_chop(const Game& game, int player) {
+  const State& s = game.state;
+  auto chop = game.chop(player);
+  if (!chop) return false;  // locked hand — no chop
+  auto id = s.deck[*chop].id();
+  if (!id) return false;  // unknown from our POV — cannot verify
+  if (!s.is_playable(*id)) return false;
+  return !has_same_hand_dupe(s, player, *chop, *id);
 }
 
 // What the candidate clue achieves, read off the CTP stamps its
@@ -401,6 +425,12 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   if (f.count >= 2 && f.regain_rank) return ClueTier::HIGH;
 
   // --- not low ----------------------------------------------------------
+  // N5 — Bob has a playable chop he cannot just pitch a duplicate of. Any
+  // clue is then worth at least MEDIUM: the team is expecting that card to
+  // be saved or played, and suppressing every clue here is how replay
+  // 1942330 T33 ended up giving a LOCK by arbitrary tie-break.
+  if (has_playable_chop(game, bob)) return ClueTier::MEDIUM;
+
   const int cathy = s.next_player_index(bob);
   if (cathy != alice && at_risk_chop(game, alice, cathy)) {
     // N3 — two new plays.

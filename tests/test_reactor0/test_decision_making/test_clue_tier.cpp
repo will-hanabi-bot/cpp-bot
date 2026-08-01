@@ -236,3 +236,67 @@ TEST(Reactor0ClueTier, NonCriticalOnePlayedIsNotHigh) {
   EXPECT_NE(tier_of(g, make_clue(g, 0, 1, ClueKind::RANK, 1)), ClueTier::HIGH)
       << "a non-critical 1 does not satisfy H2.";
 }
+
+// --- N5: Bob has a playable chop -----------------------------------------
+
+// N5 is a property of the POSITION, not of the clue: when Bob's chop is a
+// playable card he cannot just pitch a duplicate of, every clue that turn is
+// worth at least MEDIUM. Deliberately weaker than `at_risk_chop` — it does
+// not care that Cathy holds a copy — which is what makes it fire at replay
+// 1942330 T33, where H1/N1 cannot.
+TEST(Reactor0ClueTier, BobPlayableChopLiftsAnyClueToMedium) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "g1", "b1", "p1", "y5"},
+      {"r1", "y4", "g4", "b4", "p4"},  // chop (slot 1) = r1, playable
+      {"r1", "p2", "p2", "b2", "g5"},  // Cathy holds the other r1 → not at risk
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(1), order_at(g, TestPlayer::BOB, 1)) << "guard: Bob's chop";
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_NE(t, ClueTier::LOW)
+      << "Bob's chop r1 is playable and unduplicated in his own hand, so any "
+         "clue is at least MEDIUM. Got " << name_of(t);
+}
+
+// A same-hand duplicate makes the chop expendable — Bob can pitch one copy
+// and still play the other, so N5 must not fire.
+TEST(Reactor0ClueTier, BobPlayableChopDupedInOwnHandDoesNotLift) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "g1", "b1", "p1", "y5"},
+      {"r1", "r1", "g4", "b4", "p4"},  // chop r1 duplicated in-hand
+      {"p2", "p2", "b2", "g2", "g5"},  // Cathy's chop duped → N2/N3 dead
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_EQ(t, ClueTier::LOW)
+      << "a duplicated playable chop does not lift the tier. Got " << name_of(t);
+}
+
+// An unplayable chop does not lift the tier either, however useful it is.
+TEST(Reactor0ClueTier, BobUnplayableChopDoesNotLift) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "g1", "b1", "p1", "y5"},
+      {"r3", "y4", "g4", "b4", "p4"},  // chop r3 — useful but not playable
+      {"r3", "p2", "p2", "b2", "g5"},  // Cathy covers r3 → H1/N1 dead
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_EQ(t, ClueTier::LOW)
+      << "r3 on a stack of 0 is not playable, so N5 must stay silent. Got "
+      << name_of(t);
+}
