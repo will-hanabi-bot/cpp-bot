@@ -84,6 +84,116 @@ std::optional<int> find_play_reveal(const Game& prev, Game& game,
   return std::nullopt;
 }
 
+// --- orange (inverted-suit) readings --------------------------------------
+//
+// Vocabulary, from reactor's GLOSSARY "pitch / chuck": **pitch** = press the
+// Play button, **chuck** = press the Discard button. For an inverted suit the
+// game swaps their outcomes, so a chuck advances the orange stack and a pitch
+// sends the card to the discard pile (regaining a clue). CTP/CTD name the
+// BUTTON, so "get an orange card onto its stack" means stamping CTD.
+//
+// All three predicates read `common` + `possible`, which is POV-invariant:
+// giver, receiver and every observer compute the same answer, so the
+// convention may branch on them without desyncing (§1g).
+
+bool could_be_inverted(const Game& game, int order) {
+  const State& state = game.state;
+  return game.common.thoughts[order].possible.exists(
+      [&](Identity i) { return variants::is_inverted_id(state, i); });
+}
+
+// Known — not merely possible — to be an orange identity that is currently
+// playable, i.e. chucking it definitely advances the stack.
+bool known_playable_inverted(const Game& game, int order) {
+  const State& state = game.state;
+  const IdentitySet& poss = game.common.thoughts[order].possible;
+  return poss.non_empty() && poss.forall([&](Identity i) {
+    return variants::is_inverted_id(state, i) && state.is_playable(i);
+  });
+}
+
+// Could a chuck still land this card on a stack, from the holder's POV?
+bool could_reach_stacks(const Game& game, int order) {
+  const State& state = game.state;
+  return game.common.thoughts[order].possible.exists([&](Identity i) {
+    return variants::is_inverted_id(state, i) && state.is_playable(i);
+  });
+}
+
+// The touched cards that could be orange, LEFT to RIGHT. `state.hands` is
+// stored leftmost (newest) first, which is the same walk
+// `leftmost_could_be_playable` does.
+std::vector<int> orange_touched(const Game& game, const ClueAction& action) {
+  std::vector<int> out;
+  for (int o : game.state.hands[action.target]) {
+    if (contains(action.list_, o) && could_be_inverted(game, o)) out.push_back(o);
+  }
+  return out;
+}
+
+// Stamp a CHUCK. Mirrors reactor's idiom (`target_play` +
+// `called_focus_status`, reactor/interpret_clue.cpp:132 and
+// variants/inverted.cpp:53-61): narrow `inferred` to the identities that
+// would actually advance a stack, then mark CALLED_TO_DISCARD.
+//
+// `reactor::target_discard` is deliberately NOT reused: it filters `inferred`
+// to the NON-critical ids — the "this is safe to throw away" reading — which
+// is the opposite of what a chuck wants, and empties the set outright in Dark
+// Orange, where every card is critical (src/basics/variant.cpp:183).
+std::optional<ClueInterp> stamp_orange_chuck(Game& game, const ClueAction& action,
+                                             int order) {
+  const State& state = game.state;
+  IdentitySet keep =
+      game.common.thoughts[order].possibilities().filter([&](Identity i) {
+        return variants::is_inverted_id(state, i) && state.is_playable(i);
+      });
+  if (keep.is_empty()) return std::nullopt;
+  game.with_thought(order, [&](const Thought& t) {
+    Thought out = t;
+    out.old_inferred = t.inferred;
+    out.inferred = keep;
+    out.info_lock = std::optional<IdentitySet>{keep};
+    return out;
+  });
+  const int turn = state.turn_count;
+  const int giver = action.giver;
+  game.with_meta(order, [turn, giver](ConvData& m) {
+    m.focused = true;
+    m.status = CardStatus::CALLED_TO_DISCARD;
+    m.by = giver;
+    m = m.reason(turn).signal(turn);
+  });
+  return ClueInterp::PLAY;
+}
+
+// Stamp a PITCH — press Play, sending the orange to the discard pile and
+// regaining a clue. `reactor::target_play` is NOT reused: it narrows
+// `inferred` to the playable set, but a pitched orange is being thrown away
+// and need not be playable at all. Only the "it is orange" part of the
+// promise is recorded.
+std::optional<ClueInterp> stamp_orange_pitch(Game& game, const ClueAction& action,
+                                             int order) {
+  const State& state = game.state;
+  IdentitySet keep = game.common.thoughts[order].possibilities().filter(
+      [&](Identity i) { return variants::is_inverted_id(state, i); });
+  if (keep.is_empty()) return std::nullopt;
+  game.with_thought(order, [&](const Thought& t) {
+    Thought out = t;
+    out.old_inferred = t.inferred;
+    out.inferred = keep;
+    return out;
+  });
+  const int turn = state.turn_count;
+  const int giver = action.giver;
+  game.with_meta(order, [turn, giver](ConvData& m) {
+    m.focused = true;
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.by = giver;
+    m = m.reason(turn).signal(turn);
+  });
+  return ClueInterp::DISCARD;
+}
+
 }  // namespace
 
 // Exported (declared in interpret_clue.h) so the decision layer can ask
@@ -129,31 +239,93 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
     return ClueInterp::FIX;
   }
 
-  // 1. Play reveal: a previously-clued card became an obvious playable.
-  if (find_play_reveal(prev, game, action)) return ClueInterp::REVEAL;
+  const State& state = game.state;
 
-  // 2. The leftmost touched card that could be playable is called to play.
+  // 1. Play reveal: a previously-clued card became an obvious playable. If it
+  //    is a known playable ORANGE the receiver must CHUCK it (press Discard),
+  //    so the reveal is stamped CTD — a bare REVEAL stamps nothing and would
+  //    leave the physical action to empathy alone.
+  if (auto revealed = find_play_reveal(prev, game, action)) {
+    if (known_playable_inverted(game, *revealed)) {
+      stamp_orange_chuck(game, action, *revealed);
+    }
+    return ClueInterp::REVEAL;
+  }
+
+  // 1b. Orange play reveal. An orange colour clue that REVEALS a playable
+  //     orange is a play reveal and tells the receiver to chuck that card,
+  //     and this reading takes priority over the pitch/chuck ladder below.
+  //     `find_play_reveal` alone does not cover it: for a colour clue it only
+  //     considers cards that were ALREADY clued (`:78-83`), because a newly
+  //     touched card becoming obviously playable is the ordinary direct-play
+  //     reading — which for orange is exactly the case that has to change.
+  if (variants::includes_inverted(state)) {
+    for (int o : orange_touched(game, action)) {
+      if (!known_playable_inverted(game, o)) continue;
+      if (game.is_blind_playing(o)) continue;
+      if (stamp_orange_chuck(game, action, o)) return ClueInterp::REVEAL;
+      break;
+    }
+  }
+
+  // 2. The orange ladder, reached only when no playable orange was revealed.
+  //
+  //    A colour clue naming the inverted suit is a call to get rid of, or to
+  //    stack, one specific orange card:
+  //      * non-dark orange at pace > 3 -> PITCH the leftmost touched orange
+  //        the receiver does not know is critical. Pitching sends it to the
+  //        discard pile and regains a clue, which is only worth doing while
+  //        there is pace to spare and the card is expendable.
+  //      * pace <= 3, or the suit is DARK -> CHUCK the leftmost touched
+  //        orange instead, putting it on the stacks. Every Dark Orange card
+  //        is a singleton (src/basics/variant.cpp:183), so pitching one is an
+  //        unrecoverable loss and the chuck is the only sane reading.
+  //    All-critical fallback: chuck the leftmost one that could still reach
+  //    the stacks from the receiver's POV; if none could, the clue stalls.
+  std::vector<int> oranges = orange_touched(game, action);
+  if (!oranges.empty()) {
+    const bool pitch_mode =
+        !variants::includes_dark_inverted(state) && state.pace() > 3;
+    if (pitch_mode) {
+      for (int o : oranges) {
+        if (holder_knows_critical(game, o)) continue;
+        if (game.is_blind_playing(o)) continue;
+        if (auto r = stamp_orange_pitch(game, action, o)) return r;
+      }
+    }
+    for (int o : oranges) {
+      if (!could_reach_stacks(game, o)) continue;
+      if (game.is_blind_playing(o)) continue;
+      if (auto r = stamp_orange_chuck(game, action, o)) return r;
+    }
+    return ClueInterp::STALL;
+  }
+
+  // 3. The leftmost touched card that could be playable is called to play.
   auto target = leftmost_could_be_playable(game, action, action.list_);
   if (target) {
     // Guards shared with reactor's ref_play
     // (src/conventions/reactor/interpret_clue.cpp:291-311): don't stack a
-    // play promise on a blind-playing card; a CTD'd card is only a valid
-    // play target if it is visibly playable; and a CTP on an inverted
-    // (orange) card would pitch it into the discard pile.
+    // play promise on a blind-playing card, and a CTD'd card is only a valid
+    // play target if it is visibly playable.
+    //
+    // There is no longer an inverted-target reject here. It used to read
+    // `state.deck[*target].id()`, which is POV-ASYMMETRIC — nullopt for the
+    // receiver's own card, so giver and receiver disagreed. The orange ladder
+    // above now claims every touched card that could be orange, and a card's
+    // `possible` always contains its true identity, so an actually-orange
+    // target can no longer reach this branch.
     if (game.is_blind_playing(*target)) return std::nullopt;
     auto target_id = game.state.deck[*target].id();
     if (game.meta[*target].status == CardStatus::CALLED_TO_DISCARD &&
         !(target_id && game.state.is_playable(*target_id))) {
       return std::nullopt;
     }
-    if (target_id && variants::is_inverted_id(game.state, *target_id)) {
-      return std::nullopt;
-    }
     return hanabi::reactor::target_play(game, action, *target,
                                         /*urgent=*/false, /*stable=*/true);
   }
 
-  // 3. The receiver knows none of the touched cards can be playable.
+  // 4. The receiver knows none of the touched cards can be playable.
   return ClueInterp::STALL;
 }
 
@@ -208,16 +380,41 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   for (int o : action.list_) {
     touchable |= hanabi::reactor::effective_possible_for(game, o);
   }
-  if (variants::includes_pinkish(state)) {
+  // The pink promise, gated on the FLAG test rather than the name-based
+  // `includes_pinkish`. `violates_pink_promise` uses the flags for a reason
+  // its header spells out — do not unify the two.
+  //
+  // A true pink/omni SUIT is touched at every rank, so a rank-N clue promises
+  // rank N. A special-rank variant is different: with `pink_s` (which is
+  // exactly `specialRankAllClueRanks`, src/basics/variant.cpp:318) the special
+  // rank is touched by EVERY clue rank, so a rank-N clue promises rank N **or
+  // the special rank**. Filtering to N alone dropped the special rank and, at
+  // replay 1942709 in "Pink-Ones & Orange", turned a lock into a play call.
+  bool pinkish_flag = state.variant->pink_s;
+  for (const Suit& suit : state.variant->suits) {
+    if (suit.suit_type.pinkish) pinkish_flag = true;
+  }
+  if (pinkish_flag) {
     const int rv = clue.value;
-    touchable = touchable.filter([rv](Identity i) { return i.rank == rv; });
+    const std::optional<int> special =
+        state.variant->pink_s ? state.variant->special_rank : std::nullopt;
+    touchable = touchable.filter([rv, special](Identity i) {
+      return i.rank == rv || (special && i.rank == *special);
+    });
   }
   bool all_trash = true;
   bool playable_rank = true;
   for (Identity id : touchable) {
     bool basic = state.is_basic_trash(id);
     if (!basic) all_trash = false;
-    if (!basic && !state.is_playable(id)) playable_rank = false;
+    // A rank direct play clue ALWAYS means pitch (press Play), and pitching an
+    // inverted card sends it to the discard pile instead of its stack. So a
+    // useful orange identity can never be played by this reading, whatever the
+    // stacks say — which is why a rank-1 clue cannot put an orange 1 onto its
+    // stack. It stays reachable through the play reveal at priority 2 below,
+    // which is a chuck.
+    if (!basic && variants::is_inverted_id(state, id)) playable_rank = false;
+    else if (!basic && !state.is_playable(id)) playable_rank = false;
   }
   // An empty set teaches nothing — fall through rather than claim every
   // identity is playable vacuously.
@@ -266,10 +463,17 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
         out.info_lock = std::optional<IdentitySet>{new_inferred};
         return out;
       });
-      CardStatus focus_status = variants::called_focus_status(state, new_inferred);
-      game.with_meta(*focus, [focus_status](ConvData& m) {
+      // A rank direct play clue always means PITCH, so the focus is stamped
+      // CALLED_TO_PLAY unconditionally — reactor0 does NOT call
+      // `variants::called_focus_status` here, which would return CTD (chuck)
+      // for a possibly-orange focus. The classification above already declines
+      // to read a useful orange as playable, so `new_inferred` should carry no
+      // inverted identity; stamping outright states the rule rather than
+      // leaving it as a consequence. **reactor keeps `called_focus_status` at
+      // its own call site (reactor/interpret_clue.cpp:504).**
+      game.with_meta(*focus, [](ConvData& m) {
         m.focused = true;
-        m.status = focus_status;
+        m.status = CardStatus::CALLED_TO_PLAY;
       });
       return ClueInterp::PLAY;
     }

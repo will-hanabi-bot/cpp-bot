@@ -158,4 +158,16 @@ std::vector<int> players_until(int num_players, int start, int target);
 // Build the per-player and common-perspective Players for a fresh State.
 std::pair<std::vector<Player>, Player> gen_players(const State& state);
 
+// Does the HOLDER of `order` know the card is critical — i.e. is every
+// identity it could still be a critical one? Reads `common.thoughts[order]`
+// and raw `possible` (not `inferred` / `possibilities()`), which is the
+// POV-invariant choice: giver, holder and every observer compute the same
+// answer, so a convention rule may branch on it without desyncing.
+//
+// The same expression is open-coded in several places that predate this
+// helper (reactor0/interpret_reactive.cpp's react-slot guards, decide.cpp's
+// urgent CTD dispatch, solver.cpp's discard gate). Those are left alone here
+// to keep this change behavioural rather than a sweeping refactor.
+bool holder_knows_critical(const Game& game, int order);
+
 }  // namespace hanabi

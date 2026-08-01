@@ -216,3 +216,42 @@ Prerequisites before this can be revisited:
 A cheaper shape worth trying first: once a NON-play reaches the ceiling,
 continue evaluating only the remaining **play** candidates rather than the
 whole list — that bounds the extra work to what the preference actually needs.
+
+---
+
+## 10. `[endgame]` The feasibility layers are still blind to inverted suits
+
+v4.0.0 taught the *search* about orange (`possible_actions` emits a
+stack-advancing orange as a `PerformDiscard`, `perform_to_action` derives
+`failed`, and the direct-win / tie-break predicates count a chuck as a play).
+The layers that *prune* before scoring were left blind on purpose, so a
+winning chuck can still be pruned before it is ever evaluated:
+
+- **`trivially_winnable`** (`src/endgame/helper.cpp:113-141`) emits
+  `PerformPlay{first}` at `:130` while advancing its modelled stack at `:131`.
+  For an orange card those two disagree: the modelled stack goes up, but the
+  emitted action pitches the card into the discard pile. It claims a win it
+  cannot achieve. Only reachable with `endgame_turns` set, which is why
+  `EndgameOrange.KnownPlayableOrangeIsOfferedAsAChuck` does not cover it.
+- **`player_known_plays`** (`src/endgame/winnable.cpp`) counts known plays
+  without asking which button performs them.
+
+## 11. `[reactor0]` No orange tiering in reactor0's `get_result`
+
+Reactor's clue scoring bumps a discard that advances a stack to `1.0`
+(`src/conventions/reactor/state_eval.cpp:539-566`, via
+`variants::discard_advances_stack`). Reactor0's own `get_result`
+(`src/conventions/reactor0/state_eval.cpp`, §2c) has no equivalent, so in the
+heuristic path reactor0 under-values a chuck relative to reactor. The §1b
+orange ladder makes this more visible, since reactor0 now issues clues whose
+whole point is to produce a chuck.
+
+## 12. `[engine]` An unpinned playable orange is still pitched
+
+`src/basics/decide.cpp:885-894` routes a playable orange to `PerformDiscard`
+only when `thoughts[o].id(infer=true)` resolves to a **single** identity. A
+card that is empathy-*playable* but ambiguous between an inverted and a
+non-inverted suit (say `{o1, r1}` at zero stacks) falls through to
+`PerformPlay`, which discards it if it really was orange. Reactor0's §1b
+stamps sidestep this by narrowing `inferred` to the inverted playable set, but
+a bare rank play reveal in an inverted variant does not.

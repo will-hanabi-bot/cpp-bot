@@ -29,4 +29,11 @@ bool includes_inverted(const State& state) {
   return false;
 }
 
+bool includes_dark_inverted(const State& state) {
+  for (const Suit& suit : state.variant->suits) {
+    if (suit.suit_type.inverted && suit.suit_type.dark) return true;
+  }
+  return false;
+}
+
 }  // namespace hanabi::reactor::variants

@@ -600,4 +600,10 @@ Player Player::update_hypo_stacks(const Game& game) const {
   return out;
 }
 
+bool holder_knows_critical(const Game& game, int order) {
+  const State& state = game.state;
+  return game.common.thoughts[order].possible.forall(
+      [&](Identity i) { return state.is_critical(i); });
+}
+
 }  // namespace hanabi

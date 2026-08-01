@@ -135,8 +135,24 @@ Action perform_to_action(const PerformAction& perform, const Game& game,
           return PlayAction{player_index, p.target, -1, -1};
         } else if constexpr (std::is_same_v<T, PerformDiscard>) {
           if (p.target < static_cast<int>(state.deck.size())) {
+            // `failed` is NOT always false. For an inverted (Orange / Dark
+            // Orange) suit a physical discard IS the play attempt, so
+            // `Game::on_discard` calls `with_play` whenever `failed` is
+            // false. Hardcoding false therefore made the search advance the
+            // orange stack for a chuck of a NON-playable orange — a
+            // hallucinated win. Same rule as
+            // `variants::make_discard_for_simulation`
+            // (src/conventions/variants/inverted.cpp:63-71), replicated here
+            // rather than called to keep src/endgame free of a dependency on
+            // the convention layer.
             auto id = state.deck[p.target].id();
-            if (id) return DiscardAction{player_index, p.target, id->suit_index, id->rank, false};
+            if (id) {
+              const bool inverted =
+                  state.variant->suits[id->suit_index].suit_type.inverted;
+              const bool failed = inverted && !state.is_playable(*id);
+              return DiscardAction{player_index, p.target, id->suit_index,
+                                   id->rank, failed};
+            }
           }
           return DiscardAction{player_index, p.target, -1, -1, false};
         } else if constexpr (std::is_same_v<T, PerformColour>) {

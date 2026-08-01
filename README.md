@@ -349,9 +349,9 @@ All land in `build/`.
 | Target | What it does |
 |---|---|
 | `hanabi_bot` | The live bot. Logs into hanab.live, opens a WebSocket, joins/creates tables, plays. |
-| `hanabi_tests` | Convention-**neutral** correctness suite (ctest label `core`) — 242 tests. A failure here is a bug in shared engine code and affects both conventions. |
-| `hanabi_reactor_tests` | The reactor convention plus every replay regression (label `reactor`) — 122 tests, including 53 replays reconstructed from real games. |
-| `hanabi_reactor0_tests` | The reactor0 convention (label `reactor0`) — 38 tests. |
+| `hanabi_tests` | Convention-**neutral** correctness suite (ctest label `core`) — 248 tests. A failure here is a bug in shared engine code and affects both conventions. |
+| `hanabi_reactor_tests` | The reactor convention plus every replay regression (label `reactor`) — 120 tests, including 53 replays reconstructed from real games. |
+| `hanabi_reactor0_tests` | The reactor0 convention (label `reactor0`) — 74 tests. |
 | `hanabi_decision_tests` | Decision-**quality** suite, under the ctest label `decision_making`. A failure means the bot made a suboptimal but not necessarily incorrect choice, and needs manual review (see `CLAUDE.md`). |
 | `replay_log` | Reconstructs a `Game` from a per-game JSONL log and re-runs `take_action` with the current build, or emits a regression-test scaffold. |
 | `bench_endgame` | Microbenchmark of `IdentitySet` and `Fraction` primitives. |
@@ -361,9 +361,9 @@ can affect. **Run the binaries directly** — `ctest` spawns one process per
 test, which turns a 23-second suite into a 7-minute one:
 
 ```bash
-build/hanabi_reactor0_tests   # reactor0            38 tests, 0.6 s
-build/hanabi_tests           # convention-neutral 242 tests, 1.2 s
-build/hanabi_reactor_tests   # reactor + replays  122 tests,  21 s
+build/hanabi_reactor0_tests   # reactor0            74 tests, 6.1 s
+build/hanabi_tests           # convention-neutral 248 tests, 0.2 s
+build/hanabi_reactor_tests   # reactor + replays  120 tests,  20 s
 build/hanabi_decision_tests  # decision quality    12 tests
 ```
 

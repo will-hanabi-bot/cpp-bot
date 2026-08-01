@@ -29,11 +29,40 @@ bool past_deadline_local(std::optional<double> deadline) {
 
 bool perform_eq(const PerformAction& a, const PerformAction& b) { return a == b; }
 
-// True iff this PerformAction is a play (as opposed to a clue or discard).
-// Used to break winrate ties — when several candidates produce the same
-// winrate, the user prefers the one that plays a card.
-bool is_play_perform(const PerformAction& p) {
-  return std::holds_alternative<PerformPlay>(p);
+// True iff this PerformAction advances a play stack. Used to break winrate
+// ties — when several candidates produce the same winrate, the user prefers
+// the one that plays a card.
+//
+// Button-oriented naming makes this suit-dependent: for an inverted (Orange /
+// Dark Orange) suit the action that stacks a card is PerformDiscard, and
+// PerformPlay throws it away. Matching PerformPlay alone made an orange
+// stack-advance lose every tie and stay invisible to the direct-win checks,
+// which is half of bug_report_3.txt 3.2.
+bool stacks_a_card(const State& state, const PerformAction& p) {
+  int target = -1;
+  bool chuck = false;
+  if (auto* pp = std::get_if<PerformPlay>(&p)) {
+    target = pp->target;
+  } else if (auto* pd = std::get_if<PerformDiscard>(&p)) {
+    target = pd->target;
+    chuck = true;
+  } else {
+    return false;
+  }
+  if (target < 0 || target >= static_cast<int>(state.deck.size())) return false;
+  auto id = state.deck[target].id();
+  if (!id) return false;
+  const bool inverted = state.variant->suits[id->suit_index].suit_type.inverted;
+  if (inverted != chuck) return false;  // wrong button for this suit
+  return state.is_playable(*id);
+}
+
+// The tie-break predicate. Strictly wider than `stacks_a_card`: every
+// PerformPlay still wins a tie exactly as it did before, and an orange chuck
+// now does too. Kept separate so the direct-win check above can stay strict.
+bool is_play_perform(const State& state, const PerformAction& p) {
+  if (std::holds_alternative<PerformPlay>(p)) return true;
+  return std::holds_alternative<PerformDiscard>(p) && stacks_a_card(state, p);
 }
 
 }  // namespace
@@ -54,8 +83,24 @@ Action EndgameSolver::perform_to_action(const PerformAction& perform, const Game
           return PlayAction{player_index, p.target, -1, -1};
         } else if constexpr (std::is_same_v<T, PerformDiscard>) {
           if (p.target < static_cast<int>(state.deck.size())) {
+            // `failed` is NOT always false. For an inverted (Orange / Dark
+            // Orange) suit a physical discard IS the play attempt, so
+            // `Game::on_discard` calls `with_play` whenever `failed` is
+            // false. Hardcoding false therefore made the search advance the
+            // orange stack for a chuck of a NON-playable orange — a
+            // hallucinated win. Same rule as
+            // `variants::make_discard_for_simulation`
+            // (src/conventions/variants/inverted.cpp:63-71), replicated here
+            // rather than called to keep src/endgame free of a dependency on
+            // the convention layer.
             auto id = state.deck[p.target].id();
-            if (id) return DiscardAction{player_index, p.target, id->suit_index, id->rank, false};
+            if (id) {
+              const bool inverted =
+                  state.variant->suits[id->suit_index].suit_type.inverted;
+              const bool failed = inverted && !state.is_playable(*id);
+              return DiscardAction{player_index, p.target, id->suit_index,
+                                   id->rank, failed};
+            }
           }
           return DiscardAction{player_index, p.target, -1, -1, false};
         } else if constexpr (std::is_same_v<T, PerformColour>) {
@@ -140,8 +185,22 @@ std::vector<EndgameSolver::ActionEntry> EndgameSolver::possible_actions(
   std::vector<ActionEntry> play_actions;
   for (int order : playables) {
     if (past_deadline_local(deadline)) return {};
-    if (!state.deck[order].id()) continue;
-    auto r = try_action(PerformPlay{order});
+    auto id = state.deck[order].id();
+    if (!id) continue;
+    // Inverted (Orange / Dark Orange) suits swap the buttons: the action that
+    // advances the stack is the CHUCK (PerformDiscard), not the pitch. Emitting
+    // PerformPlay here sent the card to the discard pile instead, so every line
+    // that needed an orange play scored as a loss and the winning chuck was
+    // never a candidate at all — replay 1942723 T42, where a known Orange 4
+    // with the Orange stack at 3 won 20/20 and the bot discarded slot 1.
+    //
+    // Mirrors the heuristic path's routing at src/basics/decide.cpp:885-894.
+    // Only ever emitted for a card whose identity is known AND currently
+    // playable: a chuck of a non-playable orange is a misplay, which
+    // `perform_to_action` now models via the `failed` flag.
+    const bool chuck = state.variant->suits[id->suit_index].suit_type.inverted &&
+                       state.is_playable(*id);
+    auto r = chuck ? try_action(PerformDiscard{order}) : try_action(PerformPlay{order});
     if (r) play_actions.push_back(*r);
   }
 
@@ -330,11 +389,13 @@ std::vector<std::pair<PerformAction, Fraction>> EndgameSolver::optimize_full(
     // winnable() over all draws, so this typically saves seconds).
     if (single_hypo && wr == Fraction(1)) stop = true;
   }
+  const State& sort_state = game.state;
   std::sort(result.begin(), result.end(),
-             [](const auto& a, const auto& b) {
+             [&sort_state](const auto& a, const auto& b) {
                if (a.second != b.second) return a.second > b.second;
                // Tie-break: prefer a play over a non-play at the same winrate.
-               return is_play_perform(a.first) && !is_play_perform(b.first);
+               return is_play_perform(sort_state, a.first) &&
+                      !is_play_perform(sort_state, b.first);
              });
   return result;
 }
@@ -361,7 +422,8 @@ WinnableResult EndgameSolver::optimize(
                  // Tie-break: a play comes before a non-play. Ensures the
                  // 100%-winrate early-exits surface a play first when one
                  // is available.
-                 return is_play_perform(a.first) && !is_play_perform(b.first);
+                 return is_play_perform(game.state, a.first) &&
+                        !is_play_perform(game.state, b.first);
                });
   }
 
@@ -425,8 +487,9 @@ WinnableResult EndgameSolver::optimize(
   if (best_actions.empty()) return WinnableResult{{}, Fraction(0), "no winning actions"};
   // Bubble any play to the front so callers that take actions.front() get
   // the play when the best winrate ties between a play and a non-play.
-  std::stable_partition(best_actions.begin(), best_actions.end(),
-                         [](const PerformAction& p) { return is_play_perform(p); });
+  std::stable_partition(
+      best_actions.begin(), best_actions.end(),
+      [&game](const PerformAction& p) { return is_play_perform(game.state, p); });
   return WinnableResult{std::move(best_actions), best_winrate, ""};
 }
 
@@ -510,16 +573,13 @@ WinnableResult EndgameSolver::winnable(const Game& game, int player_turn,
   auto performs = possible_actions(game, player_turn, remaining, deadline, depth);
   if (performs.empty()) return WinnableResult{{}, Fraction(0), "no actions"};
 
-  // Direct win check.
+  // Direct win check. `possible_actions` emits an orange stack-advance as a
+  // PerformDiscard (a chuck), so matching on PerformPlay alone would step
+  // straight past the winning move in an inverted variant.
   if (state.score() + 1 == state.max_score()) {
     for (const auto& [p, _] : performs) {
-      if (std::holds_alternative<PerformPlay>(p)) {
-        int target = std::get<PerformPlay>(p).target;
-        auto deck_id = state.deck[target].id();
-        if (deck_id && state.is_playable(*deck_id)) {
-          return WinnableResult{{p}, Fraction(1), ""};
-        }
-      }
+      if (!stacks_a_card(state, p)) continue;
+      return WinnableResult{{p}, Fraction(1), ""};
     }
   }
 
@@ -567,11 +627,16 @@ SolveResult EndgameSolver::solve(const Game& game,
       {{"cards_left", game.state.cards_left}, {"clue_tokens", game.state.clue_tokens}});
   const State& state = game.state;
 
-  // Trivial: one play wins.
+  // Trivial: one play wins. The winning BUTTON depends on the suit — for an
+  // inverted (Orange / Dark Orange) card it is Discard, since pressing Play
+  // would send the last needed card to the discard pile and lose outright.
   if (state.score() + 1 == state.max_score()) {
     for (int o : state.our_hand()) {
       auto id = game.me().thoughts[o].id(/*infer=*/true);
       if (id && state.is_playable(*id)) {
+        if (state.variant->suits[id->suit_index].suit_type.inverted) {
+          return SolveResult{PerformDiscard{o}, Fraction(1), ""};
+        }
         return SolveResult{PerformPlay{o}, Fraction(1), ""};
       }
     }
@@ -851,8 +916,8 @@ SolveResult EndgameSolver::solve(const Game& game,
     // in the first hypo would short-circuit the loop before any play is
     // tried even if that play also wins 100% across all hypos.
     std::stable_partition(initial.begin(), initial.end(),
-                            [](const auto& kv) {
-                              return is_play_perform(kv.first);
+                            [&state](const auto& kv) {
+                              return is_play_perform(state, kv.first);
                             });
     auto best = initial.front();
     for (auto& [action, winrate] : initial) {
@@ -886,8 +951,8 @@ SolveResult EndgameSolver::solve(const Game& game,
         break;
       }
       bool better = cur > best.second ||
-                    (cur == best.second && is_play_perform(action) &&
-                      !is_play_perform(best.first));
+                    (cur == best.second && is_play_perform(state, action) &&
+                      !is_play_perform(state, best.first));
       if (better) best = {action, cur};
     }
     if (best.second == Fraction(0)) {

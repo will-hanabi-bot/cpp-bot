@@ -31,8 +31,10 @@ giver, Bob the next player, Cathy the one after.
   `target_discard`, `ref_discard`, `check_fix`, `delayed_plays`,
   `effective_possible_for`; the reaction-resolution machinery (`calc_slot`,
   `calc_target_slot`, `target_i_play/discard`, the four `elim_*` matrices);
-  and the variant layers (pink promise, brownish trash reveal, inverted
-  pitch/chuck compensation, reversed suits).
+  and most variant layers (pink promise, brownish trash reveal, the inverted
+  pitch/chuck compensation on the **reactive** side, reversed suits).
+  **Exception as of v4.0.0**: the *stable* side of the inverted (orange)
+  compensation is reactor0's own — see §1b and the divergence table in §1f.
 - **Not shared**: everything about *which clue to give*. Reactor0 owns
   `eval_action`'s clue branch, its own `get_result` (§2c) and a candidate
   filter run before the argmax (§2b), all in
@@ -55,34 +57,70 @@ giver, Bob the next player, Cathy the one after.
 
 ## §1a Dispatch — purely positional
 
-`reactor0::interpret_clue` (`src/conventions/reactor0/interpret_clue.cpp:295-331`):
+`reactor0::interpret_clue` (`src/conventions/reactor0/interpret_clue.cpp:540-576`):
 
 - empty clue in an empty-clues variant → `USELESS`;
-- **clue to Bob → always stable**, even when Bob is loaded (`:321-326`);
+- **clue to Bob → always stable**, even when Bob is loaded (`:568-573`);
 - **clue to anyone else → always reactive with Bob as reacter**, even when
-  the giver is locked, in the endgame, or at 8 clue tokens (`:327-328`).
+  the giver is locked, in the endgame, or at 8 clue tokens (`:574-575`).
 
 The stall context (`giver obviously locked || in_endgame() ||
-clue_tokens == 8`, `:318-319`) is passed to the stable branches only as the
+clue_tokens == 8`, `:565-566`) is passed to the stable branches only as the
 `stall` flag that reactor's `ref_discard` already honours.
 
 ## §1b Stable colour — a direct play clue
 
-`stable_colour` (`interpret_clue.cpp:116-157`). **There is no referential
+`stable_colour` (`interpret_clue.cpp:227-329`). **There is no referential
 play in reactor0.** Priority:
 
-1. **Fix** — `check_fix` reports a reset/duplicate → `FIX` (`:122-128`).
+1. **Fix** — `check_fix` reports a reset/duplicate → `FIX` (`:237-240`).
 2. **Play reveal** — a previously-clued card the clue fills in as a new
-   obvious playable/connectable → `REVEAL`, no stamp; empathy carries it
-   (`find_play_reveal`, `:59-84`, mirroring reactor's fill-in machinery).
-3. **Direct play** — the **leftmost card touched by this clue** whose common
+   obvious playable/connectable → `REVEAL` (`find_play_reveal`, `:60-85`,
+   mirroring reactor's fill-in machinery). Normally no stamp; empathy carries
+   it. **Exception:** if the revealed card is a known playable *orange*, it is
+   stamped `CALLED_TO_DISCARD` (`:244-252`), because that is the button which
+   advances an inverted stack — see the orange ladder below.
+3. **Orange play reveal** (`:255-266`) — an orange colour clue that reveals a
+   playable orange is a play reveal, and the receiver **chucks** the revealed
+   card. `find_play_reveal` alone does not cover it: on a colour clue it only
+   considers cards that were *already* clued (`:78-83`), because a newly
+   touched card becoming obviously playable is the ordinary direct-play
+   reading — which is exactly the case orange has to change. `REVEAL`.
+4. **The orange ladder** (`:271-302`), reached only when no playable orange
+   was revealed. An orange colour clue names one orange card to get rid of or
+   to stack:
+   - non-dark orange at `pace() > 3` → **pitch** the leftmost touched orange
+     the receiver does not know is critical (`holder_knows_critical`,
+     `src/basics/player_game.cpp`). A pitch presses Play, which for an
+     inverted suit sends the card to the discard pile and regains a clue.
+     Stamped `CALLED_TO_PLAY`; returns `DISCARD`, the semantic outcome.
+   - `pace() <= 3`, **or** the inverted suit is **dark**
+     (`variants::includes_dark_inverted`) → **chuck** the leftmost touched
+     orange that could still reach the stacks from the receiver's POV. A
+     chuck presses Discard, which advances the orange stack. Stamped
+     `CALLED_TO_DISCARD`; returns `PLAY`. Dark forces this reading because
+     every dark card is a singleton (`src/basics/variant.cpp:183`), so a
+     pitch is an unrecoverable loss.
+   - all-critical fallback: the chuck loop runs regardless of what the pitch
+     branch found, so if every touched orange is known critical the leftmost
+     one that could still reach the stacks is chucked. If none could →
+     `STALL` (`:301`).
+5. **Direct play** — the **leftmost card touched by this clue** whose common
    empathy could be playable (playable set ∪ delayed-play successors) is
-   called to play via `target_play` (`leftmost_could_be_playable` `:92-112`,
-   guards + call `:135-153`). The guards are reactor's `ref_play` rejections:
-   blind-playing target, CTD'd-and-not-visibly-playable target, inverted
-   (orange) target.
-4. Otherwise the receiver knows none of the touched cards can play →
-   `STALL` (`:156`).
+   called to play via `target_play` (`leftmost_could_be_playable` `:203-223`,
+   guards + call `:305-326`). The guards are reactor's `ref_play` rejections:
+   blind-playing target, CTD'd-and-not-visibly-playable target. There is **no
+   longer an inverted-target reject** — it read `state.deck[*target].id()`,
+   which is POV-asymmetric (nullopt for the receiver's own card), and the
+   orange ladder above now claims every touched card that could be orange.
+6. Otherwise the receiver knows none of the touched cards can play →
+   `STALL` (`:329`).
+
+The stamps are bespoke rather than reused: `reactor::target_play` narrows
+`inferred` to the playable set, but a pitched orange is being thrown away and
+need not be playable; `reactor::target_discard` narrows to the *non-critical*
+ids, which is the opposite of a chuck and empties outright in Dark Orange
+(`stamp_orange_pitch` `:174-195`, `stamp_orange_chuck` `:143-167`).
 
 Selection and narrowing cannot disagree about their baseline, because no
 layer is ever handed a card with an empty `inferred`: the engine resets a
@@ -91,20 +129,35 @@ contradicted card to its global empathy the moment the contradiction happens
 
 ## §1c Stable rank — seven priorities
 
-`stable_rank` (`interpret_clue.cpp:162-330`). The pink-promise gate runs
-first (`:174-176`), then the rank is classified (`:178-229`).
+`stable_rank` (`interpret_clue.cpp:334-536`). The pink-promise gate runs
+first (`:346-348`), then the rank is classified (`:350-424`).
 
 **The classification is over what the touched cards can actually be — this is
 a deliberate divergence from reactor**, which still scans
-`variant->touch_possibilities` (reactor's §1c). Two steps, both load-bearing:
+`variant->touch_possibilities` (reactor's §1c). Three steps, all
+load-bearing:
 
-1. **the pink promise.** A rank clue in a pinkish variant promises the rank,
-   so the omni suit's *other* ranks are off the table (`:216-219`).
-2. **per-card visibility**, via `reactor::effective_possible_for` (`:207-210`)
+1. **the pink promise.** A rank-N clue in a pinkish variant promises rank N,
+   so the omni suit's *other* ranks are off the table (`:393-404`). The
+   promise set is `{clue.value}` ∪ `{special_rank}` when `pink_s` is set:
+   `pink_s` is exactly `specialRankAllClueRanks` (`src/basics/variant.cpp:318`),
+   which means the special rank is touched by **every** clue rank, so a rank-N
+   clue promises rank N *or* the special rank. The gate is the **flag** test,
+   not the name-based `includes_pinkish` — the same distinction
+   `variants::violates_pink_promise` makes, and for the same reason. Filtering
+   to N alone dropped the special rank and, at replay 1942709 in "Pink-Ones &
+   Orange", turned a lock into a play call (bug_report_3.txt 3.1).
+2. **per-card visibility**, via `reactor::effective_possible_for` (`:379-391`)
    — the card's `possible` narrowed by the copies visible in every non-holder
    hand. That is POV-invariant by construction (defined from the **holder's**
    viewpoint, so every seat computes the same set), which is why it is safe to
    read here at all. Plain `common.thoughts` is not enough.
+3. **a useful inverted identity is not playable by this clue** (`:416`). A
+   rank direct play clue *always* means pitch, and pitching an orange card
+   sends it to the discard pile rather than its stack. So a rank-1 clue cannot
+   be used to get an Orange 1 onto the stacks, whatever the stacks say. This
+   is confined to priority 1: the play reveal at priority 2 is actioned as a
+   chuck and still picks a playable orange up.
 
 Why it matters: an omni suit is pinkish, so `Variant::id_touched` returns true
 for it on **every** rank clue (`src/basics/variant.cpp:230`), and the
@@ -116,43 +169,49 @@ degraded to the referential discard at the bottom of this ladder. Replays
 1942525 T53 (a playable Sky 4 never called) are the worked examples.
 
 An empty narrowed set teaches nothing and is treated as neither
-all-trash nor playable-rank (`:225-229`), rather than vacuously true.
+all-trash nor playable-rank (`:420-424`), rather than vacuously true.
 
-1. **Direct play clue** (`:231-280`) — every remaining useful identity the
+1. **Direct play clue** (`:426-486`) — every remaining useful identity the
    touched cards can hold is playable (assuming good touch). Focus = leftmost
    **newly** touched card — highest order, since slot 1 is newest — in both
-   the plain branch (`:240`) and the pinkish one
-   (`variants::playable_rank_focus`, `:235`; that helper returned the
+   the plain branch (`:436`) and the pinkish one
+   (`variants::playable_rank_focus`, `:431`; that helper returned the
    *rightmost* until v3.0.0); with no
    newly touched cards, the leftmost **touched** card that could be playable.
    The focus is narrowed to its playable identities, `info_lock` set, and
-   stamped via `variants::called_focus_status` (CTD for a possibly-orange
-   focus). Returns `PLAY`. An *unnecessary* focus (every possibility trash or
-   visible elsewhere) makes the clue a `STALL` instead (`:250-260`).
-2. **Play reveal** (`:282-287`) — the clue fills a previously-clued card in
+   stamped **`CALLED_TO_PLAY` unconditionally** (`:466-478`). reactor0 does
+   *not* call `variants::called_focus_status` here — that helper returns CTD
+   (a chuck) for a possibly-orange focus, which contradicts "a rank direct
+   play clue always pitches". Step 3 of the classification already keeps a
+   useful orange out of `new_inferred`, so the stamp states the rule rather
+   than leaving it a consequence. **reactor keeps `called_focus_status` at its
+   own call site** (`src/conventions/reactor/interpret_clue.cpp:504`).
+   Returns `PLAY`. An *unnecessary* focus (every possibility trash or
+   visible elsewhere) makes the clue a `STALL` instead (`:443-455`).
+2. **Play reveal** (`:488-491`) — the clue fills a previously-clued card in
    as a new obvious playable, without the whole rank being playable →
    `REVEAL`, no stamp; empathy carries it. **Terminal, and ranked above every
    other reveal and above the referential readings**: the receiver has a play
    to make, which outranks being told what to discard. So a rank clue that
    both fills in a playable and touches the lock slot is a `REVEAL`, not a
    `LOCK`.
-3. **Trash reveal** (`:289-300`) — every touchable identity is trash. The
+3. **Trash reveal** (`:491-508`) — every touchable identity is trash. The
    leftmost newly touched card is marked known trash (`inferred ∩= trash_set`,
    `meta.trash`); `REVEAL`. No newly touched cards → `STALL`. **Terminal**:
    never falls through to a referential reading (unlike reactor, where an
    all-trash rank clue is the trash push and this is where reactor0 and
    reactor deliberately diverge — see TODO.md's reactor-only trash-push
    entry).
-4. **Previously-clued trash / dupe reveal** (`:302-323`) — `check_fix` →
+4. **Previously-clued trash / dupe reveal** (`:510-528`) — `check_fix` →
    `FIX`; a previously-clued card newly known trash → `REVEAL`; the brownish
    trash reveal (`variants::brownish_trash_reveal`) → `REVEAL`.
-5. **Lock** and 6. **Referential discard** (`:325-329`) — a clue touching at
+5. **Lock** and 6. **Referential discard** (`:530-532`) — a clue touching at
    least one new card falls into reactor's `ref_discard`
    (`src/conventions/reactor/interpret_clue.cpp:317-420`): touching the lock
    slot (oldest unclued) stamps the whole hand `CHOP_MOVED` → `LOCK`;
    otherwise the first unclued slot right of the focus is stamped
    `CALLED_TO_DISCARD` → `DISCARD`, pink promise included.
-7. **Stall** (`:332`) — no new cards and nothing above fired.
+7. **Stall** (`:535`) — no new cards and nothing above fired.
 
 ## §1d Reactive — the clue value is the anchor
 
@@ -320,10 +379,26 @@ are insulated because the reading binds at clue time via `ReactorWC::rlocks`.
 Inherited from reactor, by construction rather than reimplementation: the
 pink promise (via `violates_pink_promise` + `ref_discard` +
 `playable_rank_focus`), the brownish trash reveal, the inverted (orange)
-compensation (`called_focus_status`, `would_lose_inverted_reacter`,
+compensation on the **reactive** side (`would_lose_inverted_reacter`,
 target-play/discard swaps at every reactive site), and reversed suits (free
 from `State`'s direction-aware helpers, plus `variants::connector_of` for the
 finesse prerequisite, which runs **up** the ranks on a reversed suit).
+
+**Not inherited: the stable side of the orange compensation.** From v4.0.0
+reactor0 owns its own readings for inverted suits, and they are a
+cross-version compatibility break with reactor:
+
+| | reactor | reactor0 |
+|---|---|---|
+| Stable colour naming an orange | `ref_play`; `target_play` on an inverted target is rejected as a mistake | the §1b orange ladder — play reveal, then pitch or chuck |
+| Rank direct play with a possibly-orange focus | `called_focus_status` → CTD (a chuck) | always `CALLED_TO_PLAY` (a pitch); a useful orange is excluded from the reading in the first place |
+| `pace()` | not consulted for orange | selects pitch vs chuck |
+| Dark Orange | no special handling | always chucks |
+
+The new predicate is `variants::includes_dark_inverted`
+(`src/conventions/variants/predicates.cpp:32-37`), which like
+`includes_inverted` reads the real `SuitType` flags rather than matching suit
+names.
 Reactive anchors ignore the rainbowish/pinkish focus tables entirely — the
 anchor is the clue value in every variant. `/allplays` is a reactor concept
 and never reaches a reactor0 game at all (§0).
@@ -615,6 +690,8 @@ the penalty must not make a clue that only buries trash look acceptable.
 | `tests/test_reactor0/test_reactive_colour.cpp` | both colour modes, critical skip, dupe targets, MISTAKE rejection |
 | `tests/test_reactor0/test_reactive_lock.cpp` | lock in both modes, rlocks-off sacrifice, trash-on-oldest-slot |
 | `tests/test_reactor0/test_colour_value.cpp` | the colour-value table incl. the spec's worked example |
+| `tests/test_reactor0/test_orange.cpp` | §1b/§1c in inverted variants — bug 3.1's rank-2 lock, a rank clue still revealing a playable orange, pitch at pace > 3, chuck at pace <= 3, chuck in Dark Orange, play reveal outranking the pitch, and the stall when nothing can reach the stacks |
+| `tests/test_endgame/test_orange_chuck.cpp` | bug 3.2 — the solver offers a known playable orange as a chuck, and `perform_to_action` models a chuck of a non-playable orange as a misplay |
 | `tests/test_reactor0/test_stable_rank_omni.cpp` | §1c in an omni variant — rank 1 and rank 4 read as direct plays, an unplayable useful identity still blocks, and the pinkish focus is the leftmost |
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |

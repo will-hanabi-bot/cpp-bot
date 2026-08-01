@@ -712,6 +712,26 @@ Stable `ref_play` simply refuses orange targets (`interpret_clue.cpp:309-311`),
 so that the giver's eval scores the clue as a `MISTAKE` and prefers the rank
 clue that reaches the same card through `ref_discard`.
 
+**Reactor0 diverges here as of v4.0.0** — a cross-version compatibility break,
+so a reactor player and a reactor0 player read an orange clue differently.
+Reactor keeps everything in this section unchanged; reactor0 replaces the
+stable side with its own ladder (pitch vs chuck selected by `pace()` and by
+whether the inverted suit is dark) and stamps a rank direct play clue
+`CALLED_TO_PLAY` unconditionally rather than routing it through
+`called_focus_status`. See
+[reactor0's §1b and §1f](../reactor0/CONVENTION.md). The **reactive** swaps
+above are still shared by both conventions.
+
+The endgame solver is convention-neutral and now knows about the swap in three
+places: `possible_actions` emits a stack-advancing orange as a
+`PerformDiscard` (`src/endgame/solver.cpp`), `perform_to_action` derives the
+`failed` flag instead of hardcoding `false` (so a chuck of a non-playable
+orange models as a misplay rather than a stack jump), and the direct-win /
+tie-break predicates count an orange chuck as a play. Before v4.0.0 the solver
+enumerated every orange play as a `PerformPlay`, i.e. as a pitch into the
+discard pile, so any line needing an orange play scored as a loss
+(bug_report_3.txt 3.2, replay 1942723 T42).
+
 ### 1b.6 Clue-touch rules
 
 `Variant::id_touched` (`src/basics/variant.cpp:199-246`) determines which

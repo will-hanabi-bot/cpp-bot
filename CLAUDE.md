@@ -73,9 +73,9 @@ each and makes the full suite take ~7 minutes instead of ~23 seconds.
 
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
-build/hanabi_reactor0_tests.exe   # reactor0 only          38 tests, 0.6 s
-build/hanabi_tests.exe            # convention-neutral    242 tests, 1.2 s
-build/hanabi_reactor_tests.exe    # reactor + replays     122 tests, 21 s
+build/hanabi_reactor0_tests.exe   # reactor0 only          74 tests, 6.1 s
+build/hanabi_tests.exe            # convention-neutral    248 tests, 0.2 s
+build/hanabi_reactor_tests.exe    # reactor + replays     120 tests, 20 s
 build/hanabi_decision_tests.exe   # decision quality       12 tests
 ```
 
@@ -83,8 +83,8 @@ Pick the scope from the report's `Convention:` field:
 
 | Working on | Run |
 |---|---|
-| reactor0 | `hanabi_reactor0_tests` + `hanabi_tests` (1.8 s) |
-| reactor | `hanabi_reactor_tests` + `hanabi_tests` (22 s) |
+| reactor0 | `hanabi_reactor0_tests` + `hanabi_tests` (6.3 s) |
+| reactor | `hanabi_reactor_tests` + `hanabi_tests` (20 s) |
 | shared engine (`src/basics/`, eval, elim) | all three |
 
 `ctest` remains available when you want label composition or CI-style output:

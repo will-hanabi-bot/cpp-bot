@@ -76,7 +76,9 @@ A stable clue whose meaning is "play this touched card" — reactor0's
 stable colour reading and rank priority 1. Contrast reactor, where a stable
 colour clue is *referential* (points one slot left of a touched card).
 There is **no referential play in reactor0**.
-`src/conventions/reactor0/interpret_clue.cpp:116-157`, `:188-237`.
+A rank direct play clue **always means pitch** (press Play), which is why it
+can never put an orange card onto its stack — see *orange ladder*.
+`src/conventions/reactor0/interpret_clue.cpp:227-330`, `:426-486`.
 
 ### double discard (clue)
 The rank-reactive fallback when no play or finesse target exists: zero
@@ -126,7 +128,13 @@ playable. The receiver just plays it; no status is stamped. Terminal in both
 stable branches, and on the rank ladder it sits at **priority 2** — ahead of
 every other reveal and ahead of the lock / referential discard, because a
 play to make outranks being told what to discard.
-`interpret_clue.cpp:59-84`, `:132`, `:239-244`.
+
+In an inverted variant the revealed card is **chucked**, not pitched, and the
+colour branch stamps `CALLED_TO_DISCARD` to say so; it also recognises a
+*newly* touched card that the clue pins to a playable orange, which
+`find_play_reveal` does not (it requires a previously-clued card on a colour
+clue). This reading takes priority over the orange ladder.
+`interpret_clue.cpp:60-85`, `:244-266`, `:488-491`.
 
 ### positional dispatch
 Reactor0's whole dispatcher: clue to Bob ⇒ stable, clue to anyone else ⇒
@@ -203,7 +211,13 @@ variants — rather than over the variant-wide `touch_possibilities`.
 here. Introduced in v3.0.0 because an omni suit is touched by *every* rank
 clue, which made the variant-wide set contain the omni suit at all five ranks
 and stopped priority 1 firing at all in those variants.
-`src/conventions/reactor0/interpret_clue.cpp:178-229`.
+
+Three narrowing steps as of v4.0.0: per-card `effective_possible_for`, the
+pink promise — whose set is `{clue rank}` ∪ `{special rank}` when `pink_s`
+(= `specialRankAllClueRanks`) is set, gated on the **flag** rather than the
+name-based `includes_pinkish` — and "a useful inverted identity is not
+playable by this clue", since priority 1 pitches.
+`src/conventions/reactor0/interpret_clue.cpp:350-424`.
 
 ### dc-target walk
 Colour mode 2 tries each trash/dupe dc-candidate in turn instead of committing
@@ -212,3 +226,38 @@ knowledge** and rejecting the clue outright when only the giver can tell (the
 §1g split). Rank Phase C does *not* walk — it keeps the strict leftmost
 dc-target. `src/conventions/reactor0/interpret_reactive.cpp:476-521`;
 CONVENTION.md §1d.
+
+### orange ladder
+Reactor0's reading of a colour clue naming an inverted (Orange / Dark Orange)
+suit, new in v4.0.0. After the fix and the play-reveal steps:
+
+* **non-dark orange at `pace() > 3` → pitch.** The receiver presses **Play**
+  on the leftmost touched orange they do not know is critical, which for an
+  inverted suit sends it to the discard pile and regains a clue. Stamped
+  `CALLED_TO_PLAY`; the clue interp is `DISCARD`.
+* **`pace() <= 3`, or a dark inverted suit → chuck.** The receiver presses
+  **Discard** on the leftmost touched orange that could still reach the
+  stacks, which advances the orange stack. Stamped `CALLED_TO_DISCARD`; the
+  clue interp is `PLAY`.
+* nothing reachable → `STALL`.
+
+Dark forces the chuck because every dark card is a singleton, so a pitch
+throws away the only copy. **Reactor does none of this** — it rejects a
+stable colour clue on an orange target outright.
+`src/conventions/reactor0/interpret_clue.cpp:271-302`; stamps at `:143-195`.
+
+### includes_dark_inverted
+True when the variant has a suit that is both `inverted` and `dark`, i.e.
+Dark Orange. Like `includes_inverted` it reads the real `SuitType` flags
+rather than matching suit names. Selects the chuck branch of the *orange
+ladder* at any pace.
+`src/conventions/variants/predicates.cpp:32-37`.
+
+### holder_knows_critical
+"Does the holder of this card know it is critical" — every identity in
+`common.thoughts[order].possible` is critical. Uses `common` and raw
+`possible` rather than `inferred`, which makes it POV-invariant: giver,
+holder and every observer compute the same answer, so a convention rule may
+branch on it without desyncing (§1g). Selects which touched orange the pitch
+branch names.
+`src/basics/player_game.cpp`, declared in `include/hanabi/basics/player.h`.
