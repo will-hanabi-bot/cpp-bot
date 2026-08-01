@@ -294,3 +294,61 @@ TEST(ForcedEndgame, TwoCriticalPlayPrefersRank4WhenSuccessorHeldElsewhere) {
          "turn because r stack is still 3.";
   EXPECT_NE(std::get<PerformPlay>(*forced).target, b5_order);
 }
+
+// --- CP's own hand is visible to the rule --------------------------------
+
+// Same shape as FiveLockoutFiresWhenFiveHolderPrecedesFourHolder, except the
+// 4 that would suppress the rule is in CP's OWN hand at offset 0. Holders
+// used to be found via `state.deck[o].id()`, which is nullopt for one's own
+// cards, so CP could never be counted as a 4-holder and the rule's documented
+// CP exemption was dead code. Replay 1942668 T44.
+TEST(ForcedEndgame, FiveLockoutDoesNotFireWhenCpHoldsTheFour) {
+  SetupOptions opts;
+  opts.hands = {
+      // Alice (observer + CP) holds o4 on slot 1 — offset 0.
+      {"o4", "b1", "o1", "r2", "b2"},
+      // Bob (offset 1): slot 1 = o5.
+      {"o5", "r3", "b3", "r2", "b2"},
+      {"r1", "r3", "b3", "r4", "b4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {0, 0, 3};
+  opts.clue_tokens = 4;
+  Game g = setup(std::move(opts));
+  g = with_cards_left(std::move(g), 1);
+  // CP must be able to pin its own card for the rule to see it.
+  g = fully_known(std::move(g), TestPlayer::ALICE, /*slot=*/1, "o4");
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "CP holds the 4 at offset 0, so playing it advances the stack and "
+         "the 5 plays normally — the 5-lockout must not force a stall clue";
+}
+
+// The mirror: CP holding the FIVE is also now visible. With CP as the
+// 5-holder at offset 0, no 4-holder can have a smaller offset, so the rule
+// fires — which it could not previously conclude from CP's own hand either.
+TEST(ForcedEndgame, FiveLockoutSeesCpAsTheFiveHolder) {
+  SetupOptions opts;
+  opts.hands = {
+      // Alice (CP) holds o5 — offset 0.
+      {"o5", "b1", "o1", "r2", "b2"},
+      {"r1", "r3", "b3", "r2", "b2"},
+      // Cathy (offset 2) holds o4.
+      {"o4", "r3", "b3", "r4", "b4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {0, 0, 3};
+  opts.clue_tokens = 4;
+  Game g = setup(std::move(opts));
+  g = with_cards_left(std::move(g), 1);
+  g = fully_known(std::move(g), TestPlayer::ALICE, /*slot=*/1, "o5");
+
+  auto forced = hanabi::endgame::forced_endgame_action(g);
+  ASSERT_TRUE(forced.has_value())
+      << "CP is the 5-holder at offset 0; every 4-holder is at a later "
+         "offset, so the lockout applies";
+  EXPECT_TRUE(std::holds_alternative<PerformColour>(*forced) ||
+              std::holds_alternative<PerformRank>(*forced));
+}

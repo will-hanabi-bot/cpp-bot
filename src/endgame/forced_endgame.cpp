@@ -14,6 +14,34 @@ namespace hanabi::endgame {
 
 namespace {
 
+// The identity of `order` as the CURRENT PLAYER knows it, or nullopt when
+// they cannot pin it to one card. `state.deck[o].id()` returns nullopt for
+// one's own hand, so any rule that scans hands by deck identity is blind to
+// CP's own cards — see the 5-lockout below, whose documented CP exemption was
+// unreachable for exactly that reason (replay 1942668 T44).
+//
+// The intersection rather than either view alone is Rule 2's convention (see
+// its comment): common alone can retain basic trash that good-touch never
+// stripped, and the per-player view alone can be wider in test setups that
+// seed common.thoughts without syncing per-player views.
+std::optional<Identity> own_known_identity(const Game& game, int order) {
+  const int cp = game.state.current_player_index;
+  IdentitySet tight = game.common.thoughts[order].inferred.intersect(
+      game.players[cp].thoughts[order].inferred);
+  if (tight.length() != 1) return std::nullopt;
+  return tight.head();
+}
+
+// The identity `order` holds for the purposes of the hand scans below: the
+// real deck id when visible, else what CP knows about its own card.
+std::optional<Identity> effective_identity(const Game& game, int order) {
+  if (auto id = game.state.deck[order].id()) return id;
+  if (game.state.holder_of(order) != game.state.current_player_index) {
+    return std::nullopt;
+  }
+  return own_known_identity(game, order);
+}
+
 // Rule 1 — "5-lockout".
 //
 // Precondition: `cards_left == 1`, `play_stacks[suit] < 4`, and the suit's
@@ -30,6 +58,13 @@ namespace {
 // predicate. When CP themselves holds a 4 (offset 0), the rule does NOT
 // fire — playing the 4 advances the stack and the 5 plays normally on
 // its endgame turn.
+//
+// Holders are resolved with `effective_identity`, so CP's OWN hand counts
+// whenever CP can pin the card to a single identity. Using `deck[o].id()`
+// alone made the CP exemption above dead code — CP never sees its own cards,
+// so it could never be a 4-holder. Replay 1942668 T44: CP held a called,
+// empathy-known, playable Ice 4 at offset 0 while the Ice 5 sat at offset 1;
+// unseen, the rule fired and forced a stall clue instead of the play.
 bool five_lockout_fires(const Game& game, int suit) {
   const State& s = game.state;
   if (s.play_stacks[suit] >= 4) return false;
@@ -41,7 +76,7 @@ bool five_lockout_fires(const Game& game, int suit) {
   std::vector<int> four_holders;
   for (int p = 0; p < s.num_players; ++p) {
     for (int o : s.hands[p]) {
-      auto id = s.deck[o].id();
+      auto id = effective_identity(game, o);
       if (!id) continue;
       if (*id == five) five_holder = p;
       if (*id == four) four_holders.push_back(p);

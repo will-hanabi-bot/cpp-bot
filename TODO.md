@@ -181,3 +181,38 @@ right — but the branch has no test either way. Decide and pin it.
 *(Chop selecting the most recent CTD by `signal_turn` shipped in v1.11.0 —
 `Game::chop`, `src/basics/decide.cpp:419-446`, pinned by
 `tests/test_basics/test_chop.cpp`.)*
+
+---
+
+## 9. `[endgame]` The solver cannot safely be made to enumerate all 100% lines
+
+behavioral_changes_2.txt 2.1 asked for: run to the time limit, collect every
+action with winrate 1, and prefer one where the acting player plays. Attempted
+and **reverted** — the three early-exits on `Fraction(1)` (`solver.cpp`
+`optimize_full`'s `stop`, `optimize`'s per-action return, and `solve`'s
+multi-hypo `break`) are load-bearing for *accuracy*, not just speed. Removing
+them made `EndgameReplay1885375.Turn35EndgameWinrateIsOne` report **2/15
+instead of 1** and take 12.5 s instead of 1.4 s: without the short-circuit the
+search runs into the 6 s deadline, and a timed-out sub-search is scored **0**
+and is indistinguishable from a loss (`:301-303`, `:394-396`). The whole
+reactor suite went 19.2 s → 39.1 s.
+
+Prerequisites before this can be revisited:
+
+1. **Make truncation distinguishable from a loss.** Until a timed-out branch
+   stops contributing 0, any longer search can report a *worse* winrate than a
+   shorter one, which is what bit here.
+2. **The draw-filter asymmetry.** Clues are scored against `undrawn` — one
+   `GameArr` with `drew == nullopt`, never filtered — while plays lose
+   probability mass to the `winnable_draws` filter (`:293-296`, `:386-390`).
+   A genuinely 100% play can therefore score below a 100% clue, which defeats
+   the preference from underneath.
+3. Several paths return an action at winrate 1 without ranking at all:
+   `trivially_winnable` defaults to a **discard** (`helper.cpp:121`),
+   `solver.cpp:491` returns an arbitrary `find_all_clues().front()`, and
+   `:551` returns `performs.back()`, which by the ordering at `:270-278` is
+   never a play.
+
+A cheaper shape worth trying first: once a NON-play reaches the ceiling,
+continue evaluating only the remaining **play** candidates rather than the
+whole list — that bounds the extra work to what the preference actually needs.
