@@ -19,8 +19,6 @@ using hanabi::reactor::elim_play_play;
 using hanabi::reactor::target_i_discard;
 using hanabi::reactor::target_i_play;
 
-namespace {
-
 // The reactive-lock reading: a dc-target on the receiver's OLDEST slot,
 // with rlocks bound into the WC at clue time, locks the whole hand — even
 // when the slot actually holds trash (the receiver cannot tell the two
@@ -30,7 +28,23 @@ bool is_lock_target(const ReactorWC& wc, int target_slot) {
          target_slot == static_cast<int>(wc.receiver_hand.size());
 }
 
-}  // namespace
+bool predicts_reactive_lock(const Game& hypo) {
+  if (hypo.waiting.empty()) return false;
+  const ReactorWC& wc = hypo.waiting.front();
+  if (wc.react_order < 0) return false;
+  const auto& reacter_hand = hypo.state.hands[wc.reacter];
+  auto it = std::find(reacter_hand.begin(), reacter_hand.end(), wc.react_order);
+  if (it == reacter_hand.end()) return false;
+  const int react_slot = static_cast<int>(it - reacter_hand.begin()) + 1;
+  // `calc_slot` is its own inverse in the slot argument, so feeding it the
+  // reacter's called slot recovers the receiver's target slot — the same
+  // number `calc_target_slot` derives at resolution time. Hand size comes
+  // from `kHandSize`, matching the reactive selection paths
+  // (interpret_reactive.cpp:219, :408).
+  const int target_slot = hanabi::reactor::calc_slot(
+      wc.focus_slot, react_slot, kHandSize[hypo.state.num_players]);
+  return is_lock_target(wc, target_slot);
+}
 
 void reactive_lock(Game& game, const ReactorWC& wc) {
   int turn = game.state.turn_count;

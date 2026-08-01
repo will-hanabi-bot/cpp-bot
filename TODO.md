@@ -96,12 +96,24 @@ live-game evidence first.
 
 ## 4. `[reactor0]` Eval tuning for double-discard and lock clue shapes
 
-Reactor0 reuses reactor's eval layer except for `eval_action`'s clue branch
-(see reactor0 CONVENTION.md §2a). Double-discard clues score as
-ordinary discards (0 plays), reactive locks have no dedicated `get_result`
-term, and blind-play clues rely on the urgent CTP being visible to
-`hypo_plays`. Whether the search picks these clues often enough (or too
-often) needs live-game evidence before tuning.
+Reactor0 now owns `eval_action`'s clue branch and its own `get_result` (see
+reactor0 CONVENTION.md §2a-§2c), but the shape-specific terms are still
+missing:
+
+- **Double discards** still score as ordinary 0-play clues. §2b refuses to
+  *offer* one that buys nothing, which is a candidate filter rather than an
+  eval term — a double discard competing against a play, a discard or another
+  reactive is still scored as though it were any other 0-play clue.
+- **Reactive locks** have no dedicated `get_result` term, and are deliberately
+  exempt from §2b. `eval_game`'s `lock_penalty` never fires for the clue that
+  causes a lock, because the `CHOP_MOVED` stamps land a turn later.
+- **Blind-play clues** (colour mode 2) still rely on the urgent CTP being
+  visible to `hypo_plays`.
+
+Also latent: `new_play_facts` counts `CALLED_TO_PLAY` transitions only, so on
+an inverted suit — where a play call is stamped `CALLED_TO_DISCARD` — it
+undercounts. §2b sits out inverted variants for exactly this reason; `§2a`'s
+tier conditions H3/N3 have the same blind spot and have not been audited.
 
 ---
 

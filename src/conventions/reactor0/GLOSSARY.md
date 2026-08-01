@@ -24,7 +24,7 @@ visibility. All four must hold: Alice knows the identity and it is not basic
 trash; there is **no second copy in the holder's own hand**; no copy is
 visible in the third player's hand; and Alice cannot prove she is holding a
 copy (see *group elim*). Input to §2a's H1 and N2/N3.
-`src/conventions/reactor0/state_eval.cpp:107-133`. Stricter than reactor's
+`src/conventions/reactor0/state_eval.cpp:109-135`. Stricter than reactor's
 `chop_is_nontrash` (`src/conventions/reactor/state_eval.cpp:44-49`), which
 tests basic trash only.
 
@@ -40,7 +40,7 @@ Proving Alice holds a copy of an identity without any of her cards being a
 singleton: for a subset S of her hand with combined possibilities `u`, if
 fewer than |S| copies of `u \ {id}` remain unaccounted for, one of them must
 be `id`. |S| = 1 is the ordinary singleton case.
-`src/conventions/reactor0/state_eval.cpp:58-99`. Distinct from `cross_elim`
+`src/conventions/reactor0/state_eval.cpp:60-101`. Distinct from `cross_elim`
 (`src/basics/player_elim.cpp:165-226`), which strips locked identities from
 cards *outside* such a group rather than identifying one inside it.
 
@@ -51,7 +51,7 @@ holds a card stamped `CALLED_TO_PLAY` (or, in a variant with an inverted
 suit, `CALLED_TO_DISCARD`), and otherwise must be at least MEDIUM; anything
 lower scores a flat `-1.0`. One token wider than reactor's window and,
 unlike it, fires even when Alice holds no play.
-`src/conventions/reactor0/state_eval.cpp:266-281`; CONVENTION.md §2a.
+`src/conventions/reactor0/state_eval.cpp:443-458`; CONVENTION.md §2a.
 
 ### blind play (react slot)
 The reacter playing the computed react slot without knowing its identity.
@@ -81,7 +81,17 @@ There is **no referential play in reactor0**.
 ### double discard (clue)
 The rank-reactive fallback when no play or finesse target exists: zero
 plays — the reacter discards the react slot and the receiver discards the
-dc-target (or locks). `interpret_reactive.cpp:366-398`.
+dc-target (or locks). `interpret_reactive.cpp:366-398`. The giver will not
+*offer* one that buys nothing — see *pointless double discard*.
+
+### pointless double discard
+A double discard aimed at a receiver who was going to act safely anyway:
+their chop is expendable, or they already hold a known play, a
+`CALLED_TO_PLAY`, a `CALLED_TO_DISCARD` or known trash. Reactor0 drops such a
+clue from its candidate set when a stable clue to Bob would instead get a card
+played (CONVENTION.md §2b,
+`src/conventions/reactor0/state_eval.cpp:486-566`). Reactive locks are
+exempt. Named from replay 1942181 T41.
 
 ### call invariants
 The two rules constraining a hand's outstanding calls, enforced after every
@@ -136,7 +146,11 @@ The rlocks reading: a reactive dc-target on the receiver's **oldest slot**
 locks the whole hand (`CHOP_MOVED` on every card) instead of calling a
 discard. Applies uniformly in both dc modes and conservatively even when
 the oldest slot is actually trash. Bound at clue time via
-`ReactorWC::rlocks`. `src/conventions/reactor0/interpret_reaction.cpp:28-49`.
+`ReactorWC::rlocks`. `src/conventions/reactor0/interpret_reaction.cpp:24-49`.
+Exempt from the §2b filter — a lock protects a whole hand, so it is never a
+*pointless double discard*. Because the `CHOP_MOVED` stamps land a turn later
+at resolution, the giver predicts the reading at clue time instead, via
+`predicts_reactive_lock` (`:31-49`).
 
 ### rlocks (`allow_reactive_locks`)
 The flag enabling the reactive lock. Default per variant: on iff

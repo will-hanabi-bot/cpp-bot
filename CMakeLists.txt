@@ -245,6 +245,8 @@ add_executable(hanabi_decision_tests
   tests/test_reactor/test_decision_making/test_replay_1916933_clue_forces_discard_of_queued_playable.cpp
   tests/test_reactor0/test_decision_making/test_clue_tier.cpp
   tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp
+  tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp
+  tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp
 )
 target_include_directories(hanabi_decision_tests PRIVATE tests)
 target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)

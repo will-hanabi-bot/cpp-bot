@@ -863,6 +863,21 @@ PerformAction Game::take_action() const {
     }
   }
 
+  // Reactor0 §2b: a reactive whose entire content is "you two both discard"
+  // is not worth a token when a stable clue to Bob would get a card played
+  // instead. This runs ONCE per turn over the whole candidate set, because
+  // it is a comparison *between* clues — something eval_action, which sees a
+  // single Action and is called 2(n-1) times by the argmax below, cannot
+  // express. Reactive locks, and every 1- or 2-play reactive, are untouched;
+  // the filter is a no-op unless a stable Bob play clue worth giving
+  // survives, so `all_clues` can never be emptied by it. Modelled on the
+  // force-play override further down, and inert with respect to it: a
+  // surviving Bob play clue is exactly what makes that override's
+  // `any_clue_creates_play` scan true.
+  if (convention == Convention::REACTOR0) {
+    hanabi::reactor0::drop_pointless_double_discards(*this, all_clues);
+  }
+
   std::vector<std::pair<PerformAction, Action>> all_plays;
   for (int o : playable_orders) {
     auto inferred = m.thoughts[o].id(/*infer=*/true);

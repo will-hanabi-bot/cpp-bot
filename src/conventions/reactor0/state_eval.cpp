@@ -5,6 +5,7 @@
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/clue.h"
+#include "hanabi/basics/clue_result.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity_set.h"
 #include "hanabi/basics/interp.h"
@@ -13,6 +14,7 @@
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor/state_eval.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/predicates.h"
 #include "hanabi/conventions/variants/reversed.h"
@@ -187,6 +189,181 @@ bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
 
 }  // namespace
 
+// --- §2c Clue scoring, reactor0's own ------------------------------------
+//
+// Ported from `reactor::get_result` (reactor/state_eval.cpp:152-291) so the
+// two conventions can diverge. The structure is deliberately kept
+// line-for-line comparable with reactor's; the ONLY intentional differences
+// are the two bad-touch constants below.
+//
+// Why: reactor charges a clue twice for touching a card that turns out to be
+// trash — once by shrinking the `good_touch` bonus (it indexes the table on
+// `new_touched - bad_touch`) and again through a flat `-0.1 * bad_touch`.
+// Under reactor0 that made a clue which *gets a card played* score below
+// several clues that achieve nothing, purely because the playing clue also
+// swept up some trash. Replay 1942181 T41 is the worked example: Blue to Bob
+// plays a Berry 5 off a stack of 4 but touches two dead Aqua cards, and it
+// finished behind a referential discard, a play-less reveal, and a
+// zero-play double discard — all within 0.14 of each other.
+//
+// Bad touch still costs, but only through the terms that already model it:
+// the touched cards are dead weight in the receiver's hand, and the
+// all-bad-touch-with-no-playables reading is still hard-rejected below.
+namespace {
+
+// reactor uses 0.1. Charging nothing here is what lets a clue that creates a
+// play outrank a clean clue that creates none.
+constexpr double kBadTouchPenalty = 0.0;
+// When true, `good_touch` indexes on `new_touched - bad_touch` as reactor
+// does, so trash never earns the touch bonus; it simply stops being charged
+// for a second time. Keeping this true avoids the opposite failure — a bot
+// that sprays clues because touching trash is free.
+constexpr bool kGoodTouchDiscountsBadTouch = true;
+
+}  // namespace
+
+double get_result(const Game& game, const Game& hypo, const ClueAction& action) {
+  const State& state = game.state;
+  const Player& common = game.common;
+  const auto& meta = game.meta;
+
+  auto [new_touched, fill, elim] = hanabi::elim_result(
+      game, hypo, hypo.state.hands[action.target], action.list_);
+  auto [bad_touch, trash, _] = hanabi::bad_touch_result(game, hypo, action);
+  auto [_blind_plays, playables] = hanabi::playables_result(game, hypo);
+
+  int revealed_trash = 0;
+  for (int o : hypo.common.thinks_trash(hypo, action.target)) {
+    if (!hypo.state.deck[o].clued) continue;
+    auto game_trash = common.thinks_trash(game, action.target);
+    if (std::find(game_trash.begin(), game_trash.end(), o) == game_trash.end()) {
+      ++revealed_trash;
+    }
+  }
+
+  std::vector<int> new_playables;
+  for (const auto& hand : state.hands) {
+    for (int o : hand) {
+      if (meta[o].status != CardStatus::CALLED_TO_PLAY &&
+          hypo.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+        new_playables.push_back(o);
+      }
+    }
+  }
+  for (int o : new_playables) {
+    bool ok = hypo.me().hypo_plays.count(o) > 0;
+    if (!ok && game.in_endgame()) {
+      auto id = state.deck[o].id();
+      ok = id && state.is_playable(*id);
+    }
+    if (!ok) return -100.0;
+  }
+
+  auto move = hypo.last_move();
+  auto move_is = [&](ClueInterp ci) {
+    return move && std::holds_alternative<ClueInterp>(*move) &&
+           std::get<ClueInterp>(*move) == ci;
+  };
+
+  if (move_is(ClueInterp::PLAY) && playables.empty() && !game.in_endgame()) {
+    return -100.0;
+  }
+  if (move_is(ClueInterp::REVEAL) && playables.empty() && !trash.empty()) {
+    bool all_clued = true;
+    for (int o : trash) {
+      if (!state.deck[o].clued) {
+        all_clued = false;
+        break;
+      }
+    }
+    if (all_clued) return -100.0;
+  }
+  // Retained in full: dropping the bad-touch *penalty* must not make a clue
+  // that only buries trash and creates nothing look acceptable.
+  if (!move_is(ClueInterp::REACTIVE) && !bad_touch.empty()) {
+    bool all_in_bad = true;
+    for (int o : new_touched) {
+      if (std::find(bad_touch.begin(), bad_touch.end(), o) == bad_touch.end()) {
+        all_in_bad = false;
+        break;
+      }
+    }
+    if (all_in_bad && playables.empty()) return -100.0;
+  }
+
+  int duped_playables = 0;
+  for (int p : hypo.me().hypo_plays) {
+    if (state.deck[p].clued) continue;
+    bool dup = false;
+    for (const auto& hand : state.hands) {
+      for (int o : hand) {
+        if (o == p) continue;
+        if (game.is_touched(o) && state.deck[o].matches(state.deck[p])) {
+          dup = true;
+          break;
+        }
+      }
+      if (dup) break;
+    }
+    if (dup) ++duped_playables;
+  }
+
+  const int new_touched_count = static_cast<int>(new_touched.size());
+  const int bad_count = static_cast<int>(bad_touch.size());
+  double good_touch;
+  if (kGoodTouchDiscountsBadTouch && bad_count > new_touched_count) {
+    good_touch = -static_cast<double>(bad_count);
+  } else {
+    static constexpr double table[] = {0.0, 0.125, 0.25, 0.35, 0.45, 0.55};
+    const int touched =
+        kGoodTouchDiscountsBadTouch ? new_touched_count - bad_count
+                                    : new_touched_count;
+    good_touch = table[std::min(touched, 5)];
+  }
+
+  int untouched_plays = 0;
+  for (int o : playables) {
+    if (!hypo.state.deck[o].clued) ++untouched_plays;
+  }
+
+  // As reactor: a reading that flips a queued CALLED_TO_PLAY into a
+  // CALLED_TO_DISCARD destroys that play and whatever chains behind it.
+  int destroyed_plays = 0;
+  for (const auto& hand : state.hands) {
+    for (int o : hand) {
+      if (meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      if (hypo.meta[o].status != CardStatus::CALLED_TO_DISCARD) continue;
+      auto id = state.deck[o].id();
+      if (id && state.is_basic_trash(*id)) continue;
+      ++destroyed_plays;
+    }
+  }
+
+  double value =
+      good_touch +
+      (static_cast<double>(playables.size()) - 2.0 * duped_playables) +
+      0.2 * untouched_plays +
+      (game.in_endgame() ? 0.01 : 0.05) * revealed_trash +
+      (game.in_endgame() ? 0.1 : 0.05) * static_cast<double>(fill.size()) +
+      (game.in_endgame() ? 0.05 : 0.02) * static_cast<double>(elim.size()) +
+      -kBadTouchPenalty * bad_count - 10.0 * destroyed_plays;
+
+  if (move_is(ClueInterp::MISTAKE)) return value - 10.0;
+  if (move_is(ClueInterp::FIX)) return value + 1.0;
+  // Reactor0's rank double play is the only 2-play reactive shape; colour
+  // reactives are 1-play by construction, so this fires exactly where
+  // reactor's does.
+  if (move_is(ClueInterp::REACTIVE) && playables.size() >= 2) value += 10.0;
+  return value;
+}
+
+double clue_branch_value(const Game& game, const Game& hypo,
+                         const ClueAction& ca, bool we_hold_a_play) {
+  const double mult = !we_hold_a_play ? 0.5 : (game.in_endgame() ? 0.1 : 0.25);
+  const double result = get_result(game, hypo, ca);
+  return result * (result > 0 ? mult : 1.0) - 0.5;
+}
+
 bool requires_high_tier(const Game& game) {
   const State& s = game.state;
   const int alice = s.our_player_index;
@@ -281,9 +458,111 @@ double eval_action(const Game& game, const Action& action) {
   }
 
   auto playables_us = game.me().obvious_playables(game, state.our_player_index);
-  double value = hanabi::reactor::clue_branch_value(game, hypo_game, ca,
-                                                    !playables_us.empty());
+  double value = clue_branch_value(game, hypo_game, ca, !playables_us.empty());
   return value + hanabi::reactor::advance(game, hypo_game, 1);
+}
+
+// --- §2b The pointless-double-discard filter -----------------------------
+
+bool receiver_is_safe(const Game& game, int alice, int receiver) {
+  // An expendable chop — trash, same-hand dupe, covered elsewhere, or no
+  // chop at all because the hand is locked.
+  if (!at_risk_chop(game, alice, receiver)) return true;
+  // Known trash, which `order_trash` (player_game.cpp:115-132) already folds
+  // together with CALLED_TO_DISCARD and PERMISSION_TO_DISCARD.
+  if (!game.common.thinks_trash(game, receiver).empty()) return true;
+  // A known play.
+  if (!game.common.obvious_playables(game, receiver).empty()) return true;
+  // An outstanding play call. Usually implied by the line above, but
+  // `order_kp`'s CALLED_TO_PLAY branch can fail when the card's `possible`
+  // no longer intersects the playable set — a card the convention told the
+  // receiver to play is still an action they can take.
+  for (int o : game.state.hands[receiver]) {
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) return true;
+  }
+  return false;
+}
+
+bool is_pointless_double_discard(const Game& game, const Game& hypo,
+                                 const ClueAction& action) {
+  const State& s = game.state;
+  if (action.giver != s.our_player_index) return false;
+  const int alice = s.our_player_index;
+  const int bob = s.next_player_index(alice);
+  // Positional dispatch: a clue to anyone but Bob is reactive (§1a).
+  if (action.target == bob) return false;
+  // Only a rank reactive can call zero plays. Colour mode 2 always stamps
+  // the reacter's blind play, and colour mode 1 the receiver's
+  // (interpret_reactive.cpp:450, :489-490).
+  if (action.clue.kind != ClueKind::RANK) return false;
+  // On an inverted (Orange) suit a *play* call is stamped CALLED_TO_DISCARD
+  // (interpret_reactive.cpp:198-200), so `new_play_facts` — which counts
+  // CALLED_TO_PLAY transitions only — would read a genuine two-play Phase A
+  // as zero plays. Rather than mis-fire, sit the rule out in those variants.
+  if (variants::includes_inverted(s)) return false;
+
+  auto m = hypo.last_move();
+  if (!m || !std::holds_alternative<ClueInterp>(*m) ||
+      std::get<ClueInterp>(*m) != ClueInterp::REACTIVE) {
+    return false;
+  }
+  if (new_play_facts(game, hypo).count != 0) return false;
+  if (predicts_reactive_lock(hypo)) return false;
+  return receiver_is_safe(game, alice, action.target);
+}
+
+bool is_stable_play_clue_for_bob(const Game& game, const Game& hypo,
+                                 const ClueAction& action) {
+  const State& s = game.state;
+  if (action.giver != s.our_player_index) return false;
+  if (action.target != s.next_player_index(s.our_player_index)) return false;
+  auto m = hypo.last_move();
+  if (!m || !std::holds_alternative<ClueInterp>(*m)) return false;
+  const ClueInterp interp = std::get<ClueInterp>(*m);
+  // PLAY covers both direct play readings (stable colour, stable rank
+  // priority 1); REVEAL covers the play reveal, which stamps nothing and so
+  // is only visible as a new playable. The interp test is what excludes a
+  // referential discard, a LOCK or a FIX that happens to free up a playable
+  // through elimination on an untouched card.
+  if (interp != ClueInterp::PLAY && interp != ClueInterp::REVEAL) return false;
+  return !hanabi::playables_result(game, hypo).second.empty();
+}
+
+void drop_pointless_double_discards(
+    const Game& game, std::vector<std::pair<PerformAction, Action>>& clues) {
+  hanabi::instr::ScopedTimer st("reactor0.dd_filter");
+  if (clues.size() < 2) return;
+
+  bool have_bob_play_clue = false;
+  std::vector<size_t> pointless;
+  for (size_t i = 0; i < clues.size(); ++i) {
+    const Action& act = clues[i].second;
+    if (!std::holds_alternative<ClueAction>(act)) continue;
+    const auto& ca = std::get<ClueAction>(act);
+    Game hypo = game.simulate(act);
+    if (is_stable_play_clue_for_bob(game, hypo, ca)) {
+      // Only an alternative we would actually be willing to give. A stable
+      // play clue that the pace-clue tier gate rejects (-1.0) or that
+      // `get_result` hard-rejects is no reason to drop anything — without
+      // this check the bot could suppress the double discard and then fall
+      // through to chucking its own chop.
+      if (!have_bob_play_clue && eval_action(game, act) > 0.0) {
+        have_bob_play_clue = true;
+      }
+      continue;
+    }
+    if (is_pointless_double_discard(game, hypo, ca)) pointless.push_back(i);
+  }
+  if (!have_bob_play_clue || pointless.empty()) return;
+
+  hanabi::logging::log_branch("reactor0.dd_filter",
+                              {{"dropped", pointless.size()},
+                               {"candidates", clues.size()}});
+  // Back to front, so the indices stay valid. The qualifying Bob clue is
+  // itself still in `clues`, so this can never empty the pool.
+  for (auto it = pointless.rbegin(); it != pointless.rend(); ++it) {
+    clues.erase(clues.begin() + static_cast<std::ptrdiff_t>(*it));
+  }
 }
 
 }  // namespace hanabi::reactor0

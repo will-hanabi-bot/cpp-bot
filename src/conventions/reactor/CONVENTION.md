@@ -865,7 +865,10 @@ stack.
 
 ## 2.4 Scoring a clue: `get_result`
 
-`src/conventions/reactor/state_eval.cpp:152-291`.
+`src/conventions/reactor/state_eval.cpp:152-291`. **Reactor only** since
+v2.3.0 — reactor0 ports this into `reactor0::get_result` and drops the flat
+bad-touch penalty (`reactor0/CONVENTION.md` §2c). Changes here must be
+considered for that copy too.
 
 **Hard rejections** (all return `−100`):
 - any newly-CTP'd card that isn't in `hypo.me().hypo_plays` — and, in the
@@ -930,10 +933,12 @@ a card a plain stable push gets for free.
 **Reactor only.** Reactor0 replaces this wholesale with its pace-clue tier
 gate — a wider window, a three-way tier and no "we hold a play" conjunct (see
 `src/conventions/reactor0/CONVENTION.md` §2a). Under reactor0 this gate never
-runs, because `reactor0::eval_action` owns the clue branch; the play and
-discard branches, `get_result`, `advance`, `eval_state` and `eval_game` remain
-common to both conventions. The clue-branch arithmetic below is shared via
-`clue_branch_value` (`state_eval.cpp:456-461`).
+runs, because `reactor0::eval_action` owns the clue branch. **As of v2.3.0
+reactor0 also has its own `get_result`** (`reactor0` §2c) — a port of §2.4
+below that does not charge the flat bad-touch penalty — so nothing in §2.4 or
+this section applies to reactor0 games. Still common to both conventions:
+`eval_action`'s play and discard branches, `advance`, `eval_state` and
+`eval_game`.
 
 `state_eval.cpp:495-506`. When `clue_tokens < 3` **and** `pace() >= 3` **and**
 we hold a real (non-duplicated) obvious playable, a clue must be *high value*
