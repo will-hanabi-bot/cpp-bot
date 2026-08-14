@@ -48,16 +48,19 @@ std::optional<Identity> effective_identity(const Game& game, int order) {
 // 5 still exists in some hand.
 //
 // Cycle offsets (relative to current player): `offset(p) = (p - cp + n) %
-// n`. CP itself has offset 0 (their current turn is "now"); after CP plays
-// the deck empties and the remaining cycle is offsets `1..n-1`.
+// n`. CP's current turn is "now", offset 0; after CP plays, the deck empties
+// and the final round runs offsets `1..n-1` and then **CP again**, so CP's
+// second opportunity is offset `n` — last of all.
 //
 // Rule fires for suit `S` iff every 4-holder has offset >= the 5-holder's
-// offset. Same-hand counts (>=), CP-is-5-holder counts (5-offset = 0,
-// no 4-holder can have a smaller non-negative offset), and the "5-holder
-// strictly precedes all 4-holders" case all fall under that single
-// predicate. When CP themselves holds a 4 (offset 0), the rule does NOT
-// fire — playing the 4 advances the stack and the 5 plays normally on
-// its endgame turn.
+// offset. Same-hand counts (>=) and the "5-holder strictly precedes all
+// 4-holders" case both fall under that single predicate. Two CP cases sit
+// outside it, in opposite directions:
+//   * CP holds a **4** → offset 0, playable now, so the rule does NOT fire:
+//     playing it advances the stack and the 5 plays on its endgame turn.
+//   * CP holds the **5** → offset `n`, since the stack is `< 4` and the 5
+//     cannot be played this turn. No 4-holder can come later, so the rule
+//     does NOT fire either.
 //
 // Holders are resolved with `effective_identity`, so CP's OWN hand counts
 // whenever CP can pin the card to a single identity. Using `deck[o].id()`
@@ -88,7 +91,23 @@ bool five_lockout_fires(const Game& game, int suit) {
   int n = s.num_players;
   auto offset = [&](int p) { return (p - cp + n) % n; };
 
-  int five_offset = offset(*five_holder);
+  // CP gets TWO opportunities, not one: this turn (offset 0) and — because
+  // drawing the last card sets `endgame_turns = num_players`
+  // (src/basics/game.cpp:328), decremented per action (`:250`, `:274`,
+  // `:310`) until the game ends at 0 (src/basics/state.cpp:144) — one more
+  // turn at the very END of the final round, offset `n`.
+  //
+  // Which one applies depends on the card. A **4** can be played right now, so
+  // offset 0 is right and the CP-holds-the-4 exemption stands. A **5** cannot:
+  // the rule's own precondition is `play_stacks[suit] < 4`, so the 5 is not
+  // playable this turn and its opportunity is CP's final-round turn. Scoring
+  // it at offset 0 made `offset(fh) < 0` unsatisfiable, so the rule fired
+  // unconditionally whenever CP held the 5 — and it is precisely then that no
+  // lockout can exist, since CP plays after every other holder's 4.
+  // bug_report_4_1_0.txt 4.1.0a (replay 1957936 T41): stacks [5,5,5,1] with
+  // CP holding Orange 2 and Orange 5, a winning chuck line available, and the
+  // rule forcing a stall clue that short-circuited the solver.
+  int five_offset = (*five_holder == cp) ? n : offset(*five_holder);
   for (int fh : four_holders) {
     if (offset(fh) < five_offset) return false;
   }

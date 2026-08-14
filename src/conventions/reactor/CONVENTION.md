@@ -1071,19 +1071,32 @@ by `take_action`'s main path. It simulates each clue and:
 than the base-game definition — and is what switches the various eval
 constants to their endgame values.
 
-**Forced-endgame rules** (`src/endgame/forced_endgame.cpp:195-223`), only when
-`cards_left == 1` (`:199`):
+**Forced-endgame rules** (`src/endgame/forced_endgame.cpp:249-281`), only when
+`cards_left == 1` (`:253`). Both **short-circuit the solver** — whatever they
+return is `take_action`'s answer — so a rule that fires wrongly is expensive.
 
-- **Rule 2 — two-critical play** (`:100-156`), checked first. Fires when
+- **Rule 2 — two-critical play** (`:154-210`), checked first. Fires when
   `clue_tokens < num_players` and the current player holds ≥ 2
   singleton-critical cards with ≥ 1 playable. Returns a play, preferring the
   playable critical whose successor is held by another player — the "unblock"
-  bonus (`:128-154`, replay 1899527 T47).
-- **Rule 1 — 5-lockout** (`:33-61`), needs `clue_tokens > 0`. Fires for a suit
+  bonus (`:182-208`, replay 1899527 T47).
+- **Rule 1 — 5-lockout** (`:48-115`), needs `clue_tokens > 0`. Fires for a suit
   when its stack is below 4, its 5 is still in someone's hand, and **every
   4-holder's cycle offset is ≥ the 5-holder's** — playing now would empty the
   deck and lock the 5-holder out. The response is to give the top
-  `find_all_clues` result (`:220-221`), falling back to any legal clue.
+  `find_all_clues` result (`:274-275`), falling back to any legal clue.
+
+  **CP has two opportunities, and which one counts depends on the card**
+  (`:106-110`). Drawing the last card sets `endgame_turns = num_players`
+  (`src/basics/game.cpp:328`), so the final round runs offsets `1..n-1` and
+  then **CP again** — CP acts last. A **4** in CP's hand can be played right
+  now, offset 0, which is the long-standing CP-holds-the-4 exemption. A **5**
+  cannot: the rule's own precondition is `play_stacks[suit] < 4`. Its offset is
+  therefore `n`, and since no 4-holder can come later the rule never fires when
+  CP holds the 5. Scoring it at 0 instead made `offset(fh) < 0` unsatisfiable,
+  so the rule fired unconditionally in exactly the case where no lockout can
+  exist — bug_report_4_1_0.txt 4.1.0a, replay 1957936 T41, where it returned a
+  stall clue and hid a 20/20 orange chuck chain from the solver.
 
 **The solver** (`src/endgame/solver.cpp`) is a probability-weighted DFS over
 arrangements of our own unknown cards and deck draws, optimising **exact win

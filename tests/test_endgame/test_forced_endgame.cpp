@@ -325,10 +325,21 @@ TEST(ForcedEndgame, FiveLockoutDoesNotFireWhenCpHoldsTheFour) {
          "the 5 plays normally — the 5-lockout must not force a stall clue";
 }
 
-// The mirror: CP holding the FIVE is also now visible. With CP as the
-// 5-holder at offset 0, no 4-holder can have a smaller offset, so the rule
-// fires — which it could not previously conclude from CP's own hand either.
-TEST(ForcedEndgame, FiveLockoutSeesCpAsTheFiveHolder) {
+// The mirror: CP holding the FIVE is also visible — but it must SUPPRESS the
+// rule, not fire it. CP has two opportunities, not one: this turn (offset 0)
+// and, because drawing the last card gives every player one more turn ending
+// with the drawer, the very last turn of the final round (offset n). The 5 is
+// not playable now — `play_stacks[suit] < 4` is the rule's own precondition —
+// so its opportunity is that last turn, after every other holder's 4. No
+// lockout can exist.
+//
+// This test used to assert the opposite, on the "5-offset = 0, no 4-holder can
+// have a smaller non-negative offset" reading. That premise is
+// bug_report_4_1_0.txt 4.1.0a: at replay 1957936 T41 the rule fired on a CP
+// holding Orange 2 and Orange 5, returned a stall clue, and short-circuited the
+// solver past the only winning line (chuck the 2, then 3/4/5 chuck in order for
+// 20/20).
+TEST(ForcedEndgame, FiveLockoutDoesNotFireWhenCpHoldsTheFive) {
   SetupOptions opts;
   opts.hands = {
       // Alice (CP) holds o5 — offset 0.
@@ -345,10 +356,36 @@ TEST(ForcedEndgame, FiveLockoutSeesCpAsTheFiveHolder) {
   g = with_cards_left(std::move(g), 1);
   g = fully_known(std::move(g), TestPlayer::ALICE, /*slot=*/1, "o5");
 
-  auto forced = hanabi::endgame::forced_endgame_action(g);
-  ASSERT_TRUE(forced.has_value())
-      << "CP is the 5-holder at offset 0; every 4-holder is at a later "
-         "offset, so the lockout applies";
-  EXPECT_TRUE(std::holds_alternative<PerformColour>(*forced) ||
-              std::holds_alternative<PerformRank>(*forced));
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "CP plays LAST in the final round, so a CP-held 5 comes after every "
+         "4-holder and can never be locked out — forcing a stall clue here "
+         "throws away CP's second turn";
+}
+
+// bug_report_4_1_0.txt 4.1.0a asked whether a second shape is covered too:
+// the incomplete stack at 2, CP holding the 3 and the 5, and one of the other
+// two holding the 4. It is the same defect and the same fix — CP is the
+// 5-holder, so the lockout cannot apply and the rule must stay silent, leaving
+// the position to the solver (chuck the 3 now, the 4 comes round, chuck the 5
+// on CP's last turn).
+TEST(ForcedEndgame, FiveLockoutSilentWhenCpHoldsBothTheThreeAndTheFive) {
+  SetupOptions opts;
+  opts.hands = {
+      // Alice (CP) holds o3 and o5.
+      {"o3", "o5", "r2", "b2", "r4"},
+      {"r1", "r3", "b3", "r2", "b2"},
+      // Cathy (offset 2) holds o4.
+      {"o4", "r3", "b3", "r4", "b4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {0, 0, 2};
+  opts.clue_tokens = 4;
+  Game g = setup(std::move(opts));
+  g = with_cards_left(std::move(g), 1);
+  g = fully_known(std::move(g), TestPlayer::ALICE, /*slot=*/1, "o3");
+  g = fully_known(std::move(g), TestPlayer::ALICE, /*slot=*/2, "o5");
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "CP acts last in the final round, so its 5 is never locked out";
 }

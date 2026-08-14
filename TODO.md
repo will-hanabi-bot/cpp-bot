@@ -219,22 +219,27 @@ whole list — that bounds the extra work to what the preference actually needs.
 
 ---
 
-## 10. `[endgame]` The feasibility layers are still blind to inverted suits
+## 10. `[endgame]` `clueless_winnable`'s own discard offer is still blind
 
-v4.0.0 taught the *search* about orange (`possible_actions` emits a
-stack-advancing orange as a `PerformDiscard`, `perform_to_action` derives
-`failed`, and the direct-win / tie-break predicates count a chuck as a play).
-The layers that *prune* before scoring were left blind on purpose, so a
-winning chuck can still be pruned before it is ever evaluated:
+v4.0.0 taught the *search* about orange; v6.1.0 taught the feasibility layers,
+which used to prune a winning chuck (or hallucinate a win) before it was ever
+scored:
 
-- **`trivially_winnable`** (`src/endgame/helper.cpp:113-141`) emits
-  `PerformPlay{first}` at `:130` while advancing its modelled stack at `:131`.
-  For an orange card those two disagree: the modelled stack goes up, but the
-  emitted action pitches the card into the discard pile. It claims a win it
-  cannot achieve. Only reachable with `endgame_turns` set, which is why
-  `EndgameOrange.KnownPlayableOrangeIsOfferedAsAChuck` does not cover it.
-- **`player_known_plays`** (`src/endgame/winnable.cpp`) counts known plays
-  without asking which button performs them.
+- `trivially_winnable` (`src/endgame/helper.cpp:114-150`) now emits the button
+  that matches the stack it credits;
+- `advance_state` (`src/endgame/winnable.cpp:89-152`) runs the button swap in
+  both directions — it had no inverted branch at all, so a physical Play on an
+  orange advanced the stack;
+- `player_known_plays`' consumer and `winnable_simpler`'s discard fallback
+  (`winnable.cpp:325-352`) emit a chuck for a playable orange and a pitch for
+  an orange being thrown away.
+
+What is left: `clueless_winnable`'s discard loop (`winnable.cpp:245-250`) still
+offers `PerformDiscard` only for cards whose id is unknown. For an orange that
+is a chuck, i.e. a play attempt that strikes on trash — the pitch (PerformPlay)
+is the safe way to throw one away, and it is never offered there. Reachable
+only in the clueless branch, where every hand is known, so it has not bitten
+yet.
 
 ## 11. `[reactor0]` No orange tiering in reactor0's `get_result`
 
@@ -332,3 +337,26 @@ Reactor also lacks reactor0's `vet_react_slot` entirely, so the second half of
 the fix has nowhere to live yet. Left alone deliberately: this is a
 cross-version behaviour change on top of entry 13's, and reactor's 120-test
 corpus is the gate. Fix entry 13 first — the two share the same call sites.
+
+---
+
+## 17. `[engine]` `hanabi_decision_tests` segfaults intermittently
+
+`build/hanabi_decision_tests.exe` crashes with SIGSEGV roughly **1 run in 5**,
+always at the same point — the last line written is
+`[ RUN ] Reactor0PaceClueGate.SilentBelowPaceThree`. The remaining runs exit 1
+with the five known `HighValueClueGate` failures and no crash.
+
+Not a regression: reproduced at **v4.1.0** (commit 013580b, before the v5/v6
+orange work) in a clean worktree build, 1 crash in 12 runs, at the identical
+test. It survives at v6.1.0 at the same rate.
+
+Notes for whoever picks it up:
+- `Reactor0PaceClueGate.*` run **alone** passed 8/8 and never crashed, so it is
+  state left by an earlier test in the binary rather than that test's own
+  fixture — or a stack depth issue that only the full run reaches.
+- No `gdb` in this MSYS2 environment; the build is RelWithDebInfo, so a trace
+  needs one installed (`pacman -S mingw-w64-ucrt-x86_64-gdb`) or a WER dump.
+- `SilentBelowPaceThree` sets `pace() < 3`, which also makes `in_endgame()`
+  true (`pace() < num_players - 1`, `decide.cpp:428`) — the endgame solver and
+  the deepest `advance` recursion are both in reach there.

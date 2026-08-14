@@ -16,6 +16,13 @@ namespace hanabi::endgame {
 
 namespace {
 
+// `src/endgame` deliberately does not depend on `src/conventions` (see
+// `perform_to_action` below), so the inverted-suit test is replicated here
+// rather than calling `variants::is_inverted_id`.
+bool is_inverted(const State& state, Identity id) {
+  return state.variant->suits[id.suit_index].suit_type.inverted;
+}
+
 double monotonic_seconds() {
   using clock = std::chrono::steady_clock;
   return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
@@ -85,6 +92,14 @@ State remove_and_draw(State s, int player_index, int order,
 
 State advance_state(State state, const PerformAction& perform, int player_index,
                      const std::optional<Card>& draw) {
+  // Both branches below run the inverted (Orange / Dark Orange) game rule,
+  // which swaps what the two buttons do. `advance_game`'s `perform_to_action`
+  // has always done this; `advance_state` did not, so it advanced the stack
+  // for a PerformPlay on an orange — hallucinating wins — and could never
+  // model the chuck that actually advances it. TODO entry 10 / bug report
+  // 4.1.0a.
+  auto inverted = [&](Identity id) { return is_inverted(state, id); };
+
   if (std::holds_alternative<PerformPlay>(perform)) {
     int target = std::get<PerformPlay>(perform).target;
     auto played_id = state.deck[target].id();
@@ -92,6 +107,10 @@ State advance_state(State state, const PerformAction& perform, int player_index,
     if (!played_id) {
       after = state;
       ++after.strikes;
+    } else if (inverted(*played_id)) {
+      // A PITCH: press Play, and the inversion sends the card to the discard
+      // pile and regains a clue. Never a strike, never stack progress.
+      after = state.with_discard(*played_id, target).regain_clue();
     } else if (state.is_playable(*played_id)) {
       after = state.with_play(*played_id);
     } else {
@@ -105,6 +124,18 @@ State advance_state(State state, const PerformAction& perform, int player_index,
     int target = std::get<PerformDiscard>(perform).target;
     auto d_id = state.deck[target].id();
     State after = state;
+    // A CHUCK: press Discard on an orange and the inversion makes it a play
+    // attempt — the stack advances when it is playable, else it strikes and
+    // the card is still lost. No clue is regained either way.
+    if (d_id && inverted(*d_id)) {
+      if (state.is_playable(*d_id)) {
+        after = state.with_play(*d_id);
+      } else {
+        ++after.strikes;
+        after = after.with_discard(*d_id, target);
+      }
+      return remove_and_draw(std::move(after), player_index, target, draw);
+    }
     if (d_id) after = after.with_discard(*d_id, target);
     after = after.regain_clue();
     return remove_and_draw(std::move(after), player_index, target, draw);
@@ -201,7 +232,13 @@ std::optional<PerformAction> clueless_winnable(State state, int player_turn,
   for (int order : state.hands[player_turn]) {
     auto id = state.deck[order].id();
     if (id && state.is_playable(*id)) {
-      PerformAction perform = PerformPlay{order};
+      // The button that advances the stack: Discard on an inverted (orange)
+      // suit, Play everywhere else. Offering PerformPlay for an orange here
+      // pitched the card instead, so a winnable orange line was invisible.
+      PerformAction perform =
+          state.variant->suits[id->suit_index].suit_type.inverted
+              ? PerformAction{PerformDiscard{order}}
+              : PerformAction{PerformPlay{order}};
       if (action_winnable(perform)) return perform;
     }
   }
@@ -283,8 +320,20 @@ bool winnable_simpler(const Game& game, int player_turn, const RemainingMap& rem
     found_dc = true;
   }
 
+  // `player_known_plays` returns bare orders — it does not ask which button
+  // performs them. On an inverted (orange) suit the play is a CHUCK: press
+  // Discard. Emitting PerformPlay pitched the card instead, so every
+  // continuation of a winning orange line scored as a loss and the line was
+  // pruned UNWINNABLE before `optimize` ever saw it (bug report 4.1.0a: the
+  // Orange 3/4/5 follow-ups behind the winning Orange 2 chuck).
   for (int order : player_known_plays(game, player_turn)) {
-    plays.insert(plays.begin(), PerformPlay{order});
+    auto id = game.players[player_turn].thoughts[order].id(/*infer=*/true);
+    if (!id) id = state.deck[order].id();
+    if (id && is_inverted(state, *id)) {
+      plays.insert(plays.begin(), PerformDiscard{order});
+    } else {
+      plays.insert(plays.begin(), PerformPlay{order});
+    }
   }
 
   for (auto it = state.hands[player_turn].rbegin(); it != state.hands[player_turn].rend();
@@ -292,7 +341,13 @@ bool winnable_simpler(const Game& game, int player_turn, const RemainingMap& rem
     if (found_dc) break;
     auto inferred = game.players[player_turn].thoughts[*it].id(/*infer=*/true);
     if (!inferred || state.is_basic_trash(*inferred)) {
-      discards.insert(discards.begin(), PerformDiscard{*it});
+      // An orange discard is a chuck, i.e. a play attempt — it strikes on
+      // trash. The safe way to throw an orange away is PerformPlay, the pitch.
+      if (inferred && is_inverted(state, *inferred)) {
+        discards.insert(discards.begin(), PerformPlay{*it});
+      } else {
+        discards.insert(discards.begin(), PerformDiscard{*it});
+      }
       found_dc = true;
     }
   }

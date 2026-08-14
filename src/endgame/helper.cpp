@@ -127,7 +127,16 @@ TriviallyResult trivially_winnable(const Game& game, int player_turn) {
     int first = playables.front();
     auto id = state.deck[first].id();
     if (!id) continue;
-    if (i == 0) perform = PerformPlay{first};
+    if (i == 0) {
+      // The emitted action and the credited stack must agree. On an inverted
+      // (Orange / Dark Orange) suit the button that advances the stack is
+      // Discard — emitting PerformPlay pitched the card into the discard pile
+      // while still crediting the rank below, so this claimed a certain win
+      // for an action that could not achieve it (TODO entry 10).
+      perform = state.variant->suits[id->suit_index].suit_type.inverted
+                    ? PerformAction{PerformDiscard{first}}
+                    : PerformAction{PerformPlay{first}};
+    }
     play_stacks[id->suit_index] = id->rank;
   }
   int sum = 0;
