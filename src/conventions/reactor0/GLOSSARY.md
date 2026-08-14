@@ -290,4 +290,12 @@ reverse. A play call is vetted for playability (POV-invariantly via
 `effective_possible_for`, plus a giver-only "would strike" reject); a discard
 call is vetted only for "not every possibility is critical". Vetting the
 un-swapped call is bug_report_4.txt 4.1.
-`src/conventions/reactor0/interpret_reactive.cpp:186-244`.
+
+**A play call on an expendable orange is a PITCH, and is exempt.** When every
+identity the react card could still be is inverted *and* basic trash
+(`variants::can_pitch_for_free`), pressing Play throws it into the discard pile
+at no cost, so the vet short-circuits to `OK`. The playability question can
+never be answered yes by a trash identity, which is how a free pitch came to be
+skipped — bug_report_4_1_0.txt 4.1.0b. The scope is *trash*, not *orange*:
+pitching a useful orange still loses a copy and is still rejected.
+`src/conventions/reactor0/interpret_reactive.cpp:187-262`.

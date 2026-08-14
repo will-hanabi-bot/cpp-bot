@@ -171,3 +171,62 @@ TEST(Reactor0ReactiveInvertedVet, ColourModeOneKeepsTheDiscardVetWhenNotSwapped)
       << "a discard call does not require the react slot to be playable";
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_PLAY);
 }
+
+// --- bug_report_4_1_0.txt 4.1.0b: pitching an expendable orange react slot --
+
+// A play call on a card the holder knows is an EXPENDABLE orange is a PITCH,
+// not a blind play: pressing Play on an inverted suit sends the card to the
+// discard pile. The playability vet can never pass such a card — a basic-trash
+// identity is in neither `playable_set` nor the connectors — so the pairing was
+// skipped and Phase A walked on to a worse one. At replay 1957942 T19 that cost
+// a Yellow 5.
+//
+// Orange sits at 2, so Bob's slot 3 (pinned o1) is basic trash and free to
+// pitch. Cathy's only playable is r1 at slot 4.
+TEST(Reactor0ReactiveInvertedVet, RankPhaseAPitchesAnExpendableOrangeReactSlot) {
+  SetupOptions opts = orange_opts();
+  opts.play_stacks = {0, 0, 0, 2};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r3", "g3", "o1", "g4", "r5"},  // Bob (reacter): slot 3 = o1, trash
+      // Cathy: r1 at slot 4 is the ONLY playable; r2 on slot 5 is there
+      // purely so the rank-2 clue touches something and is legal.
+      {"r3", "g3", "b3", "r1", "r2"},
+  };
+  Game g = setup(std::move(opts));
+  // Bob knows the card is Orange 1 — both halves of "expendable orange" are
+  // common knowledge, so the reacter walks the pairing with the giver.
+  g = fully_known(std::move(g), TestPlayer::BOB, /*slot=*/3, "o1");
+
+  // Rank 2 -> anchor 2. Target slot 4 -> react slot (2+5-4)%5 = 3.
+  g = take_turn(std::move(g), "Alice clues 2 to Cathy");
+
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::REACTIVE);
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 3), CardStatus::CALLED_TO_PLAY)
+      << "CTP is the Play button, which on an orange card is the pitch";
+  EXPECT_TRUE(urgent_at(g, TestPlayer::BOB, 3))
+      << "a reaction must be actioned on the reacter's very next turn";
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 4), CardStatus::CALLED_TO_PLAY)
+      << "and the receiver's r1 is the double play the pitch pays for";
+}
+
+// The control, and the reason the exemption is scoped to TRASH rather than to
+// "orange": pitching a USEFUL orange throws a copy away for nothing, which is
+// what `would_lose_inverted_reacter` exists to stop. Same fixture with the
+// orange stack at 0, so Bob's o1 is playable-by-chuck and must not be pitched.
+TEST(Reactor0ReactiveInvertedVet, RankPhaseAStillRefusesToPitchAUsefulOrange) {
+  SetupOptions opts = orange_opts();
+  opts.play_stacks = {0, 0, 0, 0};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r3", "g3", "o1", "g4", "r5"},  // Bob: slot 3 = o1, now USEFUL
+      {"r3", "g3", "b3", "r1", "r2"},
+  };
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::BOB, /*slot=*/3, "o1");
+
+  g = take_turn(std::move(g), "Alice clues 2 to Cathy");
+
+  EXPECT_NE(status_at(g, TestPlayer::BOB, 3), CardStatus::CALLED_TO_PLAY)
+      << "pitching a useful orange loses the copy for nothing";
+}

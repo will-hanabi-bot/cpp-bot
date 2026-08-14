@@ -166,13 +166,22 @@ std::optional<ClueInterp> stamp_orange_chuck(Game& game, const ClueAction& actio
   return ClueInterp::PLAY;
 }
 
+}  // namespace
+
 // Stamp a PITCH — press Play, sending the orange to the discard pile and
 // regaining a clue. `reactor::target_play` is NOT reused: it narrows
 // `inferred` to the playable set, but a pitched orange is being thrown away
 // and need not be playable at all. Only the "it is orange" part of the
 // promise is recorded.
+//
+// Exported (declared in interpret_clue.h) because the REACTIVE side needs the
+// same stamp: a reacter called to play an expendable orange is pitching it,
+// and `target_play` would refuse to stamp a card it cannot narrow to a
+// playable (§1d Phase A, bug_report_4_1_0.txt 4.1.0b). `urgent` is what the
+// reactive path adds — a reaction must be actioned on the reacter's very next
+// turn, which is what `decide.cpp`'s urgent scan keys on.
 std::optional<ClueInterp> stamp_orange_pitch(Game& game, const ClueAction& action,
-                                             int order) {
+                                             int order, bool urgent) {
   const State& state = game.state;
   IdentitySet keep = game.common.thoughts[order].possibilities().filter(
       [&](Identity i) { return variants::is_inverted_id(state, i); });
@@ -185,16 +194,15 @@ std::optional<ClueInterp> stamp_orange_pitch(Game& game, const ClueAction& actio
   });
   const int turn = state.turn_count;
   const int giver = action.giver;
-  game.with_meta(order, [turn, giver](ConvData& m) {
+  game.with_meta(order, [turn, giver, urgent](ConvData& m) {
     m.focused = true;
+    m.urgent = urgent;
     m.status = CardStatus::CALLED_TO_PLAY;
     m.by = giver;
     m = m.reason(turn).signal(turn);
   });
   return ClueInterp::DISCARD;
 }
-
-}  // namespace
 
 // Exported (declared in interpret_clue.h) so the decision layer can ask
 // "what would this stable colour clue name?" without simulating it —

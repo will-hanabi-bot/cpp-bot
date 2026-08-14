@@ -73,10 +73,10 @@ each and makes the full suite take ~7 minutes instead of ~23 seconds.
 
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
-build/hanabi_reactor0_tests.exe   # reactor0 only          80 tests, 6.1 s
+build/hanabi_reactor0_tests.exe   # reactor0 only          87 tests, 6.4 s
 build/hanabi_tests.exe            # convention-neutral    248 tests, 0.2 s
 build/hanabi_reactor_tests.exe    # reactor + replays     120 tests, 20 s
-build/hanabi_decision_tests.exe   # decision quality       12 tests
+build/hanabi_decision_tests.exe   # decision quality       43 tests
 ```
 
 Pick the scope from the report's `Convention:` field:

@@ -314,3 +314,21 @@ would be the general answer.
 could still be orange (`trash_is_orange_safe`, `:940-947`). So the lookahead
 invents misplay strikes for discards the bot would never physically make, and
 mis-scores every inverted-variant line that reaches a discard.
+
+---
+
+## 16. `[reactor]` A free pitch is still skipped on reactor's reactive side
+
+v6.0.0 taught reactor0 that a play-type reaction on a card the holder knows is
+an expendable orange is a **pitch**, not a blind play, and is unconditionally
+safe (`variants::can_pitch_for_free`, CONVENTION.md §1d). Reactor's four
+reactive sites (`src/conventions/reactor/interpret_reactive.cpp:316`, `:548`,
+`:689`, `:849`) still hand every such candidate to
+`would_lose_inverted_reacter`, whose blanket "a play-type call on an orange
+loses the copy for nothing" is false for a trash one — so reactor still walks
+past the pairing exactly as reactor0 did at replay 1957942 T19.
+
+Reactor also lacks reactor0's `vet_react_slot` entirely, so the second half of
+the fix has nowhere to live yet. Left alone deliberately: this is a
+cross-version behaviour change on top of entry 13's, and reactor's 120-test
+corpus is the gate. Fix entry 13 first — the two share the same call sites.

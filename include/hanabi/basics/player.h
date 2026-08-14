@@ -170,4 +170,10 @@ std::pair<std::vector<Player>, Player> gen_players(const State& state);
 // to keep this change behavioural rather than a sweeping refactor.
 bool holder_knows_critical(const Game& game, int order);
 
+// The mirror: does the HOLDER of `order` know the card is basic trash — is
+// every identity it could still be already on the stacks (or otherwise
+// unreachable)? Same `common.thoughts[order].possible` reading, and
+// POV-invariant for the same reason.
+bool holder_knows_trash(const Game& game, int order);
+
 }  // namespace hanabi

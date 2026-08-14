@@ -328,13 +328,16 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
 
 ### Vetting the react slot follows the swap
 
-`vet_react_slot` (`:186-243`). Both reactive paths swap the reacter's action
+`vet_react_slot` (`:187-262`). Both reactive paths swap the reacter's action
 when the receiver's target is inverted — rank Phase A goes play → **discard**,
 colour mode 1 goes discard → **play** — so the question asked of the react slot
-has to swap with it:
+has to swap with it. A third case sits above both: when the react card is one
+the holder knows is an **expendable orange**, a "play" call is neither a blind
+play nor a chuck but a **pitch**, and a pitch is unconditionally safe.
 
 | the reacter will | the vet asks | on failure |
 |---|---|---|
+| **pitch** (play call on a react card the holder knows is an expendable orange) | nothing — a pitch is always legal | — |
 | **play** | `effective_possible_for(react)` intersects playables ∪ delayed-play connectors | RETARGET (shared) |
 | **play** | the react card's **actual** id is playable or a connector | REJECT (giver-only) |
 | **discard** | not every possibility is critical | RETARGET (shared) |
@@ -354,6 +357,35 @@ blind-play a react slot with no playability check at all, which strikes.
 `variants::would_lose_inverted_reacter` was already swap-aware at both sites,
 which is why only this vet was wrong. **Reactor still vets the un-swapped call
 at all four of its reactive sites** — see TODO.md.
+
+**The pitch row is bug_report_4_1_0.txt 4.1.0b** (replay 1957942 T19). A play
+call on a card the holder knows is orange sends it to the discard pile, so the
+only question worth asking is "can the team afford to lose it?" — but the vet
+asked the play question, which a basic-trash identity can never answer yes to
+(it is in neither `playable_set` nor the connectors). Phase A therefore skipped
+the pairing and walked on to one whose react slot was a critical Yellow 5.
+Three gates had to move together, all scoped to `variants::can_pitch_for_free`
+(`variants/inverted.cpp:85-92`) — every possibility inverted **and** basic
+trash, read off `common`, so the reacter walks with the giver:
+
+- the vet itself short-circuits to `OK` (`:230-232`);
+- `would_lose_inverted_reacter` is skipped (`:342-350`). Its blanket "a
+  play-type call on an orange loses the copy for nothing" is true of a *useful*
+  orange only; a trash one has no copy to lose. The guard is POV-asymmetric by
+  design and may only reject, so the exemption that bypasses it has to read
+  `common` — which is why it is a separate predicate rather than a change to
+  the guard;
+- the stamp is `stamp_orange_pitch` with `urgent` (`:358-366`), not
+  `target_play` — the latter narrows `inferred` to the playable set and bails
+  when that empties, so it cannot stamp a trash card at all.
+
+A fourth gate lives outside the convention: `decide.cpp:715-726` skips an
+urgent `CALLED_TO_PLAY` whose empathy is all basic trash, which would have
+swallowed the stamp on the reacter's own turn. It carries the same exemption.
+
+Scoping to **trash** rather than to "orange" is deliberate and is what keeps
+`test_pov_reject.cpp:24`'s rejection correct: that fixture's react slot is an
+Orange 3 at a stack of 0 — useful, so pitching it still loses a copy.
 
 ### Colour reactive — one play
 
@@ -495,6 +527,11 @@ whether the **reacter** shares the knowledge:
   Phase A (`:269-276`), Phase B (`:339-346`) and colour mode 1 (`:435-443`),
   the blind mode-2 rejection (`:479-487`), and — on the **stable** side — the
   orange ladder's chuck veto (`interpret_clue.cpp:310-312`, §1b).
+  `would_lose_inverted_reacter` carries one **exemption**, not an exception to
+  this rule: rank Phase A skips it for a react card `can_pitch_for_free`
+  accepts (§1d). That predicate reads `common`, so it belongs to the *shared*
+  half — giver and reacter both conclude the pitch is free, and no reject is
+  needed because nothing is lost.
 
 Worked example: Alice clues red, and the first target maps to Bob's slot 5,
 which Alice can see is an unplayable orange 3. Bob cannot see it. He will not
@@ -765,6 +802,7 @@ the penalty must not make a clue that only buries trash look acceptable.
 | `tests/test_reactor0/test_colour_value.cpp` | the colour-value table incl. the spec's worked example |
 | `tests/test_reactor0/test_reactive_inverted_vet.cpp` | §1d — the react-slot vet follows the inverted swap, each swapped case paired with its un-swapped control, plus the giver-only reject |
 | `tests/test_reactor0/test_bad_reactive_target/test_replay_1942777_orange_reactive_vet_follows_swap.cpp` | bug 4.1 end to end — the reacter discards slot 5, not the Phase C lock's slot 3 |
+| `tests/test_reactor0/test_bad_reactive_target/test_replay_1957942_trash_orange_pitch_is_a_valid_reaction.cpp` | bug_report_4_1_0.txt 4.1.0b end to end — the reacter pitches the trash orange instead of discarding a critical 5 |
 | `tests/test_reactor0/test_orange.cpp` | §1b/§1c in inverted variants — bug 3.1's rank-2 lock, a rank clue still revealing a playable orange, pitch at pace > 3, chuck at pace <= 3, chuck in Dark Orange, play reveal outranking the pitch, the stall when nothing can reach the stacks, the §1b giver-side reject of an unplayable chuck target, and the §1c orange-only rank chuck plus its mixed-set negative |
 | `tests/test_endgame/test_orange_chuck.cpp` | bug 3.2 — the solver offers a known playable orange as a chuck, and `perform_to_action` models a chuck of a non-playable orange as a misplay |
 | `tests/test_reactor0/test_stable_rank_omni.cpp` | §1c in an omni variant — rank 1 and rank 4 read as direct plays, an unplayable useful identity still blocks, and the pinkish focus is the leftmost |

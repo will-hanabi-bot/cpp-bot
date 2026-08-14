@@ -15,6 +15,7 @@
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
+#include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/instrumentation/timer.h"
@@ -220,6 +221,16 @@ ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
     return ReactVet::OK;
   }
 
+  // A play call on a card the holder knows is an expendable INVERTED card is
+  // not a blind play at all — it is a PITCH. Pressing Play on an orange sends
+  // it to the discard pile, so the vet must ask "can you afford to throw this
+  // away?", not "is it playable?". A known-trash orange answers yes, and the
+  // playability vet below would always answer no (a basic-trash id is never in
+  // `playable_set` and can never be a connector), which is how a free pitch
+  // came to be skipped — bug_report_4_1_0.txt 4.1.0b, replay 1957942 T19.
+  // `can_pitch_for_free` reads `common`, so the reacter walks with us.
+  if (variants::can_pitch_for_free(game, react_order)) return ReactVet::OK;
+
   auto is_workable = [&](Identity i) {
     if (prev.state.playable_set.contains(i)) return true;
     for (const auto& [_, c] : conns) {
@@ -321,9 +332,17 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       case ReactVet::OK:
         break;
     }
-    if (variants::would_lose_inverted_reacter(
-            state, react_order, target_inverted,
-            /*standard_is_target_play=*/true)) {
+    // A free pitch is exempt from the loss guard. `would_lose_inverted_reacter`
+    // rejects every play-type call on an orange react card on the grounds that
+    // pitching it "loses the copy for nothing" — true for a useful orange,
+    // false for one the holder knows is trash, where there is no copy to lose.
+    // The exemption reads `common`, unlike the guard itself (which is
+    // POV-asymmetric by design and may therefore only reject), so it does not
+    // desync the walk.
+    const bool free_pitch = variants::can_pitch_for_free(game, react_order);
+    if (!free_pitch && variants::would_lose_inverted_reacter(
+                           state, react_order, target_inverted,
+                           /*standard_is_target_play=*/true)) {
       // Giver-only: the guard reads the react card's suit. The reacter does
       // not know their card is inverted, so they would chuck it and strike.
       rb.undo();
@@ -335,10 +354,17 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       out.old_inferred = t.inferred;
       return out;
     });
-    auto interp = variants::target_is_inverted(state, target)
-                      ? target_discard(game, action, react_order, /*urgent=*/true)
-                      : target_play(game, action, react_order, /*urgent=*/true,
-                                    /*stable=*/false);
+    // `reactor::target_play` narrows `inferred` to the playable set and bails
+    // when that empties, so it can never stamp a pitch — a pitched card need
+    // not be playable at all. `stamp_orange_pitch` is the stable side's answer
+    // to exactly that (reactor0 §1b) and is reused here.
+    auto interp =
+        target_inverted
+            ? target_discard(game, action, react_order, /*urgent=*/true)
+        : free_pitch
+            ? stamp_orange_pitch(game, action, react_order, /*urgent=*/true)
+            : target_play(game, action, react_order, /*urgent=*/true,
+                          /*stable=*/false);
     if (!interp) continue;
     if (!stamp_receiver_play(prev, game, action, target)) continue;
     auto target_id = state.deck[target].id();

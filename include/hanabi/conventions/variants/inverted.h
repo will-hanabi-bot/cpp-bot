@@ -31,7 +31,13 @@ bool target_is_inverted(const State& state, int target_order);
 //   * target_play(orange) ⇒ on the reacter's turn the bot would issue
 //     PerformPlay, which the inversion turns into "discard the orange" —
 //     the orange card goes to the discard pile with no stack progress.
-//     Always a losing convention path.
+//     A losing path whenever the orange is worth keeping, which is what this
+//     helper assumes. It does NOT hold for an orange the holder knows is
+//     basic trash: that is a free PITCH, and reactor0's rank Phase A skips
+//     this guard entirely for one (`can_pitch_for_free` below,
+//     reactor0/interpret_reactive.cpp:342-350). Kept blanket here because the
+//     helper reads `state.deck` and so is POV-asymmetric — it may only ever
+//     reject, and the exemption has to be decided on common knowledge.
 //   * target_discard(orange) ⇒ PerformDiscard, which the inversion turns
 //     into "play attempt" — if the orange is currently playable this
 //     advances the orange stack (the intended outcome); otherwise it is
@@ -68,6 +74,20 @@ bool discard_advances_stack(const State& state,
 
 // True when any identity in `possible` is on an inverted suit.
 bool possible_has_inverted(const State& state, const IdentitySet& possible);
+
+// Can the HOLDER of `order` pitch it for free? True when every identity the
+// card could still be is on an inverted suit **and** is basic trash. Both
+// halves are load-bearing:
+//   * all-inverted, because pressing Play is only a *pitch* on an inverted
+//     suit — on a normal suit it is a play attempt, and on a trash card that
+//     is a misplay strike;
+//   * all-trash, because a pitch sends the card to the discard pile, so a
+//     useful orange loses a copy for nothing. A useful-but-not-critical
+//     orange still counts as a loss and is deliberately excluded.
+// Reads `common.thoughts[order].possible`, so giver, holder and every
+// observer compute the same answer — the reactive walk may branch on it
+// without desyncing (reactor0 §1g).
+bool can_pitch_for_free(const Game& game, int order);
 
 // Chop-save fallback for the rank-reactive path. If no play_target /
 // finesse worked and the receiver's chop is an inverted-suit (orange)

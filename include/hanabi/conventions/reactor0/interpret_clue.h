@@ -25,6 +25,19 @@ std::optional<int> leftmost_could_be_playable(
     const Game& game, const ClueAction& action,
     const std::vector<int>& candidates);
 
+// Stamp a PITCH on `order`: press Play, which on an inverted (Orange / Dark
+// Orange) suit sends the card to the discard pile and regains a clue.
+// `inferred` is narrowed to the inverted identities only — a pitched card is
+// being thrown away and need not be playable, which is why
+// `reactor::target_play` cannot be used for this (it narrows to the playable
+// set and bails when that empties). Returns `DISCARD`, the semantic outcome,
+// or nullopt when the card cannot be orange at all.
+//
+// Used by the §1b orange ladder's pitch branch and, with `urgent` set, by the
+// §1d rank Phase A reaction that pitches an expendable orange react slot.
+std::optional<ClueInterp> stamp_orange_pitch(Game& game, const ClueAction& action,
+                                             int order, bool urgent = false);
+
 // Top-level entry: called from Game::interpret_clue when
 // game.convention == Convention::REACTOR0. Returns the interpretation, or
 // nullopt for MISTAKE (the caller stamps it).

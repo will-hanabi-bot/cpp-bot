@@ -606,4 +606,11 @@ bool holder_knows_critical(const Game& game, int order) {
       [&](Identity i) { return state.is_critical(i); });
 }
 
+bool holder_knows_trash(const Game& game, int order) {
+  const IdentitySet& poss = game.common.thoughts[order].possible;
+  const State& state = game.state;
+  return poss.non_empty() &&
+         poss.forall([&](Identity i) { return state.is_basic_trash(i); });
+}
+
 }  // namespace hanabi

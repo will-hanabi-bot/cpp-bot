@@ -82,6 +82,14 @@ bool possible_has_inverted(const State& state, const IdentitySet& possible) {
   return false;
 }
 
+bool can_pitch_for_free(const Game& game, int order) {
+  const State& state = game.state;
+  const IdentitySet& poss = game.common.thoughts[order].possible;
+  return poss.non_empty() && poss.forall([&](Identity i) {
+    return is_inverted_id(state, i) && state.is_basic_trash(i);
+  });
+}
+
 std::optional<ClueInterp> orange_chop_save(
     const Game& prev, Game& game, const ClueAction& action, int focus_slot,
     int reacter, const std::vector<std::pair<int, Identity>>& possible_conns) {

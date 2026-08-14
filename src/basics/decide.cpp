@@ -24,6 +24,7 @@
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
+#include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/endgame/fraction.h"
 #include "hanabi/endgame/forced_endgame.h"
 #include "hanabi/endgame/solver.h"
@@ -711,7 +712,14 @@ PerformAction Game::take_action() const {
         CardStatus status = meta[o].status;
         const Thought& thought = m.thoughts[o];
         if (status == CardStatus::CALLED_TO_PLAY) {
-          if (thought.possible.forall(
+          // A CTP on an expendable INVERTED card is a PITCH, not a play call:
+          // pressing Play throws an orange away rather than attempting it, so
+          // "the holder can now see it is trash" is the *point*, not a reason
+          // to skip. Without this exemption the reactive pitch of a trash
+          // orange is stamped and then silently swallowed here
+          // (bug_report_4_1_0.txt 4.1.0b).
+          if (!hanabi::reactor::variants::can_pitch_for_free(*this, o) &&
+              thought.possible.forall(
                   [&](Identity i) { return s.is_basic_trash(i); })) {
             continue;  // known trash — try the next call
           }
