@@ -232,6 +232,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_urgent_skips_known_trash.cpp
   tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp
   tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp
+  tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp
 )
 target_include_directories(hanabi_reactor0_tests PRIVATE tests)
 target_link_libraries(hanabi_reactor0_tests PRIVATE hanabi_core GTest::gtest_main)

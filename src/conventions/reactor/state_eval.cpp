@@ -333,7 +333,7 @@ double advance(const Game& orig, const Game& game, int offset) {
   }
   std::vector<int> all_playables = player.obvious_playables(game, player_index);
 
-  if (player_index == state.our_player_index ||
+  if (player_index == state.our_player_index || state.ended() ||
       (state.endgame_turns && *state.endgame_turns == 0)) {
     return eval_game(orig, game);
   }
@@ -370,7 +370,16 @@ double advance(const Game& orig, const Game& game, int offset) {
       if (!id) {
         act = PlayAction{player_index, order, -1, -1};
       } else if (state.is_playable(*id)) {
-        act = PlayAction{player_index, order, id->suit_index, id->rank};
+        // A playable INVERTED (orange) card reaches its stack only through the
+        // Discard button — the same routing `take_action` uses for the real
+        // action (src/basics/decide.cpp:885-894). Simulating it as PerformPlay
+        // runs the game-rule inversion instead and sends the card to the
+        // discard pile, so every good chuck scored as a thrown-away card.
+        act = variants::is_inverted_id(state, *id)
+                  ? Action{variants::make_discard_for_simulation(
+                        state, player_index, order)}
+                  : Action{PlayAction{player_index, order, id->suit_index,
+                                      id->rank}};
       } else {
         act = DiscardAction{player_index, order, id->suit_index, id->rank, true};
       }
@@ -608,12 +617,17 @@ double eval_state(const State& state, bool in_endgame) {
   int score_loss = num_suits * 5 - state.max_score();
   double dc_crit_val = -20.0 * score_loss;
 
+  // `default` is the ZERO-strike case and nothing else. A simulation can run
+  // past the strike-out (`advance` recurses on a state it has just ended), so
+  // a leaf with 4+ strikes is reachable; scoring those 0.0 made a
+  // struck-out line look BETTER than a clean 2-strike one, and the argmax
+  // chased the hallucination (replay 1957905 #31).
   double strikes_val;
   switch (state.strikes) {
+    case 0: strikes_val = 0.0; break;
     case 1: strikes_val = -1.5; break;
     case 2: strikes_val = -3.5; break;
-    case 3: strikes_val = -100.0; break;
-    default: strikes_val = 0.0; break;
+    default: strikes_val = -100.0; break;
   }
   return score_val + clue_val + dc_crit_val + strikes_val;
 }
@@ -644,6 +658,22 @@ double eval_game(const Game& orig, const Game& game) {
         auto by = game.meta[order].by;
         if (!by) continue;
         auto id = state.deck[order].id();
+        // On an INVERTED (orange) suit the Discard button is the play button,
+        // so a CTD is a chuck — a play call, not "throw this away". Falling
+        // through to the ladder below charged every chuck the
+        // `-(5 - playable_away) * 0.5` useful-card penalty (and `* 10.0` when
+        // the orange was critical, i.e. always in Dark Orange), which is the
+        // opposite of what a chuck is worth. Price it like CALLED_TO_PLAY
+        // instead: a chuck that cannot reach the stack is the one that is bad,
+        // because pressing Discard on it is a misplay strike.
+        if (id && variants::is_inverted_id(state, *id)) {
+          if (state.is_playable(*id)) {
+            future_val += id->rank == 5 ? 0.8 : 0.4;
+          } else {
+            future_val -= 1.5;
+          }
+          continue;
+        }
         if (!id) {
           if (*by != state.our_player_index) {
             // future_val += 0

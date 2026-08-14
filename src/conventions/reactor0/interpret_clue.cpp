@@ -282,6 +282,9 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
   //        unrecoverable loss and the chuck is the only sane reading.
   //    All-critical fallback: chuck the leftmost one that could still reach
   //    the stacks from the receiver's POV; if none could, the clue stalls.
+  //    The chuck target is then vetted against what the GIVER can see (§1g):
+  //    a chuck of a card we can see is not currently playable strikes, so we
+  //    reject the clue rather than retarget.
   std::vector<int> oranges = orange_touched(game, action);
   if (!oranges.empty()) {
     const bool pitch_mode =
@@ -296,6 +299,17 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
     for (int o : oranges) {
       if (!could_reach_stacks(game, o)) continue;
       if (game.is_blind_playing(o)) continue;
+      // §1g: the two `continue`s above read common knowledge, so the receiver
+      // walks on with us. THIS reads `state.deck[o]`, which the receiver
+      // cannot see — giver-only knowledge may only REJECT. The receiver will
+      // chuck this card whatever we do, and a chuck of a non-playable orange
+      // is a misplay strike, so the clue must not be offered at all. Walking
+      // on to the next orange would desync: the receiver still computes this
+      // one. Mirrors `would_lose_inverted_reacter`'s second half
+      // (src/conventions/variants/inverted.cpp:44-51) on the reactive side.
+      if (auto id = state.deck[o].id(); id && !state.is_playable(*id)) {
+        return std::nullopt;
+      }
       if (auto r = stamp_orange_chuck(game, action, o)) return r;
     }
     return ClueInterp::STALL;
@@ -404,18 +418,29 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   }
   bool all_trash = true;
   bool playable_rank = true;
+  bool useful_inverted = false;
+  bool useful_plain = false;
   for (Identity id : touchable) {
     bool basic = state.is_basic_trash(id);
-    if (!basic) all_trash = false;
-    // A rank direct play clue ALWAYS means pitch (press Play), and pitching an
-    // inverted card sends it to the discard pile instead of its stack. So a
-    // useful orange identity can never be played by this reading, whatever the
-    // stacks say — which is why a rank-1 clue cannot put an orange 1 onto its
-    // stack. It stays reachable through the play reveal at priority 2 below,
-    // which is a chuck.
-    if (!basic && variants::is_inverted_id(state, id)) playable_rank = false;
-    else if (!basic && !state.is_playable(id)) playable_rank = false;
+    if (basic) continue;
+    all_trash = false;
+    if (variants::is_inverted_id(state, id)) useful_inverted = true;
+    else useful_plain = true;
+    if (!state.is_playable(id)) playable_rank = false;
   }
+  // A rank direct play clue means PITCH (press Play) by default, and pitching
+  // an inverted card sends it to the discard pile instead of its stack. So a
+  // useful orange identity can only be read as playable when EVERY useful
+  // identity of the rank is orange — then the button is unambiguous and the
+  // focus is called to CHUCK (press Discard) instead. That is the case where
+  // every other suit's copy of the rank is already on the stacks, so the clue
+  // names the orange one and nothing else (replay 1957905 #31).
+  //
+  // A MIXED useful set stays undecidable — the receiver could not tell which
+  // button to press — and declines exactly as before (bug_report_3.txt 3.1,
+  // `RankDirectPlayDeclinesOrangeAndLocksInstead`).
+  const bool orange_only = useful_inverted && !useful_plain;
+  if (useful_inverted && useful_plain) playable_rank = false;
   // An empty set teaches nothing — fall through rather than claim every
   // identity is playable vacuously.
   if (!touchable.non_empty()) {
@@ -423,9 +448,21 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
     playable_rank = false;
   }
 
+  // The orange-only reading sits BELOW the play reveal of priority 2. When the
+  // clue pins a previously-clued orange to a playable one, the reveal already
+  // says everything — empathy carries the chuck, since `decide.cpp:885-894`
+  // routes an empathy-pinned playable orange through PerformDiscard. Claiming
+  // it at priority 1 would also trip the `unnecessary_focus` test below, which
+  // counts the focus's OWN pinned identity as "visible elsewhere"
+  // (`Thought::matches` is `id() == other`, src/basics/card.cpp:48-52) and
+  // would turn the reveal into a STALL. Only the ORANGE-ONLY branch defers;
+  // an ordinary direct play clue still outranks the reveal as before.
+  const bool defer_to_reveal = orange_only && playable_rank && !all_trash &&
+                               find_play_reveal(prev, game, action).has_value();
+
   // 1. Direct play clue: all remaining useful identities of the rank are
   //    playable (assuming good touch).
-  if (playable_rank && !all_trash) {
+  if (playable_rank && !all_trash && !defer_to_reveal) {
     std::optional<int> focus;
     if (!newly_touched.empty()) {
       if (variants::includes_pinkish(state)) {
@@ -455,7 +492,14 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
       if (unnecessary_focus) return ClueInterp::STALL;
 
       IdentitySet new_inferred = game.common.thoughts[*focus].inferred.filter(
-          [&](Identity i) { return state.is_playable(i); });
+          [&](Identity i) {
+            // Under the orange-only reading the call is a chuck, so narrow to
+            // the identities a chuck actually advances — same reasoning as
+            // `stamp_orange_chuck` above, and it keeps TODO #12's unpinned
+            // -playable-orange hazard away from this focus.
+            if (orange_only && !variants::is_inverted_id(state, i)) return false;
+            return state.is_playable(i);
+          });
       if (new_inferred.is_empty()) return std::nullopt;
       game.with_thought(*focus, [&](const Thought& t) {
         Thought out = t;
@@ -463,17 +507,21 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
         out.info_lock = std::optional<IdentitySet>{new_inferred};
         return out;
       });
-      // A rank direct play clue always means PITCH, so the focus is stamped
-      // CALLED_TO_PLAY unconditionally — reactor0 does NOT call
-      // `variants::called_focus_status` here, which would return CTD (chuck)
-      // for a possibly-orange focus. The classification above already declines
-      // to read a useful orange as playable, so `new_inferred` should carry no
-      // inverted identity; stamping outright states the rule rather than
-      // leaving it as a consequence. **reactor keeps `called_focus_status` at
-      // its own call site (reactor/interpret_clue.cpp:504).**
-      game.with_meta(*focus, [](ConvData& m) {
+      // A rank direct play clue means PITCH, so the focus is stamped
+      // CALLED_TO_PLAY — EXCEPT under the orange-only reading, where every
+      // useful identity of the rank is inverted and the call is a chuck.
+      // `variants::called_focus_status` is the shared helper for that
+      // (it returns CTD for any inverted member of the set); reactor keeps it
+      // at its own call site unconditionally
+      // (reactor/interpret_clue.cpp:504), reactor0 gates it on `orange_only`
+      // so a MIXED set can never reach it — a mixed set has already set
+      // `playable_rank = false` and cannot get here.
+      const CardStatus status =
+          orange_only ? variants::called_focus_status(state, new_inferred)
+                      : CardStatus::CALLED_TO_PLAY;
+      game.with_meta(*focus, [status](ConvData& m) {
         m.focused = true;
-        m.status = CardStatus::CALLED_TO_PLAY;
+        m.status = status;
       });
       return ClueInterp::PLAY;
     }

@@ -51,7 +51,7 @@ holds a card stamped `CALLED_TO_PLAY` (or, in a variant with an inverted
 suit, `CALLED_TO_DISCARD`), and otherwise must be at least MEDIUM; anything
 lower scores a flat `-1.0`. One token wider than reactor's window and,
 unlike it, fires even when Alice holds no play.
-`src/conventions/reactor0/state_eval.cpp:443-458`; CONVENTION.md §2a.
+`src/conventions/reactor0/state_eval.cpp:473-488`; CONVENTION.md §2a.
 
 ### blind play (react slot)
 The reacter playing the computed react slot without knowing its identity.
@@ -76,9 +76,14 @@ A stable clue whose meaning is "play this touched card" — reactor0's
 stable colour reading and rank priority 1. Contrast reactor, where a stable
 colour clue is *referential* (points one slot left of a touched card).
 There is **no referential play in reactor0**.
-A rank direct play clue **always means pitch** (press Play), which is why it
-can never put an orange card onto its stack — see *orange ladder*.
-`src/conventions/reactor0/interpret_clue.cpp:227-330`, `:426-486`.
+A rank direct play clue means **pitch** (press Play) by default, which is why
+it cannot put an orange card onto its stack while the rank's useful
+identities are mixed. When **every** useful identity of the rank is orange —
+every other suit's copy of that rank is already stacked — the button is
+unambiguous and the clue is actioned as a **chuck** instead, stamped
+`CALLED_TO_DISCARD` via `variants::called_focus_status`. See *orange ladder*
+and *touched-card rank classification*.
+`src/conventions/reactor0/interpret_clue.cpp:227-344`, `:452-531`.
 
 ### double discard (clue)
 The rank-reactive fallback when no play or finesse target exists: zero
@@ -92,7 +97,7 @@ their chop is expendable, or they already hold a known play, a
 `CALLED_TO_PLAY`, a `CALLED_TO_DISCARD` or known trash. Reactor0 drops such a
 clue from its candidate set when a stable clue to Bob would instead get a card
 played (CONVENTION.md §2b,
-`src/conventions/reactor0/state_eval.cpp:486-566`). Reactive locks are
+`src/conventions/reactor0/state_eval.cpp:516-559`). Reactive locks are
 exempt. Named from replay 1942181 T41.
 
 ### call invariants
@@ -139,7 +144,7 @@ clue). This reading takes priority over the orange ladder.
 ### positional dispatch
 Reactor0's whole dispatcher: clue to Bob ⇒ stable, clue to anyone else ⇒
 reactive with Bob as reacter — regardless of loadedness, stall context, or
-pending reactives. `interpret_clue.cpp:295-331`.
+pending reactives. `interpret_clue.cpp:583-619`.
 
 ### reactive clue
 As in reactor, a clue decoded jointly with the reacter's next action — but
@@ -212,12 +217,14 @@ here. Introduced in v3.0.0 because an omni suit is touched by *every* rank
 clue, which made the variant-wide set contain the omni suit at all five ranks
 and stopped priority 1 firing at all in those variants.
 
-Three narrowing steps as of v4.0.0: per-card `effective_possible_for`, the
-pink promise — whose set is `{clue rank}` ∪ `{special rank}` when `pink_s`
+Three narrowing steps: per-card `effective_possible_for`, the pink promise —
+whose set is `{clue rank}` ∪ `{special rank}` when `pink_s`
 (= `specialRankAllClueRanks`) is set, gated on the **flag** rather than the
-name-based `includes_pinkish` — and "a useful inverted identity is not
-playable by this clue", since priority 1 pitches.
-`src/conventions/reactor0/interpret_clue.cpp:350-424`.
+name-based `includes_pinkish` — and, as of v5.0.0, "a **mixed** useful set is
+not playable by this clue". A set holding both orange and non-orange useful
+identities leaves the receiver unable to tell which button to press, so the
+reading declines; an all-orange one does not, and becomes a *chuck*.
+`src/conventions/reactor0/interpret_clue.cpp:364-450`.
 
 ### dc-target walk
 Colour mode 2 tries each trash/dupe dc-candidate in turn instead of committing
@@ -229,7 +236,8 @@ CONVENTION.md §1d.
 
 ### orange ladder
 Reactor0's reading of a colour clue naming an inverted (Orange / Dark Orange)
-suit, new in v4.0.0. After the fix and the play-reveal steps:
+suit, new in v4.0.0 and given a giver-side veto in v5.0.0. After the fix and
+the play-reveal steps:
 
 * **non-dark orange at `pace() > 3` → pitch.** The receiver presses **Play**
   on the leftmost touched orange they do not know is critical, which for an
@@ -239,12 +247,18 @@ suit, new in v4.0.0. After the fix and the play-reveal steps:
   **Discard** on the leftmost touched orange that could still reach the
   stacks, which advances the orange stack. Stamped `CALLED_TO_DISCARD`; the
   clue interp is `PLAY`.
+* **the giver then vets the chuck target against its own sight.** The target
+  is picked from common knowledge, so the receiver lands on the same card; if
+  the giver can see it is not currently playable the chuck is a misplay
+  strike, and §1g permits only a **reject** (`nullopt` → `MISTAKE`), never a
+  walk on to the next orange. Added in v5.0.0 after replay 1957905 #31. The
+  pitch branch needs no veto — a pitch cannot strike.
 * nothing reachable → `STALL`.
 
 Dark forces the chuck because every dark card is a singleton, so a pitch
 throws away the only copy. **Reactor does none of this** — it rejects a
 stable colour clue on an orange target outright.
-`src/conventions/reactor0/interpret_clue.cpp:271-302`; stamps at `:143-195`.
+`src/conventions/reactor0/interpret_clue.cpp:274-314`; stamps at `:143-195`.
 
 ### includes_dark_inverted
 True when the variant has a suit that is both `inverted` and `dark`, i.e.

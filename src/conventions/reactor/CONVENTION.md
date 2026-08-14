@@ -681,7 +681,7 @@ This is the most invasive variant in the codebase. For an inverted suit the
 (`src/basics/game.cpp:228-247`, `:312-326`).
 
 Critically: **`CALLED_TO_PLAY` and `CALLED_TO_DISCARD` name buttons, not
-outcomes** (`decide.cpp:674-683`). CTP means *pitch*, CTD means *chuck*, and the
+outcomes** (`decide.cpp:692-708`). CTP means *pitch*, CTD means *chuck*, and the
 game rule decides where the card lands. So to get an orange card onto its stack
 the convention must stamp **CTD**.
 
@@ -701,7 +701,7 @@ Every place the convention compensates, all in
 | `called_focus_status` | Return CTD instead of CTP when the focus could be orange. | `:53-61` |
 | `would_lose_inverted_reacter` | Reject a candidate whose resolution would `target_play` an orange reacter card — that would *pitch* it into the discard pile, losing the copy for nothing. Also rejects `target_discard` on a *non-playable* orange, which would strike. | `:31-51` |
 | `orange_chop_save` | Rank-reactive Phase C. Only fires when the receiver's chop is orange; encodes "receiver **pitches** their chop" — a clean voluntary loss that avoids the misplay strike a chuck of a non-playable orange would cause. Non-orange chops deliberately bail, because the observer can't run the critical check on their own card. The chop here is `Game::chop`'s positional fallback: `:91-96` scans for the newest unclued status-`NONE` card. | `:85-148` |
-| `make_discard_for_simulation` | In `advance()`'s simulation, an inverted non-playable card must use `failed=true`, or `with_play` would jump the stack to a non-playable rank and corrupt the simulated state. | `:63-71` |
+| `make_discard_for_simulation` | In `advance()`'s simulation, an inverted non-playable card must use `failed=true`, or `with_play` would jump the stack to a non-playable rank and corrupt the simulated state. Since v5.0.0 `advance`'s **play** branch also routes a playable orange through it, so a chuck advances the stack instead of being simulated as a pitch (§2.6). | `:63-71` |
 | `discard_advances_stack`, `possible_has_inverted` | Used by the chuck-safety filters of §2.3. | `:73-83` |
 
 In both reactive paths, `target_is_inverted(target)` **swaps the reacter's
@@ -716,9 +716,11 @@ clue that reaches the same card through `ref_discard`.
 so a reactor player and a reactor0 player read an orange clue differently.
 Reactor keeps everything in this section unchanged; reactor0 replaces the
 stable side with its own ladder (pitch vs chuck selected by `pace()` and by
-whether the inverted suit is dark) and stamps a rank direct play clue
-`CALLED_TO_PLAY` unconditionally rather than routing it through
-`called_focus_status`. See
+whether the inverted suit is dark, plus a giver-side reject when the chuck
+target is visibly unplayable) and, since **v5.0.0**, routes a rank direct play
+clue through `called_focus_status` only when *every* useful identity of the
+rank is orange — otherwise `CALLED_TO_PLAY`, where reactor calls the helper
+unconditionally. See
 [reactor0's §1b and §1f](../reactor0/CONVENTION.md). The **reactive** swaps
 above are still shared by both conventions.
 
@@ -989,43 +991,61 @@ just force a wasted dupe-play.
 
 ## 2.6 The lookahead: `advance`
 
-`state_eval.cpp:314-447` recursively models what each subsequent player would
-do, terminating at `eval_game` when play comes back around (`:336-338`).
+`state_eval.cpp:314-456` recursively models what each subsequent player would
+do, terminating at `eval_game` when play comes back around **or once the game
+has ended** (`:336-339`). The `state.ended()` half of that guard is new in
+v5.0.0: without it the recursion kept simulating actions past a strike-out and
+manufactured leaves with four or more strikes.
 
 - Playables and no urgent discard → simulate every non-dominated play; take
   the **minimum** if any of them strikes (pessimism), else
-  `max(best_play, force_clue_inner(...))` (`:341-387`).
-- Locked → discard if clueless, else clue (`:389-396`). At 8 clues, forced
-  clue (`:398`). Urgent CTD → discard it (`:400-403`).
-- Otherwise `try_discard` (`:405-425`), a **probabilistic** blend:
+  `max(best_play, force_clue_inner(...))` (`:341-396`). A **playable inverted
+  (orange) card is simulated with the Discard button** —
+  `variants::make_discard_for_simulation` (`:378-382`) — because that is what
+  advances an inverted stack, and what `take_action` really issues
+  (`src/basics/decide.cpp:885-894`). Simulating it as `PerformPlay` ran the
+  game-rule inversion and scored every good chuck as a card thrown away
+  (v5.0.0; replay 1957905 #31).
+- Locked → discard if clueless, else clue (`:398-405`). At 8 clues, forced
+  clue (`:407`). Urgent CTD → discard it (`:409-412`).
+- Otherwise `try_discard` (`:414-434`), a **probabilistic** blend:
   `clue_prob × clue_value + (1 − clue_prob) × discard_value`, where
   `clue_prob` is 0.2 if Bob is loaded, 0.2 if his chop is trash, 0.7 if his
-  chop is useful, 0.5 with no chop, and 0.8 at deeper offsets (`:410-422`).
+  chop is useful, 0.5 with no chop, and 0.8 at deeper offsets (`:419-431`).
 
 `force_clue_inner` (`:295-308`) adds `+1.0` (2 players) or `+0.5` (3+) — a
 mild bias making "a clue exists" attractive.
 
 ## 2.7 The leaf evaluation
 
-`eval_state` (`:595-619`):
+`eval_state` (`:604-636`):
 - score term `min(score, 2 × num_suits) × 0.5 + score`;
 - clue term: 0 in endgame / at 0 tokens / when unable to clue;
   `3.0 + (tokens − 6) × 0.25` above 6; else `tokens / 2`;
 - **`−20.0` per point of `max_score` lost** — by a wide margin the dominant
   term, and the reason the bot treats discarding a critical as near-fatal;
-- strikes: `−1.5` / `−3.5` / `−100.0`.
+- strikes: `0` / `−1.5` / `−3.5`, and `−100.0` for **three or more**
+  (`:626-631`). The switch keys `0` explicitly and puts `−100.0` in `default`;
+  until v5.0.0 `default` was `0.0`, so a leaf with four strikes — reachable
+  because `advance` used to recurse past the strike-out — scored *better* than
+  a clean two-strike one and the argmax chased it (replay 1957905 #31).
 
-`eval_game` (`:623-754`) adds:
-- an instant `+100` on reaching the original max score (`:626`);
-- `future_val` (`:633-666`): CTP `+0.4`, CTP'd 5 `+0.8`, CTP'd trash `−1.5`;
-  CTD trash `+0.3`, CTD sieved `+0.2`, **CTD critical
-  `−(5 − playable_away) × 10.0`**, CTD useful-to-us `−(5 − playable_away) × 0.5`;
-- `bdr_val` — bad-discard risk (`:668-719`): per non-duplicated useful
+`eval_game` (`:637-780`) adds:
+- an instant `+100` on reaching the original max score (`:640`);
+- `future_val` (`:647-690`): CTP `+0.4`, CTP'd 5 `+0.8`, CTP'd trash `−1.5`;
+  **a CTD on an inverted (orange) card is a play call — a chuck — and is
+  priced like a CTP: `+0.4`, `+0.8` for a 5, and `−1.5` when the chuck could
+  not reach the stack** (`:661-676`, v5.0.0). Only a non-inverted CTD walks
+  the discard ladder: CTD trash `+0.3`, CTD sieved `+0.2`, **CTD critical
+  `−(5 − playable_away) × 10.0`**, CTD useful-to-us `−(5 − playable_away) × 0.5`.
+  Charging a chuck the useful-card penalty (and the `× 10.0` critical one,
+  i.e. always in Dark Orange) was the opposite of what a chuck is worth;
+- `bdr_val` — bad-discard risk (`:692-745`): per non-duplicated useful
   identity with copies already discarded, `−n²` (rank 1), `−3.0` (rank 2),
   `−1.5` (rank 3), `−0.5` (rank 4), the whole term scaled `× 2.5`;
-- `lock_penalty` `0 / −1 / −3 / −10` for 0/1/2/3+ locked players (`:721-731`);
+- `lock_penalty` `0 / −1 / −3 / −10` for 0/1/2/3+ locked players (`:747-757`);
 - `endgame_penalty`: projects the final round's plays and charges
-  `(stacks_sum − max_score) × 5.0` (`:733-751`).
+  `(stacks_sum − max_score) × 5.0` (`:759-777`).
 
 ## 2.8 Enumerating clues: `find_all_clues`
 

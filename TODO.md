@@ -239,12 +239,18 @@ winning chuck can still be pruned before it is ever evaluated:
 ## 11. `[reactor0]` No orange tiering in reactor0's `get_result`
 
 Reactor's clue scoring bumps a discard that advances a stack to `1.0`
-(`src/conventions/reactor/state_eval.cpp:539-566`, via
+(`src/conventions/reactor/state_eval.cpp:545-575`, via
 `variants::discard_advances_stack`). Reactor0's own `get_result`
 (`src/conventions/reactor0/state_eval.cpp`, §2c) has no equivalent, so in the
 heuristic path reactor0 under-values a chuck relative to reactor. The §1b
-orange ladder makes this more visible, since reactor0 now issues clues whose
-whole point is to produce a chuck.
+orange ladder and the §1c orange-only rank chuck make this more visible, since
+reactor0 now issues clues whose whole point is to produce a chuck.
+
+v5.0.0 fixed the *lookahead* half of this — `advance` now simulates a playable
+orange with the Discard button and `eval_game` prices an orange CTD as a play
+call — but `get_result` itself still counts no play for a chuck, because
+`playables_result` reads `hypo_plays` and `new_play_facts` counts
+`CALLED_TO_PLAY` transitions only.
 
 ## 12. `[engine]` An unpinned playable orange is still pitched
 
@@ -253,8 +259,9 @@ only when `thoughts[o].id(infer=true)` resolves to a **single** identity. A
 card that is empathy-*playable* but ambiguous between an inverted and a
 non-inverted suit (say `{o1, r1}` at zero stacks) falls through to
 `PerformPlay`, which discards it if it really was orange. Reactor0's §1b
-stamps sidestep this by narrowing `inferred` to the inverted playable set, but
-a bare rank play reveal in an inverted variant does not.
+stamps and the §1c orange-only rank stamp sidestep this by narrowing
+`inferred` to the inverted playable set, but a bare rank play reveal in an
+inverted variant does not.
 
 ## 13. `[reactor]` Reactive vetting does not follow the inverted swap
 
@@ -272,3 +279,38 @@ as reactor0 used to. Two consequences, one per direction:
 Left alone deliberately: fixing it is a second cross-version behaviour change
 and puts reactor's 120-test corpus at risk. reactor0's `vet_react_slot`
 (`reactor0/interpret_reactive.cpp:186-244`) is the shape to copy.
+
+## 14. `[engine]` Nothing vetoes a clue whose reading predicts a strike
+
+A predicted misplay is only ever *priced*, never rejected, anywhere in the
+candidate pipeline:
+
+- `advance`'s strike pessimisation (`reactor/state_eval.cpp:374-396`) is
+  confined to the **play** branch; the discard branches (`:409-434`) never
+  compare `advanced.state.strikes` to `game.state.strikes`, so a simulated
+  chuck-strike is charged only the flat `eval_state` term and `try_discard`
+  can dilute even that by its `clue_prob` blend.
+- Neither `get_result` reads `hypo.state.strikes` — reactor's
+  (`reactor/state_eval.cpp:152-292`) or reactor0's (§2c) — and reactor0's §2b
+  filter returns early in any inverted variant
+  (`reactor0/state_eval.cpp:532`), which is exactly where a chuck can strike.
+- `find_all_clues`'s `reacter_critical_discard` guard
+  (`src/basics/decide.cpp:565-579`) tests `is_critical`, not "would strike",
+  and is unreachable from `take_action`, which builds its own pool at
+  `:851-864`.
+
+What actually stops the bad clue today is the *interpretation* layer's §1g
+rejects, one per site. A single strike-predicting veto over the candidate pool
+would be the general answer.
+
+## 15. `[engine]` `advance` models every voluntary discard as a chuck
+
+`advance`'s discard paths hand every order to
+`variants::make_discard_for_simulation` (`reactor/state_eval.cpp:401`, `:410`,
+`:415`), which sets `failed = inverted && !playable`. That is right for a CTD
+(a real chuck) but wrong for an ordinary discard: `take_action` routes a
+*known* orange through `PerformPlay` (a pitch,
+`src/basics/decide.cpp:1007-1024`) and drops empathy-trash candidates that
+could still be orange (`trash_is_orange_safe`, `:940-947`). So the lookahead
+invents misplay strikes for discards the bot would never physically make, and
+mis-scores every inverted-variant line that reaches a discard.

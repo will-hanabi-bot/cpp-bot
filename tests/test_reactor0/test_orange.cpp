@@ -247,6 +247,88 @@ TEST(Reactor0Orange, ColourPlayRevealOutranksThePitch) {
       << "the pitch branch must not also fire on the leftmost orange";
 }
 
+// §1g on the STABLE side. The chuck target is chosen from common knowledge, so
+// the receiver computes the same card whatever the giver can see. If the giver
+// can see that card is not currently playable, the receiver's chuck is a
+// misplay strike — so the clue must be REJECTED, not quietly retargeted to the
+// next orange (replay 1957905 #31, bug_report_4_1_0.txt).
+TEST(Reactor0Orange, ColourChuckRejectsAnUnplayableOrangeTheGiverCanSee) {
+  SetupOptions opts = orange_opts("Orange (3 Suits)");
+  // Orange sits at 1, so Bob's slot 1 (o1) is already on the stacks and a
+  // chuck of it strikes. Bob cannot see that: his slot 1 could still be the
+  // playable o2, so `could_reach_stacks` is true and he will chuck it.
+  opts.play_stacks = {0, 0, 1};
+  opts.hands = {
+      {"r4", "b4", "r5", "b5", "r3"},
+      {"o1", "o2", "r3", "b3", "r2"},
+      {"r2", "b2", "b3", "r1", "b1"},
+  };
+  Game g = setup(std::move(opts));
+  ASSERT_LE(g.state.pace(), 3) << "fixture must land in the chuck branch";
+
+  auto before = hand_marks(g, TestPlayer::BOB);
+  g = take_turn(std::move(g), "Alice clues orange to Bob");
+
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::MISTAKE)
+      << "giver-only knowledge must reject the clue; walking on to slot 2 "
+         "would desync, because Bob still computes slot 1";
+  EXPECT_TRUE(newly_marked(before, g, TestPlayer::BOB).empty())
+      << "a rejected clue must leave the receiver unstamped";
+}
+
+// The convention bug_report_4_1_0.txt asks for: when every other suit's copy of
+// the clued rank is already on the stacks, the rank names the orange one and
+// nothing else. The button is then unambiguous, so the clue is a direct play
+// clue actioned as a CHUCK rather than the usual pitch.
+//
+// Stacks [2, 2, 1]: r2 and b2 are basic trash, o2 is the rank's only useful
+// identity and it is playable.
+TEST(Reactor0Orange, RankDirectPlayChucksWhenEveryUsefulIdentityIsOrange) {
+  SetupOptions opts = orange_opts("Orange (3 Suits)");
+  opts.play_stacks = {2, 2, 1};
+  opts.hands = {
+      {"r4", "b4", "r5", "b5", "r3"},
+      // Bob's only rank-2 card is the orange one, so the clue touches slot 1
+      // alone.
+      {"o2", "r3", "b3", "r4", "b4"},
+      {"r1", "b1", "o4", "o5", "r3"},
+  };
+  Game g = setup(std::move(opts));
+
+  g = take_turn(std::move(g), "Alice clues 2 to Bob");
+
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::PLAY)
+      << "the rank's only useful identity is orange, so this is a direct play "
+         "clue after all";
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_DISCARD)
+      << "CTD is the Discard button, which for an orange card is the chuck "
+         "that advances its stack";
+  expect_infs(g, TestPlayer::BOB, TestPlayer::BOB, 1, {"o2"});
+}
+
+// The companion negative, and the reason the rule is "ALL useful identities",
+// not "any". Stacks [1, 1, 1] leave r2, b2 AND o2 useful and playable, so the
+// receiver could not tell which button to press — a pitch would discard the
+// orange, a chuck would discard a playable red or blue. The clue must decline,
+// exactly as it did before this rule existed.
+TEST(Reactor0Orange, RankDirectPlayStillDeclinesAMixedUsefulSet) {
+  SetupOptions opts = orange_opts("Orange (3 Suits)");
+  opts.play_stacks = {1, 1, 1};
+  opts.hands = {
+      {"r4", "b4", "r5", "b5", "r3"},
+      {"o2", "r3", "b3", "r4", "b4"},
+      {"r1", "b1", "o4", "o5", "r3"},
+  };
+  Game g = setup(std::move(opts));
+
+  g = take_turn(std::move(g), "Alice clues 2 to Bob");
+
+  EXPECT_NE(last_clue_interp(g), ClueInterp::PLAY)
+      << "a mixed useful set leaves the physical action undecidable";
+  EXPECT_NE(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_DISCARD);
+  EXPECT_NE(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
+}
+
 // Nothing to pitch and nothing to chuck: the clue is a stall. Orange sits at
 // 2 and both touched cards are already pinned to ranks above the playable one,
 // so no chuck could reach the stacks; pace is 3, so the pitch branch is off.
