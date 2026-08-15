@@ -219,27 +219,31 @@ whole list — that bounds the extra work to what the preference actually needs.
 
 ---
 
-## 10. `[endgame]` `clueless_winnable`'s own discard offer is still blind
+## 10. `[endgame]` — CLOSED in v6.2.0
 
-v4.0.0 taught the *search* about orange; v6.1.0 taught the feasibility layers,
-which used to prune a winning chuck (or hallucinate a win) before it was ever
-scored:
+The endgame layers are inverted-aware end to end. For the record, the sites and
+the versions that fixed them:
 
-- `trivially_winnable` (`src/endgame/helper.cpp:114-150`) now emits the button
-  that matches the stack it credits;
-- `advance_state` (`src/endgame/winnable.cpp:89-152`) runs the button swap in
-  both directions — it had no inverted branch at all, so a physical Play on an
-  orange advanced the stack;
-- `player_known_plays`' consumer and `winnable_simpler`'s discard fallback
-  (`winnable.cpp:325-352`) emit a chuck for a playable orange and a pitch for
-  an orange being thrown away.
+- v4.0.0 — the search proper: `possible_actions`' play loop, `perform_to_action`
+  deriving `failed`, the direct-win / tie-break predicates.
+- v6.1.0 — the feasibility layers, which used to prune a winning chuck or
+  hallucinate a win before it was scored: `trivially_winnable`'s `i == 0`
+  overwrite, `advance_state` (which had no inverted branch at all, in either
+  direction), `player_known_plays`' consumer and `winnable_simpler`'s discard
+  fallback.
+- v6.2.0 — the top-level discard candidate: `Game::find_all_discards`
+  (`src/basics/decide.cpp:1128-1173`) returned an unconditional
+  `PerformDiscard`, which on an orange is a chuck, and it is the solver's ONLY
+  discard candidate. bug_report_5_0_0.txt. Plus two siblings found with it:
+  `two_critical_play_action`'s unconditional `PerformPlay` (which pitched a
+  singleton-critical orange away) and `trivially_winnable`'s filler action.
 
-What is left: `clueless_winnable`'s discard loop (`winnable.cpp:245-250`) still
-offers `PerformDiscard` only for cards whose id is unknown. For an orange that
-is a chuck, i.e. a play attempt that strikes on trash — the pitch (PerformPlay)
-is the safe way to throw one away, and it is never offered there. Reachable
-only in the clueless branch, where every hand is known, so it has not bitten
-yet.
+**Correction to what this entry said in v6.1.0.** It claimed
+`clueless_winnable`'s discard loop was blind for the same reason. It is not:
+that loop offers `PerformDiscard` only for cards whose id is **unknown**
+(`winnable.cpp:251-256`), and a holder who cannot tell their card is orange
+really would press Discard — modelling that is correct, not a bug. The entry
+was a false lead.
 
 ## 11. `[reactor0]` No orange tiering in reactor0's `get_result`
 

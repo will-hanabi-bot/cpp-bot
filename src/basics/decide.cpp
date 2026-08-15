@@ -1135,6 +1135,40 @@ std::vector<PerformAction> Game::find_all_discards(int player_index) const {
   } else {
     target = players[player_index].locked_discard(state, player_index);
   }
+  // Inverted (Orange / Dark Orange) suit: PerformDiscard is a CHUCK, i.e. a
+  // play attempt onto the orange stack — it advances the stack when the card
+  // is currently playable and STRIKES otherwise. To actually throw an orange
+  // away (and regain the clue) the holder presses Play, the pitch. Same
+  // routing as take_action's own discard ladder at `:1015-1033`, which the
+  // endgame fork returns above without ever reaching.
+  //
+  // Keyed on the HOLDER's knowledge, not the deck: a player who cannot tell
+  // their card is orange really would press Discard and really would risk the
+  // strike, and the solver must keep modelling that. This function is called
+  // for seats other than the POV player, so `players[player_index]` is the
+  // right perspective.
+  //
+  // The test is "every identity it could still be is inverted", not "pinned to
+  // one inverted identity". Knowing the SUIT is enough to know which button to
+  // press — a card clued orange with its rank still open is exactly as safe to
+  // pitch as a fully known one, and would strike just as surely on a chuck.
+  //
+  // Without this, the sole discard candidate for a known-trash orange was a
+  // guaranteed misplay, and the solver — which optimises win probability, where
+  // a first strike is not by itself fatal — had nothing better to compare it
+  // against. bug_report_5_0_0.txt, replay 1957953 T30.
+  // `common ∩ per-player` is the tight set both views agree on, the same
+  // idiom `own_known_identity` uses (src/endgame/forced_endgame.cpp:27-33):
+  // common alone can retain identities the holder has privately ruled out,
+  // and the per-player view alone can be the wider of the two in fixtures
+  // that seed common without syncing it.
+  IdentitySet poss = common.thoughts[target].possible.intersect(
+      players[player_index].thoughts[target].possible);
+  const bool holder_knows_inverted =
+      poss.non_empty() && poss.forall([&](Identity i) {
+        return state.variant->suits[i.suit_index].suit_type.inverted;
+      });
+  if (holder_knows_inverted) return {PerformPlay{target}};
   return {PerformDiscard{target}};
 }
 

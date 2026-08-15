@@ -389,3 +389,39 @@ TEST(ForcedEndgame, FiveLockoutSilentWhenCpHoldsBothTheThreeAndTheFive) {
   EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
       << "CP acts last in the final round, so its 5 is never locked out";
 }
+
+// bug_report_5_0_0.txt, found alongside it. Rule 2 ended with an unconditional
+// `PerformPlay{best.first}`. Its candidates are filtered by `is_playable`, and
+// on an inverted (Orange) suit "playable" means *a CHUCK advances the stack* —
+// so pressing Play would pitch a singleton-critical card into the discard pile
+// and lose the point outright. Nothing downstream can correct it: the forced
+// layer short-circuits the solver.
+//
+// Alice holds the last o4 (playable, orange stack 3) and the last b4 (critical,
+// unplayable at a blue stack of 0), so Rule 2 fires and must pick the o4.
+TEST(ForcedEndgame, TwoCriticalPlayChucksAPlayableOrange) {
+  SetupOptions opts;
+  opts.hands = {
+      {"o4", "b4", "r1", "r2", "r3"},
+      {"r1", "r2", "b1", "b2", "o5"},
+      {"r1", "r3", "b1", "b3", "o1"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  // Both remaining 4s are the last copies in the game.
+  opts.discarded = {"o4", "b4"};
+  opts.play_stacks = {0, 0, 3};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "o4");
+  g = fully_known(std::move(g), TestPlayer::ALICE, 2, "b4");
+  g = with_cards_left(std::move(g), 1);
+
+  const int o4_order = g.state.hands[0][0];
+  auto forced = hanabi::endgame::forced_endgame_action(g);
+  ASSERT_TRUE(forced.has_value()) << "two-critical play must still fire";
+  ASSERT_TRUE(std::holds_alternative<PerformDiscard>(*forced))
+      << "an orange is stacked by pressing Discard — the chuck; PerformPlay "
+         "would pitch the last copy into the discard pile";
+  EXPECT_EQ(std::get<PerformDiscard>(*forced).target, o4_order);
+}

@@ -118,7 +118,30 @@ TriviallyResult trivially_winnable(const Game& game, int player_turn) {
   int endgame_turns = *state.endgame_turns;
   if (state.rem_score() > endgame_turns) return r;
 
-  PerformAction perform = PerformDiscard{state.hands[player_turn].front()};
+  auto inverted = [&](Identity id) {
+    return state.variant->suits[id.suit_index].suit_type.inverted;
+  };
+
+  // The filler action, used when CP has no play of its own at `i == 0`. It has
+  // to be certainly safe, because this function reports `Fraction(1)` — a
+  // claimed certain win. Pressing Discard on an inverted (Orange / Dark Orange)
+  // card is a play attempt that strikes unless it is currently playable, so a
+  // KNOWN orange is pitched (press Play) instead, and a card that might be an
+  // unplayable orange makes the promise unsound — see `filler_unsafe` below.
+  // v6.1.0 routed the `i == 0` overwrite but left this default untouched.
+  const int filler = state.hands[player_turn].front();
+  const Thought& filler_thought = game.players[player_turn].thoughts[filler];
+  auto filler_known = filler_thought.id(/*infer=*/true);
+  bool filler_unsafe = false;
+  PerformAction perform = PerformDiscard{filler};
+  if (filler_known && inverted(*filler_known)) {
+    perform = PerformPlay{filler};
+  } else if (!filler_known) {
+    filler_unsafe = filler_thought.possible.exists(
+        [&](Identity i) { return inverted(i) && !state.is_playable(i); });
+  }
+  bool used_filler = true;
+
   std::vector<int> play_stacks = state.play_stacks;
   for (int i = 0; i < endgame_turns; ++i) {
     int pi = (player_turn + i) % state.num_players;
@@ -132,16 +155,16 @@ TriviallyResult trivially_winnable(const Game& game, int player_turn) {
       // (Orange / Dark Orange) suit the button that advances the stack is
       // Discard — emitting PerformPlay pitched the card into the discard pile
       // while still crediting the rank below, so this claimed a certain win
-      // for an action that could not achieve it (TODO entry 10).
-      perform = state.variant->suits[id->suit_index].suit_type.inverted
-                    ? PerformAction{PerformDiscard{first}}
-                    : PerformAction{PerformPlay{first}};
+      // for an action that could not achieve it.
+      perform = inverted(*id) ? PerformAction{PerformDiscard{first}}
+                              : PerformAction{PerformPlay{first}};
+      used_filler = false;
     }
     play_stacks[id->suit_index] = id->rank;
   }
   int sum = 0;
   for (int v : play_stacks) sum += v;
-  if (sum == state.max_score()) {
+  if (sum == state.max_score() && !(used_filler && filler_unsafe)) {
     r.found = true;
     r.actions = {perform};
     r.winrate = Fraction(1);

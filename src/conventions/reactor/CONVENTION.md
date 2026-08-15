@@ -1111,12 +1111,31 @@ probability** (`Fraction`), not score. Key parameters:
 | Consecutive-clue cap | `num_players + 1` since the last draw | `solver.cpp:148-164` |
 | Monte-Carlo grouping | arrangements collapse by trash-normalised key, probabilities renormalise | `solver.cpp:720-752` |
 
-Move ordering inside the search (`possible_actions`, `:102-280`): urgent
+Move ordering inside the search (`possible_actions`, `:147-330`): urgent
 first, then plays, then the clue cap, then a discard gate `ignore_dc` when
 `pace() == 0`, at 8 clues, when a 5 is playable, or while protecting a
-critical (`:207-244`); finally plays always first, with **discards before
+critical (`:266-302`); finally plays always first, with **discards before
 clues when no other player has a visible playable**, otherwise clues before
-discards (`:255-279`).
+discards (`:314-330`).
+
+**Both candidate kinds route the inverted (Orange / Dark Orange) button.**
+Plays: a chuck (`PerformDiscard`) only when the orange is known *and currently
+playable*, else the ordinary `PerformPlay` (`solver.cpp:201-203`). Discards:
+the sole candidate comes from `Game::find_all_discards`
+(`src/basics/decide.cpp:1128-1173`), which emits the **pitch**
+(`PerformPlay`) when every identity the holder thinks the card could be is
+inverted — knowing the suit is enough to know which button to press, and
+pressing Discard there would be a play attempt that strikes on trash. Keyed on
+`common ∩ per-player` so a holder who *cannot* tell their card is orange still
+models the real risk of pressing Discard. Until v6.2.0 this was an
+unconditional `PerformDiscard`, and since it is the only discard the solver
+ever sees, a known-trash orange had a guaranteed misplay as its sole option —
+bug_report_5_0_0.txt, replay 1957953 T30, which struck.
+
+The same routing now applies to forced Rule 2 (`forced_endgame.cpp:209-218`):
+its candidates are filtered by `is_playable`, which on an inverted suit means
+*the chuck advances the stack*, so returning `PerformPlay` pitched a
+singleton-critical card into the discard pile.
 
 ## 2.10 Risk management
 

@@ -187,3 +187,86 @@ TEST(EndgameOrange, AdvanceStateRunsTheInvertedButtonSwap) {
       << "pressing Discard on a playable orange is what stacks it";
   EXPECT_EQ(chucked.strikes, s.strikes);
 }
+
+// --- bug_report_5_0_0.txt: the solver's discard candidate ------------------
+
+// `Game::find_all_discards` is the ONLY source of discard candidates for the
+// endgame solver (`solver.cpp:305-312`), and it returns exactly one action. It
+// used to be an unconditional `PerformDiscard`, which on an inverted suit is a
+// CHUCK — a play attempt that strikes unless the card is currently playable.
+//
+// Replay 1957953 T30: a fully known Orange 2 with the orange stack already at
+// 5. The solver's only discard candidate was a guaranteed misplay, and since it
+// optimises win probability — where a first strike is not by itself fatal — the
+// chuck cleared the 1% gate with no pitch to lose to. It struck.
+TEST(EndgameOrange, FindAllDiscardsPitchesAKnownTrashOrange) {
+  SetupOptions opts;
+  opts.variant_name = "Orange (4 Suits)";
+  opts.hands = {
+      {"o2", "r1", "g1", "b1", "r2"},
+      {"xx", "xx", "xx", "xx", "xx"},
+  };
+  // Orange is complete, so the o2 is basic trash; the other suits sit at 0, so
+  // r1/g1/b1 are playable and never enter `thinks_trash`.
+  opts.play_stacks = std::vector<int>{0, 0, 0, 5};
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "o2");
+
+  const int o2 = g.state.hands[0][0];
+  auto discards = g.find_all_discards(0);
+  ASSERT_EQ(discards.size(), 1u);
+  ASSERT_TRUE(std::holds_alternative<PerformPlay>(discards.front()))
+      << "throwing an orange away is the PITCH — press Play; pressing Discard "
+         "is a play attempt that strikes on trash";
+  EXPECT_EQ(std::get<PerformPlay>(discards.front()).target, o2);
+}
+
+// Knowing the SUIT is enough to know which button to press, so the rule is
+// "every possibility is inverted", not "pinned to one identity". A card clued
+// orange with its rank still open is exactly as safe to pitch — and would
+// strike just as surely on a chuck.
+TEST(EndgameOrange, FindAllDiscardsPitchesAnOrangeOfUnknownRank) {
+  SetupOptions opts;
+  opts.variant_name = "Orange (4 Suits)";
+  opts.hands = {
+      {"o2", "r1", "g1", "b1", "r2"},
+      {"xx", "xx", "xx", "xx", "xx"},
+  };
+  opts.play_stacks = std::vector<int>{0, 0, 0, 5};
+  Game g = setup(std::move(opts));
+  // Colour only: Alice knows it is orange, not which orange. Every orange is
+  // trash at a stack of 5, so it is still the trash front.
+  g = pre_clue(std::move(g), TestPlayer::ALICE, 1, {"orange"});
+
+  const int o2 = g.state.hands[0][0];
+  ASSERT_GT(g.common.thoughts[o2].possible.length(), 1)
+      << "fixture must leave the rank open";
+
+  auto discards = g.find_all_discards(0);
+  ASSERT_EQ(discards.size(), 1u);
+  EXPECT_TRUE(std::holds_alternative<PerformPlay>(discards.front()))
+      << "the suit alone decides the button";
+}
+
+// The control: a non-orange trash card is still an ordinary discard. Without
+// this, "always pitch" would pass the two tests above and break every normal
+// suit — pressing Play on a non-orange trash card is a misplay.
+TEST(EndgameOrange, FindAllDiscardsStillDiscardsNonOrangeTrash) {
+  SetupOptions opts;
+  opts.variant_name = "Orange (4 Suits)";
+  opts.hands = {
+      {"r1", "g1", "b1", "o1", "r2"},
+      {"xx", "xx", "xx", "xx", "xx"},
+  };
+  // Red is complete, so the r1 is trash; g1/b1/o1 are playable.
+  opts.play_stacks = std::vector<int>{5, 0, 0, 0};
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r1");
+
+  const int r1 = g.state.hands[0][0];
+  auto discards = g.find_all_discards(0);
+  ASSERT_EQ(discards.size(), 1u);
+  ASSERT_TRUE(std::holds_alternative<PerformDiscard>(discards.front()))
+      << "a normal suit keeps the normal button";
+  EXPECT_EQ(std::get<PerformDiscard>(discards.front()).target, r1);
+}

@@ -206,6 +206,14 @@ std::optional<PerformAction> two_critical_play_action(const Game& game) {
       best_score = score;
     }
   }
+  // The button that stacks the card. On an inverted (Orange / Dark Orange)
+  // suit `is_playable` above means "a CHUCK advances the stack" — pressing
+  // Play would pitch this singleton-critical card into the discard pile and
+  // lose the point outright. Nothing downstream can correct it either: the
+  // forced layer short-circuits the solver (src/basics/decide.cpp:743-745).
+  if (s.variant->suits[best.second.suit_index].suit_type.inverted) {
+    return PerformAction{PerformDiscard{best.first}};
+  }
   return PerformAction{PerformPlay{best.first}};
 }
 
