@@ -352,3 +352,79 @@ TEST(Reactor0Orange, ColourStallsWhenNoOrangeCanReachTheStacks) {
   EXPECT_FALSE(any_status(g, TestPlayer::BOB, CardStatus::CALLED_TO_PLAY));
   EXPECT_FALSE(any_status(g, TestPlayer::BOB, CardStatus::CALLED_TO_DISCARD));
 }
+
+// --- bug_report_6_2_0.txt: a chuck call must survive its own resolution -----
+
+// A CTD is the PHYSICAL label "press Discard", so on an inverted suit it is a
+// CHUCK — a play call. `target_i_discard`, which resolves the receiver's target
+// when the reacter acts, narrowed `inferred` to the NON-CRITICAL identities:
+// the "which of these can you afford to lose?" reading. Dark Orange is
+// `oneOfEach`, so every identity is critical and the set emptied. The card was
+// then marked `meta.trash`, and `Game::elim`'s step-1 sweep reset it to global
+// empathy and cleared the status — the chuck signal destroyed one turn after it
+// was given (replay 1959065 T5-T6).
+//
+// The clue has to TOUCH the target for common to know the suit, which is what
+// the replay does: Alice clues Dark Orange to Cathy, touching her o1 on slot 2.
+// Dark Orange's colour value is 5, so target_slot 2 -> react_slot
+// calc_slot(5,2,5) = 3, and the inverted target swaps the reacter to a play —
+// Bob's slot 3 is a playable r1. Bob playing it runs the resolution.
+TEST(Reactor0Orange, DarkOrangeChuckCallSurvivesReactionResolution) {
+  SetupOptions opts = orange_opts("Dark Orange (5 Suits)");
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.hands = {
+      {"y5", "g5", "b5", "r5", "y4"},
+      {"y3", "g3", "r1", "b3", "y4"},  // Bob (reacter): slot 3 = r1, playable
+      {"r3", "o1", "g4", "b4", "y4"},  // Cathy: o1 on slot 2 is her only playable
+  };
+  Game g = setup(std::move(opts));
+  const int dark_orange = suit_index_of(g, "Dark Orange");
+
+  g = clue_colour(std::move(g), TestPlayer::ALICE, TestPlayer::CATHY, dark_orange);
+  ASSERT_EQ(last_clue_interp(g), ClueInterp::REACTIVE);
+  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::CALLED_TO_DISCARD)
+      << "an inverted play target is stamped CTD — Discard is the button that "
+         "advances its stack";
+
+  // The reacter acts: this is the resolution that used to destroy the call.
+  g = take_turn(std::move(g), "Bob plays r1 (slot 3)", "y2");
+
+  const int target = order_at(g, TestPlayer::CATHY, 2);
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::CALLED_TO_DISCARD)
+      << "the chuck call must survive the resolution";
+  EXPECT_FALSE(g.meta[target].trash)
+      << "'every identity is critical' means the card is irreplaceable, not "
+         "that it is trash";
+  // Narrowed (in common) to what a chuck would actually stack.
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, 2, {"o1"});
+}
+
+// The control, and the reason the branch is scoped to "the ordinary reading
+// came out empty" rather than to "the target is orange": in NON-dark Orange the
+// o1 has spare copies, so it is not critical, the ordinary non-critical
+// narrowing yields something, and the old reading is kept untouched. Only the
+// self-destructing case changes.
+TEST(Reactor0Orange, NonDarkOrangeTargetKeepsTheOrdinaryDiscardReading) {
+  SetupOptions opts = orange_opts("Orange (5 Suits)");
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.hands = {
+      {"y5", "g5", "b5", "r5", "y4"},
+      {"y3", "g3", "r1", "b3", "y4"},
+      {"r3", "o1", "g4", "b4", "y4"},
+  };
+  Game g = setup(std::move(opts));
+  const int orange = suit_index_of(g, "Orange");
+
+  g = clue_colour(std::move(g), TestPlayer::ALICE, TestPlayer::CATHY, orange);
+  ASSERT_EQ(last_clue_interp(g), ClueInterp::REACTIVE);
+
+  g = take_turn(std::move(g), "Bob plays r1 (slot 3)", "y2");
+
+  const int target = order_at(g, TestPlayer::CATHY, 2);
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::CALLED_TO_DISCARD);
+  EXPECT_FALSE(g.meta[target].trash)
+      << "the ordinary narrowing found non-critical ids, so nothing is trash";
+  EXPECT_FALSE(g.common.thoughts[target].info_lock.has_value())
+      << "the chuck branch pins with info_lock; the ordinary reading does not, "
+         "so this proves the fix did not broaden to every orange";
+}

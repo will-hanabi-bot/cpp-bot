@@ -8,6 +8,7 @@
 #include "hanabi/basics/interp.h"
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
+#include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -55,22 +56,82 @@ void mark_trash_if_empty(Game& game, int receive_order) {
 void target_i_discard(const Game& prev, Game& game, const ReactorWC& wc,
                        int target_slot) {
   int order = wc.receiver_hand[target_slot - 1];
+  const State& state = game.state;
+
+  // "Press Discard" is a PHYSICAL instruction, and on an INVERTED (Orange /
+  // Dark Orange) suit that button is the CHUCK — a play attempt that advances
+  // the stack. The discard semantics below are exactly backwards for it:
+  // narrowing to the NON-CRITICAL ids asks "which of these can you afford to
+  // throw away?", and in Dark Orange — every rank `oneOfEach`, so every card
+  // critical — that empties the set outright. The card is then marked trash,
+  // and `Game::elim`'s step-1 sweep (src/basics/game.cpp:498-509) sees the
+  // empty `inferred`, resets the card to its global empathy and clears the
+  // status, so the chuck signal is destroyed the moment it is given.
+  // bug_report_6_2_0.txt, replay 1959065 T5-T6.
+  //
+  // reactor0's stable side already knows this trap and refuses to reuse
+  // `reactor::target_discard` for precisely this reason
+  // (reactor0/interpret_clue.cpp:139-142, `stamp_orange_chuck`). The
+  // resolution side never learned it. When the ordinary reading self-destructs
+  // on a card the holder knows is orange, narrow to what a chuck would
+  // actually stack instead, and never call the result trash.
+  //
+  // The "is it orange?" test is gated on COMMON knowledge so every seat
+  // computes the same reading. The receiver cannot see their own card, and
+  // `variants::target_is_inverted` reads `state.deck`, which is nullopt for the
+  // card's own holder — branching on that here would desync the table.
+  //
+  // The ordinary reading runs FIRST and is kept verbatim whenever it yields
+  // anything at all, so this change is confined to the case that destroys
+  // itself: Dark Orange always hits it, an ordinary suit essentially never
+  // does, and a non-dark orange with a spare copy keeps its old reading.
   IdentitySet critical = prev.state.critical_set;
   IdentitySet new_inferred = game.common.thoughts[order].inferred.filter(
       [&](Identity i) { return !critical.contains(i); });
-  game.with_thought(order, [&](const Thought& t) {
-    Thought out = t;
-    out.old_inferred = t.inferred;
-    out.inferred = new_inferred;
-    return out;
-  });
+
+  bool chuck = false;
+  if (new_inferred.is_empty()) {
+    const IdentitySet& poss = game.common.thoughts[order].possible;
+    const bool holder_knows_inverted =
+        poss.non_empty() &&
+        poss.forall([&](Identity i) { return variants::is_inverted_id(state, i); });
+    if (holder_knows_inverted) {
+      chuck = true;
+      new_inferred = game.common.thoughts[order].inferred.filter([&](Identity i) {
+        return variants::is_inverted_id(state, i) && state.is_playable(i);
+      });
+    }
+  }
+
+  const bool is_empty = new_inferred.is_empty();
+  if (chuck && is_empty) {
+    // Nothing this card could be would reach a stack, so there is nothing to
+    // promise — but do NOT empty `inferred` to say so, because that trips the
+    // reset above and voids the call we are stamping. An empty narrowing
+    // teaches nothing. (`target_i_play` was hardened the same way below.)
+  } else {
+    game.with_thought(order, [&](const Thought& t) {
+      Thought out = t;
+      out.old_inferred = t.inferred;
+      out.inferred = new_inferred;
+      if (chuck) {
+        // Pin it, as `stamp_orange_chuck` does. This is what lets
+        // `decide.cpp:889-899` resolve the card to a single playable inverted
+        // identity and dispatch the chuck as a `PerformDiscard`.
+        out.info_lock = std::optional<IdentitySet>{new_inferred};
+      }
+      return out;
+    });
+  }
   int turn = game.state.turn_count;
   int giver = wc.giver;
-  bool is_empty = new_inferred.is_empty();
-  game.with_meta(order, [turn, giver, is_empty](ConvData& m) {
+  // A chuck is a play call, so it is never "revealed trash". Only the ordinary
+  // discard reading can conclude that, and only when it found nothing safe.
+  const bool mark_trash = !chuck && is_empty;
+  game.with_meta(order, [turn, giver, mark_trash](ConvData& m) {
     m.status = CardStatus::CALLED_TO_DISCARD;
     m.by = giver;
-    m.trash = is_empty;
+    m.trash = mark_trash;
     m = m.reason(turn).signal(turn);
   });
 }

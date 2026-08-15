@@ -364,3 +364,40 @@ Notes for whoever picks it up:
 - `SilentBelowPaceThree` sets `pace() < 3`, which also makes `in_endgame()`
   true (`pace() < num_players - 1`, `decide.cpp:428`) — the endgame solver and
   the deepest `advance` recursion are both in reach there.
+
+---
+
+## 18. `[engine]` Other consumers still read an inverted CTD as "throw this away"
+
+v6.3.0 taught the reaction-resolution helper that a `CALLED_TO_DISCARD` on an
+inverted (Orange / Dark Orange) suit is a **chuck** — a play call — not a
+throw-away. Several other consumers of CTD have not learned it. None is
+reachable from replay 1959065; all are the same defect class, and all bite
+hardest in Dark Orange, where every card is `oneOfEach` and therefore critical.
+
+- **`src/basics/decide.cpp`'s urgent CTD dispatch** fires only when
+  `!possible.forall(is_critical)`. Every Dark Orange card fails that, so an
+  urgent chuck is *never* dispatched from the urgent scan and the `break` ends
+  it. The CTP arm right above already carries a `can_pitch_for_free` exemption
+  (v6.0.0); the CTD arm has no counterpart.
+- **`Game::find_all_discards`** routes a card whose holder knows it is inverted
+  to `PerformPlay` — the pitch — with no CTD check. So the endgame solver models
+  a *called* chuck as throwing the critical away. That routing is v6.2.0's fix
+  for bug_report_5_0_0 and is right for a trash orange; it wants a "unless the
+  card carries a chuck call" arm.
+- **`src/conventions/reactor/state_eval.cpp`'s `eval_action` discard branch**
+  folds `status == CALLED_TO_DISCARD` into `is_trash`, scoring it `0.0` and
+  gating out the orange tiering that would otherwise give a stack-advancing
+  discard `1.0`.
+- **`Player::order_trash`** folds CTD into "trash" outright. Today that is
+  masked only by the all-critical early-out immediately above it — remove or
+  weaken that early-out and a called Dark Orange chuck becomes discardable as
+  ordinary trash.
+
+Related state-hygiene bug, found in the same investigation: **`Game::elim`'s
+step-1 sweep clears `status`/`by` with a raw two-field assignment instead of
+`ConvData::cleared()`**, so a stale `meta.trash` and `signal_turn` outlive the
+status they were stamped with. That is precisely how bug 6.2.0 left its card
+branded trash with no call attached. `check_missed`, `erase_call` and the bomb
+reset all use `cleared()`; the two `elim` sweeps and `clear_contradicted_call`
+do not.

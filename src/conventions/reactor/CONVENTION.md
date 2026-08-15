@@ -468,14 +468,30 @@ When the reacter finally plays or discards, `Game::interpret_play` /
 `react_slot`, through `calc_slot` to a `target_slot`, and validates that the
 resulting card is still in the receiver's hand.
 
-- `target_i_play` (`:77-111`) stamps the receiver's slot `CALLED_TO_PLAY` and
+- `target_i_play` (`:139-173`) stamps the receiver's slot `CALLED_TO_PLAY` and
   intersects `inferred` with `playable_set ∪ next-ranks-of-obvious-playables`.
   The CTP is stamped **unconditionally**, even when that intersection is empty,
   so delayed chains survive; the narrowing applies only when non-empty.
-- `target_i_discard` (`:54-75`) stamps `CALLED_TO_DISCARD` and removes
-  `critical_set` from `inferred`, marking `meta.trash` if that empties it.
+- `target_i_discard` (`:56-137`) stamps `CALLED_TO_DISCARD` and removes
+  `critical_set` from `inferred`, marking `meta.trash` if that empties it —
+  **except when that narrowing comes out empty on a card the holder knows is
+  on an inverted suit**, which is the chuck case (`:91-103`). A CTD is the
+  physical label "press Discard", and on an inverted suit that button is the
+  CHUCK, a play call; asking "which of these can you afford to lose?" is
+  backwards for it, and in Dark Orange — every rank `oneOfEach`, so every card
+  critical — it empties the set outright. The card was then branded trash and
+  `Game::elim`'s step-1 sweep (`src/basics/game.cpp:498-509`) reset it to
+  global empathy and cleared the status, destroying the chuck signal one turn
+  after it was given (bug_report_6_2_0.txt, replay 1959065 T5-T6). In that case
+  the narrowing is to the inverted identities a chuck would actually **stack**,
+  pinned with `info_lock` exactly as reactor0's `stamp_orange_chuck` does, and
+  `meta.trash` is never set. The ordinary reading runs first and is kept
+  verbatim whenever it yields anything, so a non-dark orange with a spare copy
+  is untouched. The "is it inverted?" test reads **common** knowledge, not
+  `state.deck` — the receiver cannot see their own card, so branching on the
+  deck would desync the seats.
 
-**The four `elim_*` matrices** (`:115-245`) then run over the receiver's slots
+**The four `elim_*` matrices** (`:177-307`) then run over the receiver's slots
 *left of* (newer than) the resolved target. Their shared logic: had the
 receiver held a different identity in one of those earlier slots, a *different*
 slot would have been the target — so identities inconsistent with the actual

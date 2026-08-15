@@ -355,7 +355,19 @@ collapsed into Phase C's lock, so the reacter discarded slot 3 instead of
 slot 5. Asking a **play** call for criticality is worse: colour mode 1 would
 blind-play a react slot with no playability check at all, which strikes.
 `variants::would_lose_inverted_reacter` was already swap-aware at both sites,
-which is why only this vet was wrong. **Reactor still vets the un-swapped call
+which is why only this vet was wrong.
+
+**The resolution side has to honour the swap too.** When the reacter acts, the
+receiver's target is re-stamped by the shared `target_i_play` /
+`target_i_discard` (reactor's §2 "Resolving the reaction"). For an inverted
+target the physical label is CTD, so resolution lands in `target_i_discard` —
+correctly, since pressing Discard is what stacks an orange. What was wrong is
+that the helper applied *throw-this-away* semantics to it: narrowing `inferred`
+to the non-critical ids, which in Dark Orange (every card `oneOfEach`, so every
+card critical) empties the set, marks the card trash and lets `elim` void the
+call. bug_report_6_2_0.txt, replay 1959065 T5-T6 — the chuck signal was
+destroyed one turn after it was given, and the receiver's playable Dark Orange
+2 was left neither playable nor discardable. **Reactor still vets the un-swapped call
 at all four of its reactive sites** — see TODO.md.
 
 **The pitch row is bug_report_4_1_0.txt 4.1.0b** (replay 1957942 T19). A play
@@ -448,8 +460,8 @@ reacter acts, `calc_target_slot` maps their slot to the receiver's target;
 the standard table applies — reacter play + RANK ⇒ receiver plays
 (`elim_play_play`); play + COLOUR ⇒ receiver discards (`elim_play_dc`);
 discard + COLOUR ⇒ receiver plays (`elim_dc_play`); discard + RANK ⇒
-receiver discards (`elim_dc_dc`) (`react_play` `:51-83`, `react_discard`
-`:85-132`). Parity keys on `wc.clue.kind` **alone** (`:66`, `:115`);
+receiver discards (`elim_dc_dc`) (`react_play` `:65-97`, `react_discard`
+`:99-146`). Parity keys on `wc.clue.kind` **alone** (`:80`, `:129`);
 `wc.all_plays` is deliberately not consulted, because reading it let
 resolution contradict the reading every seat agreed on at clue time. Should a
 waiting connection carry the flag anyway (a replayed snapshot, or a reactor WC
@@ -458,7 +470,7 @@ discard available to them at all: a discard is then a **known mistake**
 (`DiscardInterp::MISTAKE`) that applies no marks (`:96-106`). Reactor0 never
 rewinds — both entry points always return false.
 
-**The lock reading** (`is_lock_target` `:28-31`, `reactive_lock` `:35-49`):
+**The lock reading** (`is_lock_target` `:26-29`, `reactive_lock` `:49-63`):
 a dc-target on the receiver's **oldest slot**, with `wc.rlocks` bound at
 clue time, stamps every still-held card of the clue-time hand `CHOP_MOVED`
 instead of CTD. This applies **uniformly** in both dc modes (colour
