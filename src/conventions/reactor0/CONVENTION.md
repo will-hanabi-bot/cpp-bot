@@ -620,17 +620,30 @@ Naming: the worth of *giving* a clue is its **tier**, never its "value" —
 "clue value" already means the reactive anchor (GLOSSARY: *anchor (value)*,
 *colour value*).
 
-**The window** (`:473-474`): `pace() >= 3 && clue_tokens <= 3`. Two deliberate
-differences from reactor's gate: it is one token wider (`<= 3`, not `< 3`),
-and it has **no "we hold a real play" conjunct** — it fires whether or not
-Alice has anything queued.
+**The window and the required tier are one decision** (`:487-505`), because
+the two requirements carry **different token ranges** (`requires_high_tier`,
+`:391-403`):
 
-**The required tier** (`requires_high_tier`, `:391-403`):
+| Alice's hand | Window | Required |
+|---|---|---|
+| holds ≥1 card stamped `CALLED_TO_PLAY`; **or**, in a variant containing an inverted suit (`variants::includes_inverted`), ≥1 stamped `CALLED_TO_DISCARD` | `pace() >= 3 && clue_tokens < 8` | **HIGH** |
+| otherwise | `pace() >= 3 && clue_tokens <= 3` | **HIGH or MEDIUM** |
 
-| Alice's hand | Required |
-|---|---|
-| holds ≥1 card stamped `CALLED_TO_PLAY`; **or**, in a variant containing an inverted suit (`variants::includes_inverted`), ≥1 stamped `CALLED_TO_DISCARD` | **HIGH** |
-| otherwise | **HIGH or MEDIUM** |
+Both keep reactor's two deliberate differences: the MEDIUM row is one token
+wider than reactor's gate (`<= 3`, not `< 3`), and neither row has a **"we hold
+a real play" conjunct** — the gate fires on the *stamp*, not on what Alice
+happens to know.
+
+**Why the HIGH row runs so much wider.** Holding a call Alice can fall back on
+is exactly the position in which the team can afford to wait for a clue worth
+the token: there is something to do this turn either way. Capping that
+requirement at 3 tokens meant the bot spent tokens on LOW clues all the way down
+from 7 while a queued play sat in its own hand.
+
+**The `< 8` bound is the forced-clue exemption.** At 8 tokens discarding is
+illegal, so the bot must clue. Gating there would score every non-HIGH clue at
+the same flat `-1.0` and leave the argmax to break the tie arbitrarily, losing
+the normal ranking precisely when there is no alternative to cluing.
 
 The stamp is read **literally** off `game.meta[o].status`. An empathy-known
 playable carrying no stamp does *not* raise the bar — the rule is about
@@ -825,7 +838,7 @@ the penalty must not make a clue that only buries trash look acceptable.
 | `tests/test_reactor0/test_giver_filters.cpp` | MISTAKE clues never offered |
 | `tests/test_basics/test_snapshot_convention.cpp` | convention/rlocks snapshot round-trip + reactor back-compat |
 | `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | §2a tiers — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim |
-| `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | §2a window (both boundaries, incl. `clue_tokens == 3`), required tier, and that reactor's own gate is unchanged |
+| `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | §2a's two windows (both boundaries incl. `clue_tokens == 3`, the HIGH row reaching past 3, the 8-token exemption, and the no-stamp negative that pins the split), required tier, and that reactor's own gate is unchanged |
 | `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | §2b predicates — every `receiver_is_safe` clause, and the negatives that keep the filter off stable clues, colour reactives and endangered receivers |
 | `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | §2b/§2c end to end on the replay that motivated them, plus both predicates on a real Phase C |
 | `tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp` | §2a N5 end to end — a playable non-duped chop on Bob lifts every clue, so a direct play clue beats the lock the flattened gate used to pick |

@@ -215,3 +215,86 @@ TEST(Reactor0PaceClueGate, CtdStampForcesHighTierOnlyWhenInverted) {
       << "with an inverted suit present a CTD is a queued action, so it "
          "forces the HIGH-only tier.";
 }
+
+// --- the HIGH window is wider than the MEDIUM one ------------------------
+//
+// The two required tiers carry different windows. When Alice holds a call she
+// can fall back on, HIGH is demanded at every clue count short of the
+// forced-clue case; when she does not, the original `<= 3` window and its
+// "anything but LOW" requirement are unchanged.
+//
+// Rationale: holding something to do is exactly when the team can afford to
+// wait for a clue worth the token, so capping that requirement at 3 tokens was
+// leaving value on the table between 4 and 7.
+
+// The headline delta: at 4 tokens the old window was closed entirely. With a
+// CTP standing in Alice's hand it is now open, and a LOW clue is rejected.
+TEST(Reactor0PaceClueGate, CtpStampFiresTheGateAboveThreeTokens) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 4;
+  Game g = setup(std::move(opts));
+  g.meta[order_at(g, TestPlayer::ALICE, 1)].status = CardStatus::CALLED_TO_PLAY;
+
+  ASSERT_GE(g.state.pace(), 3) << "guard: window needs pace >= 3";
+  ASSERT_TRUE(hanabi::reactor0::requires_high_tier(g)) << "guard: call stands";
+  Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+  ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: this clue must be LOW";
+
+  EXPECT_EQ(hanabi::reactor0::eval_action(g, clue), -1.0)
+      << "with a call standing the HIGH requirement reaches past 3 tokens; "
+         "the old window stopped here and let this LOW clue through.";
+}
+
+// The companion negative, and what pins this as a SPLIT rather than a blanket
+// widening: the identical position without the stamp keeps the old window and
+// the gate stays silent at 4.
+TEST(Reactor0PaceClueGate, WithoutAStampFourTokensIsStillOutsideTheWindow) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 4;
+  Game g = setup(std::move(opts));
+
+  ASSERT_FALSE(hanabi::reactor0::requires_high_tier(g))
+      << "guard: no call standing";
+  Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+  ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
+
+  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+      << "the MEDIUM requirement still stops at 3 tokens.";
+}
+
+// The forced-clue exemption. At 8 tokens discarding is illegal, so gating would
+// flatten every non-HIGH clue to the same -1.0 and let the argmax break the tie
+// arbitrarily — losing the ranking exactly when there is no alternative to
+// cluing.
+TEST(Reactor0PaceClueGate, SilentAtEightTokensEvenWithACallStanding) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 8;
+  Game g = setup(std::move(opts));
+  g.meta[order_at(g, TestPlayer::ALICE, 1)].status = CardStatus::CALLED_TO_PLAY;
+
+  ASSERT_TRUE(hanabi::reactor0::requires_high_tier(g)) << "guard: call stands";
+  Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+  ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
+
+  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+      << "at 8 tokens the bot cannot discard, so the gate stands down.";
+}
+
+// The pace half of the window is untouched by the split: below pace 3 there is
+// no reason to hoard tokens, call standing or not.
+TEST(Reactor0PaceClueGate, SilentBelowPaceThreeEvenWithACallStanding) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 5;
+  opts.discarded = kTenOnes;
+  opts.discarded.push_back("r2");  // one more, pushing pace to 2
+  Game g = setup(std::move(opts));
+  g.meta[order_at(g, TestPlayer::ALICE, 1)].status = CardStatus::CALLED_TO_PLAY;
+
+  ASSERT_EQ(g.state.pace(), 2) << "guard: fixture must sit below the window";
+  ASSERT_TRUE(hanabi::reactor0::requires_high_tier(g)) << "guard: call stands";
+  Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+  ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
+
+  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+      << "pace < 3 keeps the gate shut regardless of the widened token range.";
+}

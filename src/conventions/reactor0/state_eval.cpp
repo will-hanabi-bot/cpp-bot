@@ -464,16 +464,33 @@ double eval_action(const Game& game, const Action& action) {
     return -100.0;
   }
 
-  // The pace-clue tier gate. With pace to spare and the clue supply running
-  // down, a clue has to earn its token: HIGH only when Alice already holds a
-  // call she can fall back on, otherwise anything but LOW.
+  // The pace-clue tier gate. With pace to spare a clue has to earn its token,
+  // and how hard it has to work depends on whether Alice already holds a call
+  // she can fall back on.
+  //
+  // The two requirements carry **different windows**, so they are decided
+  // together:
+  //   * Alice holds a call (`requires_high_tier`) → HIGH, at every clue count
+  //     short of the forced-clue case. Holding something to do is exactly when
+  //     the team can afford to wait for a clue worth the token, so the old
+  //     `<= 3` cap was leaving value on the table between 4 and 7.
+  //   * otherwise → the original `<= 3` window, requiring anything but LOW.
+  //
+  // The `< 8` bound is the forced-clue exemption: at 8 tokens discarding is
+  // illegal, so gating there would flatten every non-HIGH clue to the same
+  // `-1.0` and let the argmax break the tie arbitrarily, losing the ranking
+  // precisely when the bot has no alternative to cluing.
+  //
   // `clue_tier` reasons as the giver about its own hand via `game.me()`, so
   // it is only meaningful when the giver is the POV seat. During `take_action`
   // that always holds; anything else fails open (no gate).
-  if (state.pace() >= 3 && state.clue_tokens <= 3 &&
-      ca.giver == state.our_player_index) {
+  const bool high_tier_required = requires_high_tier(game);
+  const bool in_gate_window =
+      state.pace() >= 3 && ca.giver == state.our_player_index &&
+      (high_tier_required ? state.clue_tokens < 8 : state.clue_tokens <= 3);
+  if (in_gate_window) {
     const ClueTier need =
-        requires_high_tier(game) ? ClueTier::HIGH : ClueTier::MEDIUM;
+        high_tier_required ? ClueTier::HIGH : ClueTier::MEDIUM;
     const ClueTier tier = clue_tier(game, hypo_game, ca);
     if (tier < need) {
       hanabi::logging::log_branch("reactor0.pace_clue_gate",

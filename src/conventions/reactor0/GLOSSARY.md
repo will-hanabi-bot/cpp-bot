@@ -45,13 +45,20 @@ be `id`. |S| = 1 is the ordinary singleton case.
 cards *outside* such a group rather than identifying one inside it.
 
 ### pace-clue tier gate
-Reactor0's replacement for reactor's low-clue-count gate. At
-`pace() >= 3 && clue_tokens <= 3`, a clue must be HIGH when Alice already
-holds a card stamped `CALLED_TO_PLAY` (or, in a variant with an inverted
-suit, `CALLED_TO_DISCARD`), and otherwise must be at least MEDIUM; anything
-lower scores a flat `-1.0`. One token wider than reactor's window and,
-unlike it, fires even when Alice holds no play.
-`src/conventions/reactor0/state_eval.cpp:473-488`; CONVENTION.md §2a.
+Reactor0's replacement for reactor's low-clue-count gate, and the reason a
+clue has to earn its token. Two windows, both needing `pace() >= 3`:
+
+* Alice already holds a card stamped `CALLED_TO_PLAY` (or, in a variant with
+  an inverted suit, `CALLED_TO_DISCARD`) — she has something to do either way,
+  so the bar is **HIGH** at `clue_tokens < 8`;
+* otherwise the bar is **at least MEDIUM**, at `clue_tokens <= 3`.
+
+Anything below its bar scores a flat `-1.0`. The `< 8` bound is the
+forced-clue exemption: at 8 tokens discarding is illegal, and flattening every
+clue to `-1.0` there would just hand the choice to an arbitrary tie-break. The
+MEDIUM window is one token wider than reactor's and, unlike reactor's, fires
+even when Alice holds no play — the gate keys on the *stamp*, not on what she
+knows. `src/conventions/reactor0/state_eval.cpp:487-505`; CONVENTION.md §2a.
 
 ### blind play (react slot)
 The reacter playing the computed react slot without knowing its identity.

@@ -76,7 +76,7 @@ cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only          92 tests, 13 s
 build/hanabi_tests.exe            # convention-neutral    255 tests, 0.2 s
 build/hanabi_reactor_tests.exe    # reactor + replays     120 tests, 20 s
-build/hanabi_decision_tests.exe   # decision quality       43 tests
+build/hanabi_decision_tests.exe   # decision quality       47 tests
 ```
 
 Pick the scope from the report's `Convention:` field:
