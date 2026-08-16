@@ -258,13 +258,20 @@ TEST(HighValueClueGate, RejectsClueWithTwoPlaysNoFive) {
 // in Cathy's hand, no singleton-inferred copy in Alice's hand). The
 // clue itself doesn't need to do anything productive — just keeping
 // Bob from discarding the unique chop is sufficient.
+//
+// The chop is Bob's NEWEST unclued card — slot 1, not slot 5 (`Game::chop`,
+// `decide.cpp:432-459`) — so the b3 the fixture intends as "the unique chop"
+// has to sit there. On slot 5 the real chop was Bob's r3, which Cathy also
+// holds, so `chop_id_is_unique` failed and condition (1) never fired.
 TEST(HighValueClueGate, AllowsClueWithUniqueGoodChop) {
   SetupOptions opts;
   opts.hands = {
       {"y1", "r4", "g4", "p4", "b4"},
-      // Bob: filler that ensures chop (slot 5) is a non-trash card
-      // and Bob has no safe discard / CTD.
-      {"r3", "g3", "p3", "y3", "b3"},
+      // Bob: chop (slot 1) is the b3 — non-trash at empty stacks, and the
+      // only copy anyone can see. The rest is filler that leaves Bob with
+      // no obvious play, no known trash and no CTD, so he has no safe
+      // discard.
+      {"b3", "r3", "g3", "p3", "y3"},
       // Cathy: NO copy of Bob's chop (b3).
       {"y2", "r3", "g3", "p3", "p4"},
   };
@@ -278,16 +285,19 @@ TEST(HighValueClueGate, AllowsClueWithUniqueGoodChop) {
 
   expect_gate_preconditions(g);
   {
-    auto bob_chop_id = g.state.deck[order_of(g, TestPlayer::BOB, 5)].id();
+    auto bob_chop_id = g.state.deck[order_of(g, TestPlayer::BOB, 1)].id();
     ASSERT_TRUE(bob_chop_id.has_value());
     ASSERT_EQ(bob_chop_id->suit_index, 3);
     ASSERT_EQ(bob_chop_id->rank, 3);
   }
 
-  // Any clue Alice can give Bob — even one that does nothing — must
-  // pass the gate because condition (1) is satisfied unconditionally
-  // by the hand shape. We use rank-3 → Bob (touches slot 1 r3, slot 2
-  // g3, slot 4 y3, slot 5 b3) as a representative.
+  // Any clue Alice can give Bob — even one that does nothing productive —
+  // must pass the gate, because condition (1) reads the *pre-clue* state
+  // (`is_high_value_clue` takes Bob's chop from `game`, not `hypo`) and is
+  // therefore satisfied by the hand shape alone. Rank-3 → Bob is the
+  // representative: every card Bob holds is a rank 3, so it touches all five
+  // slots and produces no plays whatsoever. Conditions (2) and (3) are dead;
+  // only (1) can carry it.
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 3);
   double v = hanabi::reactor::eval_action(g, clue);
   EXPECT_GT(v, -1.0)
