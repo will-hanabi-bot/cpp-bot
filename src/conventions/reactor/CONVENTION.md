@@ -987,23 +987,51 @@ this section applies to reactor0 games. Still common to both conventions:
 `eval_action`'s play and discard branches, `advance`, `eval_state` and
 `eval_game`.
 
-`state_eval.cpp:495-506`. When `clue_tokens < 3` **and** `pace() >= 3` **and**
+`state_eval.cpp:540-551`. When `clue_tokens < 3` **and** `pace() >= 3` **and**
 we hold a real (non-duplicated) obvious playable, a clue must be *high value*
 or `eval_action` returns a flat `−1.0`, below any play. The gate is skipped
-when every play is a dupe (`:479-482`), because suppressing the clue would
+when every play is a dupe (`:541-546`), because suppressing the clue would
 just force a wasted dupe-play.
 
-`is_high_value_clue` (`:105-146`, spec at `:58-80`) — high value iff **any**:
+`is_high_value_clue` (`:106-182`, spec at `:59-81`) — high value iff **any**:
 
 1. **Unique good chop in danger**: Bob is not locked, has no safe discard (no
    obvious play, no known trash, no CTD), and his chop is non-trash with a
    **unique** identity — no visible copy in Cathy's hand, and no
    singleton-inferred copy in the giver's own hand
-   (`chop_id_is_unique`, `:82-103`).
+   (`chop_id_is_unique`, `:83-104`).
 2. The clue gets a **critical low card** played — rank 1 or 2 normally, 4 or 5
-   reversed (`:137`).
+   reversed (`:136`).
 3. The clue gets **≥ 2 new plays** and at least one is the clue-regain rank —
-   5 normally, 1 reversed (`:140`, `:144`).
+   5 normally, 1 reversed (`:180`).
+
+#### Counting plays: the promised post-reaction CTP (v6.5.0)
+
+Conditions (2) and (3) both walk the plays a clue causes, via the shared
+`credit_play` lambda (`:131-141`). The obvious walk is over clue-time stamps —
+every order that went from non-CTP to CTP in `hypo` (`:144-149`).
+
+That walk alone systematically under-counted **reactive finesses**. The finesse
+fallback in `interpret_reactive_rank` (`interpret_reactive.cpp:789-875`) stamps
+only the *reacter's* blind play at clue time (`:854-874`); the *receiver's*
+target is stamped a full turn later, when the reaction actually resolves
+(`react_play` → `target_i_play`, `interpret_reaction.cpp:383-427`). So a finesse
+— the canonical two-play reactive clue — scored as **one** play, which put
+condition (3) permanently out of its reach.
+
+The clue has already *promised* that second play, so the gate now credits it
+(`:162-176`). The waiting connection records the order the reacter was called
+on, and `calc_target_slot` — the very arithmetic the reaction will use — names
+the receiver's target from it. Two guards keep this honest:
+
+- it only fires when a waiting connection exists with a real `react_order`;
+- it credits the target **only if that order is not already CTP** in either
+  `game` or `hypo`. Rank Phase A stamps the receiver at clue time, so without
+  this check the two paths would double-count the same play.
+
+The rule is deliberately "two CTPs", not "two stamps at clue time": a reactive
+clue that yields two plays *after* the reacter reacts is high value, and the
+gate should not veto it on a bookkeeping accident of when the stamp lands.
 
 ## 2.6 The lookahead: `advance`
 

@@ -11,6 +11,7 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/instrumentation/timer.h"
@@ -123,23 +124,58 @@ bool is_high_value_clue(const Game& game, const Game& hypo,
     }
   }
 
-  // Conditions (2) and (3) walk newly-CTP'd cards from this clue.
+  // Conditions (2) and (3) walk the plays this clue causes.
   int new_plays = 0;
   bool any_clue_regain_rank = false;
+  // Returns true when the card satisfies condition (2) on its own.
+  auto credit_play = [&](int order) {
+    ++new_plays;
+    auto id = s.deck[order].id();
+    if (!id) return false;
+    // (2) Critical first/second-rank in play direction.
+    if (s.is_critical(*id) && variants::is_first_or_second_rank(s, *id)) {
+      return true;
+    }
+    if (variants::is_clue_regain_rank(s, *id)) any_clue_regain_rank = true;
+    return false;
+  };
+
   for (const auto& hand : s.hands) {
     for (int o : hand) {
       if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
       if (hypo.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
-      ++new_plays;
-      auto id = s.deck[o].id();
-      if (!id) continue;
-      // (2) Critical first/second-rank in play direction.
-      if (s.is_critical(*id) && variants::is_first_or_second_rank(s, *id)) {
-        return true;
-      }
-      if (variants::is_clue_regain_rank(s, *id)) any_clue_regain_rank = true;
+      if (credit_play(o)) return true;
     }
   }
+
+  // A reactive FINESSE stamps only the reacter at clue time — the receiver's
+  // target is stamped a turn later, when the reaction resolves
+  // (`react_play` → `target_i_play`, `interpret_reaction.cpp:383-427`; the
+  // finesse block itself touches only `react_order`,
+  // `interpret_reactive.cpp:854-874`). Counting clue-time stamps alone
+  // therefore scored every finesse as a single play and put condition (3)
+  // permanently out of its reach.
+  //
+  // The clue has already *promised* that second play, so credit it: the
+  // waiting connection records the order the reacter was called on, and the
+  // very arithmetic the reaction will use names the receiver's target from it.
+  if (!hypo.waiting.empty()) {
+    const ReactorWC& wc = hypo.waiting.front();
+    if (wc.react_order >= 0) {
+      if (auto slots = calc_target_slot(game, hypo, wc.react_order, wc)) {
+        const int receive_order = wc.receiver_hand[slots->second - 1];
+        // Rank Phase A already stamps the receiver at clue time, so it was
+        // counted by the walk above; only credit a target still uncalled, or
+        // the two paths double-count the same play.
+        if (game.meta[receive_order].status != CardStatus::CALLED_TO_PLAY &&
+            hypo.meta[receive_order].status != CardStatus::CALLED_TO_PLAY &&
+            credit_play(receive_order)) {
+          return true;
+        }
+      }
+    }
+  }
+
   // (3) ≥ 2 plays AND at least one regains a clue token.
   if (new_plays >= 2 && any_clue_regain_rank) return true;
   return false;
