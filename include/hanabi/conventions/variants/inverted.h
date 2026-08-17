@@ -72,8 +72,18 @@ DiscardAction make_discard_for_simulation(const State& state, int player_index,
 bool discard_advances_stack(const State& state,
                             const std::optional<Identity>& id);
 
-// True when any identity in `possible` is on an inverted suit.
+// True when any identity in `possible` is on an inverted suit. Used by the
+// chuck-safety filter in `take_action`'s discard-candidate construction: a card
+// that could be orange has no safe Discard button.
 bool possible_has_inverted(const State& state, const IdentitySet& possible);
+
+// True when some identity in `possible` is on an inverted suit **and** is
+// currently playable — i.e. a chuck of this card could actually advance the
+// stack. The unpinned counterpart to `discard_advances_stack`, and a strictly
+// stronger test than `possible_has_inverted`: "might be orange" is not the same
+// claim as "might advance the orange stack".
+bool possible_chuck_advances_stack(const State& state,
+                                   const IdentitySet& possible);
 
 // Can the HOLDER of `order` pitch it for free? True when every identity the
 // card could still be is on an inverted suit **and** is basic trash. Both

@@ -718,7 +718,9 @@ Every place the convention compensates, all in
 | `would_lose_inverted_reacter` | Reject a candidate whose resolution would `target_play` an orange reacter card — that would *pitch* it into the discard pile, losing the copy for nothing. Also rejects `target_discard` on a *non-playable* orange, which would strike. | `:31-51` |
 | `orange_chop_save` | Rank-reactive Phase C. Only fires when the receiver's chop is orange; encodes "receiver **pitches** their chop" — a clean voluntary loss that avoids the misplay strike a chuck of a non-playable orange would cause. Non-orange chops deliberately bail, because the observer can't run the critical check on their own card. The chop here is `Game::chop`'s positional fallback: `:91-96` scans for the newest unclued status-`NONE` card. | `:85-148` |
 | `make_discard_for_simulation` | In `advance()`'s simulation, an inverted non-playable card must use `failed=true`, or `with_play` would jump the stack to a non-playable rank and corrupt the simulated state. Since v5.0.0 `advance`'s **play** branch also routes a playable orange through it, so a chuck advances the stack instead of being simulated as a pitch (§2.6). | `:63-71` |
-| `discard_advances_stack`, `possible_has_inverted` | Used by the chuck-safety filters of §2.3. | `:73-83` |
+| `discard_advances_stack` | Known id, inverted, currently playable — a chuck that advances the stack. Used by §2.5's orange tiering. | `:73-76` |
+| `possible_has_inverted` | Any identity in `possible` is inverted, so the card *might* be orange and has no safe Discard button. Used by §2.3's chuck-safety filter. | `:78-83` |
+| `possible_chuck_advances_stack` | `possible`'s counterpart to `discard_advances_stack`: *some* identity is inverted **and** playable, so a chuck could advance the stack. Strictly stronger than `possible_has_inverted`, and what §2.5's `0.5` floor requires as of v6.6.0. | `:96-102` |
 
 In both reactive paths, `target_is_inverted(target)` **swaps the reacter's
 intended action** so that the receiver's standard reading of
@@ -801,71 +803,71 @@ worse play.
 
 ## 2.1 The `take_action` ladder
 
-`Game::take_action` (`src/basics/decide.cpp:650-1103`). Each stage that
+`Game::take_action` (`src/basics/decide.cpp:651-1138`). Each stage that
 returns short-circuits the rest. It scores actions through the convention seam
-`eval_for` (`:628-634`), which routes reactor0 games to
+`eval_for` (`:632-636`), which routes reactor0 games to
 `reactor0::eval_action` and everything else to `reactor::eval_action`.
 
 | Stage | What it does | Cite |
 |---|---|---|
-| 0 | **Compute** (not yet return) the urgent action: the first card in our hand with `meta.urgent`, converted to a Play or Discard. Guarded by empathy sanity checks — never play a card whose every possibility is basic trash, never discard one whose every possibility is critical. | `:605-662` |
-| 0b | **Urgent Bob-protection override.** If we can clue, a reactive is pending with us as reacter, the receiver isn't Bob, Bob is unloaded, and Bob's chop is *actually* critical from our full visibility → replace our urgent action with the best clue to Bob. | `:615-640` |
-| 1 | **Endgame fork**, when `rem_score() <= num_suits + 1`: first `forced_endgame_action`, then the endgame solver. | `:664-684` |
-| 2 | **Return the urgent action.** Note the ordering: the endgame solver *outranks* the convention's urgent signal. | `:686` |
-| 3–5 | Build the candidate lists: plays, clues, discards. | `:688-820` |
-| 6 | Discard gating. | `:822-946` |
-| 7 | **Force-play override.** | `:948-1021` |
-| 8 | **Global argmax of `eval_action`** over all clues + plays + discards. | `:1023-1039` |
-| 9 | Fallback: play slot 1 at 8 clues, else `locked_discard`. | `:1028-1031` |
+| 0 | **Compute** (not yet return) the urgent action: the first card in our hand with `meta.urgent`, converted to a Play or Discard. Guarded by empathy sanity checks — never play a card whose every possibility is basic trash, never discard one whose every possibility is critical. | `:658-736` |
+| 0b | **Urgent Bob-protection override.** If we can clue, a reactive is pending with us as reacter, the receiver isn't Bob, Bob is unloaded, and Bob's chop is *actually* critical from our full visibility → replace our urgent action with the best clue to Bob. | `:672-693` |
+| 1 | **Endgame fork**, when `rem_score() <= num_suits + 1`: first `forced_endgame_action`, then the endgame solver. | `:738-759` |
+| 2 | **Return the urgent action.** Note the ordering: the endgame solver *outranks* the convention's urgent signal. | `:760` |
+| 3–5 | Build the candidate lists: plays, clues, discards. | `:762-1044` |
+| 6 | Discard gating. | `:931-1044` |
+| 7 | **Force-play override.** | `:1048-1119` |
+| 8 | **Global argmax of `eval_action`** over all clues + plays + discards. | `:1122-1137` |
+| 9 | Fallback: play slot 1 at 8 clues, else `locked_discard`. | `:1127-1130` |
 
 One rule worth isolating: **the bot does not clue while it is the receiver of
-a pending reactive** (`can_clue_now`, `:782-783`). Its job that turn is to
+a pending reactive** (`can_clue_now`, `:856-857`). Its job that turn is to
 answer the clue it was given.
 
 ## 2.2 Choosing a play
 
-Candidates are built by three mutually exclusive branches (`:688-780`):
+Candidates are built by three mutually exclusive branches (`:762-853`):
 
-1. **Connector-first** (`:692-726`). If we are the receiver of a pending
+1. **Connector-first** (`:766-800`). If we are the receiver of a pending
    reactive and hold a common-playable whose successor sits in the reacter's
    hand, the play set is exactly that one card — lowest `signal_turn` wins.
-2. **Known playables** (`:727-777`), starting from `obvious_playables` and
+2. **Known playables** (`:801-852`), starting from `obvious_playables` and
    then:
    - drop non-CTP cards that have a same-`possible` focused duplicate in our
-     own hand (`:733-741`);
-   - **definite-singleton filter** (`:750-759`): with more than one candidate,
+     own hand (`:806-814`);
+   - **definite-singleton filter** (`:823-832`): with more than one candidate,
      prefer only those whose inferred identity is a definite singleton
      playable on the current stacks — this stops an ambiguous `{b2,n3}` CTP
      from being played ahead of an empathy-known prerequisite;
-   - **signal-turn tiebreak** (`:769-777`): still more than one → lowest
+   - **signal-turn tiebreak** (`:842-850`): still more than one → lowest
      `signal_turn`, with `value_or(0)` so unsignalled empathy-plays run ahead
      of convention-marked ones.
-3. **Fallback**: `thinks_playables` (`:779`).
+3. **Fallback**: `thinks_playables` (`:853`).
 
 There is **no explicit "play 5s first" rule**. Rank enters the play score only
-weakly, through `0.02 * (5 - rank)` (`state_eval.cpp:524`) — which actually
+weakly, through `0.02 * (5 - rank)` (`state_eval.cpp:569`) — which actually
 prefers *low* ranks — and through `eval_game`'s future-value term, where a
 CTP'd 5 is worth `+0.8` against `+0.4` for anything else
-(`state_eval.cpp:641-642`).
+(`state_eval.cpp:699-702`, and `:717` for a delayed successor).
 
-**Force-play override** (`:948-1021`) is the strongest "just play it" rule: if
+**Force-play override** (`:1048-1119`) is the strongest "just play it" rule: if
 no available clue creates a playable anywhere, *and* Bob is safe (he has known
-trash, or is locked, or his chop is visibly non-critical, `:970-980`), return
+trash, or is locked, or his chop is visibly non-critical, `:1071-1081`), return
 the best play immediately without comparing it against clues. It is skipped
 when the card's identity is already CTP'd or visibly held elsewhere
-(`:989-1015`).
+(`:1092-1115`).
 
 In the endgame the solver breaks all win-rate ties toward plays
 (`src/endgame/solver.cpp:35-38`, `:336-337`, `:853-856`).
 
 ## 2.3 Choosing a discard
 
-**Suppression** (`:843-845`): no discard candidates at all when
+**Suppression** (`:931-933`): no discard candidates at all when
 `clue_tokens == 8`, when `pace() == 0` and any clue or play exists, or when
 `potential_forced_play` — we hold a play whose successor is visibly in the
-pending reacter's hand, so discarding would break the chain (`:822-841`).
+pending reacter's hand, so discarding would break the chain (`:910-929`).
 
-**`chop()`** (`:404-431`): an explicitly CTD'd card wins — the one signalled most
+**`chop()`** (`:432-460`): an explicitly CTD'd card wins — the one signalled most
 recently by `signal_turn`, with hand order breaking ties (v1.11.0); otherwise the
 **newest** unclued card with status NONE, gated by `zcs_turn` so cards drawn after
 the team hit zero clues are excluded. Any non-NONE status disqualifies a card, so
@@ -874,34 +876,64 @@ not, and never the reverse, which is why the newest *signal* wins; this also mak
 `chop()` agree with the most-recent-CTD filter below rather than disagree with it.
 
 **A player always chucks their chop**, except when its inference is a known
-orange card, which is **pitched** instead (`:934-943`). Note the "except" is
-narrower than it looks and is enforced *structurally*: the chop only enters the
-candidate pool when `all_plays` is empty (`:875-878`), so a chop is never
-playable, and a known-orange **playable** is routed through `all_plays` as a chuck
-that advances the stack (`:808-813`). Don't add a playability test at `:934` — and
-don't remove the `all_plays.empty()` gate without noticing that `:934` would then
-pitch a playable orange away.
+orange card, which is **pitched** instead (`:1026-1044`, the re-route proper at
+`:1033-1037`). Note the "except" is narrower than it looks and is enforced
+*structurally*: the chop only enters the candidate pool when `all_plays` is empty
+(`:963-970`), so a chop is never playable, and a known-orange **playable** is
+routed through `all_plays` as a chuck that advances the stack (`:889-908`). Don't
+add a playability test at `:1033` — and don't remove the `all_plays.empty()` gate
+without noticing that `:1033` would then pitch a playable orange away.
 
-**`has_ptd()`** — "does Bob have permission to discard?" (`:419-458`), the
+**`has_ptd()`** — "does Bob have permission to discard?" (`:462-501`), the
 discard-permission gate, one ladder:
 
 | Condition | Verdict | Cite |
 |---|---|---|
-| Bob is obviously loaded | yes | `:452` |
-| Bob's chop is **critical** | **no** | `:453` |
-| Bob's chop is basic trash | yes, unless the previous player just made an unknown play of that identity | `:454` |
-| A known duplicate of Bob's chop is elsewhere in Bob's hand | yes | `:455` |
-| Otherwise | **no** iff the chop is playable or is a **rank 2** | `:456-457` |
+| Bob is obviously loaded | yes | `:495` |
+| Bob's chop is **critical** | **no** | `:496` |
+| Bob's chop is basic trash | yes, unless the previous player just made an unknown play of that identity | `:497` |
+| A known duplicate of Bob's chop is elsewhere in Bob's hand | yes | `:498` |
+| Otherwise | **no** iff the chop is playable or is a **rank 2** | `:499-500` |
 
-Candidate construction (`:848-945`), in order: known trash → the
-**orange-safety filter**, which drops empathy-trash candidates whose
-`possible` still contains an inverted-suit identity, since chucking those is
-a play attempt that can strike (`:860-871`) — note it guards only the
-known-trash pool, the chop being added after it → chop discard, only when not
-locked, no plays available, and `has_ptd()` (`:875-879`) → ordering, where a
-pending reactive restricts us to the `expected` set (`:880-901`).
+Candidate construction (`:936-1044`), in order: known trash → the
+**orange-safety filter** → chop discard, only when not locked, no plays
+available, and `has_ptd()` (`:963-970`) → ordering, where a pending reactive
+restricts us to the `expected` set (`:971-1000`).
 
-**Most-recent-CTD enforcement** (v0.30, `:902-926`): if the hand holds several
+Note that a CTD'd card is *already* known trash — `Player::order_trash` returns
+true for any `CALLED_TO_DISCARD` status (`src/basics/player_game.cpp:128`) — so
+`expected` normally comes from the trash pool and the chop branch is the fallback
+for the case where the chop is **all-critical** (a Dark Orange chuck call), which
+`order_trash` refuses.
+
+**The orange-safety filter** (`discard_button_is_safe`, `:938-958`) drops a
+candidate whose `possible` still contains an inverted-suit identity, because
+pressing Discard on it is a play attempt that can strike. It keeps CTD'd cards
+(the convention told us to press Discard, and the giver vetted the target), cards
+pinned to a singleton identity (the emission re-route handles those), and cards
+that cannot be orange at all.
+
+It applies to the **whole** candidate pool: the known-trash entries at `:959-962`
+and every extra candidate `Player::discardable` contributes at `:983-999` (the
+filter call at `:996`). Until
+v6.6.0 the second application was gated on `order_trash`, i.e. it guarded only the
+empathy-trash entries — but `discardable` also admits cards whose every
+possibility is *sieved*, covered elsewhere and therefore expendable
+(`player_game.cpp:286-290`). That is a judgement about the discard *pile* and says
+nothing about which button is safe. Replay 1961419 T11 walked straight through the
+gap: a clued rank 4 inferred `{Red 4, Orange 4}`, both copies sieved, went out as
+a raw `PerformDiscard` and chucked Orange 4 into an orange stack of 2 for a
+strike.
+
+Such a card has **no** safe button — Discard chucks it, and Play would be a
+genuine play attempt on the non-inverted possibility — so dropping it is the only
+correct answer; there is no re-route to fall back on. The **chop** is still exempt,
+and exempt *structurally*: `expected` is appended first and marked `seen`
+(`:977-984`), so the filter never examines it. That is deliberate — an unclued
+chop's `possible` contains an orange identity in almost every orange variant, so
+filtering it would break chop discards outright.
+
+**Most-recent-CTD enforcement** (v0.30, `:1001-1025`): if the hand holds several
 CTD'd cards, only the one with the largest `signal_turn` is discardable this
 turn. Older CTDs stay marked but are removed from the pool.
 
@@ -954,26 +986,44 @@ a card a plain stable push gets for free.
 
 ## 2.5 Scoring any action: `eval_action`
 
-`state_eval.cpp:463-591`. Simulate, then:
+`state_eval.cpp:508-646`. Simulate, then:
 
-- `MISTAKE` interpretation → `−100` (`:470-483`).
-- **Clue branch** (`:486-507`): the low-clue-count gate (below), then
-  `clue_branch_value` (`:456-461`) —
+- `MISTAKE` interpretation → `−100` (`:515-529`).
+- **Clue branch** (`:531-552`): the low-clue-count gate (below), then
+  `clue_branch_value` (`:501-506`) —
   `mult = playables_us.empty() ? 0.5 : (in_endgame ? 0.1 : 0.25)` and
   `value = get_result × (result > 0 ? mult : 1.0) − 0.5`. So **positive clue
   value is damped hard once we already hold a play, negative value is not
   damped, and every clue pays a flat 0.5 tempo tax.** `clue_branch_value` is
   factored out because reactor0 reuses it behind its own gate.
-- **Play branch** (`:508-524`): unknown identity `+1.5`; known
+- **Play branch** (`:553-569`): unknown identity `+1.5`; known
   `0.02 × (5 − rank)`; a known dupe `−0.25`.
-- **Discard branch** (`:525-586`): base tiers — endgame `−1.0`, known trash
+- **Discard branch** (`:570-644`): base tiers — endgame `−1.0`, known trash
   `0.0`, own chop `−0.25`, unknown identity `−1.5`, else `−0.5`. Orange
-  tiering raises a stack-advancing discard to `1.0` and floors a
-  possibly-orange unknown at `0.5` (`:543-568`). A **`−10.0` block penalty**
-  applies if we hold a real obvious playable that this discard would skip
-  (`:570-585`).
-- Every action finally adds `advance(game, hypo_game, 1)` (`:590`) — a
+  tiering (`:583-623`) raises a stack-advancing discard to `1.0` and floors a
+  possibly-orange unknown at `0.5`. A **`−10.0` block penalty** applies if we
+  hold a real obvious playable that this discard would skip (`:625-641`).
+- Every action finally adds `advance(game, hypo_game, 1)` (`:645`) — a
   one-full-round-forward lookahead.
+
+**The `0.5` floor needs a *reachable* orange** (`:599-618`, v6.6.0). Its whole
+justification is the upside "this discard might advance the orange stack", so the
+guard asks for that upside — `variants::possible_chuck_advances_stack`, *some*
+identity in `possible` both inverted **and** currently playable — rather than
+merely "might this be orange" (`possible_has_inverted`, which it used to call).
+When no orange the card could be is playable there is no stack to advance and the
+chuck can only strike, which is exactly the conclusion the known-orange-unplayable
+case already reaches by falling through to the baseline (`:620-622`). Replay
+1961419 T11: a card inferred `{Red 4, Orange 4}` against an orange stack of 2 was
+floored to `0.5` and beat the `0.0` of the card the clue had actually called to
+discard.
+
+Note the CTD asymmetry that made that comparison so easy to lose: a called discard
+scores exactly `0.0` because `CALLED_TO_DISCARD` is folded into `is_trash`
+(`:574-575`), and the orange tiering is then skipped entirely by `if (!is_trash)`
+(`:590`). So honouring an explicit discard signal sits at the same tier as
+throwing away generic trash, and any mildly positive clue clears it. See TODO
+entry 18.
 
 ### The low-clue-count gate
 
@@ -1047,7 +1097,7 @@ manufactured leaves with four or more strikes.
   (orange) card is simulated with the Discard button** —
   `variants::make_discard_for_simulation` (`:378-382`) — because that is what
   advances an inverted stack, and what `take_action` really issues
-  (`src/basics/decide.cpp:885-894`). Simulating it as `PerformPlay` ran the
+  (`src/basics/decide.cpp:889-908`). Simulating it as `PerformPlay` ran the
   game-rule inversion and scored every good chuck as a card thrown away
   (v5.0.0; replay 1957905 #31).
 - Locked → discard if clueless, else clue (`:398-405`). At 8 clues, forced

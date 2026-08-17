@@ -237,6 +237,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1957936_orange_chuck_chain_wins_the_endgame.cpp
   tests/test_reactor0/test_misc/test_replay_1957953_trash_orange_is_pitched_not_chucked.cpp
   tests/test_reactor0/test_misc/test_replay_1959065_orange_chuck_call_survives_resolution.cpp
+  tests/test_reactor0/test_misc/test_replay_1961419_sieved_orange_is_not_a_discard_candidate.cpp
 )
 target_include_directories(hanabi_reactor0_tests PRIVATE tests)
 target_link_libraries(hanabi_reactor0_tests PRIVATE hanabi_core GTest::gtest_main)

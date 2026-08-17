@@ -263,7 +263,7 @@ call — but `get_result` itself still counts no play for a chuck, because
 
 ## 12. `[engine]` An unpinned playable orange is still pitched
 
-`src/basics/decide.cpp:885-894` routes a playable orange to `PerformDiscard`
+`src/basics/decide.cpp:889-908` routes a playable orange to `PerformDiscard`
 only when `thoughts[o].id(infer=true)` resolves to a **single** identity. A
 card that is empathy-*playable* but ambiguous between an inverted and a
 non-inverted suit (say `{o1, r1}` at zero stacks) falls through to
@@ -315,14 +315,26 @@ would be the general answer.
 ## 15. `[engine]` `advance` models every voluntary discard as a chuck
 
 `advance`'s discard paths hand every order to
-`variants::make_discard_for_simulation` (`reactor/state_eval.cpp:401`, `:410`,
-`:415`), which sets `failed = inverted && !playable`. That is right for a CTD
-(a real chuck) but wrong for an ordinary discard: `take_action` routes a
-*known* orange through `PerformPlay` (a pitch,
-`src/basics/decide.cpp:1007-1024`) and drops empathy-trash candidates that
-could still be orange (`trash_is_orange_safe`, `:940-947`). So the lookahead
-invents misplay strikes for discards the bot would never physically make, and
-mis-scores every inverted-variant line that reaches a discard.
+`variants::make_discard_for_simulation` (`reactor/state_eval.cpp:414-420`,
+`:437`, `:446`, `:451`), which sets `failed = inverted && !playable`. That is
+right for a CTD (a real chuck) but wrong for an ordinary discard: `take_action`
+routes a *known* orange through `PerformPlay` (a pitch,
+`src/basics/decide.cpp:1026-1044`) and drops candidates that could still be
+orange (`discard_button_is_safe`, `:938-958`). So the lookahead invents misplay
+strikes for discards the bot would never physically make, and mis-scores every
+inverted-variant line that reaches a discard.
+
+**The mirror of this, found at replay 1961419 T11 (v6.6.0):** for the bot's *own*
+top-of-tree action the error runs the other way. `make_discard_for_simulation`
+keys on `state.deck[order].id()`, which is null for our own cards, so a candidate
+`DiscardAction{us, o, -1, -1, false}` is handed to `Game::on_discard`
+(`src/basics/game.cpp:263-305`) with `suit_index == -1`; `inverted_id` is then
+false, `failed` is false, and the simulation scores a clean clue-regaining
+discard. No strike, no discard-pile entry, no `max_score` loss — the eval cannot
+price the chuck risk of its own possibly-orange discard at all. Candidate removal
+(§2.3's filter) is the only mechanism available today, which is why v6.6.0 fixed
+it there. Related: entry 14, "a predicted misplay is only ever priced, never
+rejected".
 
 ---
 
@@ -401,3 +413,98 @@ status they were stamped with. That is precisely how bug 6.2.0 left its card
 branded trash with no call attached. `check_missed`, `erase_call` and the bomb
 reset all use `cleared()`; the two `elim` sweeps and `clear_contradicted_call`
 do not.
+
+---
+
+## 19. `[engine]` An all-orange discard candidate is dropped where it could be pitched
+
+§2.3's chuck-safety filter (`discard_button_is_safe`,
+`src/basics/decide.cpp:938-958`) rejects any candidate whose `possible` contains
+an inverted identity. That is exactly right for a set that *straddles* an
+inverted and a plain suit — neither button is safe there, so there is nothing to
+re-route to. But when **every** possibility is inverted, `PerformPlay` is a pitch
+for all of them: a guaranteed clean discard that also regains the token. The
+filter drops those too, which is safe but leaves a free pitch on the table.
+
+The precedent for the tighter test already exists: `Game::find_all_discards`
+(`decide.cpp:1176-1182`) uses `poss.forall(inverted)` over a
+`common ∩ per-player` intersection, and `variants::can_pitch_for_free`
+(`src/conventions/variants/inverted.cpp:104-110`) is the stricter all-inverted
+**and** all-basic-trash form used by the urgent-CTP exemption.
+
+Left out of v6.6.0 deliberately, and it is more than a one-line change: the
+emission loop must pair the `PerformPlay` with an `Action` for `eval_for`, and
+neither available shape prices a pitch correctly. `PlayAction{us, o, -1, -1}`
+scores `+1.5` (`reactor/state_eval.cpp:568`) and `on_play` with `suit_index == -1`
+skips the inverted branch, losing the clue regain — overvalued *and*
+mis-simulated. `DiscardAction{us, o, -1, -1, false}` models card-gone plus
+clue-regain correctly but then meets the `0.5` orange floor, above the `0.0` a
+known-trash discard gets — so the bot would prefer pitching a possibly-useful
+orange over discarding actual trash, which is the same inversion that produced
+the 1961419 bug. Doing this properly needs a pitch tier priced between the two,
+which also touches reactor0's `get_result` (entry 11).
+
+---
+
+## 20. `[engine]` The `locked_discard` fallback presses Discard with no inverted re-route
+
+`src/basics/decide.cpp:1128` — when `all_discards`, `all_clues` and `all_plays`
+are all empty, `take_action` returns a bare
+`PerformDiscard{m.locked_discard(...)}`. No pitch/chuck routing, unlike both the
+ordinary emission loop (`:1026-1044`) and `find_all_discards` (`:1176-1182`). On
+an inverted suit that is a play attempt, so the last-resort path is the one place
+that can still chuck a card the rest of the engine would have protected.
+
+Pre-existing, but v6.6.0's widened chuck-safety filter makes it marginally more
+reachable: emptying `discard_orders` is now easier, and this is where an emptied
+pool lands. Note the situation is genuinely forced — with nothing else to do the
+bot must discard something — so the fix is to route the button, not to refuse.
+
+---
+
+## 21. `[engine]` `discard_button_is_safe` clause 2 trusts `inferred`, not `possible`
+
+`src/basics/decide.cpp:955` exempts a candidate when
+`m.thoughts[o].id(/*infer=*/true)` resolves. `Thought::id`
+(`src/basics/card.cpp:29-44`) resolves on `possible.length() == 1` (sound) **or**
+`inferred.length() == 1` (not sound — an inference is a convention deduction that
+can be wrong). The comment justifying the exemption only covers the case where
+the singleton *is* inverted. Two leaks, in opposite directions:
+
+- `inferred = {r4}`, `possible = {r4, o4}` → emitted as `PerformDiscard`
+  (`:1039-1042`); if the card really is Orange 4, that is a chuck-strike. This is
+  the escape hatch `tests/test_reactor/test_misc/test_replay_1885550.cpp:144-148`
+  uses to skip its own assertion.
+- `inferred = {o4}`, `possible = {r4, o4}` → re-routed to `PerformPlay`
+  (`:1033-1037`); if the card really is Red 4, that is a real play attempt.
+
+The sound formulation keys on `possible` alone: press Discard when
+`possible.forall(!inverted)`, press Play when `possible.forall(inverted)`, and
+otherwise drop — `possible.length() == 1` is subsumed by whichever `forall`
+applies. Not folded into v6.6.0 because it also tightens the empathy-trash pool,
+which is a separate behavioural decision deserving its own version bump.
+
+---
+
+## 22. `[engine]` A called discard scores the same as generic trash, so marginal clues beat it
+
+`reactor/state_eval.cpp:574-575` folds `status == CALLED_TO_DISCARD` into
+`is_trash`, scoring it exactly `0.0`, and `:590`'s `if (!is_trash)` then skips the
+orange tiering for it entirely. So honouring an explicit discard signal sits at
+the same tier as throwing away generic trash, and **any** clue scoring above zero
+outranks it.
+
+Replay 1961419 T11 is the worked example. Once v6.6.0 stopped the bot chucking a
+no-safe-button card there, it did **not** fall back to the card the rank-4
+referential discard had actually called to discard (a basic-trash Muddy Rainbow 1,
+a free clue regain). It gave `rank 3 → will-bot69` instead — which `ref_discard`
+reads as a **LOCK**, because the clue touches will-bot69's oldest unclued card
+(`reactor/interpret_clue.cpp:339-358` locks when `list_` contains the minimum
+unclued order). That buys nothing: will-bot69's chop was a Muddy Rainbow 4 whose
+own duplicate sat clued in the same hand, so they already had a free discard.
+
+Two contributing gaps, both listed in reactor0's §2 as known: a LOCK has no
+dedicated `get_result` term and scores as an ordinary 0-play clue, and a called
+discard has no term above generic trash. This is the third bullet of entry 18,
+promoted here with a reproducing replay. Fixing it is a tuning change across both
+conventions' scoring and is gated by the 121 + 93 test corpus.

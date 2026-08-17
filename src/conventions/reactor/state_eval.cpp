@@ -408,7 +408,7 @@ double advance(const Game& orig, const Game& game, int offset) {
       } else if (state.is_playable(*id)) {
         // A playable INVERTED (orange) card reaches its stack only through the
         // Discard button — the same routing `take_action` uses for the real
-        // action (src/basics/decide.cpp:885-894). Simulating it as PerformPlay
+        // action (src/basics/decide.cpp:889-908). Simulating it as PerformPlay
         // runs the game-rule inversion instead and sends the card to the
         // discard pile, so every good chuck scored as a thrown-away card.
         act = variants::is_inverted_id(state, *id)
@@ -591,13 +591,13 @@ double eval_action(const Game& game, const Action& action) {
       if (discard_is_play) {
         // Discard advances the orange stack — value at the play tier
         // regardless of endgame. The known-id PlayAction baseline is
-        // `0.02 * (5 - rank)` (line 370) ≈ 0.02..0.08, small enough
+        // `0.02 * (5 - rank)` (`:569`) ≈ 0.02..0.08, small enough
         // that clue eval often beats it, so bump to 1.0. This must
         // override the in_endgame baseline (-1.0) too — discarding
         // a known-orange playable in endgame is still a stack-advance.
         value = 1.0;
       } else if (!target_id_is_orange &&
-                 variants::possible_has_inverted(
+                 variants::possible_chuck_advances_stack(
                      state, game.me().thoughts[da.order].possible)) {
         // Possibly-orange unknown: in orange games the bot must be
         // willing to discard rather than fall back to clues that may
@@ -605,6 +605,16 @@ double eval_action(const Game& game, const Action& action) {
         // unknown-card baseline; the upside (might advance the orange
         // stack) justifies preferring this over a positively-scored
         // clue that the convention may have mis-evaluated.
+        //
+        // The guard asks for that upside, not merely for the presence of an
+        // inverted possibility (`possible_has_inverted`, which this used to
+        // call). When no orange the card could be is currently playable there
+        // is no stack to advance, so the floor's whole justification is absent
+        // and the chuck can only strike — the same conclusion the
+        // known-orange-unplayable case a few lines below already reaches.
+        // Replay 1961419 T11: a card inferred {Red 4, Orange 4} against an
+        // orange stack of 2 was floored to 0.5 and beat the 0.0 of the card
+        // the clue had actually called to discard.
         value = std::max(value, 0.5);
       }
       // Known-orange-unplayable falls through to the baseline

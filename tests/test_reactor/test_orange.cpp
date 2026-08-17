@@ -10,7 +10,9 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
+#include "hanabi/basics/identity_set.h"
 #include "hanabi/conventions/reactor/state_eval.h"
+#include "hanabi/conventions/variants/inverted.h"
 #include "test_harness.h"
 
 using namespace hanabi;
@@ -349,6 +351,71 @@ TEST(Orange, AvoidPerformDiscardOnMultiIdOrangePossibleTrash) {
         << "PerformDiscard on a possibly-orange empathy-trash card would "
            "misplay under the orange game-rule; expected chop discard instead";
   }
+}
+
+// `possible_chuck_advances_stack` vs `possible_has_inverted` — the distinction
+// that replay 1961419 T11 turned on.
+//
+// The scoring floor in reactor's discard branch raises a possibly-orange
+// discard to 0.5, justified by "it might advance the orange stack". It used to
+// ask `possible_has_inverted`, i.e. merely "might this be orange", which is a
+// weaker claim: a card that might be an orange TWO AWAY from its stack has no
+// stack-advance upside at all, only a strike. That mis-earned 0.5 outscored the
+// 0.0 of the card the convention had actually called to discard.
+//
+// These two predicates must therefore disagree in exactly one direction: every
+// stack-advancing set has an inverted member, but not every set with an inverted
+// member advances the stack.
+TEST(Orange, PossibleChuckAdvancesStackRequiresAReachableOrange) {
+  SetupOptions opts;
+  opts.hands = {
+      {"r1", "r2", "b1", "b2", "o1"},
+      {"r3", "b3", "o3", "r4", "b4"},
+      {"o4", "r2", "b2", "o2", "r3"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  // Orange sits at 2, so Orange 3 is playable and Orange 4 is two away.
+  opts.play_stacks = {2, 2, 2};
+  Game g = setup(std::move(opts));
+  const State& s = g.state;
+
+  const int red = 0, orange = 2;
+  ASSERT_TRUE(s.variant->suits[orange].suit_type.inverted);
+  ASSERT_FALSE(s.variant->suits[red].suit_type.inverted);
+  ASSERT_TRUE(s.is_playable(Identity{orange, 3}));
+  ASSERT_FALSE(s.is_playable(Identity{orange, 4}));
+
+  // The replay's card: {Red 4, Orange 4}. Might be orange, cannot advance the
+  // stack — pressing Discard can only strike or be an ordinary discard.
+  const IdentitySet rank4 =
+      IdentitySet::single(Identity{red, 4}).add(Identity{orange, 4});
+  EXPECT_TRUE(hanabi::reactor::variants::possible_has_inverted(s, rank4));
+  EXPECT_FALSE(hanabi::reactor::variants::possible_chuck_advances_stack(s, rank4))
+      << "Orange 4 is two away from an orange stack of 2, so there is no "
+         "stack to advance and the 0.5 floor has no justification";
+
+  // Same shape one rank down, where the orange member really is playable: the
+  // floor's premise holds and both predicates agree.
+  const IdentitySet rank3 =
+      IdentitySet::single(Identity{red, 3}).add(Identity{orange, 3});
+  EXPECT_TRUE(hanabi::reactor::variants::possible_has_inverted(s, rank3));
+  EXPECT_TRUE(hanabi::reactor::variants::possible_chuck_advances_stack(s, rank3));
+
+  // No inverted member at all: neither fires, and pressing Discard is simply a
+  // discard.
+  const IdentitySet plain =
+      IdentitySet::single(Identity{red, 4}).add(Identity{1, 4});
+  EXPECT_FALSE(hanabi::reactor::variants::possible_has_inverted(s, plain));
+  EXPECT_FALSE(hanabi::reactor::variants::possible_chuck_advances_stack(s, plain));
+
+  // A pinned playable orange agrees with the known-id helper the floor's
+  // sibling branch uses, which is the invariant that keeps the two arms of the
+  // orange tiering consistent.
+  const IdentitySet pinned_o3 = IdentitySet::single(Identity{orange, 3});
+  EXPECT_TRUE(hanabi::reactor::variants::possible_chuck_advances_stack(s, pinned_o3));
+  EXPECT_TRUE(hanabi::reactor::variants::discard_advances_stack(s, Identity{orange, 3}));
+  EXPECT_FALSE(hanabi::reactor::variants::discard_advances_stack(s, Identity{orange, 4}));
 }
 
 // Regression for the live-bot crash:

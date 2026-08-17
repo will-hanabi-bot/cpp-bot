@@ -185,7 +185,7 @@ load-bearing:
    play reveal of priority 2** (`defer_to_reveal`, `:452-462`). When the clue
    pins a previously-clued orange to a playable one the reveal already says
    everything and empathy carries the chuck
-   (`src/basics/decide.cpp:885-894` routes an empathy-pinned playable orange
+   (`src/basics/decide.cpp:889-908` routes an empathy-pinned playable orange
    through PerformDiscard). Claiming it at priority 1 would also trip the
    `unnecessary_focus` test, which counts the focus's **own** pinned identity
    as "visible elsewhere" (`Thought::matches` is `id() == other`,
@@ -608,6 +608,17 @@ reactor0 is willing to give at a low clue count. Reactor0-specific notes:
   they score as ordinary 0-play clues. What reactor0 does instead is refuse
   to *offer* a double discard that buys nothing (§2b); reactive locks and
   blind-play clues are untouched, and the remaining tuning is in TODO.md.
+  A lock scoring as a plain 0-play clue is what lets it outrank an explicit
+  called discard, whose own tier is only `0.0` — replay 1961419 T11, TODO
+  entry 22;
+- reactor's §2.3 chuck-safety filter passes a `CALLED_TO_DISCARD` card
+  unconditionally, and under reactor0 that exemption is *sound* rather than
+  merely conventional: the dc-target walk refuses to name an inverted card at
+  all (`interpret_reactive.cpp:136`, `:171` — "not a naming preference but an
+  illegal target", `:110-112`), and §1b's colour chuck is rejected outright when
+  the giver can see the chuck target is unplayable
+  (`interpret_clue.cpp:316-320`). So a standing CTD under reactor0 was vetted by
+  a player who could see the card.
 
 ## §2a The pace-clue tier gate
 

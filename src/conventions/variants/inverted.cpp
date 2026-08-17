@@ -82,6 +82,25 @@ bool possible_has_inverted(const State& state, const IdentitySet& possible) {
   return false;
 }
 
+// Could a chuck of this card advance the orange stack at all? `possible`'s
+// counterpart to `discard_advances_stack`, for a card whose identity isn't
+// pinned.
+//
+// The scoring floor in reactor's discard branch exists for exactly that upside,
+// so it has to ask for the upside rather than merely for the *presence* of an
+// inverted possibility. When no identity the card could still be is both
+// inverted and playable, pressing Discard can only strike (if the card is
+// orange) or be an ordinary discard (if it is not) — which is the same
+// conclusion `reactor/state_eval.cpp` already draws for a *known*
+// orange-unplayable, where it lets the baseline penalty stand.
+bool possible_chuck_advances_stack(const State& state,
+                                   const IdentitySet& possible) {
+  for (Identity i : possible) {
+    if (is_inverted_id(state, i) && state.is_playable(i)) return true;
+  }
+  return false;
+}
+
 bool can_pitch_for_free(const Game& game, int order) {
   const State& state = game.state;
   const IdentitySet& poss = game.common.thoughts[order].possible;

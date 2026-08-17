@@ -436,7 +436,8 @@ std::optional<int> Game::chop(int player_index) const {
   // not, and never the reverse, so preferring the newest signal keeps good
   // cards around longer. This also makes chop() agree with the
   // most-recent-CTD filter find_all_discards applies to the candidate pool
-  // (see `:902-926`). Hand order breaks ties, so behaviour is unchanged when
+  // (see `take_action`, `:1001-1025`). Hand order breaks ties, so behaviour is
+  // unchanged when
   // signal_turns are equal or absent.
   std::optional<int> ctd;
   int best_signal = -1;
@@ -935,27 +936,30 @@ PerformAction Game::take_action() const {
   std::vector<std::pair<PerformAction, Action>> all_discards;
   if (!cant_discard) {
     auto trash = m.thinks_trash(*this, s.our_player_index);
-    // Orange-safety filter. Auto-discarding an empathy-trash card whose
-    // `possible` still includes an inverted-suit (Orange / Dark Orange)
-    // identity risks the engine's `on_discard(inverted, failed=false)`
-    // play-attempt — which strikes when the actual id is an orange
-    // basic_trash (e.g. o1 on orange stack 1). Drop those candidates so
-    // the bot falls back to the chop instead. Keep:
+    // Orange-safety filter. Auto-discarding a card whose `possible` still
+    // includes an inverted-suit (Orange / Dark Orange) identity risks the
+    // engine's `on_discard(inverted, failed=false)` play-attempt — which
+    // strikes whenever the actual id is an orange that isn't currently
+    // playable (e.g. o1 on orange stack 1). Drop those candidates so the bot
+    // falls back to the chop instead. Keep:
     //   * CTD'd cards (the convention explicitly told us to discard),
     //   * cards with a singleton inferred (the dispatch swap a few lines
     //     down routes orange singletons through PerformPlay correctly),
     //   * cards whose possible has no inverted-suit id (cannot be orange).
-    auto trash_is_orange_safe = [&](int o) -> bool {
+    //
+    // Note what "unsafe" means for a card straddling an inverted and a plain
+    // suit: NEITHER button is safe. PerformDiscard chucks it, and PerformPlay
+    // would be a genuine play attempt on the plain possibility — so there is
+    // no re-route to fall back on and dropping is the only correct answer.
+    auto discard_button_is_safe = [&](int o) -> bool {
       if (meta[o].status == CardStatus::CALLED_TO_DISCARD) return true;
       if (m.thoughts[o].id(/*infer=*/true)) return true;
-      for (Identity i : m.thoughts[o].possible) {
-        if (s.variant->suits[i.suit_index].suit_type.inverted) return false;
-      }
-      return true;
+      return !hanabi::reactor::variants::possible_has_inverted(
+          s, m.thoughts[o].possible);
     };
     std::vector<int> safe_trash;
     for (int o : trash) {
-      if (trash_is_orange_safe(o)) safe_trash.push_back(o);
+      if (discard_button_is_safe(o)) safe_trash.push_back(o);
     }
     std::vector<int> expected;
     if (!safe_trash.empty()) {
@@ -979,10 +983,18 @@ PerformAction Game::take_action() const {
       }
       for (int o : discardable) {
         if (contains_v(seen, o)) continue;
-        // Re-apply the orange-safety filter on empathy-trash entries
-        // that `discardable` may have added — `safe_trash` only
-        // controlled `expected`.
-        if (m.order_trash(*this, o) && !trash_is_orange_safe(o)) continue;
+        // Re-apply the orange-safety filter to entries `discardable` added —
+        // `safe_trash` only controlled `expected`. This used to be gated on
+        // `m.order_trash(*this, o)`, i.e. it guarded only the empathy-trash
+        // ones. But `Player::discardable` also admits cards whose every
+        // possibility is *sieved* — covered elsewhere, so expendable
+        // (`player_game.cpp:286-290`) — and that is a discard-PILE judgement
+        // which says nothing about whether pressing Discard is safe. Replay
+        // 1961419 T11: a clued rank 4 inferred {Red 4, Orange 4}, both copies
+        // sieved, entered the pool that way, went out as a raw PerformDiscard
+        // and chucked Orange 4 into an orange stack of 2 for a strike — while
+        // the card the clue had actually called to discard sat unused.
+        if (!discard_button_is_safe(o)) continue;
         discard_orders.push_back(o);
         seen.push_back(o);
       }
@@ -1139,7 +1151,7 @@ std::vector<PerformAction> Game::find_all_discards(int player_index) const {
   // play attempt onto the orange stack — it advances the stack when the card
   // is currently playable and STRIKES otherwise. To actually throw an orange
   // away (and regain the clue) the holder presses Play, the pitch. Same
-  // routing as take_action's own discard ladder at `:1015-1033`, which the
+  // routing as take_action's own discard ladder at `:1026-1044`, which the
   // endgame fork returns above without ever reaching.
   //
   // Keyed on the HOLDER's knowledge, not the deck: a player who cannot tell

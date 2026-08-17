@@ -145,7 +145,7 @@ TEST(Reactor0Orange, RankClueStillRevealsAPlayableOrange) {
       << "and it is not turned into a pitch call, which would discard it";
   // A rank reveal stamps nothing — deliberately, since the clarification only
   // moves the ORANGE COLOUR clue's reveal. The chuck comes from empathy
-  // instead: the card is pinned to Orange 1, and src/basics/decide.cpp:885-894
+  // instead: the card is pinned to Orange 1, and src/basics/decide.cpp:889-908
   // routes an empathy-pinned playable orange through PerformDiscard.
   expect_poss(g, TestPlayer::BOB, TestPlayer::BOB, 2, {"o1"});
 }
