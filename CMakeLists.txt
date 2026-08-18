@@ -44,6 +44,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor0/call_invariants.cpp
   src/conventions/reactor0/efficiency.cpp
   src/conventions/reactor0/interpret_clue.cpp
+  src/conventions/reactor0/decision.cpp
   src/conventions/reactor0/interpret_reaction.cpp
   src/conventions/reactor0/interpret_reactive.cpp
   src/conventions/reactor0/state_eval.cpp
@@ -257,6 +258,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor/test_decision_making/test_high_value_clue.cpp
   tests/test_reactor/test_decision_making/test_replay_1916933_clue_forces_discard_of_queued_playable.cpp
   tests/test_reactor0/test_decision_making/test_clue_tier.cpp
+  tests/test_reactor0/test_decision_making/test_clue_shape.cpp
   tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp
   tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp
