@@ -41,16 +41,17 @@ giver, Bob the next player, Cathy the one after.
   scores 3+ strikes at `−100`, and `eval_game` prices an orange CTD as a play
   call (reactor's §2.6/§2.7).
 - **Not shared**: everything about *which clue to give*. Reactor0 owns
-  `eval_action`'s clue branch, its own `get_result` (§2c) and a candidate
-  filter run before the argmax (§2b), all in
-  `src/conventions/reactor0/state_eval.cpp`. `src/basics/decide.cpp:628-634`
-  dispatches on `Game::convention`; `:877-878` runs the filter.
+  `eval_action`'s clue branch, its own `get_result` and a candidate filter run
+  before the argmax, all in `src/conventions/reactor0/state_eval.cpp`.
+  `src/basics/decide.cpp:632-636` dispatches on `Game::convention`; `:886-887`
+  runs the filter. **All three are scheduled for removal in v7.0.0** — see
+  [DECISION_MAKING.md](DECISION_MAKING.md) and [PLAN.md](../../../PLAN.md).
 - **Absent by design** (present in reactor): the reactive focus, referential
   play for colour clues, response inversion and rewinds, the loadedness
   dispatcher, deferral-carries-reactive, re-tasking. Reactor0's dispatcher is
   the whole of §1a.
 - The dispatch fork lives at the single engine seam:
-  `src/basics/decide.cpp:55-64` (clues), `:282-289` (discards), `:343-350`
+  `src/basics/decide.cpp:57-65` (clues), `:281-288` (discards), `:342-349`
   (plays). Each fork also runs `enforce_call_invariants` (§1h) for reactor0
   games only.
 - **`/allplays` is reactor-only.** It promotes reactor's colour reactives to
@@ -591,230 +592,31 @@ This is **convention-agnostic** and applies to reactor too. Its consequence
 here: no interpretation layer is ever handed a card with an empty `inferred`,
 so target selection and target narrowing cannot disagree about their baseline.
 
-## §2 Decision making
+## §2 Decision making — moved
 
-Reactor's §2 applies **except for `eval_action`'s clue branch** — reactor0
-emits the same `ClueInterp`/`CardStatus` vocabulary, so `get_result`, the
-`take_action` ladder, `chop()`/`has_ptd()`, `advance`, `eval_game` and the
-endgame solver score it identically. What differs is §2a below: which clues
-reactor0 is willing to give at a low clue count. Reactor0-specific notes:
+Reactor0's decision making now lives in its own ruling document:
+**[DECISION_MAKING.md](DECISION_MAKING.md)**.
 
-- the `+10` two-play bonus in `get_result` fires only for rank double plays
-  (colour reactives are 1-play) — correct by construction;
-- the urgent Bob-protection override is inert under reactor0 (its guard
-  requires the receiver ≠ the giver's next player; reactor0's receiver as
-  seen from us-as-reacter *is* our next player);
-- double-discard and lock clues still have no dedicated `get_result` term —
-  they score as ordinary 0-play clues. What reactor0 does instead is refuse
-  to *offer* a double discard that buys nothing (§2b); reactive locks and
-  blind-play clues are untouched, and the remaining tuning is in TODO.md.
-  A lock scoring as a plain 0-play clue is what lets it outrank an explicit
-  called discard, whose own tier is only `0.0` — replay 1961419 T11, TODO
-  entry 22;
-- reactor's §2.3 chuck-safety filter passes a `CALLED_TO_DISCARD` card
-  unconditionally, and under reactor0 that exemption is *sound* rather than
-  merely conventional: the dc-target walk refuses to name an inverted card at
-  all (`interpret_reactive.cpp:136`, `:171` — "not a naming preference but an
-  illegal target", `:110-112`), and §1b's colour chuck is rejected outright when
-  the giver can see the chuck target is unplayable
-  (`interpret_clue.cpp:316-320`). So a standing CTD under reactor0 was vetted by
-  a player who could see the card.
+This file remains the ruling reference for what a clue **means** under reactor0
+(§0-§1i above). How the bot chooses what to do on its turn — the clue tiers, the
+General Clue Evaluation List, and the actionable-card priority — is specified
+there, because it is being replaced wholesale: the tuned-constant layer in
+`state_eval.cpp` gives way to an ordered rules procedure over v7.0.0 and v7.1.0.
+See [PLAN.md](../../../PLAN.md) for the staged scope.
 
-## §2a The pace-clue tier gate
+What used to be documented here, and where it went:
 
-`src/conventions/reactor0/state_eval.cpp`. **Reactor's low-clue-count gate
-(reactor's §2.5) does not run under reactor0** — this replaces it wholesale.
-Everything else in reactor's §2 still applies, and non-clue actions delegate
-straight back to `reactor::eval_action` (`:420-423`).
+| Was | Now |
+|---|---|
+| §2 (what reactor0 shares with reactor's §2) | DECISION_MAKING.md — *Framework* and *Precedence* |
+| §2a The pace-clue tier gate | DECISION_MAKING.md — *Clue Tier Definitions* and *Decision phase 1* |
+| §2b The pointless-double-discard filter | Deleted in v7.0.0 — the General Clue Evaluation List's priority 2 admissibility condition subsumes it |
+| §2c Clue scoring — reactor0's own `get_result` | Deleted in v7.0.0 — replaced by the ordered priority list |
 
-Naming: the worth of *giving* a clue is its **tier**, never its "value" —
-"clue value" already means the reactive anchor (GLOSSARY: *anchor (value)*,
-*colour value*).
-
-**The window and the required tier are one decision** (`:487-505`), because
-the two requirements carry **different token ranges** (`requires_high_tier`,
-`:391-403`):
-
-| Alice's hand | Window | Required |
-|---|---|---|
-| holds ≥1 card stamped `CALLED_TO_PLAY`; **or**, in a variant containing an inverted suit (`variants::includes_inverted`), ≥1 stamped `CALLED_TO_DISCARD` | `pace() >= 3 && clue_tokens < 8` | **HIGH** |
-| otherwise | `pace() >= 3 && clue_tokens <= 3` | **HIGH or MEDIUM** |
-
-Both keep reactor's two deliberate differences: the MEDIUM row is one token
-wider than reactor's gate (`<= 3`, not `< 3`), and neither row has a **"we hold
-a real play" conjunct** — the gate fires on the *stamp*, not on what Alice
-happens to know.
-
-**Why the HIGH row runs so much wider.** Holding a call Alice can fall back on
-is exactly the position in which the team can afford to wait for a clue worth
-the token: there is something to do this turn either way. Capping that
-requirement at 3 tokens meant the bot spent tokens on LOW clues all the way down
-from 7 while a queued play sat in its own hand.
-
-**The `< 8` bound is the forced-clue exemption.** At 8 tokens discarding is
-illegal, so the bot must clue. Gating there would score every non-HIGH clue at
-the same flat `-1.0` and leave the argmax to break the tie arbitrarily, losing
-the normal ranking precisely when there is no alternative to cluing.
-
-The stamp is read **literally** off `game.meta[o].status`. An empathy-known
-playable carrying no stamp does *not* raise the bar — the rule is about
-outstanding *calls* Alice can fall back on, not about what she happens to
-know. (Reactor's gate keys on `obvious_playables` instead; this is the
-deliberate divergence.) A clue below its required tier scores a flat `-1.0`,
-reactor's rejection convention: below any play, above `-100`.
-
-**The tiers** (`clue_tier`, `:405-447`). HIGH iff **any** of:
-
-1. **H1 — Bob's chop is endangered.** Bob is not locked, has no safe action
-   (no obvious play, no known trash, no CTD — all three are covered by
-   `thinks_trash`, `player_game.cpp:115-132`), and his chop is *endangered*
-   (below). `:417-421`.
-2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed
-   suit, via `variants::is_first_or_second_rank`). `:423`.
-3. **H3** — the clue gets **two new plays**, at least one at the clue-regain
-   rank (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:425`.
-
-NOT-LOW iff any of H1–H3, or:
-
-6. **N5 — Bob's chop is playable** and is not duplicated in his own hand
-   (`has_playable_chop`, `:151-161`; applied at `:428-432`). Like H1 this is a
-   property of the **position, not of the candidate clue**, so it lifts every
-   clue that turn to at least MEDIUM. Deliberately weaker than
-   `at_risk_chop`: it asks only "playable, and Bob cannot just pitch a spare
-   copy", and does *not* care whether a copy sits in Cathy's hand or is
-   provable in Alice's — the point is not that the card is in danger but that
-   it is a play the team should be collecting, and Cathy is already expecting
-   Alice to save it or get it played.
-
-…or, when **Cathy's** chop is endangered (`:434-445`):
-
-4. **N3** — the clue gets two new plays. `:436-437`.
-5. **N2** — the clue is **reactive** and Bob has no colour stable play clue he
-   could give Cathy. Reactive is a single integer compare, `action.target !=
-   bob`, since dispatch is positional (§1a). `:438-444`.
-
-MEDIUM is NOT-LOW and not HIGH; LOW is everything else. "New plays" are counted
-as CTP-status transitions between the real game and the clue's hypo
-(`new_play_facts`, `:170-187`) — the same walk reactor's `is_high_value_clue`
-uses.
-
-**Endangered chop** (`at_risk_chop`, `:121-145`), judged from Alice's full
-visibility. All four must hold: the identity is known to Alice and not basic
-trash; there is **no second copy in the holder's own hand**; no copy sits in
-the third player's hand; and Alice cannot prove she holds a copy herself. The
-first of those is stricter than reactor's `chop_is_nontrash`
-(`reactor/state_eval.cpp:44-49`), which tests only `is_basic_trash` — a chop
-the holder can safely pitch because they hold the other copy is not in danger.
-
-**"Alice provably holds a copy"** (`alice_provably_holds`, `:60-101`) extends
-reactor's singleton test (`reactor/state_eval.cpp:96-101`) to **group
-("sudoku") elim**. For any subset S of Alice's hand, let `u` be the union of
-what those |S| cards could be; if fewer than |S| copies of `u \ {id}` are still
-unaccounted for, then at least one of them must be `id`. |S| = 1 reduces to
-exactly the singleton rule. Inference sets come from `common` (the view
-reactor reads, and the one the engine and test harness both maintain);
-availability counts come from `me()`, which can see the other hands. It errs
-safe in both directions — a false "Alice holds it" would kill a save clue, so
-the bound deliberately over-counts. A 3-player hand is 5 cards, so all 31
-non-empty subsets are enumerated directly; `cross_elim`
-(`src/basics/player_elim.cpp:165-226`) solves the dual problem (it strips
-locked ids from cards *outside* the group) and cannot answer this.
-
-**Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:194-212`)
-is a structural check, not a simulation: for each colour clue Bob could give
-Cathy it replays `stable_colour`'s target choice (§1b step 2,
-`interpret_clue.cpp:318`) plus its three guards (`:331-336`), then asks whether
-the named card actually plays. Two known approximations, both deliberate: it
-skips the FIX branch above the direct-play read (`interpret_clue.cpp:126-129`),
-and it does not model a play reveal (`:132`). It is evaluated **last** in
-`clue_tier`, behind the O(1) reactive test, because it is the only costly term.
-
-**Known gap.** `advance` / `force_clue` score hypothetical *partner* clues via
-`get_result`, never `eval_action`, so the lookahead does not apply this gate —
-the bot models partners as clueing freely at low tokens while throttling
-itself. This is pre-existing for reactor and more pronounced here; tracked in
-TODO.md.
-
-## §2b The pointless-double-discard filter
-
-`src/conventions/reactor0/state_eval.cpp:495-596`, invoked once per turn from
-`Game::take_action` (`src/basics/decide.cpp:867-878`) immediately after the
-candidate clues are built and **before** the argmax.
-
-A rank Phase C reactive (§1d, `interpret_reactive.cpp:422-457`) says only
-"you two both discard". That is worth a token when the receiver would
-otherwise lose something — and worth nothing when they were going to act
-safely anyway. Reactor0 therefore **drops** such a clue from its own candidate
-set, but only when a stable clue to Bob would get a card *played* instead.
-
-A candidate is dropped when **all** of (`is_pointless_double_discard`, `:486`):
-
-1. we are the giver, and the clue is **reactive** — under positional dispatch
-   that is just `target != Bob` (§1a);
-2. the clue is a **rank** clue — colour reactives always call a play, mode 1
-   the receiver's and mode 2 the reacter's blind play, so they can never be
-   0-play;
-3. the variant contains **no inverted suit**. On an inverted suit a *play*
-   call is stamped `CALLED_TO_DISCARD` (`interpret_reactive.cpp:271-278`), so
-   the CTP-transition count below would read a genuine two-play Phase A as
-   zero plays. Rather than mis-fire, the rule sits those variants out;
-4. the interpretation is `REACTIVE` and it produces **zero** new
-   `CALLED_TO_PLAY` stamps (`new_play_facts`, `:170-187`) — the discriminator,
-   since Phase C returns the same `ClueInterp` as a two-play reactive;
-5. it is **not a reactive lock** (`predicts_reactive_lock`,
-   `interpret_reaction.cpp:31-49`). A lock protects a whole hand, so it keeps
-   competing on its own merits;
-6. the **receiver is safe** (`receiver_is_safe`, `:467`): their chop is
-   expendable (`!at_risk_chop` — trash, same-hand dupe, covered elsewhere, or
-   locked) **or** they already hold a safe action — known trash or a standing
-   CTD/PTD (`thinks_trash` folds all three together), a known play, or a
-   `CALLED_TO_PLAY` call.
-
-…and the set also contains a clue to Bob that is **stable, produces a play,
-and is worth giving** (`is_stable_play_clue_for_bob`, `:514`): interpretation
-`PLAY` or `REVEAL` *and* a non-empty `playables_result`. The interp test is
-what excludes a referential discard, a LOCK or a FIX that merely frees a
-playable through elimination; the `playables_result` test is what catches the
-**play reveal**, which stamps nothing at all. The alternative must also score
-`eval_action > 0` — demoting a double discard on the strength of a clue the
-argmax would never pick could leave the bot chucking its own chop instead.
-
-The filter **erases** rather than re-scores: there is no "rank just below X"
-primitive, and erasing is the honest encoding of "reactor0 does not offer this
-clue this turn". It can never empty `all_clues`, because the qualifying Bob
-clue is itself in the set.
-
-**Boundaries.** It does not run in the endgame — `take_action` returns from
-the forced-endgame and solver paths before `all_clues` exists — and
-`find_all_clues` (the solver's own enumerator) is not filtered, so a `/clues`
-listing still shows the double discard. Known one-sidedness: the rule judges
-only the *receiver's* half, so it will drop a double discard whose real value
-was the reacter's half.
-
-Motivated by replay 1942181 T41, where Cathy's chop was already basic trash
-and the alternative played a Berry 5 off a stack of 4.
-
-## §2c Clue scoring — reactor0's own `get_result`
-
-`src/conventions/reactor0/state_eval.cpp:225-358`, ported from
-`reactor::get_result` and kept deliberately line-for-line comparable with it.
-`clue_branch_value` (`:360`) wraps it exactly as reactor's does;
-`advance`, `eval_state` and `eval_game` are still reactor's.
-
-The one intentional divergence is **bad touch is not charged a flat penalty**
-(`kBadTouchPenalty = 0.0`, `:216`; reactor uses `0.1`). Reactor charges a clue
-twice for sweeping up a card that turns out to be trash — once by shrinking
-the `good_touch` bonus, which indexes on `new_touched − bad_touch`, and again
-through `−0.1 × bad_touch`. Under reactor0 that left a clue which *gets a card
-played* scoring below clues that achieve nothing. At 1942181 T41 the four
-live candidates sat within 0.14 of each other and the only playing clue came
-**last**, purely because it also touched two dead cards.
-
-`good_touch` still discounts bad touch (`kGoodTouchDiscountsBadTouch = true`,
-`:221`), so trash never *earns* the touch bonus — it simply stops being billed
-twice. The `−100` rejection for a non-reactive clue whose every newly-touched
-card is bad touch with no playables is retained in full (`:310-321`): dropping
-the penalty must not make a clue that only buries trash look acceptable.
+Until v7.0.0 ships, the **code** still runs the tuned-constant layer
+(`src/conventions/reactor0/state_eval.cpp`), and DECISION_MAKING.md marks itself
+as specification rather than description. Reactor is unaffected throughout; its
+decision rules stay in [reactor's CONVENTION.md §2](../reactor/CONVENTION.md).
 
 ## Test coverage
 
@@ -848,8 +650,8 @@ the penalty must not make a clue that only buries trash look acceptable.
 | `tests/test_reactor0/test_efficiency.cpp` | efficiency formula + rlocks defaults |
 | `tests/test_reactor0/test_giver_filters.cpp` | MISTAKE clues never offered |
 | `tests/test_basics/test_snapshot_convention.cpp` | convention/rlocks snapshot round-trip + reactor back-compat |
-| `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | §2a tiers — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim |
-| `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | §2a's two windows (both boundaries incl. `clue_tokens == 3`, the HIGH row reaching past 3, the 8-token exemption, and the no-stamp negative that pins the split), required tier, and that reactor's own gate is unchanged |
-| `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | §2b predicates — every `receiver_is_safe` clause, and the negatives that keep the filter off stable clues, colour reactives and endangered receivers |
-| `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | §2b/§2c end to end on the replay that motivated them, plus both predicates on a real Phase C |
-| `tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp` | §2a N5 end to end — a playable non-duped chop on Bob lifts every clue, so a direct play clue beats the lock the flattened gate used to pick |
+| `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | Clue tiers (DECISION_MAKING.md) — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim |
+| `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | The two gate windows (DECISION_MAKING.md, *Decision phase 1*) (both boundaries incl. `clue_tokens == 3`, the HIGH row reaching past 3, the 8-token exemption, and the no-stamp negative that pins the split), required tier, and that reactor's own gate is unchanged |
+| `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | The pointless-double-discard predicates (removed in v7.0.0) — every `receiver_is_safe` clause, and the negatives that keep the filter off stable clues, colour reactives and endangered receivers |
+| `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | Prefers a stable play over a double discard, end to end on the replay that motivated them, plus both predicates on a real Phase C |
+| `tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp` | N5 end to end — a playable non-duped chop on Bob lifts every clue, so a direct play clue beats the lock the flattened gate used to pick |

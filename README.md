@@ -17,11 +17,13 @@ roughly 50× faster per primitive operation. See
 | File | What it is for |
 |---|---|
 | **README.md** (this file) | Overview, build, and run instructions |
-| [reactor0/CONVENTION.md](src/conventions/reactor0/CONVENTION.md) | **The ruling reference** for the default convention |
+| [reactor0/CONVENTION.md](src/conventions/reactor0/CONVENTION.md) | **The ruling reference** for what a clue means under the default convention |
+| [reactor0/DECISION_MAKING.md](src/conventions/reactor0/DECISION_MAKING.md) | **The ruling reference** for how reactor0 decides what to do on its turn |
 | [reactor0/GLOSSARY.md](src/conventions/reactor0/GLOSSARY.md) | reactor0 terms, defined, with code references |
 | [reactor/CONVENTION.md](src/conventions/reactor/CONVENTION.md) | **The ruling reference** for the reactor convention |
 | [reactor/GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) | Every domain term, defined, with code references |
 | [TODO.md](TODO.md) | Convention that is legal but not yet implemented |
+| [PLAN.md](PLAN.md) | Scoping document for work in flight (currently the reactor0 decision overhaul) |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for agents: version bumps, test policy, the bug-report workflow |
 | [VERIFICATION.md](VERIFICATION.md) | Historical port-era verification notes and benchmarks |
 
@@ -127,7 +129,7 @@ receiver's hand — see [CONVENTION.md §1a.5](src/conventions/reactor/CONVENTIO
 |---|---|
 | `src/basics/` | Game state, empathy/card knowledge, elimination, the clue dispatcher (`decide.cpp`) and action selection |
 | `src/conventions/reactor/` | The reactor convention: `interpret_clue`, `interpret_reactive`, `interpret_reaction`, `state_eval`, plus its `CONVENTION.md` / `GLOSSARY.md` |
-| `src/conventions/reactor0/` | The reactor0 convention (default): interpretation, colour values, efficiency, plus its `CONVENTION.md` / `GLOSSARY.md` |
+| `src/conventions/reactor0/` | The reactor0 convention (default): interpretation, colour values, efficiency, plus its `CONVENTION.md` / `DECISION_MAKING.md` / `GLOSSARY.md` |
 | `src/conventions/variants/` | Variant-specific convention rules: rainbow/pink tables, brownish, inverted (Orange), reversed |
 | `src/endgame/` | Exact win-probability solver, forced-endgame rules, winnability helpers |
 | `src/net/` | hanab.live client: HTTPS login, WebSocket transport, protocol codec, command dispatcher, notes |
@@ -480,11 +482,13 @@ Full details, including the replay-test naming and category conventions, are in
 ## 10. Contributing
 
 - The build version lives in `include/hanabi/version.h` as `kBotVersion` and
-  **must be bumped on every deployed change**.
+  **must be bumped on every deployed change**. The bump is a **minor** increment
+  by default; a major bump is reserved for a cross-version compatibility break
+  and is only taken when explicitly asked for.
 - **Modifying or deleting any existing test requires prior approval**; adding
   tests does not. New test files must be added to the source list in
   `CMakeLists.txt` by hand — there is no globbing.
-- On every version bump, check that `CONVENTION.md`, `GLOSSARY.md`, `TODO.md`,
-  and this file still match the code.
+- On every version bump, check that `CONVENTION.md`, `DECISION_MAKING.md`,
+  `GLOSSARY.md`, `TODO.md`, and this file still match the code.
 
 `CLAUDE.md` has the full working agreement.

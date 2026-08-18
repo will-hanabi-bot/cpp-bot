@@ -6,12 +6,18 @@ The bot's build version lives in `include/hanabi/version.h` as `kBotVersion`.
 When a game starts, the bot publishes that version as a note on card order 0
 so observers can confirm which build is running.
 
-**Every deployed change must bump `kBotVersion`** (patch bump for fixes, minor
-bump for behavioural changes, **major bump for a cross-version compatibility
-break** — changing the default convention, or anything else that changes what
-existing clues mean to partners running an older build). After making the
-change, **write the new version number in the change summary** you return to
-the user.
+**Every deployed change must bump `kBotVersion`, and the bump is a MINOR
+increment by default** — `v6.5.0` → `v6.6.0`, whether the change is a bug fix, a
+behavioural change or a refactor. **Never bump the major version unless the user
+explicitly asks for it.**
+
+A major bump means a **cross-version compatibility break**: changing the default
+convention, or anything else that changes what existing clues mean to partners
+running an older build. If a change looks like one, say so and *ask* — do not
+take the major bump on your own initiative.
+
+After making the change, **write the new version number in the change summary**
+you return to the user.
 
 **Every version bump must be committed and pushed to `origin/master`** with a
 commit message summarising the changes. Use a HEREDOC for multi-line messages.
@@ -20,24 +26,30 @@ before pushing if there's any ambiguity about whether the change is ready to
 deploy.
 
 **On every version bump, check that the repo's `.md` docs are still accurate**
-(each convention's `CONVENTION.md` / `GLOSSARY.md` under
-`src/conventions/<name>/`, plus `README.md`, `TODO.md`, `VERIFICATION.md`, this
-file, and any other `.md` describing implementation status). Docs or code
+(each convention's `CONVENTION.md` / `GLOSSARY.md` / `DECISION_MAKING.md`
+under `src/conventions/<name>/`, plus `PLAN.md`, `README.md`, `TODO.md`,
+`VERIFICATION.md`, this file, and any other `.md` describing implementation
+status). Docs or code
 comments that claim work is "pending", "stubbed", or "Phase N" must be updated or
 marked historical once the work has shipped. VERIFICATION.md previously went
 stale this way — treat any status-bearing `.md` as part of the change surface.
 
 `TODO.md` lists convention that is legal but not implemented. When a change
 closes one of its entries, delete the entry and update the `CONVENTION.md` /
-`GLOSSARY.md` wording that pointed at it in the same commit.
+`GLOSSARY.md` / `DECISION_MAKING.md` wording that pointed at it in the same
+commit.
 
 ## Convention documentation
 
-Each convention owns its docs: `src/conventions/<name>/CONVENTION.md` is the
-**ruling reference** for what a clue means and how the bot decides under that
-convention, and `src/conventions/<name>/GLOSSARY.md` defines its terminology.
-Both are written for a reader with no prior context, and both cite `file:line`
-for every rule so that a claim can be checked against the code. Which
+Each convention owns its docs. `src/conventions/<name>/CONVENTION.md` is the
+**ruling reference** for what a clue means under that convention, and
+`src/conventions/<name>/GLOSSARY.md` defines its terminology. Where a convention
+has a `src/conventions/<name>/DECISION_MAKING.md`, **that file — not
+`CONVENTION.md` — is the ruling reference for how the bot decides** what to do on
+its turn; reactor0 has one, reactor does not (its decision rules live in
+`CONVENTION.md` §2). All are written for a reader with no prior context, and all
+cite `file:line` for every rule so that a claim can be checked against the
+code. Which
 convention a game runs is `Game::convention`; replay tests replay under the
 convention recorded in their snapshot.
 
@@ -51,17 +63,20 @@ the eval layer) updates all conventions' docs. Specifically:
   rule in that convention's **§1 Convention**, including its `file:line`
   citation and the replay that motivated it.
 - Changing `eval_action` / `get_result` / `advance` / `eval_state` /
-  `eval_game` terms, the `take_action` ladder, gates, thresholds, or the
-  endgame solver's parameters → update **§2 Decision Making** (shared by all
-  conventions; each convention's doc states its deltas).
+  `eval_game` terms, the `take_action` ladder, gates, thresholds, the decision
+  priority lists, or the endgame solver's parameters → update the decision
+  documentation of every convention whose behaviour changed: reactor's
+  **§2 Decision Making** in its `CONVENTION.md`, and reactor0's
+  `DECISION_MAKING.md`. A change to shared code updates both.
 - Introducing a new term, status, flag, or role → add it to the owning
   convention's `GLOSSARY.md`.
 - Line numbers shift constantly. When editing a documented file, re-check the
   citations for the rules in it, not just the rule you changed.
 
-A `CONVENTION.md` that disagrees with the code is a bug in one of them. It is
-the document a human or a fresh agent is expected to read *instead of* reading
-thousands of lines of `src/conventions/`, so silent drift is expensive. If a
+A `CONVENTION.md` or `DECISION_MAKING.md` that disagrees with the code is a bug
+in one of them. They are the documents a human or a fresh agent is expected to
+read *instead of* reading thousands of lines of `src/conventions/`, so silent
+drift is expensive. If a
 change makes a documented rule obsolete, delete the rule — do not leave it
 alongside its replacement.
 

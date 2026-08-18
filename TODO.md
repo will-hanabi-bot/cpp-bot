@@ -9,7 +9,8 @@ Each entry is tagged with the convention(s) it applies to. Anything here is a
 known gap, not a disagreement about what the convention says.
 
 Delete an entry when it ships, and update the owning convention's
-`CONVENTION.md` / `GLOSSARY.md` wording in the same commit.
+`CONVENTION.md` / `DECISION_MAKING.md` / `GLOSSARY.md` wording in the same
+commit.
 
 ---
 
@@ -83,10 +84,17 @@ not the seat after the reacter.
 `advance` / `force_clue` score hypothetical **partner** clues through
 `get_result`, never `eval_action` (`src/basics/eval.cpp:11-52`,
 `src/conventions/reactor/state_eval.cpp:295-308`). So neither reactor's
-low-clue-count gate nor reactor0's pace-clue tier gate applies inside the
+low-clue-count gate nor reactor0's decision procedure applies inside the
 lookahead: the bot models its partners as clueing freely at a low clue count
 while throttling itself. Pre-existing for reactor; more pronounced under
 reactor0, whose window is a token wider and has no "we hold a play" conjunct.
+
+**v7.0.0 widens this gap rather than closing it.** The asymmetry used to be one
+gate; once reactor0 chooses its own clue by an ordered rules procedure while its
+partners are still modelled by a `get_result`-shaped score, the self/partner
+divergence is the *entire decision rule*. Any future work here should target
+reactor0 first, since it is now the convention whose model of its partners is
+least like itself.
 
 Closing it means threading the hypothetical giver's Alice/Bob/Cathy assignment
 down through `advance`, which has real regression surface for reactor — worth
@@ -94,26 +102,25 @@ live-game evidence first.
 
 ---
 
-## 4. `[reactor0]` Eval tuning for double-discard and lock clue shapes
+## 4. `[reactor0]` `new_play_facts` undercounts plays on an inverted suit
 
-Reactor0 now owns `eval_action`'s clue branch and its own `get_result` (see
-reactor0 CONVENTION.md §2a-§2c), but the shape-specific terms are still
-missing:
+`new_play_facts` (`src/conventions/reactor0/state_eval.cpp:170-187`) counts
+`CALLED_TO_PLAY` transitions only. On an inverted suit a *play* call is stamped
+`CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:282-284`), so a genuine
+two-play reactive reads as zero plays there.
 
-- **Double discards** still score as ordinary 0-play clues. §2b refuses to
-  *offer* one that buys nothing, which is a candidate filter rather than an
-  eval term — a double discard competing against a play, a discard or another
-  reactive is still scored as though it were any other 0-play clue.
-- **Reactive locks** have no dedicated `get_result` term, and are deliberately
-  exempt from §2b. `eval_game`'s `lock_penalty` never fires for the clue that
-  causes a lock, because the `CHOP_MOVED` stamps land a turn later.
-- **Blind-play clues** (colour mode 2) still rely on the urgent CTP being
-  visible to `hypo_plays`.
+This matters more, not less, after the v7.0.0 overhaul: `new_play_facts` is
+**kept** machinery, and the clue-tier conditions built on it — H3 ("two new
+plays, one at the clue-regain rank") and N3 ("two new plays") — inherit the blind
+spot and have never been audited in an inverted variant. The old §2b filter sat
+those variants out for exactly this reason; the new General Clue Evaluation List
+has no such exemption, and its priorities 1 and 2 are defined in terms of plays.
 
-Also latent: `new_play_facts` counts `CALLED_TO_PLAY` transitions only, so on
-an inverted suit — where a play call is stamped `CALLED_TO_DISCARD` — it
-undercounts. §2b sits out inverted variants for exactly this reason; `§2a`'s
-tier conditions H3/N3 have the same blind spot and have not been audited.
+*This entry is what survives of the old "eval tuning for double-discard and lock
+clue shapes" entry. The rest of it — missing `get_result` terms for double
+discards, reactive locks and blind-play clues — was made moot by v7.0.0, which
+deletes `get_result` outright in favour of the ordered priority list in
+[reactor0's DECISION_MAKING.md](src/conventions/reactor0/DECISION_MAKING.md).*
 
 ---
 
@@ -245,21 +252,16 @@ that loop offers `PerformDiscard` only for cards whose id is **unknown**
 really would press Discard — modelling that is correct, not a bug. The entry
 was a false lead.
 
-## 11. `[reactor0]` No orange tiering in reactor0's `get_result`
+## 11. *(closed by the v7.0.0 plan — reactor0 orange tiering)*
 
-Reactor's clue scoring bumps a discard that advances a stack to `1.0`
-(`src/conventions/reactor/state_eval.cpp:545-575`, via
-`variants::discard_advances_stack`). Reactor0's own `get_result`
-(`src/conventions/reactor0/state_eval.cpp`, §2c) has no equivalent, so in the
-heuristic path reactor0 under-values a chuck relative to reactor. The §1b
-orange ladder and the §1c orange-only rank chuck make this more visible, since
-reactor0 now issues clues whose whole point is to produce a chuck.
+Was: "no orange tiering in reactor0's `get_result`" — reactor0 under-valued a
+stack-advancing chuck because its `get_result` had no equivalent of reactor's
+`1.0` bump.
 
-v5.0.0 fixed the *lookahead* half of this — `advance` now simulates a playable
-orange with the Discard button and `eval_game` prices an orange CTD as a play
-call — but `get_result` itself still counts no play for a chuck, because
-`playables_result` reads `hypo_plays` and `new_play_facts` counts
-`CALLED_TO_PLAY` transitions only.
+`get_result` is deleted by v7.0.0. The requirement is carried forward as an
+**acceptance criterion** of the new framework rather than as a missing term: *a
+chuck that advances an inverted stack must outrank a generic discard by rule.*
+See [PLAN.md](PLAN.md) §11.
 
 ## 12. `[engine]` An unpinned playable orange is still pitched
 
@@ -312,6 +314,13 @@ What actually stops the bad clue today is the *interpretation* layer's §1g
 rejects, one per site. A single strike-predicting veto over the candidate pool
 would be the general answer.
 
+**v7.0.0 makes this newly tractable for reactor0.** An ordered priority list is
+the first structure in the codebase where a candidate can be *rejected* rather
+than merely priced — the pool is walked, not summed — so the veto has somewhere
+natural to live. Note the second bullet above stays true either way: the §2b
+early-return in inverted variants was kept machinery, not part of the deleted
+scorer.
+
 ## 15. `[engine]` `advance` models every voluntary discard as a chuck
 
 `advance`'s discard paths hand every order to
@@ -358,14 +367,20 @@ corpus is the gate. Fix entry 13 first — the two share the same call sites.
 
 ## 17. `[engine]` `hanabi_decision_tests` segfaults intermittently
 
-`build/hanabi_decision_tests.exe` crashes with SIGSEGV roughly **1 run in 5**,
+`build/hanabi_decision_tests.exe` crashes with SIGSEGV roughly **1 run in 3-5**,
 always at the same point — the last line written is
-`[ RUN ] Reactor0PaceClueGate.SilentBelowPaceThree`. The remaining runs exit 1
-with the five known `HighValueClueGate` failures and no crash.
+`[ RUN ] Reactor0PaceClueGate.SilentBelowPaceThree`. Every run that does not
+crash passes 47/47 (the five `HighValueClueGate` failures this entry used to
+mention were fixture bugs, fixed in v6.5.0/v6.6.0).
 
 Not a regression: reproduced at **v4.1.0** (commit 013580b, before the v5/v6
 orange work) in a clean worktree build, 1 crash in 12 runs, at the identical
-test. It survives at v6.1.0 at the same rate.
+test. It survives at v6.1.0 and v6.6.0 at the same rate.
+
+Note for the v7.0.0 overhaul: `test_pace_clue_gate.cpp` is rewritten by that
+change, so the crash's *landmark* may be renamed or removed. The underlying bug
+is state left by an earlier test in the binary, not that test — expect it to
+resurface under a new name rather than to disappear.
 
 Notes for whoever picks it up:
 - `Reactor0PaceClueGate.*` run **alone** passed 8/8 and never crashed, so it is
@@ -400,7 +415,11 @@ hardest in Dark Orange, where every card is `oneOfEach` and therefore critical.
 - **`src/conventions/reactor/state_eval.cpp`'s `eval_action` discard branch**
   folds `status == CALLED_TO_DISCARD` into `is_trash`, scoring it `0.0` and
   gating out the orange tiering that would otherwise give a stack-advancing
-  discard `1.0`.
+  discard `1.0`. This binds reactor0 too, but only until v7.1.0: reactor0
+  reaches it solely by delegating non-clue actions at
+  `reactor0/state_eval.cpp:451-452`, and phase 2 of the decision overhaul
+  replaces that delegation. Re-label this bullet **reactor-only** when v7.1.0
+  ships.
 - **`Player::order_trash`** folds CTD into "trash" outright. Today that is
   masked only by the all-critical early-out immediately above it — remove or
   weaken that early-out and a called Dark Orange chuck becomes discardable as
@@ -442,7 +461,8 @@ clue-regain correctly but then meets the `0.5` orange floor, above the `0.0` a
 known-trash discard gets — so the bot would prefer pitching a possibly-useful
 orange over discarding actual trash, which is the same inversion that produced
 the 1961419 bug. Doing this properly needs a pitch tier priced between the two,
-which also touches reactor0's `get_result` (entry 11).
+which is a reactor-side pricing change: reactor0 stops using this scorer for
+its own discards at v7.1.0.
 
 ---
 
@@ -486,7 +506,7 @@ which is a separate behavioural decision deserving its own version bump.
 
 ---
 
-## 22. `[engine]` A called discard scores the same as generic trash, so marginal clues beat it
+## 22. `[reactor]` A called discard scores the same as generic trash, so marginal clues beat it
 
 `reactor/state_eval.cpp:574-575` folds `status == CALLED_TO_DISCARD` into
 `is_trash`, scoring it exactly `0.0`, and `:590`'s `if (!is_trash)` then skips the
@@ -503,8 +523,15 @@ reads as a **LOCK**, because the clue touches will-bot69's oldest unclued card
 unclued order). That buys nothing: will-bot69's chop was a Muddy Rainbow 4 whose
 own duplicate sat clued in the same hand, so they already had a free discard.
 
-Two contributing gaps, both listed in reactor0's §2 as known: a LOCK has no
-dedicated `get_result` term and scores as an ordinary 0-play clue, and a called
-discard has no term above generic trash. This is the third bullet of entry 18,
-promoted here with a reproducing replay. Fixing it is a tuning change across both
-conventions' scoring and is gated by the 121 + 93 test corpus.
+Two contributing gaps: a LOCK has no dedicated `get_result` term and scores as
+an ordinary 0-play clue, and a called discard has no term above generic trash.
+This is the third bullet of entry 18, promoted here with a reproducing replay.
+
+**Scope, after the v7.0.0 plan.** Both halves that remain are reactor's — the
+`0.0` fold is `reactor/state_eval.cpp:574-575` / `:590`, and the LOCK reading is
+reactor's `ref_discard` (`reactor/interpret_clue.cpp:339-358`). Fixing it is a
+tuning change in reactor's scoring, gated by reactor's 121-test corpus. The
+reactor0 half is **not** a tuning problem any more: it converts into an
+acceptance criterion of the new framework — *honouring an explicit called discard
+must outrank a value-less lock clue by rule* — see
+[PLAN.md](PLAN.md) §11.

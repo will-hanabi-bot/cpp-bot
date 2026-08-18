@@ -213,7 +213,8 @@ bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
 
 }  // namespace
 
-// --- §2c Clue scoring, reactor0's own ------------------------------------
+// --- Clue scoring, reactor0's own ----------------------------------------
+// Scheduled for deletion in v7.0.0; see DECISION_MAKING.md and PLAN.md.
 //
 // Ported from `reactor::get_result` (reactor/state_eval.cpp:152-291) so the
 // two conventions can diverge. The structure is deliberately kept
@@ -509,7 +510,8 @@ double eval_action(const Game& game, const Action& action) {
   return value + hanabi::reactor::advance(game, hypo_game, 1);
 }
 
-// --- §2b The pointless-double-discard filter -----------------------------
+// --- The pointless-double-discard filter ---------------------------------
+// Scheduled for deletion in v7.0.0; see DECISION_MAKING.md and PLAN.md.
 
 bool receiver_is_safe(const Game& game, int alice, int receiver) {
   // An expendable chop — trash, same-hand dupe, covered elsewhere, or no

@@ -23,7 +23,7 @@ A chop the team cannot afford its holder to pitch, judged from Alice's full
 visibility. All four must hold: Alice knows the identity and it is not basic
 trash; there is **no second copy in the holder's own hand**; no copy is
 visible in the third player's hand; and Alice cannot prove she is holding a
-copy (see *group elim*). Input to §2a's H1 and N2/N3.
+copy (see *group elim*). Input to H1 and N2/N3 (DECISION_MAKING.md).
 `src/conventions/reactor0/state_eval.cpp:121-145`. Stricter than reactor's
 `chop_is_nontrash` (`src/conventions/reactor/state_eval.cpp:44-49`), which
 tests basic trash only.
@@ -33,7 +33,7 @@ How worthwhile it is to spend a token on a candidate clue: `LOW`, `MEDIUM` or
 `HIGH`. Consumed by the *pace-clue tier gate*. **Not** the "clue value" of
 *anchor (value)* / *colour value* — those are what a clue *means*, this is
 what giving it is *worth*. `include/hanabi/conventions/reactor0/state_eval.h`;
-definitions in CONVENTION.md §2a.
+definitions in DECISION_MAKING.md, *Clue Tier Definitions*.
 
 ### group elim (sudoku elim)
 Proving Alice holds a copy of an identity without any of her cards being a
@@ -58,7 +58,8 @@ forced-clue exemption: at 8 tokens discarding is illegal, and flattening every
 clue to `-1.0` there would just hand the choice to an arbitrary tie-break. The
 MEDIUM window is one token wider than reactor's and, unlike reactor's, fires
 even when Alice holds no play — the gate keys on the *stamp*, not on what she
-knows. `src/conventions/reactor0/state_eval.cpp:487-505`; CONVENTION.md §2a.
+knows. `src/conventions/reactor0/state_eval.cpp:487-505`; DECISION_MAKING.md,
+*Decision phase 1*.
 
 ### blind play (react slot)
 The reacter playing the computed react slot without knowing its identity.
@@ -103,7 +104,7 @@ A double discard aimed at a receiver who was going to act safely anyway:
 their chop is expendable, or they already hold a known play, a
 `CALLED_TO_PLAY`, a `CALLED_TO_DISCARD` or known trash. Reactor0 drops such a
 clue from its candidate set when a stable clue to Bob would instead get a card
-played (CONVENTION.md §2b,
+played (the pointless-double-discard filter, removed in v7.0.0;
 `src/conventions/reactor0/state_eval.cpp:516-559`). Reactive locks are
 exempt. Named from replay 1942181 T41.
 
@@ -167,7 +168,8 @@ locks the whole hand (`CHOP_MOVED` on every card) instead of calling a
 discard. Applies uniformly in both dc modes and conservatively even when
 the oldest slot is actually trash. Bound at clue time via
 `ReactorWC::rlocks`. `src/conventions/reactor0/interpret_reaction.cpp:24-49`.
-Exempt from the §2b filter — a lock protects a whole hand, so it is never a
+Exempt from the pointless-double-discard filter — a lock protects a whole hand,
+so it is never a
 *pointless double discard*. Because the `CHOP_MOVED` stamps land a turn later
 at resolution, the giver predicts the reading at clue time instead, via
 `predicts_reactive_lock` (`:31-49`).
@@ -212,7 +214,7 @@ that turn to at least MEDIUM, because the team is expecting that card to be
 saved or played. Weaker than *at-risk chop* — it ignores copies in Cathy's
 hand and in Alice's — which is the point: the card need not be in danger to be
 worth a clue. `src/conventions/reactor0/state_eval.cpp:151-161`;
-CONVENTION.md §2a. Added after replay 1942330 T33.
+DECISION_MAKING.md, *Clue Tier Definitions*. Added after replay 1942330 T33.
 
 ### touched-card rank classification
 How reactor0 decides whether a rank clue is a direct play clue (§1c priority
