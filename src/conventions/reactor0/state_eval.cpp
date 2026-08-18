@@ -1,5 +1,7 @@
 #include "hanabi/conventions/reactor0/state_eval.h"
 
+#include "hanabi/conventions/reactor0/facts.h"
+
 #include <variant>
 #include <vector>
 
@@ -34,6 +36,10 @@ const char* tier_name(ClueTier t) {
     default: return "low";
   }
 }
+
+}  // namespace
+
+// --- Position facts (declared in facts.h) --------------------------------
 
 // True when Alice can prove she is holding a copy of `id` — either from a
 // singleton inference, or from a group ("sudoku") elim.
@@ -161,12 +167,6 @@ bool has_playable_chop(const Game& game, int player) {
 // What the candidate clue achieves, read off the CTP stamps its
 // interpretation produced. Same walk as reactor's `is_high_value_clue`
 // (reactor/state_eval.cpp:126-142).
-struct NewPlayFacts {
-  int count = 0;
-  bool critical_low = false;  // a critical 1 or 2 (5 or 4 reversed) plays
-  bool regain_rank = false;   // at least one play regains a clue token
-};
-
 NewPlayFacts new_play_facts(const Game& game, const Game& hypo) {
   const State& s = game.state;
   NewPlayFacts f;
@@ -211,7 +211,6 @@ bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
   return false;
 }
 
-}  // namespace
 
 // --- Clue scoring, reactor0's own ----------------------------------------
 // Scheduled for deletion in v7.0.0; see DECISION_MAKING.md and PLAN.md.
@@ -403,6 +402,74 @@ bool requires_high_tier(const Game& game) {
   return false;
 }
 
+// --- Cathy-chop facts, and the finesse detector (DECISION_MAKING.md H1b/H1c/H4)
+
+// `player`'s chop identity from ALICE's full visibility. Nullopt when the hand
+// is locked (no chop) or the card is Alice's own.
+std::optional<Identity> chop_id_of(const Game& game, int player) {
+  auto chop = game.chop(player);
+  if (!chop) return std::nullopt;
+  return game.state.deck[*chop].id();
+}
+
+// H1b, negated. "Cathy's chop is not playable or critical" — judged from Alice's
+// full visibility, the same viewpoint as `at_risk_chop`, so that every term in
+// `clue_tier` reads from one view. Vacuously true when Cathy has no chop.
+bool chop_is_playable_or_critical(const Game& game, int player) {
+  auto id = chop_id_of(game, player);
+  if (!id) return false;
+  const State& s = game.state;
+  return s.is_playable(*id) || s.is_critical(*id);
+}
+
+// "Cathy's chop is either a trash or a same-hand-dupe" — the expendable-chop
+// half of H1c, and the negated guard of H4.
+bool chop_is_expendable(const Game& game, int player) {
+  auto chop = game.chop(player);
+  if (!chop) return false;
+  auto id = game.state.deck[*chop].id();
+  if (!id) return false;
+  return game.state.is_basic_trash(*id) ||
+         has_same_hand_dupe(game.state, player, *chop, *id);
+}
+
+// H4's "the clue gets a finesse": the interpretation is reactive rank Phase B
+// (`interpret_reactive.cpp:383-447`), the blind-play phase that calls the
+// reacter onto a prerequisite for a one-away card in the receiver's hand.
+//
+// Phase B is invisible to a walk over `hypo.meta`, because it stamps ONLY the
+// reacter — the receiver's target is stamped a turn later when the reaction
+// resolves. So the detector recovers the receiver's promised order from the
+// waiting connection (`predicted_receiver_order`) and asks two questions Phase B
+// answers uniquely: the receiver's card is still unstamped (Phase A and colour
+// mode 1 stamp it via `stamp_receiver_play`), and it is exactly one away from
+// playable (`:390`).
+//
+// The WC freshness guard matters: `Game::interpret_clue` clears `waiting` only
+// when the new clue's giver was the pending reacter (`decide.cpp:51-53`), so a
+// stale connection from an earlier turn can survive into a candidate's hypo.
+bool clue_gets_finesse(const Game& game, const Game& hypo,
+                       const ClueAction& action) {
+  const State& s = game.state;
+  const int alice = s.our_player_index;
+  const int bob = s.next_player_index(alice);
+  if (action.target == bob) return false;             // stable: no finesse
+  if (action.clue.kind != ClueKind::RANK) return false;  // Phase B is rank-only
+  if (hypo.waiting.empty()) return false;
+  const ReactorWC& wc = hypo.waiting.front();
+  if (wc.turn != s.turn_count || wc.giver != alice ||
+      wc.receiver != action.target || wc.reacter != bob || wc.react_order < 0) {
+    return false;                                     // stale or aborted WC
+  }
+  auto receive_order = predicted_receiver_order(hypo);
+  if (!receive_order) return false;
+  if (hypo.meta[*receive_order].status != game.meta[*receive_order].status) {
+    return false;                                     // stamped: Phase A, not B
+  }
+  auto id = s.deck[*receive_order].id();
+  return id && s.playable_away(*id) == 1;
+}
+
 ClueTier clue_tier(const Game& game, const Game& hypo,
                    const ClueAction& action) {
   const State& s = game.state;
@@ -413,17 +480,39 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   if (bob == alice) return ClueTier::HIGH;  // solo — never gate
 
   const NewPlayFacts f = new_play_facts(game, hypo);
+  const int cathy_seat = s.next_player_index(bob);
+  const bool has_cathy = cathy_seat != alice;
 
-  // H1 / N1 — Bob has nothing safe to do and a chop worth saving.
+  // H1a — Bob has nothing safe to do and a chop worth saving. Also feeds the
+  // NOT-LOW test below, where it stands alone without H1b/H1c.
+  bool h1a = false;
   if (!game.common.thinks_locked(game, bob)) {
     const bool bob_safe = !game.common.obvious_playables(game, bob).empty() ||
                           !game.common.thinks_trash(game, bob).empty();
-    if (!bob_safe && at_risk_chop(game, alice, bob)) return ClueTier::HIGH;
+    h1a = !bob_safe && at_risk_chop(game, alice, bob);
+  }
+  // H1 — H1a AND H1b AND H1c. H1b and H1c are about CATHY: rescuing Bob's chop
+  // is only HIGH when Cathy is not herself about to lose something, and when
+  // Bob could not have handled Cathy himself. Both are vacuous at two seats.
+  if (h1a) {
+    // H1b — Cathy's chop is not playable or critical.
+    const bool h1b = !has_cathy || !chop_is_playable_or_critical(game, cathy_seat);
+    // H1c — Cathy's chop is expendable, or Bob has no colour stable play clue
+    // for her. Evaluated last: `has_colour_play_clue_for` is the costly term.
+    const bool h1c = !has_cathy || chop_is_expendable(game, cathy_seat) ||
+                     !has_colour_play_clue_for(game, bob, cathy_seat);
+    if (h1b && h1c) return ClueTier::HIGH;
   }
   // H2 — a critical low card gets played.
   if (f.critical_low) return ClueTier::HIGH;
   // H3 — two new plays, at least one regaining a clue token.
   if (f.count >= 2 && f.regain_rank) return ClueTier::HIGH;
+  // H4 — a finesse, when Cathy's chop is worth keeping. A blind play is worth
+  // the tempo only if it is not being bought at the cost of Cathy's chop.
+  if ((!has_cathy || !chop_is_expendable(game, cathy_seat)) &&
+      clue_gets_finesse(game, hypo, action)) {
+    return ClueTier::HIGH;
+  }
 
   // --- not low ----------------------------------------------------------
   // N5 — Bob has a playable chop he cannot just pitch a duplicate of. Any
@@ -432,15 +521,15 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   // 1942330 T33 ended up giving a LOCK by arbitrary tie-break.
   if (has_playable_chop(game, bob)) return ClueTier::MEDIUM;
 
-  const int cathy = s.next_player_index(bob);
-  if (cathy != alice && at_risk_chop(game, alice, cathy)) {
+  if (has_cathy && at_risk_chop(game, alice, cathy_seat)) {
     // N3 — two new plays.
     if (f.count >= 2) return ClueTier::MEDIUM;
     // N2 — a reactive clue, when Bob could not simply push Cathy's play
     // himself. Reactor0's dispatch is positional, so "reactive" is just
     // "not aimed at Bob" (interpret_clue.cpp:318-329). Evaluated last: it
     // is the only expensive term in this function.
-    if (action.target != bob && !has_colour_play_clue_for(game, bob, cathy)) {
+    if (action.target != bob &&
+        !has_colour_play_clue_for(game, bob, cathy_seat)) {
       return ClueTier::MEDIUM;
     }
   }

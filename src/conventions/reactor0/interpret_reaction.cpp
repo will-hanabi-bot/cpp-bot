@@ -28,22 +28,37 @@ bool is_lock_target(const ReactorWC& wc, int target_slot) {
          target_slot == static_cast<int>(wc.receiver_hand.size());
 }
 
-bool predicts_reactive_lock(const Game& hypo) {
-  if (hypo.waiting.empty()) return false;
+std::optional<int> predicted_target_slot(const Game& hypo) {
+  if (hypo.waiting.empty()) return std::nullopt;
   const ReactorWC& wc = hypo.waiting.front();
-  if (wc.react_order < 0) return false;
+  if (wc.react_order < 0) return std::nullopt;
   const auto& reacter_hand = hypo.state.hands[wc.reacter];
   auto it = std::find(reacter_hand.begin(), reacter_hand.end(), wc.react_order);
-  if (it == reacter_hand.end()) return false;
+  if (it == reacter_hand.end()) return std::nullopt;
   const int react_slot = static_cast<int>(it - reacter_hand.begin()) + 1;
   // `calc_slot` is its own inverse in the slot argument, so feeding it the
   // reacter's called slot recovers the receiver's target slot — the same
   // number `calc_target_slot` derives at resolution time. Hand size comes
   // from `kHandSize`, matching the reactive selection paths
   // (interpret_reactive.cpp:219, :408).
-  const int target_slot = hanabi::reactor::calc_slot(
-      wc.focus_slot, react_slot, kHandSize[hypo.state.num_players]);
-  return is_lock_target(wc, target_slot);
+  return hanabi::reactor::calc_slot(wc.focus_slot, react_slot,
+                                    kHandSize[hypo.state.num_players]);
+}
+
+std::optional<int> predicted_receiver_order(const Game& hypo) {
+  auto slot = predicted_target_slot(hypo);
+  if (!slot) return std::nullopt;
+  const ReactorWC& wc = hypo.waiting.front();
+  if (*slot < 1 || *slot > static_cast<int>(wc.receiver_hand.size())) {
+    return std::nullopt;
+  }
+  return wc.receiver_hand[*slot - 1];
+}
+
+bool predicts_reactive_lock(const Game& hypo) {
+  auto target_slot = predicted_target_slot(hypo);
+  if (!target_slot) return false;
+  return is_lock_target(hypo.waiting.front(), *target_slot);
 }
 
 void reactive_lock(Game& game, const ReactorWC& wc) {

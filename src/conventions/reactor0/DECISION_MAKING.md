@@ -1,20 +1,15 @@
 # Reactor0 decision making
 
-> **STATUS — SPECIFICATION, NOT YET IMPLEMENTED.**
+> **STATUS — phase 1 implemented in v7.0.0; phase 2 is specification only.**
 > This document is the ruling reference for **how reactor0 decides what to do on
 > its turn**. `CONVENTION.md` remains the ruling reference for what a clue
 > *means*.
 >
-> The rules below are **not yet the code**. The build still runs the tuned-constant
-> decision layer in `src/conventions/reactor0/state_eval.cpp`. See
-> [`PLAN.md`](../../../PLAN.md) for the staged replacement: **v7.0.0** implements
-> phase 1 (clue selection), **v7.1.0** implements phase 2 (action selection).
-> Sections carrying an **OPEN** marker still need a ruling before they can be
-> implemented.
->
-> Once a phase ships, delete its "not yet implemented" note and add the
-> `file:line` citations for the code that implements it, the way `CONVENTION.md`
-> does.
+> *Clue Tier Definitions* and *Decision phase 1* describe the build. *Decision
+> phase 2*, and rungs §4.5 and §4.6, are **not yet implemented** — see
+> *Not yet implemented* at the foot of this document and
+> [`PLAN.md`](../../../PLAN.md). Until phase 2 lands, reactor0 chooses what to
+> play or discard with the shared ladder in `src/basics/decide.cpp`.
 
 This spec sheet replaces the mechanism for decision making that was done with
 hardcoded heuristics imported from the previous reactor code. Often times, the
@@ -42,8 +37,9 @@ A clue tier (`clue_tier`, `state_eval.cpp:405-447`) is HIGH iff **any** of:
       action (no obvious play, no known trash, no CTD — all three are covered by
       `thinks_trash`, `player_game.cpp:115-132`), and his chop is *endangered*
       (below). `:417-421`.
-    - **H1b** — Cathy's chop is not playable or critical. If Cathy has no chop,
-      this condition is vacuously true.
+    - **H1b** — Cathy's chop is not playable or critical, **judged from Alice's
+      full visibility** (the same viewpoint as *endangered chop* below, not
+      common knowledge). If Cathy has no chop, this condition is vacuously true.
     - **H1c** — Cathy's chop is either a trash or a same-hand-dupe, *or* Bob does
       not have a colour stable clue to give to Cathy.
 2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed suit,
@@ -115,11 +111,6 @@ the FIX branch above the direct-play read (`interpret_clue.cpp:245-248`), and it
 does not model a play reveal (`:256-261`). It is evaluated **last** in `clue_tier`,
 behind the O(1) reactive test, because it is the only costly term.
 
-> **OPEN — H1b's viewpoint.** "Cathy's chop is playable or critical" is not yet
-> pinned to a viewpoint. `at_risk_chop` judges from Alice's full visibility;
-> `receiver_is_safe` judged from common knowledge. Decide which H1b uses, since
-> the two disagree whenever Alice can see a card Cathy cannot reason about.
-
 ---
 
 ## Framework
@@ -150,12 +141,13 @@ Two things outrank the phases below, and one thing sits between them:
 4.  Decision phase 2 — deciding what to play or discard.
 ```
 
-A pending reaction is urgent because the receiver is decoding against it. A
-*receiver*-side call carries no such urgency and is handled in phase 2.
+Step 2 is **reacter-only**. A pending reaction is urgent because the receiver is
+decoding against it, so it interrupts everything below it and only an H4 clue
+outranks it.
 
-> **OPEN — H4 vs a receiver-side call.** The rule above settles H4 against a
-> pending reaction where Alice is the **reacter**. Whether an H4 finesse also
-> outranks a call Alice holds as the **receiver** is not yet decided.
+A **receiver**-side call carries no such urgency. It makes Alice *occupied*, which
+is what phase 1 rule 1a keys on — so Alice may give **any HIGH-tier clue** while
+holding one, not only an H4. The call itself is actioned in phase 2.
 
 ---
 
@@ -269,10 +261,11 @@ is judged from Alice's own inference, not common knowledge.
    least one dupe of in any other player's hand (including her own). Tiebreak by
    the following:
     1. Give a stable play clue to Bob if there are `>= 2 clues**`
-    2. Give a stable discard clue to Bob that stamps CTD on a trash card or
-       same-hand-dupe
+    2. Give a stable discard clue or trash reveal clue to Bob that stamps CTD on a
+       trash card or same-hand-dupe, or a CTP to a trash card in an inverted suit
     3. Give a stable discard clue to Bob that stamps CTD on a card for which a
-       dupe exists in Cathy's hand (or Alice's hand, if known by Alice)
+       dupe exists in Cathy's hand (or Alice's hand, if known by Alice), or a CTP
+       to a card in an inverted suit whose dupe is seen by Alice.
     4. Give a lock clue to Bob if all of Bob's cards are critical and there are
        `>= 2 clues**`
     5. Compute the quantity `L = (# of 1-away-from-playable cards) + 2 * (# of
@@ -280,7 +273,10 @@ is judged from Alice's own inference, not common knowledge.
        give a lock clue to Bob.
     6. Give a reactive discard that stamps CTD on a non-critical card in Bob's
        hand, tiebreak by the largest number of **missing connectors** Alice can
-       see leading up to that card.
+       see leading up to that card, or a reactive play that stamps CTP on a
+       non-critical inverted card in Bob's hand, tiebreak by the same criteria.
+       **This rung is unconditional** — it carries no clue-count condition, and
+       the `**` relaxation does not reach it.
     7. Give a lock clue to Bob if there are `>= 2 clues**`
 
    **Missing connectors** of a card `X` = the number of identities strictly
@@ -290,20 +286,31 @@ is judged from Alice's own inference, not common knowledge.
    visible → 3; `g4` needs `g1 g2 g3`, and `g3` is in Bob's hand → 2; `r4` needs
    `r1 r2 r3`, and `r2` is in Bob's hand and `r3` in Cathy's → 1. So `b4` wins.
 
-4. **Alice is at 8 clues and is forced to clue.** Tiebreak by the following:
+4. **Alice is at 8 clues and is forced to clue or pitch.** Tiebreak by the following:
     1. Same as 3.1
     2. Same as 3.2
     3. Same as 3.3
     4. Same as 3.7
+    5. *(**NOT YET IMPLEMENTED** — v7.1.0.)* Give a fill-in clue (which is a
+       stable clue that narrows down the identity of existing unplayable clued
+       cards in Bob's hand). Prioritize cards that are duplicated in either
+       Cathy's hand or Alice's own hand, followed by cards ranked by lowest
+       number of connectors and lowest stack rank.
+    6. *(**NOT YET IMPLEMENTED** — v7.1.0.)* Give any other stall clue that
+       cannot be misinterpreted by Bob as some other type of stable clue that
+       would cause a strike or a discard of a critical card.
+    7. If at < 2 strikes, give a stable clue to Bob that will cause him to pitch a trash/duped
+       non-inverted suit or chuck a trash/duped inverted suit (explicitly allowing a strike here).
+    8. Give a reactive discard/double discard clue that stamps CTD on a non-critical card
+       in Bob's hand, tiebreak by the largest number of **missing connectors** Alice can
+       see leading up to that card, or a reactive play/reactive discard that stamps CTP on a
+       non-critical inverted card in Bob's hand, tiebreak by the same criteria.
 
-> **OPEN — §4 fallback.** At 8 clue tokens a discard is illegal, so a clue must be
-> given, but 4.1-4.4 can all be unavailable (for example when no stable clue to Bob
-> touches anything useful). Proposal: fall through to the best clue by the default
-> tiebreak, ignoring tier. Needs a ruling.
->
-> **OPEN — does the `>= N clues**` relaxation reach 3.6?** 3.6 is the only sub-item
-> of priority 3 with no explicit clue-count condition, so it is unclear whether the
-> relaxation applies to it or whether it is unconditional.
+   **§4 always returns a clue.** At 8 clue tokens a discard is illegal, so
+   something must be given. If none of 4.1-4.8 applies, give the clue that
+   maximises the default tiebreak, **ignoring tier**. This floor sits beneath the
+   whole of §4, so the branch can never fall through to the play/discard phase and
+   leave the engine to burn a blind slot-1 play.
 
 ---
 
@@ -399,6 +406,9 @@ list by priority:
     (`discard_button_is_safe`, `decide.cpp:938-958`). If Alice is in an endgame
     state where she must give a clue instead, the endgame rules at step 0 of the
     Precedence section have already returned and this step is not reached.
+13. If Alice is at 8 clues where she has no known CTPs or CTDs, she should pitch
+    her chop card instead (as reaching this point means she also did not have a
+    clue to give).
 
 ---
 
@@ -424,13 +434,21 @@ implementation is expected to reuse rather than reinvent.
 | safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:938-958` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:115-132` |
 
-## Open spec items
+## Not yet implemented
 
-Collected from the sections above, in the order they must be resolved:
+Everything above is the ruling convention. These parts of it are **not yet in the
+build**, and the sections that describe them say so inline:
 
-1. **§4 fallback** — what is given at 8 clue tokens when none of 4.1-4.4 applies.
-2. **`>= N clues**` and 3.6** — does the relaxation reach the one sub-item with no
-   explicit clue-count condition?
-3. **H1b's viewpoint** — Alice's full visibility, or common knowledge?
-4. **H4 vs a receiver-side call** — does an H4 finesse outrank a call Alice holds
-   as receiver, as it does one she holds as reacter?
+| Rule | Status | What happens instead today |
+|---|---|---|
+| §4.5 fill-in clue | v7.1.0 | falls through to 4.7 / 4.8 / the floor |
+| §4.6 safe stall clue | v7.1.0 | falls through to 4.7 / 4.8 / the floor |
+| Decision phase 2 (all of it, incl. the tracking structures) | v7.1.0 | the shared `take_action` ladder in `src/basics/decide.cpp` chooses the play or discard |
+| Phase 2 item 12 — floor, discard the chop | v7.1.0 | the shared ladder's own chop rule (`Game::chop`, `decide.cpp:432-461`) |
+| Phase 2 item 13 — at 8 clues, pitch the chop | v7.1.0 | the shared ladder plays **slot 1**, not the chop (`decide.cpp:1127-1130`) |
+
+§4.5 and §4.6 are deferred because they are the only rungs needing genuinely new
+machinery — a fill-in detector, and a simulation of Bob's reading judged safe
+against a strike or a critical discard — and they fire only at 8 clue tokens
+after 4.1-4.4 have all failed. The §4 floor guarantees the branch still returns a
+legal clue without them.

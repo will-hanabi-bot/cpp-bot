@@ -10,6 +10,8 @@
 // always return false.
 #pragma once
 
+#include <optional>
+
 #include "hanabi/basics/game.h"
 
 namespace hanabi::reactor0 {
@@ -27,6 +29,24 @@ void reactive_lock(Game& game, const ReactorWC& wc);
 // The lock reading itself: a dc-target on the receiver's OLDEST slot, with
 // rlocks bound into the WC at clue time.
 bool is_lock_target(const ReactorWC& wc, int target_slot);
+
+// The receiver's target slot, recovered at CLUE TIME from the reacter's
+// called slot. `calc_slot` is its own inverse in the slot argument, so
+// feeding it the reacter's slot yields the same number `calc_target_slot`
+// derives at resolution time — prediction and resolution therefore cannot
+// drift apart.
+//
+// This is what lets the decision layer see the half of a reactive that is
+// not stamped yet: rank Phase B (finesse) and Phase C (double discard) stamp
+// only the reacter at clue time, so the receiver's promised card is
+// invisible to a walk over `hypo.meta`. Returns nullopt when there is no
+// waiting connection, no recorded `react_order`, or the reacter's card has
+// already left their hand.
+std::optional<int> predicted_target_slot(const Game& hypo);
+
+// The receiver's promised order, i.e. `predicted_target_slot` resolved
+// against `wc.receiver_hand`. Nullopt when the slot is out of range.
+std::optional<int> predicted_receiver_order(const Game& hypo);
 
 // Clue-time prediction of the above, for the giver's own decision layer
 // (CONVENTION.md §2b). The CHOP_MOVED stamps land a turn later in
