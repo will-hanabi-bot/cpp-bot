@@ -194,26 +194,250 @@ TEST(Reactor0Calls, DependenceChainsPartitionThePitchList) {
   }
 }
 
-// The chuck list is CTD-stamped cards plus everything chuckable: trash on a
-// plain suit, or playable on an inverted one.
-TEST(Reactor0Calls, ChuckListTakesCtdAndTrash) {
+// The chuck list is CTD-stamped cards plus everything chuckable, and
+// "chuckable" is judged from the HOLDER's view, never from the deck. A player
+// cannot see their own hand, so a card that happens to be trash is not
+// chuckable until they can tell.
+TEST(Reactor0Calls, ChuckListTakesCtdAndKnownTrash) {
   SetupOptions opts = base();
   opts.hands[1] = {"r1", "y3", "p5", "g5", "g2"};
   opts.play_stacks = {1, 0, 0, 0, 0};  // r1 is now basic trash
   Game g = setup(std::move(opts));
+
+  const int r1 = order_at(g, TestPlayer::BOB, 1);
+  const int ctd = order_at(g, TestPlayer::BOB, 3);
+  const int g5 = order_at(g, TestPlayer::BOB, 4);
   call(g, TestPlayer::BOB, 3, CardStatus::CALLED_TO_DISCARD, false);
 
-  ActionLists lists = hanabi::reactor0::action_lists(g, 1);
-  EXPECT_NE(std::find(lists.chuck.begin(), lists.chuck.end(),
-                      order_at(g, TestPlayer::BOB, 1)),
-            lists.chuck.end())
-      << "r1 is basic trash, so pressing Discard on it costs nothing";
-  EXPECT_NE(std::find(lists.chuck.begin(), lists.chuck.end(),
-                      order_at(g, TestPlayer::BOB, 3)),
-            lists.chuck.end())
-      << "an explicit CTD is on the chuck list whatever the card is";
-  EXPECT_EQ(std::find(lists.chuck.begin(), lists.chuck.end(),
-                      order_at(g, TestPlayer::BOB, 4)),
-            lists.chuck.end())
+  auto on_chuck_list = [](const ActionLists& l, int o) {
+    return std::find(l.chuck.begin(), l.chuck.end(), o) != l.chuck.end();
+  };
+
+  // Before Bob knows anything about it, his r1 is NOT chuckable — this is the
+  // whole point of judging from his view rather than from `state.deck`.
+  ActionLists blind = hanabi::reactor0::action_lists(g, 1);
+  EXPECT_FALSE(on_chuck_list(blind, r1))
+      << "Bob cannot see his own r1, so he cannot know it is safe to throw";
+  EXPECT_TRUE(on_chuck_list(blind, ctd))
+      << "an explicit CTD is on the chuck list whatever the holder knows";
+
+  // Once his inference pins it to red 1, it becomes chuckable.
+  g.players[1].thoughts[r1].inferred = IdentitySet::single(Identity{0, 1});
+  ActionLists knowing = hanabi::reactor0::action_lists(g, 1);
+  EXPECT_TRUE(on_chuck_list(knowing, r1))
+      << "known basic trash costs nothing to throw";
+  EXPECT_FALSE(on_chuck_list(knowing, g5))
       << "g5 is neither called nor chuckable";
+}
+
+// A pinned identity is not required — a card every one of whose possibilities
+// is basic trash is known trash, even if the holder cannot say which.
+TEST(Reactor0Calls, AllPossibilitiesTrashIsChuckable) {
+  SetupOptions opts = base();
+  opts.hands[1] = {"r1", "y3", "p5", "g5", "g2"};
+  opts.play_stacks = {1, 1, 0, 0, 0};  // r1 and y1 both played
+  Game g = setup(std::move(opts));
+
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  g.players[1].thoughts[o].inferred =
+      IdentitySet::from_iter({Identity{0, 1}, Identity{1, 1}});
+
+  ActionLists lists = hanabi::reactor0::action_lists(g, 1);
+  EXPECT_NE(std::find(lists.chuck.begin(), lists.chuck.end(), o),
+            lists.chuck.end())
+      << "r1 or y1 — either way it is trash, so it is chuckable";
+}
+
+// --- the Actionable Card Priority walk -----------------------------------
+
+// Rungs 2-8 PITCH (press Play) and 9-11 CHUCK (press Discard); 12 and 13 are a
+// floor, so the walk always answers. Rung 1 is absent by design — it is
+// `take_action`'s urgent return, which runs above the clue phase.
+namespace {
+
+// Alice's hand is real but unknown to her, which is what a hand normally is.
+// Each fixture then pins exactly the inferences the rung under test needs.
+SetupOptions alice_position() {
+  SetupOptions opts;
+  opts.hands = {
+      {"r1", "b4", "p4", "y4", "g4"},
+      {"r2", "y3", "b3", "p3", "g3"},
+      {"y2", "b2", "p2", "g2", "r4"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  return opts;
+}
+
+void alice_knows(Game& g, int slot, Identity id) {
+  g.players[0].thoughts[order_at(g, TestPlayer::ALICE, slot)].inferred =
+      IdentitySet::single(id);
+}
+
+int played(const std::optional<PerformAction>& a) {
+  auto* p = a ? std::get_if<PerformPlay>(&*a) : nullptr;
+  return p ? p->target : -1;
+}
+
+int discarded(const std::optional<PerformAction>& a) {
+  auto* d = a ? std::get_if<PerformDiscard>(&*a) : nullptr;
+  return d ? d->target : -1;
+}
+
+}  // namespace
+
+// Rung 2 — pitch a card that sets up a card a partner already holds. Alice's
+// slot 1 is r1 and Bob holds r2, so playing it unblocks him.
+TEST(Reactor0Action, PitchesTheCardThatSetsUpAPartner) {
+  Game g = setup(alice_position());
+  const int r1 = order_at(g, TestPlayer::ALICE, 1);
+  call(g, TestPlayer::ALICE, 1, CardStatus::CALLED_TO_PLAY, false);
+  alice_knows(g, 1, Identity{0, 1});
+
+  EXPECT_EQ(played(hanabi::reactor0::choose_action(g)), r1)
+      << "rung 2: r1 connects to Bob's r2";
+}
+
+// Rung 4 — with nothing to set up, pitch the head of a chain that has
+// dependants, because playing it is what unblocks the rest of the chain.
+TEST(Reactor0Action, PitchesTheHeadOfADependentChain) {
+  SetupOptions opts = alice_position();
+  // No partner holds a connector for either of Alice's called cards.
+  opts.hands[1] = {"y3", "b3", "p3", "g3", "y4"};
+  opts.hands[2] = {"y2", "b2", "p2", "g2", "b5"};
+  opts.hands[0] = {"r1", "r2", "p4", "y4", "g4"};
+  Game g = setup(std::move(opts));
+
+  const int r1 = order_at(g, TestPlayer::ALICE, 1);  // newer slot
+  const int r2 = order_at(g, TestPlayer::ALICE, 2);
+  call(g, TestPlayer::ALICE, 1, CardStatus::CALLED_TO_PLAY, false);
+  call(g, TestPlayer::ALICE, 2, CardStatus::CALLED_TO_PLAY, false);
+  alice_knows(g, 1, Identity{0, 1});
+  alice_knows(g, 2, Identity{0, 2});
+
+  auto lists = hanabi::reactor0::action_lists(g, 0);
+  ASSERT_EQ(lists.pitch_chains.size(), 1u) << "guard: both reds are one chain";
+  ASSERT_EQ(lists.pitch_chains[0].size(), 2u);
+
+  EXPECT_EQ(played(hanabi::reactor0::choose_action(g)), r1)
+      << "rung 4: the chain head, not r2 which sits behind it";
+  EXPECT_NE(played(hanabi::reactor0::choose_action(g)), r2);
+}
+
+// Rungs 5-7 — among critical cards, the lowest rank in play direction goes
+// first. Here Alice holds a critical 1 and a critical 2 and neither sets
+// anything up, so rung 5 must beat rung 6.
+TEST(Reactor0Action, PitchesTheCriticalOneBeforeTheCriticalTwo) {
+  SetupOptions opts = alice_position();
+  // Different SUITS on purpose. Two critical cards of the same suit would be a
+  // dependence chain, and rung 4 would take the chain head before rungs 5-7
+  // ever ran — correctly, but it would stop this fixture testing them.
+  opts.hands[0] = {"y2", "r1", "p4", "b4", "g4"};
+  opts.hands[1] = {"b3", "p3", "g3", "b4", "p5"};
+  opts.hands[2] = {"b2", "p2", "g2", "b5", "g5"};
+  // Enough copies gone that both of Alice's are the last of their kind.
+  opts.discarded = {"r1", "r1", "y2"};
+  Game g = setup(std::move(opts));
+
+  const int y2 = order_at(g, TestPlayer::ALICE, 1);
+  const int r1 = order_at(g, TestPlayer::ALICE, 2);
+  call(g, TestPlayer::ALICE, 1, CardStatus::CALLED_TO_PLAY, false);
+  call(g, TestPlayer::ALICE, 2, CardStatus::CALLED_TO_PLAY, false);
+  alice_knows(g, 1, Identity{1, 2});
+  alice_knows(g, 2, Identity{0, 1});
+  ASSERT_TRUE(g.state.is_critical(Identity{0, 1})) << "guard: r1 is critical";
+  ASSERT_TRUE(g.state.is_critical(Identity{1, 2})) << "guard: y2 is critical";
+
+  auto lists = hanabi::reactor0::action_lists(g, 0);
+  ASSERT_EQ(lists.pitch_chains.size(), 2u)
+      << "guard: different suits, so two singleton chains and no rung 4";
+
+  const int pick = played(hanabi::reactor0::choose_action(g));
+  EXPECT_EQ(pick, r1) << "rung 5 (critical 1) outranks rung 6 (critical 2)";
+  EXPECT_NE(pick, y2);
+}
+
+// Rung 12 — both lists empty, so Alice discards her chop.
+TEST(Reactor0Action, FloorDiscardsTheChop) {
+  SetupOptions opts = alice_position();
+  opts.clue_tokens = 4;  // below 8, so a discard is legal and rung 13 is off
+  Game g = setup(std::move(opts));
+  auto lists = hanabi::reactor0::action_lists(g, 0);
+  ASSERT_TRUE(lists.pitch.empty()) << "guard: nothing to pitch";
+  ASSERT_TRUE(lists.chuck.empty()) << "guard: nothing to chuck";
+
+  auto chop = g.chop(0);
+  ASSERT_TRUE(chop.has_value());
+  EXPECT_EQ(discarded(hanabi::reactor0::choose_action(g)), *chop)
+      << "rung 12: the floor is a chop discard";
+}
+
+// Rung 13 — at 8 clue tokens a discard is illegal, so the same empty-list
+// position pitches the chop instead of discarding it.
+TEST(Reactor0Action, AtEightCluesTheFloorPitchesTheChop) {
+  SetupOptions opts = alice_position();
+  opts.clue_tokens = 8;
+  Game g = setup(std::move(opts));
+
+  auto chop = g.chop(0);
+  ASSERT_TRUE(chop.has_value());
+  auto action = hanabi::reactor0::choose_action(g);
+  EXPECT_EQ(played(action), *chop)
+      << "rung 13: at 8 tokens the chop is pitched, never discarded";
+  EXPECT_EQ(discarded(action), -1);
+}
+
+// The walk always answers. `take_action` has to return a move, so a floor that
+// could decline would be a bug.
+TEST(Reactor0Action, AlwaysReturnsAnAction) {
+  for (int tokens : {0, 1, 4, 8}) {
+    SetupOptions opts = alice_position();
+    opts.clue_tokens = tokens;
+    Game g = setup(std::move(opts));
+    EXPECT_TRUE(hanabi::reactor0::choose_action(g).has_value())
+        << "no action at " << tokens << " clue tokens";
+  }
+}
+
+// A playable card on an INVERTED suit is played by CHUCKING it, never by
+// pitching it: pressing Play sends an orange to the discard pile. So empathy
+// thinking it "playable" must not put it on the pitch list.
+//
+// Regression for the one divergence phase 2's splice caused. Replay 1959065
+// holds a called Dark Orange 2 with the stack at 1. `thinks_playables` reported
+// it, the pitch list took it, and rung 8 pitched it — the right card by the
+// wrong button, throwing away a oneOfEach card that would have advanced its
+// stack.
+TEST(Reactor0Action, APlayableInvertedCardIsChuckedNotPitched) {
+  SetupOptions opts;
+  opts.variant_name = "Orange (4 Suits)";
+  opts.hands = {
+      {"o2", "b4", "r4", "g4", "b5"},
+      {"r3", "g3", "b3", "r5", "g5"},
+      {"r2", "g2", "b2", "r4", "o5"},
+  };
+  opts.play_stacks = {0, 0, 0, 1};  // the orange stack (suit 3) is at 1
+  opts.clue_tokens = 4;
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int orange = 3;
+  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted)
+      << "guard: suit 3 is the inverted one";
+  const int o2 = order_at(g, TestPlayer::ALICE, 1);
+  alice_knows(g, 1, Identity{orange, 2});
+
+  auto lists = hanabi::reactor0::action_lists(g, 0);
+  EXPECT_EQ(std::find(lists.pitch.begin(), lists.pitch.end(), o2),
+            lists.pitch.end())
+      << "a playable orange must not be pitchable — Play throws it away";
+  EXPECT_NE(std::find(lists.chuck.begin(), lists.chuck.end(), o2),
+            lists.chuck.end())
+      << "it belongs on the chuck list, where Discard advances its stack";
+
+  auto action = hanabi::reactor0::choose_action(g);
+  EXPECT_EQ(discarded(action), o2) << "chucked, which is how an orange plays";
+  EXPECT_NE(played(action), o2);
 }

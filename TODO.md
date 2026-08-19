@@ -274,6 +274,13 @@ stamps and the §1c orange-only rank stamp sidestep this by narrowing
 `inferred` to the inverted playable set, but a bare rank play reveal in an
 inverted variant does not.
 
+**Scope, after v7.1.0: reactor only.** Reactor0 no longer reaches
+`decide.cpp:889-908` — `choose_action` picks its play or discard first. Its
+phase-2 pitch list excludes any card whose `possible` contains an inverted
+identity, so the ambiguous `{o1, r1}` case is chucked or left alone rather than
+pitched (`reactor0/calls.cpp`, and the regression test
+`Reactor0Action.APlayableInvertedCardIsChuckedNotPitched`).
+
 ## 13. `[reactor]` Reactive vetting does not follow the inverted swap
 
 The defect reactor0 fixed in v4.1.0 (bug_report_4.txt 4.1) exists unfixed in
@@ -444,6 +451,10 @@ inverted and a plain suit — neither button is safe there, so there is nothing 
 re-route to. But when **every** possibility is inverted, `PerformPlay` is a pitch
 for all of them: a guaranteed clean discard that also regains the token. The
 filter drops those too, which is safe but leaves a free pitch on the table.
+
+**Also reactor0's, as of v7.1.0.** Phase 2's floor uses its own
+`chuck_button_is_safe` with the same three clauses, so the same free pitch is
+left on the table there. Fixing the shared predicate should fix both.
 
 The precedent for the tighter test already exists: `Game::find_all_discards`
 (`decide.cpp:1176-1182`) uses `poss.forall(inverted)` over a

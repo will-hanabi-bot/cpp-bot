@@ -6,7 +6,9 @@
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/state.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/variants/reversed.h"
 
 namespace hanabi::reactor0 {
 
@@ -68,12 +70,28 @@ namespace {
 // Trash on a plain suit throws away nothing; a playable card on an inverted
 // suit advances its stack, because the inverted rule sends a physical Discard
 // to the stacks.
-bool is_chuckable(const Game& game, int order) {
-  auto id = game.state.deck[order].id();
-  if (!id) return false;
-  const bool inverted = variants::is_inverted_id(game.state, *id);
-  if (inverted) return game.state.is_playable(*id);
-  return game.state.is_basic_trash(*id);
+//
+// Judged from the HOLDER's view, never from the deck. The spec says "given all
+// empathy and inferences from Alice's point of view", and reading
+// `state.deck[order].id()` would let Alice chuck a card she has no way of
+// knowing is trash — she cannot see her own hand.
+//
+// A pinned identity is not required: a card every one of whose possibilities is
+// basic trash is known trash, even if the holder cannot say which trash it is.
+bool is_chuckable(const Game& game, int player, int order) {
+  const Thought& t = game.players[player].thoughts[order];
+  const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+  if (set.is_empty()) return false;
+  const State& s = game.state;
+  bool all_trash = true;
+  bool all_inverted_playable = true;
+  for (Identity i : set) {
+    if (!s.is_basic_trash(i)) all_trash = false;
+    if (!variants::is_inverted_id(s, i) || !s.is_playable(i)) {
+      all_inverted_playable = false;
+    }
+  }
+  return all_trash || all_inverted_playable;
 }
 
 }  // namespace
@@ -92,7 +110,23 @@ ActionLists action_lists(const Game& game, int player) {
   // empathy and inferences from Alice's point of view", which is the empathy
   // notion. `obvious_playables` additionally demands the card be touched, and
   // would drop a card whose identity the holder has worked out by elimination.
+  //
+  // A possibly-INVERTED card is excluded, however playable empathy thinks it
+  // is. Pressing Play on an inverted card is a PITCH -- it reaches the discard
+  // pile -- so a playable orange is played by CHUCKING it, and `is_chuckable`
+  // puts it on the other list for exactly that reason. Without this, replay
+  // 1959065 pitches a called Dark Orange 2 (oneOfEach, so critical) rather than
+  // chucking it onto its stack: the right card, the wrong button.
+  //
+  // This filters only the empathy group. An explicit call is exempt, because a
+  // CTP stamped on an inverted card IS a deliberate pitch -- reactor0 stamps
+  // CTD when it wants an inverted card played -- so the deque keeps its members
+  // whatever their suit.
   for (int o : game.players[player].thinks_playables(game, player)) {
+    if (variants::possible_has_inverted(
+            game.state, game.players[player].thoughts[o].possible)) {
+      continue;
+    }
     if (std::find(pitchable.begin(), pitchable.end(), o) == pitchable.end()) {
       pitchable.push_back(o);
     }
@@ -129,11 +163,163 @@ ActionLists action_lists(const Game& game, int player) {
   // --- the chuck list -----------------------------------------------------
   for (int o : game.state.hands[player]) {
     const CardStatus st = game.meta[o].status;
-    if (st == CardStatus::CALLED_TO_DISCARD || is_chuckable(game, o)) {
+    if (st == CardStatus::CALLED_TO_DISCARD || is_chuckable(game, player, o)) {
       out.chuck.push_back(o);
     }
   }
   return out;
+}
+
+// =========================================================================
+// Actionable Card Priority (DECISION_MAKING.md "Decision phase 2").
+//
+// Thirteen rungs, walked in order, first match wins. Rung 1 is absent by
+// design -- see the header. Rungs 2-8 PITCH (press Play); 9-11 CHUCK (press
+// Discard); 12-13 are the floor.
+// =========================================================================
+
+namespace {
+
+// The identity Alice can pin for one of her own cards, or nullopt. Her own
+// view, not common knowledge -- the spec says "given all empathy and
+// inferences from Alice's point of view".
+std::optional<Identity> alice_knows(const Game& game, int order) {
+  return game.me().thoughts[order].id(/*infer=*/true);
+}
+
+// Does actioning this card set up a card Bob or Cathy is holding?
+bool sets_up_a_partner(const Game& game, Identity id) {
+  const State& s = game.state;
+  const int alice = s.our_player_index;
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == alice) continue;
+    if (connects_to_hand(game, id, p)) return true;
+  }
+  return false;
+}
+
+// `discard_button_is_safe`, which lives as a lambda inside `Game::take_action`
+// (src/basics/decide.cpp) and so cannot be called from here. Same three
+// clauses: an explicit discard call is always safe; a pinned identity is safe
+// because the engine routes it correctly; otherwise the card must not be able
+// to be on an inverted suit, since pressing Discard there is a play attempt.
+bool chuck_button_is_safe(const Game& game, int order) {
+  if (game.meta[order].status == CardStatus::CALLED_TO_DISCARD) return true;
+  if (game.me().thoughts[order].id(/*infer=*/true)) return true;
+  return !variants::possible_has_inverted(game.state,
+                                          game.me().thoughts[order].possible);
+}
+
+}  // namespace
+
+std::optional<PerformAction> choose_action(const Game& game) {
+  const State& s = game.state;
+  const int alice = s.our_player_index;
+  if (s.hands[alice].empty()) return std::nullopt;
+
+  const ActionLists lists = action_lists(game, alice);
+
+  // 2 -- pitch a card that sets up a card Bob or Cathy already holds.
+  for (int o : lists.pitch) {
+    auto id = alice_knows(game, o);
+    if (id && sets_up_a_partner(game, *id)) return PerformPlay{o};
+  }
+
+  // 3 -- chuck a KNOWN inverted card that does the same. Pressing Discard on
+  // an inverted card advances its stack, so this is a play in all but name.
+  for (int o : lists.chuck) {
+    auto id = alice_knows(game, o);
+    if (id && variants::is_inverted_id(s, *id) &&
+        sets_up_a_partner(game, *id)) {
+      return PerformDiscard{o};
+    }
+  }
+
+  // 4 -- pitch the head of a chain that has dependants. Playing it is what
+  // unblocks the rest of its chain, so it is worth more than a lone card.
+  for (const auto& chain : lists.pitch_chains) {
+    if (chain.size() > 1) return PerformPlay{chain.front()};
+  }
+
+  // 5, 6, 7 -- pitch a critical card, lowest first in play direction, then the
+  // clue-regain rank. `direction_rank` folds the reversed-suit case away.
+  auto pitch_critical = [&](auto&& pred) -> std::optional<PerformAction> {
+    for (int o : lists.pitch) {
+      auto id = alice_knows(game, o);
+      if (id && s.is_critical(*id) && pred(*id)) return PerformPlay{o};
+    }
+    return std::nullopt;
+  };
+  if (auto a = pitch_critical(
+          [&](Identity i) { return variants::direction_rank(s, i) == 1; })) {
+    return a;
+  }
+  if (auto a = pitch_critical(
+          [&](Identity i) { return variants::direction_rank(s, i) == 2; })) {
+    return a;
+  }
+  if (auto a = pitch_critical(
+          [&](Identity i) { return variants::is_clue_regain_rank(s, i); })) {
+    return a;
+  }
+
+  // 8 -- the leftmost card of the lowest stack rank. `lists.pitch` is already
+  // newest slot first, so a strict improvement keeps the leftmost on a tie.
+  {
+    int best = -1;
+    int best_rank = 0;
+    for (int o : lists.pitch) {
+      auto id = alice_knows(game, o);
+      if (!id) continue;
+      const int r = variants::direction_rank(s, *id);
+      if (best < 0 || r < best_rank) {
+        best = o;
+        best_rank = r;
+      }
+    }
+    if (best >= 0) return PerformPlay{best};
+    // Nothing on the pitch list has a pinned identity. Its cards are still
+    // playable by empathy, so pitching the leftmost is better than falling
+    // through to a discard.
+    if (!lists.pitch.empty()) return PerformPlay{lists.pitch.front()};
+  }
+
+  // 9 -- chuck a known inverted card. No connection to set up, but it still
+  // advances a stack.
+  for (int o : lists.chuck) {
+    auto id = alice_knows(game, o);
+    if (id && variants::is_inverted_id(s, *id)) return PerformDiscard{o};
+  }
+
+  // 10 -- chuck a card that COULD be inverted. Weaker than rung 9's "known",
+  // and the distinction is the point: it might advance a stack.
+  for (int o : lists.chuck) {
+    if (variants::possible_has_inverted(s, game.me().thoughts[o].possible)) {
+      return PerformDiscard{o};
+    }
+  }
+
+  // 11 -- chuck the leftmost card on the list.
+  if (!lists.chuck.empty()) return PerformDiscard{lists.chuck.front()};
+
+  // 12 / 13 -- the floor, both lists empty.
+  //
+  // The spec lists 13 after 12, but it is a condition on 12 rather than a rung
+  // below it: at 8 clue tokens a discard is ILLEGAL, so 12's chop discard
+  // cannot be taken and the chop is pitched instead. Reaching here at 8 tokens
+  // also means section 4 found no clue, which is the case 13 describes.
+  auto chop = game.chop(alice);
+  if (!chop) {
+    // A locked hand has no chop. Pitch the leftmost card rather than return
+    // nothing -- `take_action` must produce a move.
+    return PerformPlay{s.hands[alice].front()};
+  }
+  if (s.clue_tokens == 8) return PerformPlay{*chop};
+  if (chuck_button_is_safe(game, *chop)) return PerformDiscard{*chop};
+  // Neither button is safe for a card straddling an inverted and a plain suit
+  // (decide.cpp says so at its own orange-safety filter). Pitching is the
+  // lesser evil: it can lose the card, but it cannot strike.
+  return PerformPlay{*chop};
 }
 
 }  // namespace hanabi::reactor0

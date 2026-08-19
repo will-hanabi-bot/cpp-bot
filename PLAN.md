@@ -1,9 +1,9 @@
 # PLAN — reactor0's rules-based decision framework (v7.0.0 / v7.1.0)
 
-**Status: phase 1 (v7.0.0) is SHIPPED. Phase 2 (v7.1.0) is still a proposal.**
+**Status: phase 1 (v7.0.0) and phase 2 (v7.1.0) are both SHIPPED.**
 
-Everything below describes the v7.0.0 work as it landed, except §7, which scopes
-phase 2 and remains unbuilt. `src/conventions/reactor0/DECISION_MAKING.md` is the
+Everything below describes the work as it landed. The only parts of
+`DECISION_MAKING.md` still unbuilt are rungs §4.5 and §4.6. `src/conventions/reactor0/DECISION_MAKING.md` is the
 ruling reference; this file is the plan of record for how the change was staged.
 
 This document scopes the replacement of reactor0's tuned-constant decision layer
@@ -43,7 +43,7 @@ point at.
 | Version | Scope |
 |---|---|
 | **v7.0.0** | **Phase 1 — clue selection.** The General Clue Evaluation List replaces reactor0's clue scoring. Play/discard selection keeps today's ladder. |
-| **v7.1.0** | **Phase 2 — action selection.** The per-player call-tracking structures and the Actionable Card Priority list replace the play/discard ladder for reactor0. |
+| **v7.1.0** | **Phase 2 — action selection.** The per-player call-tracking structures and the Actionable Card Priority list replace the play/discard ladder for reactor0. **Shipped**; the structures are derived rather than stored — see §7. |
 
 Staged because the two halves together disturb ~140 reactor0 and decision tests
 at once; split, a behaviour change is attributable to one of them.

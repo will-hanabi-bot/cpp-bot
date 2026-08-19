@@ -615,10 +615,11 @@ What used to be documented here, and where it went:
 | §2b The pointless-double-discard filter | Deleted in v7.0.0 — the General Clue Evaluation List's priority 2 admissibility condition subsumes it |
 | §2c Clue scoring — reactor0's own `get_result` | Deleted in v7.0.0 — replaced by the ordered priority list |
 
-As of v7.0.0 the **code** runs the priority list, and DECISION_MAKING.md
-describes the build for everything in *Decision phase 1*; *Decision phase 2* and
-rungs §4.5/§4.6 remain specification, and that file's *Not yet implemented*
-table says so. Reactor is unaffected throughout; its decision rules stay in
+As of v7.1.0 the **code** runs both phases: the priority list chooses the clue,
+and the Actionable Card Priority list chooses the play or discard. Reactor0 no
+longer reaches the shared ladder in `src/basics/decide.cpp` at all. Only rungs
+§4.5 and §4.6 remain specification, and DECISION_MAKING.md's *Not yet
+implemented* table says so. Reactor is unaffected throughout; its decision rules stay in
 [reactor's CONVENTION.md §2](../reactor/CONVENTION.md).
 
 ## Test coverage

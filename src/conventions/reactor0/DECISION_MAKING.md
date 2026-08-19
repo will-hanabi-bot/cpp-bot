@@ -1,15 +1,14 @@
 # Reactor0 decision making
 
-> **STATUS — phase 1 shipped in v7.0.0; phase 2 is specification only.**
+> **STATUS — phase 1 shipped in v7.0.0, phase 2 in v7.1.0.**
 > This document is the ruling reference for **how reactor0 decides what to do on
 > its turn**. `CONVENTION.md` remains the ruling reference for what a clue
 > *means*.
 >
-> *Clue Tier Definitions* and *Decision phase 1* describe the build. *Decision
-> phase 2*, and rungs §4.5 and §4.6, are **not yet implemented** — see
-> *Not yet implemented* at the foot of this document and
-> [`PLAN.md`](../../../PLAN.md). Until phase 2 lands, reactor0 chooses what to
-> play or discard with the shared ladder in `src/basics/decide.cpp`.
+> This whole document describes the build, with one exception: rungs §4.5 and
+> §4.6 are still **not implemented** — see *Not yet implemented* at the foot of
+> this document and [`PLAN.md`](../../../PLAN.md). Reactor0 no longer uses the
+> shared play/discard ladder in `src/basics/decide.cpp` at all.
 
 This spec sheet replaces the mechanism for decision making that was done with
 hardcoded heuristics imported from the previous reactor code. Often times, the
@@ -334,8 +333,12 @@ is judged from Alice's own inference, not common knowledge.
 
 ## Decision phase 2 — deciding what to play or discard
 
-**Not yet implemented — v7.1.0.** The tracking structures below do not exist in
-the code today; see [`PLAN.md` §7](../../../PLAN.md) for what has to be built.
+**Shipped in v7.1.0** (`reactor0/calls.{h,cpp}`). The four tracking structures
+are **derived** from `ConvData` rather than stored: `urgent` already marks the
+reacter's call and no other, and `enforce_call_invariants` already keeps a
+hand's CTP calls in play order and its CTD calls unique. `calls_of` reads them
+back out. See that header for why deriving is exact, and `PLAN.md` §7 for what
+this replaced.
 
 * Each player will track the following for *every* player at the table: a
   **reacter-CTP** card, a **receiver-CTP** deque, a **reacter-CTD** card, and a
@@ -460,6 +463,11 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | priority 2's admissibility | `discard_is_affordable` |
 | the §3.2 / §3.4 double discard | `pool_double_discard` |
 | §3.2's Cathy-chop gate | `chop_is_expendable` |
+| the four phase-2 call structures | `calls_of` (`calls.h`) |
+| dependence | `depends_on` |
+| the pitch and chuck lists | `action_lists` |
+| Actionable Card Priority, rungs 2-13 | `choose_action` |
+| rung 1 (action a pending reaction) | `take_action`'s urgent return, above the clue phase |
 | the §3.8 / §4.8 tiebreak | `missing_connectors` |
 
 | Rule | Existing machinery | Where |
@@ -486,11 +494,9 @@ build**, and the sections that describe them say so inline:
 
 | Rule | Status | What happens instead today |
 |---|---|---|
-| §4.5 fill-in clue | v7.1.0 | falls through to 4.7 / 4.8 / the floor |
-| §4.6 safe stall clue | v7.1.0 | falls through to 4.7 / 4.8 / the floor |
-| Decision phase 2 (all of it, incl. the tracking structures) | v7.1.0 | the shared `take_action` ladder in `src/basics/decide.cpp` chooses the play or discard |
-| Phase 2 item 12 — floor, discard the chop | v7.1.0 | the shared ladder's own chop rule (`Game::chop`, `decide.cpp:432-461`) |
-| Phase 2 item 13 — at 8 clues, pitch the chop | v7.1.0 | the shared ladder plays **slot 1**, not the chop (`decide.cpp:1127-1130`) |
+| §4.5 fill-in clue | v7.2.0 | falls through to 4.7 / 4.8 / the floor |
+| §4.6 safe stall clue | v7.2.0 | falls through to 4.7 / 4.8 / the floor |
+
 
 §4.5 and §4.6 are deferred because they are the only rungs needing genuinely new
 machinery — a fill-in detector, and a simulation of Bob's reading judged safe

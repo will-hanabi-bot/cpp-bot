@@ -23,6 +23,7 @@
 #include "hanabi/conventions/reactor0/call_invariants.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
+#include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
 #include "hanabi/conventions/variants/inverted.h"
@@ -910,6 +911,11 @@ PerformAction Game::take_action() const {
     if (auto picked = hanabi::reactor0::choose_clue(*this, r0_clues)) {
       return *picked;
     }
+    // Precedence step 4 -- decision phase 2. The Actionable Card Priority list
+    // replaces the shared play/discard ladder below for reactor0, including the
+    // force-play override: rungs 12 and 13 are a floor, so it answers for any
+    // non-empty hand and the ladder is never reached.
+    if (auto act = hanabi::reactor0::choose_action(*this)) return *act;
     all_clues.clear();
   }
 

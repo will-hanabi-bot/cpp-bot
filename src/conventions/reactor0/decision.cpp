@@ -195,6 +195,27 @@ ClueReading read_clue(const Game& game, const Game& hypo,
 // point at, which the argmax this replaces could not offer.
 // =========================================================================
 
+// "Card X connects to card Y": Y is X's immediate successor on X's suit, so
+// playing X makes Y playable. Asked as "is X the connector of Y", which reuses
+// `variants::connector_of` and so follows the reversed-suit direction for free.
+bool connects_to_hand_orders(const State& s, Identity x,
+                             const std::vector<int>& hand, int exclude_order) {
+  for (int o : hand) {
+    if (o == exclude_order) continue;
+    auto y = s.deck[o].id();
+    if (!y) continue;
+    auto conn = variants::connector_of(s, *y);
+    if (conn && *conn == x) return true;
+  }
+  return false;
+}
+
+bool connects_to_hand(const Game& game, Identity x, int player,
+                      int exclude_order) {
+  return connects_to_hand_orders(game.state, x, game.state.hands[player],
+                                 exclude_order);
+}
+
 namespace {
 
 // --- small facts the rungs are written in --------------------------------
@@ -204,12 +225,11 @@ int bob_of(const Game& g) { return g.state.next_player_index(alice_of(g)); }
 int cathy_of(const Game& g) { return g.state.next_player_index(bob_of(g)); }
 bool has_cathy(const Game& g) { return cathy_of(g) != alice_of(g); }
 
-// The n'th rank in the suit's PLAY direction: 1/2 normally, 5/4 reversed.
 // `variants::is_first_or_second_rank` answers the pair; the priority chains
-// separate "critical 1" from "critical 2", so they need them apart.
+// separate "critical 1" from "critical 2", so they compare the direction rank
+// itself.
 bool is_rank_in_direction(const State& s, Identity id, int n) {
-  const bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
-  return id.rank == (reversed ? 6 - n : n);
+  return variants::direction_rank(s, id) == n;
 }
 
 bool is_critical_rank(const State& s, std::optional<Identity> id, int n) {
@@ -221,19 +241,9 @@ std::optional<Identity> id_of(const State& s, int order) {
   return s.deck[order].id();
 }
 
-// "Card X connects to card Y": Y is X's immediate successor on X's suit, so
-// playing X makes Y playable. Asked as "is X the connector of Y", which reuses
-// `variants::connector_of` and so follows the reversed-suit direction for free.
 bool connects_to_a_card_in(const State& s, Identity x, const std::vector<int>& hand,
                            int exclude_order) {
-  for (int o : hand) {
-    if (o == exclude_order) continue;
-    auto y = s.deck[o].id();
-    if (!y) continue;
-    auto conn = variants::connector_of(s, *y);
-    if (conn && *conn == x) return true;
-  }
-  return false;
+  return connects_to_hand_orders(s, x, hand, exclude_order);
 }
 
 // The same question against Alice's OWN hand, judged from her inference rather

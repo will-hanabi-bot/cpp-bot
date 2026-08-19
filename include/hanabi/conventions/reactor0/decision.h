@@ -82,6 +82,16 @@ ClueReading read_clue(const Game& game, const Game& hypo,
 
 // --- The General Clue Evaluation List ------------------------------------
 
+// Does playing `x` make some card in `player`'s hand playable? That is, is `x`
+// the immediate predecessor on its suit of a card they hold? Follows the
+// reversed-suit direction, because it asks `variants::connector_of` of the
+// candidate rather than stepping `x` forward itself.
+//
+// Priority 1 and 2's tiebreak chains ask it about Bob's card; Decision phase 2
+// rungs 2 and 3 ask it about Alice's own.
+bool connects_to_hand(const Game& game, Identity x, int player,
+                      int exclude_order = -1);
+
 // Priority 2's admissibility condition, and the rung-3.3 / 3.5 / 4.7 test: can
 // the team afford to have `order` thrown away? True when it is basic trash, a
 // same-hand-dupe, or a good card Alice can see a second copy of in some other

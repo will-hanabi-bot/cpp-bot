@@ -30,8 +30,10 @@
 // replays actions and never reads `meta`.
 #pragma once
 
+#include <optional>
 #include <vector>
 
+#include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
 
 namespace hanabi::reactor0 {
@@ -79,5 +81,25 @@ struct ActionLists {
 };
 
 ActionLists action_lists(const Game& game, int player);
+
+// --- Actionable Card Priority (DECISION_MAKING.md phase 2) ---------------
+
+// The play or discard reactor0 wants, walking the thirteen-rung Actionable Card
+// Priority list. Precedence step 4 -- it runs only after the clue phase has
+// declined.
+//
+// Rung 1, "action a pending reacter call", is NOT implemented here:
+// `Game::take_action`'s urgent return already does it, and does it ABOVE the
+// clue phase where the Precedence section puts it. By the time this is reached
+// there is no pending reaction left to action.
+//
+// Rungs 12 and 13 are a floor, so this returns a value for any hand that has a
+// card in it. Nullopt means the hand is empty.
+//
+// A PITCH is `PerformPlay` and a CHUCK is `PerformDiscard` -- the physical
+// buttons. On an inverted suit the engine's own rule turns a Discard into a
+// play and a Play into a throw-away, which is exactly what the two lists
+// already account for.
+std::optional<PerformAction> choose_action(const Game& game);
 
 }  // namespace hanabi::reactor0
