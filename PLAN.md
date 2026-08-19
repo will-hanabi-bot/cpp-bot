@@ -185,6 +185,34 @@ The implementation should invent none of these:
 
 ## 7. v7.1.0 — what phase 2 needs that does not exist yet
 
+**REVISED once phase 2 started.** This section assumed the four structures had
+to be built as a new mutable container plumbed through every stamp and clear
+site. They did not. They are **derived** instead
+(`reactor0/calls.{h,cpp}`, `calls_of`), because three properties already hold:
+
+- `ConvData::urgent` is set only on the **reacter's** call
+  (`reactor0/interpret_clue.cpp` takes it as a parameter; `stamp_receiver_play`
+  never sets it), which is exactly the reacter/receiver split the third bullet
+  below says is missing;
+- `enforce_call_invariants` rule 1 keeps a hand's CTP calls running newest slot
+  to oldest in play order, which **is** the deque, and is the spec's
+  "pop from the front until the front is strictly older" rule already applied at
+  stamp time;
+- rule 2 keeps at most one CTD per hand, which is the receiver-CTD slot.
+
+A reaction pops its own slot for free: the reacted card leaves `state.hands`, and
+the derivation walks the hand, so the orphaned `meta` entry the fourth bullet
+warns about is never seen. Deriving also makes the serialisation note at the foot
+of this section moot — there is nothing to rebuild.
+
+What was genuinely missing, and had to be built, is **dependence** and the
+pitch/chuck list construction. The `signal_turn` inconsistency in the last bullet
+turned out not to matter either: the deque's "newer/older" is card DRAW ORDER,
+and a newer card simply has a larger `order`.
+
+The original analysis follows, since the individual observations are still
+accurate about the engine:
+
 The spec's per-player structures (reacter-CTP, receiver-CTP deque, reacter-CTD,
 receiver-CTD) have **no analogue** in the tree:
 

@@ -360,6 +360,16 @@ the code today; see [`PLAN.md` §7](../../../PLAN.md) for what has to be built.
   stamped CTP, cards are popped out from the front until either there are no more
   cards or the front card is strictly older than the newly-stamped CTP card.
 
+**Insertion order is convention-specific, and it decides which end is the front.**
+In **reactor0 new cards enter the receiver-CTP deque at the FRONT**, so the deque
+runs newest slot first and its front is the most recently drawn called card —
+which is also the order `enforce_call_invariants` rule 1 maintains. Other
+rulesets insert at the **back** (reactor), and there the front is the oldest
+called card. The worked example below is written to generalise across both, and
+its `[r1, r2]` queue is a *back*-insertion one; under reactor0 that same position
+gives `[r2, r1]`. The dependence machinery is identical either way — only which
+card heads a chain differs.
+
 We introduce the concept of **dependence**, which only applies to receiver-CTP as
 it is the only structure that might contain more than one card. Card A is said to
 be dependent on Card B in the receiver-CTP deque if Card B is in front of card A
@@ -395,6 +405,10 @@ here)
 ```
 
 and the pitch list would be the front of each sublist — `[g2, r1]`.
+
+*(Back-insertion, per the note above. Under reactor0's front insertion the same
+hand gives `[ [g2], [r2, r1] ]` and a pitch list of `[g2, r2]`; the test
+`Reactor0Calls.DependenceChainsPartitionThePitchList` pins that.)*
 
 If Alice has no sufficiently good clues to give, Alice evaluates the following
 list by priority:
