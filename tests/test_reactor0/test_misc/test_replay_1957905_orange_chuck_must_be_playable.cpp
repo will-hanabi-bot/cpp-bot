@@ -1514,19 +1514,23 @@ TEST(MiscReplay1957905, OrangeChuckTargetMustBePlayable) {
   // was the action CHOSEN. It no longer is, and the change is intended.
   //
   // Reactor0 now picks by walking DECISION_MAKING.md's General Clue Evaluation
-  // List instead of by argmax over a score. Rank 1 to the third seat classifies
-  // REACTIVE_PLAY -- two cards played -- and priority 1 is "Alice has a reactive
-  // play clue available", which sits above rung 3.1's stable play clue to Bob
-  // and carries no quality condition. So the reactive wins on the ordering.
+  // List instead of by argmax over a score. Rank 1 to will-bot69 is an Orange
+  // 2 -> Orange 3 finesse: it classifies REACTIVE_PLAY, and priority 1 is "Alice
+  // has a reactive play clue available", which sits above rung 3.1's stable play
+  // clue to Bob and carries no quality condition. The finesse is permissible
+  // convention, so the list is right to take it.
   //
   // The old scorer preferred rank 2 because its default tiebreak read +1.99
   // against the reactive's -2.00. That -2.00 is bad touch alone: a reactive
-  // calls cards by POSITION, so the two cards it gets played are unrelated to
-  // the two trash cards it happens to touch. Ranking one play above two on the
-  // strength of that number is exactly the reasoning v7.0.0 deletes.
+  // calls cards by POSITION, so what it gets played is unrelated to what it
+  // touches. Ranking one play above two on the strength of that number is
+  // exactly the reasoning v7.0.0 deletes.
   //
-  // Adjudicated when the divergence surfaced; the spec was held to be right and
-  // this expectation updated.
+  // KNOWN, and deliberately not fixed here: this line eventually strikes,
+  // because the duplicate Orange 2 is chucked later in the game. That is a gap
+  // in how reactor0 handles a duplicated inverted card, not a reason to reject
+  // the finesse — see TODO.md entry 23. Adjudicated when the divergence
+  // surfaced.
   auto* rank = std::get_if<hanabi::PerformRank>(&action);
   ASSERT_NE(rank, nullptr) << "expected a rank clue";
   EXPECT_EQ(rank->value, 1);

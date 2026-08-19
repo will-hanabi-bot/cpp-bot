@@ -535,3 +535,30 @@ reactor0 half is **not** a tuning problem any more: it converts into an
 acceptance criterion of the new framework — *honouring an explicit called discard
 must outrank a value-less lock clue by rule* — see
 [PLAN.md](PLAN.md) §11.
+
+---
+
+## 23. `[reactor0]` A finesse onto a duplicated inverted card still strikes
+
+**Convention.** An Orange 2 → Orange 3 finesse is permissible, and reactor0 gives
+it: at replay 1957905 the reactive rank Phase B clue is priority 1 of the General
+Clue Evaluation List, which is correct
+([DECISION_MAKING.md](src/conventions/reactor0/DECISION_MAKING.md), priority 1).
+
+**Today.** The line eventually **strikes**, because the duplicate Orange 2 is
+chucked later in the game. Nothing in the reactive vetting notices that the
+promised inverted card has a second copy whose chuck will misplay once the first
+copy advances the stack. The clue itself is sound; the failure is downstream, in
+how a duplicated inverted card is tracked after the finesse resolves.
+
+**Why it is not fixed with the clue.** Rejecting the finesse would be the wrong
+fix — the convention permits it, and priority 1 has no quality condition by
+design. The fix belongs wherever the duplicate chuck is decided, which is the
+same machinery entry 12 (an unpinned playable orange is still pitched) and entry
+18 (other consumers read an inverted CTD as "throw this away") are about.
+
+**Touchpoints.**
+- `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp`
+  pins the clue and carries a note pointing here.
+- The inverted-suit helpers in `src/conventions/variants/inverted.cpp`, and
+  `discard_button_is_safe` (`src/basics/decide.cpp`).

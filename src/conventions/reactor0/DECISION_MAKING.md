@@ -258,9 +258,14 @@ is judged from Alice's own inference, not common knowledge.
     7. The discarded card is trash.
     8. Default tiebreak.
 
-   This admissibility condition is what makes a separate "pointless double
-   discard" filter unnecessary: a double discard whose discarded card is none of
-   trash / same-hand-dupe / visibly duped is simply never proposed.
+   A **double discard is not a reactive discard clue** and never enters here — a
+   reactive discard plays one card and discards one, by the definition above.
+   Double discards are ranked by priority 3 rungs 2 and 4, and by §4.8.
+
+   Together those placements are what make a separate "pointless double discard"
+   filter unnecessary. The filter existed to stop a zero-play double discard
+   beating a stable play clue to Bob; now it cannot, because every rung a double
+   discard can reach sits below rung 3.1.
 
 3. **Bob has a non-trash card on chop** (so in particular is not locked) **and no
    safe play or discard.** Every condition marked `>= N clues**` below means the
@@ -269,23 +274,28 @@ is judged from Alice's own inference, not common knowledge.
    least one dupe of in any other player's hand (including her own). Tiebreak by
    the following:
     1. Give a stable play clue to Bob if there are `>= 2 clues**`
-    2. Give a stable discard clue or trash reveal clue to Bob that stamps CTD on a
+    2. If Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
+       that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
+       in an inverted suit.
+    3. Give a stable discard clue or trash reveal clue to Bob that stamps CTD on a
        trash card or same-hand-dupe, or a CTP to a trash card in an inverted suit
-    3. Give a stable discard clue to Bob that stamps CTD on a card for which a
+    4. Give a double discard clue that stamps CTD on two trash cards or same-hand-dupes,
+       or CTP to a trash or same-hand-dupe in an inverted suit.
+    5. Give a stable discard clue to Bob that stamps CTD on a card for which a
        dupe exists in Cathy's hand (or Alice's hand, if known by Alice), or a CTP
        to a card in an inverted suit whose dupe is seen by Alice.
-    4. Give a lock clue to Bob if all of Bob's cards are critical and there are
+    6. Give a lock clue to Bob if all of Bob's cards are critical and there are
        `>= 2 clues**`
-    5. Compute the quantity `L = (# of 1-away-from-playable cards) + 2 * (# of
+    7. Compute the quantity `L = (# of 1-away-from-playable cards) + 2 * (# of
        trash cards)` in Bob's hand. If `L >= 3` and there are `>= 3 clues**`, then
        give a lock clue to Bob.
-    6. Give a reactive discard that stamps CTD on a non-critical card in Bob's
+    8. Give a reactive discard that stamps CTD on a non-critical card in Bob's
        hand, tiebreak by the largest number of **missing connectors** Alice can
        see leading up to that card, or a reactive play that stamps CTP on a
        non-critical inverted card in Bob's hand, tiebreak by the same criteria.
        **This rung is unconditional** — it carries no clue-count condition, and
        the `**` relaxation does not reach it.
-    7. Give a lock clue to Bob if there are `>= 2 clues**`
+    9. Give a lock clue to Bob if there are `>= 2 clues**`
 
    **Missing connectors** of a card `X` = the number of identities strictly
    between the top of `X`'s stack and `X` that are **not** visible to Alice in any
@@ -296,9 +306,9 @@ is judged from Alice's own inference, not common knowledge.
 
 4. **Alice is at 8 clues and is forced to clue or pitch.** Tiebreak by the following:
     1. Same as 3.1
-    2. Same as 3.2
-    3. Same as 3.3
-    4. Same as 3.7
+    2. Same as 3.3
+    3. Same as 3.5
+    4. Same as 3.9
     5. *(**NOT YET IMPLEMENTED** — v7.1.0.)* Give a fill-in clue (which is a
        stable clue that narrows down the identity of existing unplayable clued
        cards in Bob's hand). Prioritize cards that are duplicated in either
@@ -309,9 +319,9 @@ is judged from Alice's own inference, not common knowledge.
        would cause a strike or a discard of a critical card.
     7. If at < 2 strikes, give a stable clue to Bob that will cause him to pitch a trash/duped
        non-inverted suit or chuck a trash/duped inverted suit (explicitly allowing a strike here).
-    8. Give a reactive discard/double discard clue that stamps CTD on a non-critical card
+    8. Give a reactive discard or double discard clue that stamps CTD on a non-critical card
        in Bob's hand, tiebreak by the largest number of **missing connectors** Alice can
-       see leading up to that card, or a reactive play/reactive discard that stamps CTP on a
+       see leading up to that card, or a reactive play or reactive discard that stamps CTP on a
        non-critical inverted card in Bob's hand, tiebreak by the same criteria.
 
    **§4 always returns a clue.** At 8 clue tokens a discard is illegal, so
@@ -434,7 +444,9 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | Precedence step 3 — the walk | `choose_clue` |
 | shape classification | `read_clue` / `outcome_of` |
 | priority 2's admissibility | `discard_is_affordable` |
-| the §3.6 / §4.8 tiebreak | `missing_connectors` |
+| the §3.2 / §3.4 double discard | `pool_double_discard` |
+| §3.2's Cathy-chop gate | `chop_is_expendable` |
+| the §3.8 / §4.8 tiebreak | `missing_connectors` |
 
 | Rule | Existing machinery | Where |
 |---|---|---|

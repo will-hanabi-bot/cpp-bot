@@ -20,6 +20,7 @@
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/facts.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
@@ -397,4 +398,98 @@ TEST(Reactor0CluePriority, H4OffersTheFinesse) {
   ASSERT_TRUE(pick.has_value()) << "an available H4 clue is Precedence step 1";
   EXPECT_TRUE(is_rank_to(pick, 5, 2))
       << "rank 5 to Cathy is the finesse; got " << describe(pick);
+}
+
+// --- priority 3's double-discard rungs (3.2 and 3.4) ---------------------
+
+// A double discard that throws away two cards nobody needs appears TWICE in
+// priority 3, and the difference between the two positions is Cathy's chop.
+//
+// At 3.2 — above the stable discard clue — it is doing two jobs: clearing two
+// unwanted cards, and redirecting Cathy off a chop she could not afford to
+// lose. At 3.4, below the stable discard, only the first job is left, because
+// Cathy's chop was expendable anyway.
+//
+// One fixture, one card changed, so the ordering is what moves.
+//
+// Stacks r=1. Bob `g3 r1 b3 g4 y4`, chop g3 on slot 1 — non-trash and with no
+// safe action, which is priority 3's precondition. Rank 5 to Cathy is a Phase C
+// double discard calling Bob's r1 (slot 2) and Cathy's r1 (slot 3), both basic
+// trash, so neither costs the team anything.
+namespace {
+
+Game double_discard_position(std::vector<std::string> cathy_hand) {
+  SetupOptions opts;
+  opts.play_stacks = {1, 0, 0, 0, 0};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"g3", "r1", "b3", "g4", "y4"},
+      std::move(cathy_hand),
+  };
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  return setup(std::move(opts));
+}
+
+}  // namespace
+
+TEST(Reactor0CluePriority, DoubleDiscardOutranksStableDiscardWhenCathyChopIsWorthKeeping) {
+  Game g = double_discard_position({"y4", "b4", "r1", "g4", "p5"});
+  ASSERT_FALSE(hanabi::reactor0::chop_is_expendable(g, 2))
+      << "guard: Cathy's y4 chop is neither trash nor a same-hand-dupe";
+
+  auto cands = analysed(g);
+  ASSERT_TRUE(has_shape(cands, ClueShape::DOUBLE_DISCARD))
+      << "guard: the fixture must offer a double discard";
+
+  auto pick = hanabi::reactor0::choose_clue(g, cands);
+  ASSERT_TRUE(pick.has_value());
+  EXPECT_TRUE(is_rank_to(pick, 5, 2))
+      << "rung 3.2 takes the double discard, which also saves Cathy's chop; got "
+      << describe(pick);
+}
+
+TEST(Reactor0CluePriority, DoubleDiscardDropsBelowStableDiscardWhenCathyChopIsExpendable) {
+  // The only change: Cathy's chop becomes a same-hand-dupe (g4 on slots 1 and
+  // 4), so rung 3.2's condition fails and the stable discard at 3.3 goes first.
+  // Bob's g4 becomes p4 to keep the deck legal.
+  SetupOptions opts;
+  opts.play_stacks = {1, 0, 0, 0, 0};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"g3", "r1", "b3", "p4", "y4"},
+      {"g4", "b4", "r1", "g4", "p5"},
+  };
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+  ASSERT_TRUE(hanabi::reactor0::chop_is_expendable(g, 2))
+      << "guard: Cathy's g4 chop is duplicated in her own hand";
+
+  auto cands = analysed(g);
+  ASSERT_TRUE(has_shape(cands, ClueShape::DOUBLE_DISCARD))
+      << "guard: the double discard is still on offer — it just ranks lower";
+
+  auto pick = hanabi::reactor0::choose_clue(g, cands);
+  ASSERT_TRUE(pick.has_value());
+  auto* rank = std::get_if<PerformRank>(&*pick);
+  ASSERT_NE(rank, nullptr) << "got " << describe(pick);
+  EXPECT_EQ(rank->target, 1)
+      << "rung 3.3's stable discard to Bob now goes first; got " << describe(pick);
+}
+
+// The gate on rung 3.2, pinned directly. It is H1c's "expendable chop" clause
+// reused, so both readings of "Cathy can afford to lose it" are covered.
+TEST(Reactor0CluePriority, ChopIsExpendableCoversTrashAndSameHandDupe) {
+  Game trash_chop = double_discard_position({"r1", "b4", "y3", "g4", "p5"});
+  EXPECT_TRUE(hanabi::reactor0::chop_is_expendable(trash_chop, 2))
+      << "r1 is basic trash on a red stack of 1";
+
+  Game duped_chop = double_discard_position({"b4", "y3", "r1", "g4", "b4"});
+  EXPECT_TRUE(hanabi::reactor0::chop_is_expendable(duped_chop, 2))
+      << "b4 is duplicated inside Cathy's own hand";
+
+  Game keeper = double_discard_position({"y4", "b4", "r1", "g4", "p5"});
+  EXPECT_FALSE(hanabi::reactor0::chop_is_expendable(keeper, 2))
+      << "y4 is useful and unduplicated in her hand";
 }

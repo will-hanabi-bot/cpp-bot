@@ -41,12 +41,12 @@ enum class ClueShape : std::uint8_t {
   OTHER,             // nothing the list has a rule for
   REACTIVE_PLAY,     // priority 1  — two designations, both play
   REACTIVE_DISCARD,  // priority 2  — one play and one discard
-  DOUBLE_DISCARD,    // priority 2/3.6 — two discards
+  DOUBLE_DISCARD,    // priority 3.2 / 3.4 / 4.8 — two discards
   REACTIVE_LOCK,     // a reactive whose receiver-side reading is a lock
   STABLE_PLAY,       // priority 3.1 / 4.1
-  STABLE_DISCARD,    // priority 3.2 / 3.3 — stamps a CTD on Bob
-  TRASH_REVEAL,      // priority 3.2's other arm — flags trash, stamps nothing
-  STABLE_LOCK,       // priority 3.4 / 3.5 / 3.7
+  STABLE_DISCARD,    // priority 3.3 / 3.5 — stamps a CTD on Bob
+  TRASH_REVEAL,      // priority 3.3's other arm — flags trash, stamps nothing
+  STABLE_LOCK,       // priority 3.6 / 3.7 / 3.9
 };
 
 const char* shape_name(ClueShape s);
@@ -82,7 +82,7 @@ ClueReading read_clue(const Game& game, const Game& hypo,
 
 // --- The General Clue Evaluation List ------------------------------------
 
-// Priority 2's admissibility condition, and the rung-3.2 / 3.3 / 4.7 test: can
+// Priority 2's admissibility condition, and the rung-3.3 / 3.5 / 4.7 test: can
 // the team afford to have `order` thrown away? True when it is basic trash, a
 // same-hand-dupe, or a good card Alice can see a second copy of in some other
 // hand (her own included, where "see" means she can pin it).
@@ -91,7 +91,7 @@ ClueReading read_clue(const Game& game, const Game& hypo,
 // a reactive that loses something real is simply never proposed.
 bool discard_is_affordable(const Game& game, int holder, int order);
 
-// The tiebreak quantity for rungs 3.6 and 4.8: how many identities strictly
+// The tiebreak quantity for rungs 3.8 and 4.8: how many identities strictly
 // between the top of `order`'s stack and `order` itself are visible to Alice in
 // NO hand. The more there are, the less likely the team ever plays the card, so
 // the higher it sorts as something to throw away.

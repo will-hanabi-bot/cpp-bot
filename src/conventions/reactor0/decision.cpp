@@ -1,6 +1,7 @@
 #include "hanabi/conventions/reactor0/decision.h"
 
 #include <algorithm>
+#include <initializer_list>
 #include <functional>
 #include <utility>
 #include <variant>
@@ -592,28 +593,75 @@ Pool pool_lock(const Game& g, const std::vector<ClueCandidate>& cs) {
   });
 }
 
-// 3.6 / 4.8 -- throw away a non-critical card of Bob's through a REACTIVE,
+// Is `order` something the team can simply lose — basic trash, or a card its
+// holder has a second copy of? Tighter than `discard_is_affordable`, which also
+// accepts a copy visible in ANOTHER hand. The double-discard rungs use this one:
+// "two trash cards or same-hand-dupes" is about cards nobody needs, not about
+// cards someone else happens to be holding too.
+bool is_trash_or_same_hand_dupe(const Game& g, int holder, int order) {
+  auto id = id_of(g.state, order);
+  if (!id) return false;
+  return g.state.is_basic_trash(*id) ||
+         has_same_hand_dupe(g.state, holder, order, *id);
+}
+
+// Priority 3 rungs 2 and 4 — a double discard that throws away two cards nobody
+// needs. Both designated cards must be trash or a same-hand-dupe.
+//
+// The spec writes the shape as "stamps CTD on two trash cards or same-hand-dupes,
+// or CTP to a trash or same-hand-dupe in an inverted suit". Those are the same
+// two cases `Outcome::DISCARD` already distinguishes — CTD on a plain suit, CTP
+// on an inverted one — and DOUBLE_DISCARD means both sides discard by
+// construction, so what is left to check is only that neither card is wanted.
+Pool pool_double_discard(const Game& g, const std::vector<ClueCandidate>& cs) {
+  return select(cs, [&g](const ClueCandidate& c) {
+    if (c.reading.shape != ClueShape::DOUBLE_DISCARD) return false;
+    auto sides = discarded_sides(g, c.reading);
+    if (sides.size() != 2) return false;
+    for (const auto& side : sides) {
+      if (!is_trash_or_same_hand_dupe(g, side.first, side.second)) return false;
+    }
+    return true;
+  });
+}
+
+// 3.8 / 4.8 -- throw away a non-critical card of Bob's through a REACTIVE,
 // preferring the card with the most connectors Alice cannot see (so the one the
-// team is least likely to ever play). `want_double_discard` widens the shape set
-// for 4.8, which admits a plain double discard where 3.6 does not.
+// team is least likely to ever play).
+//
+// The spec pairs a shape set with a BUTTON on each of its two arms, and the
+// pairing differs between the two rungs, so both sets are passed in rather than
+// inferred:
+//
+//   3.8  CTD arm: reactive discard.                  CTP arm: reactive play.
+//   4.8  CTD arm: reactive discard or double discard. CTP arm: reactive play or
+//                                                     reactive discard.
+//
+// The CTP arm additionally requires the card to be on an inverted suit, because
+// that is the only way pressing Play throws a card away.
 const ClueCandidate* rung_reactive_ditch(const Game& g,
                                          const std::vector<ClueCandidate>& cs,
-                                         bool want_double_discard) {
-  Pool p = select(cs, [&g, want_double_discard](const ClueCandidate& c) {
-    const ClueShape sh = c.reading.shape;
-    const bool shape_ok =
-        sh == ClueShape::REACTIVE_DISCARD ||
-        (want_double_discard && sh == ClueShape::DOUBLE_DISCARD) ||
-        (!want_double_discard && sh == ClueShape::REACTIVE_PLAY);
-    if (!shape_ok) return false;
+                                         std::initializer_list<ClueShape> ctd_shapes,
+                                         std::initializer_list<ClueShape> ctp_shapes) {
+  auto allows = [](std::initializer_list<ClueShape> set, ClueShape sh) {
+    for (ClueShape s : set) {
+      if (s == sh) return true;
+    }
+    return false;
+  };
+  Pool p = select(cs, [&](const ClueCandidate& c) {
     // Bob is the reacter on a reactive; the rung is about HIS card.
     const Designation& side = c.reading.reacter_side;
     auto id = id_of(g.state, side.order);
     if (!id || g.state.is_critical(*id)) return false;
-    if (side.button == CardStatus::CALLED_TO_DISCARD) return true;
-    // ...or a CTP on a non-critical INVERTED card, which is a pitch.
-    return side.button == CardStatus::CALLED_TO_PLAY &&
-           variants::is_inverted_id(g.state, *id);
+    if (side.button == CardStatus::CALLED_TO_DISCARD) {
+      return allows(ctd_shapes, c.reading.shape);
+    }
+    if (side.button == CardStatus::CALLED_TO_PLAY) {
+      return allows(ctp_shapes, c.reading.shape) &&
+             variants::is_inverted_id(g.state, *id);
+    }
+    return false;
   });
   if (p.empty()) return nullptr;
   const ClueCandidate* best = p.front();
@@ -649,15 +697,25 @@ bool priority_3_applies(const Game& g) {
 
 const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs) {
   if (!priority_3_applies(g)) return nullptr;
-  // 3.1
+  // 3.1 -- a stable play clue to Bob.
   if (clues_at_least(g, 2)) {
     if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;
   }
-  // 3.2
+  // 3.2 -- a double discard, when Cathy's chop is NOT expendable. It outranks
+  // the stable discard below because it does two jobs at once: it clears two
+  // unwanted cards AND it redirects Cathy off a chop she could not afford to
+  // lose. Without the chop condition that second job does not exist, which is
+  // why the same clue sits again at 3.4, lower.
+  if (has_cathy(g) && !chop_is_expendable(g, cathy_of(g))) {
+    if (auto* c = first_of(g, pool_double_discard(g, cs))) return c;
+  }
+  // 3.3 -- a stable discard or trash reveal to Bob.
   if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;
-  // 3.3
+  // 3.4 -- the same double discard as 3.2, now unconditional on Cathy's chop.
+  if (auto* c = first_of(g, pool_double_discard(g, cs))) return c;
+  // 3.5 -- a stable discard to Bob on a card Alice can see a copy of elsewhere.
   if (auto* c = first_of(g, pool_stable_ditch_dupe(g, cs))) return c;
-  // 3.4 -- all of Bob's cards are critical
+  // 3.6 -- all of Bob's cards are critical
   if (clues_at_least(g, 2)) {
     bool all_critical = true;
     for (int o : g.state.hands[bob_of(g)]) {
@@ -671,7 +729,7 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
       if (auto* c = first_of(g, pool_lock(g, cs))) return c;
     }
   }
-  // 3.5 -- L = (# 1-away) + 2 * (# trash) in Bob's hand
+  // 3.7 -- L = (# 1-away) + 2 * (# trash) in Bob's hand
   if (clues_at_least(g, 3)) {
     int L = 0;
     for (int o : g.state.hands[bob_of(g)]) {
@@ -687,10 +745,13 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
       if (auto* c = first_of(g, pool_lock(g, cs))) return c;
     }
   }
-  // 3.6 -- unconditional: it carries no clue-count condition, and the `**`
+  // 3.8 -- unconditional: it carries no clue-count condition, and the `**`
   // relaxation does not reach it (the ruling on open item 2).
-  if (auto* c = rung_reactive_ditch(g, cs, /*want_double_discard=*/false)) return c;
-  // 3.7
+  if (auto* c = rung_reactive_ditch(g, cs, {ClueShape::REACTIVE_DISCARD},
+                                    {ClueShape::REACTIVE_PLAY})) {
+    return c;
+  }
+  // 3.9
   if (clues_at_least(g, 2)) {
     if (auto* c = first_of(g, pool_lock(g, cs))) return c;
   }
@@ -728,8 +789,13 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
     }
     if (auto* c = first_of(g, std::move(p))) return c;
   }
-  // 4.8
-  if (auto* c = rung_reactive_ditch(g, cs, /*want_double_discard=*/true)) return c;
+  // 4.8 -- wider than 3.8 on both arms: the CTD arm also takes a double
+  // discard, and the CTP arm also takes a reactive discard.
+  if (auto* c = rung_reactive_ditch(
+          g, cs, {ClueShape::REACTIVE_DISCARD, ClueShape::DOUBLE_DISCARD},
+          {ClueShape::REACTIVE_PLAY, ClueShape::REACTIVE_DISCARD})) {
+    return c;
+  }
   // The floor. At 8 tokens a discard is illegal, so section 4 must return
   // something: the default tiebreak, IGNORING tier. Without this an empty clue
   // set walks into take_action's last-resort branch and blind-plays slot 1,

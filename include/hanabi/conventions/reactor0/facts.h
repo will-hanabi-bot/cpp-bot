@@ -51,6 +51,15 @@ struct NewPlayFacts {
 };
 NewPlayFacts new_play_facts(const Game& game, const Game& hypo);
 
+// Is `player`'s chop a card they can afford to lose — basic trash, or a card
+// they hold a second copy of? This is H1c's "expendable chop" clause, and it is
+// also the gate on priority 3 rung 2: a double discard that redirects Cathy off
+// her chop is only urgent when that chop was worth keeping.
+//
+// False when the hand is locked (no chop) or the chop's identity is unknown to
+// the caller.
+bool chop_is_expendable(const Game& game, int player);
+
 // Is this candidate an H4 clue — a finesse worth the tempo? True when the
 // interpretation is reactive rank Phase B (`interpret_reactive.cpp:383-447`) and
 // Cathy's chop is not trash or a same-hand-dupe. `clue_tier` returns HIGH for
