@@ -469,6 +469,21 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   return id && s.playable_away(*id) == 1;
 }
 
+// H4, as a named predicate. `clue_tier` folds this into its HIGH disjunction,
+// but DECISION_MAKING.md's Precedence rule singles out an H4 clue specifically —
+// it is the one clue that outranks a pending reaction — so the decision layer
+// has to be able to ask for it apart from the other HIGH terms.
+bool clue_is_h4(const Game& game, const Game& hypo, const ClueAction& action) {
+  const State& s = game.state;
+  const int alice = s.our_player_index;
+  const int bob = s.next_player_index(alice);
+  if (bob == alice) return false;  // solo
+  const int cathy_seat = s.next_player_index(bob);
+  const bool has_cathy = cathy_seat != alice;
+  return (!has_cathy || !chop_is_expendable(game, cathy_seat)) &&
+         clue_gets_finesse(game, hypo, action);
+}
+
 ClueTier clue_tier(const Game& game, const Game& hypo,
                    const ClueAction& action) {
   const State& s = game.state;
@@ -508,10 +523,7 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   if (f.count >= 2 && f.regain_rank) return ClueTier::HIGH;
   // H4 — a finesse, when Cathy's chop is worth keeping. A blind play is worth
   // the tempo only if it is not being bought at the cost of Cathy's chop.
-  if ((!has_cathy || !chop_is_expendable(game, cathy_seat)) &&
-      clue_gets_finesse(game, hypo, action)) {
-    return ClueTier::HIGH;
-  }
+  if (clue_is_h4(game, hypo, action)) return ClueTier::HIGH;
 
   // --- not low ----------------------------------------------------------
   // N5 — Bob has a playable chop he cannot just pitch a duplicate of. Any

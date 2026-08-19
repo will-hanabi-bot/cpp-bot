@@ -13,6 +13,7 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
+#include "hanabi/conventions/reactor0/state_eval.h"
 
 namespace hanabi::reactor0 {
 
@@ -55,7 +56,14 @@ struct ClueReading {
   ClueShape shape = ClueShape::OTHER;
   Designation reacter_side;   // Bob's designation, for a reactive
   Designation receiver_side;  // Cathy's promised designation, for a reactive
-  int stable_subject = -1;    // the designated order, for a stable clue
+  // The stable side, flattened. `stable_button` distinguishes the two ways a
+  // STABLE_DISCARD arises, which several priority rungs name separately: a CTD
+  // on an ordinary card, versus a CTP on an inverted card (a pitch). Kept as
+  // three fields rather than a `Designation` because `stable_subject` is
+  // already asserted on by test_clue_shape.cpp.
+  int stable_subject = -1;
+  CardStatus stable_button = CardStatus::NONE;
+  Outcome stable_outcome = Outcome::NONE;
 };
 
 // What pressing `button` on `order` does, judged from the giver's full
@@ -71,5 +79,78 @@ Outcome outcome_of(const State& s, int order, CardStatus button);
 // arithmetic the reaction will use a turn later.
 ClueReading read_clue(const Game& game, const Game& hypo,
                       const ClueAction& action);
+
+// --- The General Clue Evaluation List ------------------------------------
+
+// Priority 2's admissibility condition, and the rung-3.2 / 3.3 / 4.7 test: can
+// the team afford to have `order` thrown away? True when it is basic trash, a
+// same-hand-dupe, or a good card Alice can see a second copy of in some other
+// hand (her own included, where "see" means she can pin it).
+//
+// This is what makes a separate "pointless double discard" filter unnecessary:
+// a reactive that loses something real is simply never proposed.
+bool discard_is_affordable(const Game& game, int holder, int order);
+
+// The tiebreak quantity for rungs 3.6 and 4.8: how many identities strictly
+// between the top of `order`'s stack and `order` itself are visible to Alice in
+// NO hand. The more there are, the less likely the team ever plays the card, so
+// the higher it sorts as something to throw away.
+//
+// DECISION_MAKING.md's worked example, empty stacks, Bob `r2 g3 r4 g4 b4` and
+// Cathy `r3 r3 b5 g5 p5`: b4 -> 3, g4 -> 2, r4 -> 1.
+int missing_connectors(const Game& game, int order);
+
+// One candidate clue, analysed. Building this is the ONLY place a candidate is
+// simulated: `Game::simulate` is the expensive call, and both entry points below
+// read this struct rather than re-deriving from a hypo.
+struct ClueCandidate {
+  PerformAction perform;
+  ClueAction action;
+  ClueReading reading;
+  ClueTier tier = ClueTier::LOW;
+  bool is_h4 = false;
+  // 1.99 * (# new useful cards touched) - (# new trash cards touched), the
+  // spec's default tiebreak. "New" is `!prev.state.deck[o].clued`; trash is
+  // basic trash from Alice's full visibility. The 1.99 is deliberate: two
+  // useful plus one trash (2.98) beats one useful alone (1.99), but one useful
+  // plus one trash (0.99) does not.
+  double default_score = 0.0;
+};
+
+// One `Game::simulate` per candidate — the same cost the deleted `eval_action`
+// paid. Candidates whose interpretation is a MISTAKE are dropped here, matching
+// the old scorer's -100 rejection: no rung may propose a clue the team cannot
+// decode.
+std::vector<ClueCandidate> analyse_clues(
+    const Game& game,
+    const std::vector<std::pair<PerformAction, Action>>& all_clues);
+
+// The tier gate of DECISION_MAKING.md "Decision phase 1" items 1 and 2, lifted
+// verbatim from the deleted `eval_action` so its boundaries do not move:
+//   * Alice occupied  -> need HIGH   while pace() >= 3 && clue_tokens < 8
+//   * otherwise       -> need MEDIUM while pace() >= 3 && clue_tokens <= 3
+// Outside either window, or when the giver is not the POV seat, there is no
+// gate. At 8 tokens neither window applies, which is what lets section 4 rank
+// clues the gate would otherwise flatten.
+bool clue_is_admissible(const Game& game, const ClueCandidate& c);
+
+// Precedence step 1 — the best H4 clue, or nullopt.
+//
+// Deliberately does NOT apply section 4's floor. The floor exists so the section
+// 4 branch always returns something at 8 tokens; applying it here would make an
+// arbitrary clue outrank a pending reaction, which is the opposite of what the
+// Precedence rule says.
+std::optional<PerformAction> choose_h4_clue(const Game& game,
+                                            const std::vector<ClueCandidate>& cands);
+
+// Precedence step 3 — walk the General Clue Evaluation List and return the clue
+// reactor0 wants to give, or nullopt to fall through to the play/discard phase.
+//
+// Returns nullopt on an empty candidate list, so the section 4 floor cannot fire
+// when Alice cannot legally clue at all (0 tokens, or she is the pending
+// receiver -- decide.cpp's `can_clue_now`). The floor is a guarantee about
+// ranking, not a promise to conjure a clue that does not exist.
+std::optional<PerformAction> choose_clue(const Game& game,
+                                         const std::vector<ClueCandidate>& cands);
 
 }  // namespace hanabi::reactor0

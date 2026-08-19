@@ -10,6 +10,7 @@
 // tuned-constant scorer being removed, and these facts outlive it.
 #pragma once
 
+#include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity.h"
 #include "hanabi/basics/state.h"
@@ -49,6 +50,15 @@ struct NewPlayFacts {
   bool regain_rank = false;   // at least one play regains a clue token
 };
 NewPlayFacts new_play_facts(const Game& game, const Game& hypo);
+
+// Is this candidate an H4 clue — a finesse worth the tempo? True when the
+// interpretation is reactive rank Phase B (`interpret_reactive.cpp:383-447`) and
+// Cathy's chop is not trash or a same-hand-dupe. `clue_tier` returns HIGH for
+// several reasons; the Precedence rule in DECISION_MAKING.md is about this one
+// specifically, so the decision layer needs to ask for it by name.
+//
+// `hypo` must be `game.simulate(Action{action})`.
+bool clue_is_h4(const Game& game, const Game& hypo, const ClueAction& action);
 
 // Could `giver` give `receiver` a colour clue that names a genuinely playable
 // card? A structural replay of `stable_colour`'s target choice and its three
