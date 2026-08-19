@@ -28,6 +28,15 @@ bool is_lock_target(const ReactorWC& wc, int target_slot) {
          target_slot == static_cast<int>(wc.receiver_hand.size());
 }
 
+bool wc_is_fresh(const Game& game, const Game& hypo, int giver, int receiver,
+                 int reacter) {
+  if (hypo.waiting.empty()) return false;
+  const ReactorWC& wc = hypo.waiting.front();
+  return wc.turn >= game.state.turn_count && wc.giver == giver &&
+         wc.receiver == receiver && wc.reacter == reacter &&
+         wc.react_order >= 0;
+}
+
 std::optional<int> predicted_target_slot(const Game& hypo) {
   if (hypo.waiting.empty()) return std::nullopt;
   const ReactorWC& wc = hypo.waiting.front();

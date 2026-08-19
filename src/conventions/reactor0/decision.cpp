@@ -67,25 +67,6 @@ CardStatus receiver_button(ClueKind kind, CardStatus reacter_button) {
                        : CardStatus::CALLED_TO_PLAY;
 }
 
-// Is this waiting connection the one THIS clue just installed? interpret_clue
-// clears `waiting` only when the new clue's giver was the pending reacter
-// (decide.cpp:51-53), so a stale connection from an earlier turn survives into
-// the hypo of an unrelated candidate. react_order >= 0 additionally excludes
-// the residue of an aborted reactive, where the WC is pushed before any phase
-// runs (interpret_reactive.cpp:660-661) and no phase ever records a slot.
-bool wc_is_fresh(const Game& game, const Game& hypo, const ClueAction& action) {
-  if (hypo.waiting.empty()) return false;
-  const ReactorWC& wc = hypo.waiting.front();
-  const int alice = game.state.our_player_index;
-  // `wc.turn` is stamped from the state the interpretation ran against, which
-  // may already have advanced past `game`'s turn — so this is `>=`, not `==`.
-  // A genuinely stale connection is strictly older.
-  return wc.turn >= game.state.turn_count && wc.giver == alice &&
-         wc.receiver == action.target &&
-         wc.reacter == game.state.next_player_index(alice) &&
-         wc.react_order >= 0;
-}
-
 ClueShape shape_of(Outcome reacter, Outcome receiver) {
   const bool a = reacter == Outcome::PLAY;
   const bool b = receiver == Outcome::PLAY;
@@ -156,7 +137,7 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   if (action.target == bob) return read_stable(game, hypo, action, interp);
 
   // --- reactive ---------------------------------------------------------
-  if (!wc_is_fresh(game, hypo, action)) return r;
+  if (!wc_is_fresh(game, hypo, alice, action.target, bob)) return r;
   const ReactorWC& wc = hypo.waiting.front();
   const CardStatus reacter_status = hypo.meta[wc.react_order].status;
 

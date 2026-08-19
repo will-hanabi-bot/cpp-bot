@@ -448,6 +448,10 @@ bool chop_is_expendable(const Game& game, int player) {
 // The WC freshness guard matters: `Game::interpret_clue` clears `waiting` only
 // when the new clue's giver was the pending reacter (`decide.cpp:51-53`), so a
 // stale connection from an earlier turn can survive into a candidate's hypo.
+// It is `wc_is_fresh` (reactor0/interpret_reaction.h), shared with the decision
+// layer's classifier — this detector originally inlined the same check with an
+// EXACT turn compare, which never matches and left H4 dead from the commit that
+// introduced it. See that helper's comment for why the compare is `>=`.
 bool clue_gets_finesse(const Game& game, const Game& hypo,
                        const ClueAction& action) {
   const State& s = game.state;
@@ -455,12 +459,7 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   const int bob = s.next_player_index(alice);
   if (action.target == bob) return false;             // stable: no finesse
   if (action.clue.kind != ClueKind::RANK) return false;  // Phase B is rank-only
-  if (hypo.waiting.empty()) return false;
-  const ReactorWC& wc = hypo.waiting.front();
-  if (wc.turn != s.turn_count || wc.giver != alice ||
-      wc.receiver != action.target || wc.reacter != bob || wc.react_order < 0) {
-    return false;                                     // stale or aborted WC
-  }
+  if (!wc_is_fresh(game, hypo, alice, action.target, bob)) return false;
   auto receive_order = predicted_receiver_order(hypo);
   if (!receive_order) return false;
   if (hypo.meta[*receive_order].status != game.meta[*receive_order].status) {

@@ -300,3 +300,99 @@ TEST(Reactor0ClueTier, BobUnplayableChopDoesNotLift) {
       << "r3 on a stack of 0 is not playable, so N5 must stay silent. Got "
       << name_of(t);
 }
+
+// --- H4: the clue gets a finesse -----------------------------------------
+
+// H4 is the only *widening* term step 2 added, and the only one that depends on
+// the clue rather than the position, so the fixture is built to make MEDIUM the
+// answer if H4 does not fire — that is what makes this test a discriminator
+// rather than a tautology.
+//
+// Alice clues rank 5 to Cathy. Cathy holds no playable, so reactive rank Phase A
+// is empty and Phase B walks her one-away cards: r2 at slot 3. anchor 5,
+// target_slot 3 → react_slot = (5 + 5 - 3) % 5 = 2, and Bob's slot 2 holds the
+// r1 connector. Every other HIGH term is deliberately dead:
+//
+//   H1a  Bob's chop y4 is duplicated in his own hand → not endangered.
+//   H2   r1 is not critical (3 copies, none discarded).
+//   H3   Phase B stamps only the reacter, so the play count is 1.
+//
+// while N2 is alive (Cathy's y5 chop is critical → endangered, the clue is
+// reactive, and Bob has no colour play clue for a hand with no playable). So a
+// working H4 reads HIGH and a dead one reads MEDIUM.
+TEST(Reactor0ClueTier, FinesseIsHigh) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y4", "r1", "b4", "g4", "y4"},  // chop y4 duped in-hand; r1 at slot 2
+      {"y5", "g3", "r2", "b3", "p4"},  // no playable; leftmost one-away r2 @ 3
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  Action clue = make_clue(g, 0, 2, ClueKind::RANK, 5);
+  Game hypo = g.simulate(clue);
+  ASSERT_EQ(status_at(hypo, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY)
+      << "guard: the fixture must actually produce a Phase B finesse";
+
+  ClueTier t = tier_of(g, clue);
+  EXPECT_EQ(t, ClueTier::HIGH)
+      << "a finesse with a non-expendable Cathy chop is H4 → HIGH. Got "
+      << name_of(t) << " (MEDIUM means H4 never fired).";
+}
+
+// --- H1b / H1c: the Cathy conditions on H1 -------------------------------
+
+// H1 became a CONJUNCTION in v7.0.0 step 2 — H1a AND H1b AND H1c — so both new
+// terms can only ever narrow it. Each fixture below keeps H1a firing and kills
+// exactly one of H1b / H1c, so a LOW reading is attributable to that term: if
+// the term did not exist, both would read HIGH.
+
+// H1b — rescuing Bob's chop is not HIGH when Cathy is herself about to lose
+// something. Cathy's chop r5 is critical (one copy), which is the H1b veto.
+// H1c is deliberately left TRUE so it cannot be the cause: Cathy holds no
+// playable at all, so Bob has no colour stable play clue for her.
+TEST(Reactor0ClueTier, CathyCriticalChopBlocksH1) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "g1", "b1", "p1", "y5"},
+      {"r3", "y4", "g4", "b4", "p4"},  // chop r3 — endangered, so H1a fires
+      {"r5", "y3", "g3", "b3", "p3"},  // chop r5 critical; no playable anywhere
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(1), order_at(g, TestPlayer::BOB, 1)) << "guard: Bob's chop";
+  ASSERT_EQ(g.chop(2), order_at(g, TestPlayer::CATHY, 1)) << "guard: Cathy's chop";
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_EQ(t, ClueTier::LOW)
+      << "Cathy's chop is critical, so H1b vetoes H1. Got " << name_of(t)
+      << " (HIGH means H1b never fired).";
+}
+
+// H1c — rescuing Bob's chop is not HIGH when Bob could have handled Cathy
+// himself. Cathy's chop y3 is neither playable nor critical, so H1b passes;
+// what kills H1 here is that Cathy holds a playable g1, which is exactly the
+// colour stable play clue Bob could give her.
+TEST(Reactor0ClueTier, BobCanColourClueCathyBlocksH1) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "g1", "b1", "p1", "y5"},
+      {"r3", "y4", "g4", "b4", "p4"},  // chop r3 — endangered, so H1a fires
+      {"y3", "g1", "b3", "p3", "r4"},  // chop y3 passes H1b; g1 is Bob's out
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(2), order_at(g, TestPlayer::CATHY, 1)) << "guard: Cathy's chop";
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_EQ(t, ClueTier::LOW)
+      << "Bob has a colour play clue for Cathy, so H1c vetoes H1. Got "
+      << name_of(t) << " (HIGH means H1c never fired).";
+}

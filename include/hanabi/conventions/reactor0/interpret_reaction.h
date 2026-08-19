@@ -30,6 +30,28 @@ void reactive_lock(Game& game, const ReactorWC& wc);
 // rlocks bound into the WC at clue time.
 bool is_lock_target(const ReactorWC& wc, int target_slot);
 
+// Is `hypo`'s waiting connection the one THIS candidate clue just installed?
+//
+// `Game::interpret_clue` clears `waiting` only when the new clue's giver was the
+// pending reacter (`decide.cpp:51-53`), so a stale connection from an earlier
+// turn otherwise survives into the hypo of an unrelated candidate and every
+// clue-time predictor reads it as its own.
+//
+// The turn comparison is `>=`, NOT `==`. `Game::simulate` routes to
+// `simulate_action` (`game.h:180`), which emits a leading `TurnAction` before
+// `handle_action` runs the interpretation (`game.cpp:690-696`), and that stamps
+// `turn_count = num + 1` (`game.cpp:486`). So the WC is created one turn ahead
+// of the caller's `game.state.turn_count`. An exact compare therefore never
+// matches and silently disables whatever it guards — which is precisely how H4
+// shipped dead in v7.0.0 step 2. A genuinely stale connection is strictly older,
+// so `>=` still rejects it.
+//
+// `react_order >= 0` additionally excludes the residue of an aborted reactive,
+// where the WC is pushed before any phase runs
+// (`interpret_reactive.cpp:660-661`) and no phase ever records a slot.
+bool wc_is_fresh(const Game& game, const Game& hypo, int giver, int receiver,
+                 int reacter);
+
 // The receiver's target slot, recovered at CLUE TIME from the reacter's
 // called slot. `calc_slot` is its own inverse in the slot argument, so
 // feeding it the reacter's slot yields the same number `calc_target_slot`
