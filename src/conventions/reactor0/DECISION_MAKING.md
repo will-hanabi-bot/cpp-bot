@@ -1,14 +1,15 @@
 # Reactor0 decision making
 
-> **STATUS — phase 1 shipped in v7.0.0, phase 2 in v7.1.0.**
+> **STATUS — phase 1 shipped in v7.0.0, phase 2 in v7.1.0, §4's stall rungs in
+> v7.2.0.**
 > This document is the ruling reference for **how reactor0 decides what to do on
 > its turn**. `CONVENTION.md` remains the ruling reference for what a clue
 > *means*.
 >
-> This whole document describes the build, with one exception: rungs §4.5 and
-> §4.6 are still **not implemented** — see *Not yet implemented* at the foot of
-> this document and [`PLAN.md`](../../../PLAN.md). Reactor0 no longer uses the
-> shared play/discard ladder in `src/basics/decide.cpp` at all.
+> **This whole document now describes the build.** Reactor0 chooses its clue
+> with the General Clue Evaluation List and its play or discard with the
+> Actionable Card Priority list, and no longer uses the shared ladder in
+> `src/basics/decide.cpp` at all.
 
 This spec sheet replaces the mechanism for decision making that was done with
 hardcoded heuristics imported from the previous reactor code. Often times, the
@@ -307,15 +308,30 @@ is judged from Alice's own inference, not common knowledge.
     1. Same as 3.1
     2. Same as 3.3
     3. Same as 3.5
-    4. Same as 3.9
-    5. *(**NOT YET IMPLEMENTED** — v7.1.0.)* Give a fill-in clue (which is a
-       stable clue that narrows down the identity of existing unplayable clued
-       cards in Bob's hand). Prioritize cards that are duplicated in either
-       Cathy's hand or Alice's own hand, followed by cards ranked by lowest
-       number of connectors and lowest stack rank.
-    6. *(**NOT YET IMPLEMENTED** — v7.1.0.)* Give any other stall clue that
-       cannot be misinterpreted by Bob as some other type of stable clue that
-       would cause a strike or a discard of a critical card.
+    4. Give a fill-in clue (which is a stable clue that narrows down the identity
+       of existing unplayable clued cards in Bob's hand). Prioritize cards that
+       are duplicated in either Cathy's hand or Alice's own hand, followed by
+       cards ranked by lowest number of connectors and lowest stack rank.
+    5. Give any other stall clue that cannot be misinterpreted by Bob as some
+       other type of stable clue that would cause a strike or a discard of a
+       critical card.
+    6. Same as 3.9
+
+   **When §4 is reachable at all.** §3 sits above §4, and its own last rung (3.9)
+   is a lock with the same `>= 2 clues**` condition — which 8 tokens always
+   satisfies. So whenever §3's precondition holds (Bob has a non-trash chop and
+   no safe play or discard), 3.9 fires and none of §4 runs. §4 is therefore the
+   branch for a forced clue when **Bob is not in trouble**: his chop is trash, he
+   already has something safe to do, or he is locked. That is the right
+   precedence — an endangered chop outranks a stall — but it is worth stating,
+   because it means the rungs below are rarer than their position suggests.
+
+   Rungs 4.4 and 4.5 sit **above** the lock, unlike their counterparts in §3.
+   Two reasons. A lock commits Bob's whole hand, so at a forced clue it is worth
+   less than information or than a harmless stall. And at 8 tokens a re-clue of
+   already-clued cards *reads* as a lock, so a lock candidate exists in
+   essentially every position — putting it above these two would make both
+   unreachable.
     7. If at < 2 strikes, give a stable clue to Bob that will cause him to pitch a trash/duped
        non-inverted suit or chuck a trash/duped inverted suit (explicitly allowing a strike here).
     8. Give a reactive discard or double discard clue that stamps CTD on a non-critical card
@@ -489,17 +505,6 @@ lives in `src/conventions/reactor0/decision.cpp`:
 
 ## Not yet implemented
 
-Everything above is the ruling convention. These parts of it are **not yet in the
-build**, and the sections that describe them say so inline:
-
-| Rule | Status | What happens instead today |
-|---|---|---|
-| §4.5 fill-in clue | v7.2.0 | falls through to 4.7 / 4.8 / the floor |
-| §4.6 safe stall clue | v7.2.0 | falls through to 4.7 / 4.8 / the floor |
-
-
-§4.5 and §4.6 are deferred because they are the only rungs needing genuinely new
-machinery — a fill-in detector, and a simulation of Bob's reading judged safe
-against a strike or a critical discard — and they fire only at 8 clue tokens
-after 4.1-4.4 have all failed. The §4 floor guarantees the branch still returns a
-legal clue without them.
+Nothing. Every rule above is in the build as of v7.2.0. `TODO.md` carries the
+gaps that remain, which are about how the engine executes a decision rather than
+about which decision reactor0 makes.

@@ -1,9 +1,10 @@
 # PLAN — reactor0's rules-based decision framework (v7.0.0 / v7.1.0)
 
-**Status: phase 1 (v7.0.0) and phase 2 (v7.1.0) are both SHIPPED.**
+**Status: COMPLETE. Phase 1 shipped in v7.0.0, phase 2 in v7.1.0, and the two
+deferred §4 stall rungs in v7.2.0.**
 
-Everything below describes the work as it landed. The only parts of
-`DECISION_MAKING.md` still unbuilt are rungs §4.5 and §4.6. `src/conventions/reactor0/DECISION_MAKING.md` is the
+Everything below describes the work as it landed. All of
+`DECISION_MAKING.md` is now implemented. `src/conventions/reactor0/DECISION_MAKING.md` is the
 ruling reference; this file is the plan of record for how the change was staged.
 
 This document scopes the replacement of reactor0's tuned-constant decision layer

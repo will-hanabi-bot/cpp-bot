@@ -493,3 +493,99 @@ TEST(Reactor0CluePriority, ChopIsExpendableCoversTrashAndSameHandDupe) {
   EXPECT_FALSE(hanabi::reactor0::chop_is_expendable(keeper, 2))
       << "y4 is useful and unduplicated in her hand";
 }
+
+// --- section 4's stall rungs (4.4 fill-in, 4.5 safe stall) ---------------
+
+// A fill-in matters exactly when Bob's hand is FULLY CLUED: there is nothing
+// left to call, but his cards are still ambiguous, so the forced token can buy
+// him information instead of committing his hand.
+//
+// This is also why 4.4 and 4.5 sit above the lock. A re-clue of already-clued
+// cards reads as a LOCK in reactor0, so a lock candidate exists in essentially
+// every 8-token position; with the lock above them, neither rung could ever
+// run. The fixture below is the proof — `rank 4` here IS a lock candidate.
+namespace {
+
+Game fully_clued_bob_at_eight_tokens() {
+  SetupOptions opts;
+  // Every 1 is played, so a card Bob knows is a 1 is known TRASH -- that is his
+  // safe discard, and it is what stops priority 3 applying. Without it, rung
+  // 3.9's lock fires and section 4 is never reached at all.
+  opts.play_stacks = {1, 1, 1, 1, 1};
+  opts.clue_tokens = 8;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r3", "y3", "g4", "b4", "r1"},
+      {"g3", "b3", "p3", "r4", "y4"},
+  };
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+  g = pre_clue(std::move(g), TestPlayer::BOB, 5, {"1"});  // his known trash
+  g = pre_clue(std::move(g), TestPlayer::BOB, 1, {"3"});  // slots 1-2
+  g = pre_clue(std::move(g), TestPlayer::BOB, 3, {"4"});  // slots 3-4
+  return g;
+}
+
+}  // namespace
+
+TEST(Reactor0CluePriority, FillInOutranksTheLockAtEightTokens) {
+  Game g = fully_clued_bob_at_eight_tokens();
+  auto cands = analysed(g);
+
+  // Both rungs really are on offer, which is what makes the ordering the
+  // subject of this test rather than an accident of the fixture.
+  ASSERT_TRUE(has_shape(cands, ClueShape::STABLE_LOCK))
+      << "guard: a lock candidate exists, as it does in almost every 8-token "
+         "position";
+  bool any_fill_in = false;
+  for (const auto& c : cands) any_fill_in = any_fill_in || !c.fill_ins.empty();
+  ASSERT_TRUE(any_fill_in) << "guard: a fill-in is available too";
+
+  auto pick = hanabi::reactor0::choose_clue(g, cands);
+  ASSERT_TRUE(pick.has_value());
+  // The chosen clue must be one that fills in, not the lock.
+  const ClueCandidate* chosen = nullptr;
+  for (const auto& c : cands) {
+    if (describe(std::optional<PerformAction>{c.perform}) == describe(pick)) {
+      chosen = &c;
+    }
+  }
+  ASSERT_NE(chosen, nullptr);
+  EXPECT_FALSE(chosen->fill_ins.empty())
+      << "rung 4.4 takes a fill-in ahead of the lock at 4.6; got "
+      << describe(pick) << " (" << hanabi::reactor0::shape_name(chosen->reading.shape)
+      << ")";
+  EXPECT_NE(chosen->reading.shape, ClueShape::STABLE_LOCK);
+}
+
+// Fill-ins only count ALREADY-CLUED, UNPLAYABLE cards. A clue that merely
+// touches a fresh card is a normal clue, not a stall, and the rungs above have
+// first refusal on it.
+TEST(Reactor0CluePriority, FillInsCountOnlyCluedUnplayableCards) {
+  Game g = fully_clued_bob_at_eight_tokens();
+  for (const auto& c : analysed(g)) {
+    for (int o : c.fill_ins) {
+      EXPECT_TRUE(g.state.deck[o].clued)
+          << "a fill-in narrows a card that was already clued";
+      auto id = g.state.deck[o].id();
+      ASSERT_TRUE(id.has_value());
+      EXPECT_FALSE(g.state.is_playable(*id))
+          << "a playable card is not a fill-in subject — it is a play clue";
+    }
+  }
+}
+
+// Rung 4.5's safe stall designates nothing at all, which is what makes it safe:
+// a clue that stamps no call cannot be read as an instruction to play or
+// discard, so it cannot strike or lose a critical card.
+TEST(Reactor0CluePriority, SafeStallDesignatesNothing) {
+  Game g = fully_clued_bob_at_eight_tokens();
+  for (const auto& c : analysed(g)) {
+    if (c.reading.shape != ClueShape::OTHER) continue;
+    EXPECT_LT(c.reading.reacter_side.order, 0);
+    EXPECT_LT(c.reading.receiver_side.order, 0);
+    EXPECT_LT(c.reading.stable_subject, 0)
+        << "an OTHER reading names no card, which is the whole of its safety";
+  }
+}

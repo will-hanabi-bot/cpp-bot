@@ -125,6 +125,11 @@ struct ClueCandidate {
   // useful plus one trash (2.98) beats one useful alone (1.99), but one useful
   // plus one trash (0.99) does not.
   double default_score = 0.0;
+  // Priority 4.5's subject: orders in the target's hand that were ALREADY
+  // clued, are unplayable, and whose identity this clue narrows from the
+  // target's own point of view. A "fill-in" tells Bob more about a card he
+  // cannot use yet, which at 8 tokens is a way to spend one without lying.
+  std::vector<int> fill_ins;
 };
 
 // One `Game::simulate` per candidate — the same cost the deleted `eval_action`

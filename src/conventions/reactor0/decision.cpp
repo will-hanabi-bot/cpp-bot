@@ -412,6 +412,29 @@ std::vector<ClueCandidate> analyse_clues(
       }
     }
     c.default_score = 1.99 * useful - trash;
+
+    // Fill-ins, for rung 4.5. "Narrows" is judged from the TARGET's own view --
+    // he is the one who learns something -- and counts both positive and
+    // negative information, since a clue that misses a card tells him about it
+    // too. Playable cards are excluded: filling in something he can already use
+    // is not a stall, and the rungs above have first refusal on it anyway.
+    auto set_size = [](const Thought& t) {
+      const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+      int n = 0;
+      for (Identity i : set) {
+        (void)i;
+        ++n;
+      }
+      return n;
+    };
+    for (int o : s.hands[ca.target]) {
+      if (!s.deck[o].clued) continue;  // must ALREADY be clued
+      auto id = s.deck[o].id();
+      if (!id || s.is_playable(*id)) continue;
+      const int before = set_size(game.players[ca.target].thoughts[o]);
+      const int after = set_size(hypo.players[ca.target].thoughts[o]);
+      if (after < before) c.fill_ins.push_back(o);
+    }
     out.push_back(std::move(c));
   }
   return out;
@@ -768,16 +791,98 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   return nullptr;
 }
 
+// 4.4 -- a FILL-IN clue: a stable clue to Bob that narrows an already-clued
+// card he cannot play yet. At 8 tokens this spends the token without asking him
+// to do anything, which is the point of a stall.
+//
+// Candidates are ranked by their BEST filled-in card, on the spec's three
+// criteria in order: a card duplicated where Alice can see it (Cathy's hand or
+// her own) is worth resolving first, then the fewest missing connectors, then
+// the lowest stack rank. The last two both prefer a card the team is CLOSE to
+// playing, which is the opposite of rungs 3.8 / 4.8, where the tiebreak wants
+// the card least likely ever to matter.
+const ClueCandidate* rung_fill_in(const Game& g,
+                                  const std::vector<ClueCandidate>& cs) {
+  const int bob = bob_of(g);
+  // The key for one filled-in card. Lower sorts better on every component.
+  struct Key {
+    int not_duped = 1;
+    int connectors = 0;
+    int rank = 0;
+    bool operator<(const Key& o) const {
+      if (not_duped != o.not_duped) return not_duped < o.not_duped;
+      if (connectors != o.connectors) return connectors < o.connectors;
+      return rank < o.rank;
+    }
+  };
+  auto key_of = [&](int order) {
+    Key k;
+    auto id = id_of(g.state, order);
+    if (!id) return k;
+    k.not_duped = dupe_visible_elsewhere(g, bob, order, *id) ? 0 : 1;
+    k.connectors = missing_connectors(g, order);
+    k.rank = variants::direction_rank(g.state, *id);
+    return k;
+  };
+
+  const ClueCandidate* best = nullptr;
+  Key best_key;
+  for (const ClueCandidate& c : cs) {
+    if (predicts_a_strike(c.reading)) continue;
+    if (!is_stable_to_bob(g, c) || c.fill_ins.empty()) continue;
+    // A clue that locks is not a fill-in, however much it also narrows. The
+    // whole reason 4.4 sits above the lock is to prefer spending the forced
+    // token WITHOUT committing Bob's hand; letting a lock in here would defeat
+    // that, and if the only fill-in available also locks then 4.6 takes it
+    // anyway.
+    if (c.reading.shape == ClueShape::STABLE_LOCK) continue;
+    for (int o : c.fill_ins) {
+      const Key k = key_of(o);
+      if (!best || k < best_key) {
+        best = &c;
+        best_key = k;
+      }
+    }
+  }
+  return best;
+}
+
+// 4.5 -- a safe STALL: a clue that designates nothing at all, so Bob cannot
+// read it as an instruction to play or discard anything.
+//
+// "Cannot be misinterpreted by Bob" is answered by the interpretation itself
+// rather than by a separate model of him: `read_clue` reports the reading every
+// seat decodes, and `analyse_clues` has already dropped anything reading
+// MISTAKE. A clue that stamps no call therefore cannot make him strike or throw
+// a critical card away.
+//
+// Locks are excluded even though they designate no single card: a lock is a
+// real instruction, and it has its own rung just below at 4.6.
+const ClueCandidate* rung_safe_stall(const Game& g,
+                                     const std::vector<ClueCandidate>& cs) {
+  Pool p = select(cs, [](const ClueCandidate& c) {
+    if (c.reading.shape != ClueShape::OTHER) return false;
+    return c.reading.reacter_side.order < 0 &&
+           c.reading.receiver_side.order < 0 && c.reading.stable_subject < 0;
+  });
+  return settle(g, std::move(p), {});
+}
+
 // --- priority 4: Alice is at 8 clues and must clue or pitch ---------------
 const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs) {
   if (g.state.clue_tokens != 8) return nullptr;
   if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;         // 4.1
   if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;  // 4.2
   if (auto* c = first_of(g, pool_stable_ditch_dupe(g, cs))) return c;   // 4.3
-  if (auto* c = first_of(g, pool_lock(g, cs))) return c;                // 4.4
-  // 4.5 fill-in and 4.6 safe stall are NOT YET IMPLEMENTED (v7.1.0). The floor
-  // below guarantees the branch still returns a legal clue without them.
-  //
+  // 4.4 and 4.5 sit ABOVE the lock deliberately. A lock commits Bob's whole
+  // hand, so at a forced clue it is worth less than information or than a
+  // harmless stall. It is also the only order in which either can ever run: at
+  // 8 tokens a re-clue of already-clued cards reads as a LOCK, so a lock
+  // candidate is available in essentially every position, and a lock above
+  // these two would swallow them both.
+  if (auto* c = rung_fill_in(g, cs)) return c;                          // 4.4
+  if (auto* c = rung_safe_stall(g, cs)) return c;                       // 4.5
+  if (auto* c = first_of(g, pool_lock(g, cs))) return c;                // 4.6
   // 4.7 -- below 2 strikes, a stable clue that makes Bob throw away a trash or
   // duplicated card, explicitly allowing a strike. This is the ONE rung that
   // tolerates a predicted misplay, so it does not go through `select`.
