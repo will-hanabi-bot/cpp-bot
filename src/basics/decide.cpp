@@ -23,6 +23,7 @@
 #include "hanabi/conventions/reactor0/call_invariants.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/endgame/fraction.h"
@@ -629,10 +630,12 @@ namespace {
 // The convention seam for scoring an action. Reactor0 owns its own clue gate
 // (src/conventions/reactor0/state_eval.cpp) and delegates everything else back
 // to reactor; reactor games are unaffected.
+// Reactor0 no longer scores clues: `choose_clue` picks one by rule before the
+// argmax below is ever reached, and `all_clues` is emptied when it declines. So
+// every action that still arrives here is a play or a discard, and those were
+// always reactor's to evaluate.
 double eval_for(const Game& game, const Action& action) {
-  return game.convention == Convention::REACTOR0
-             ? hanabi::reactor0::eval_action(game, action)
-             : hanabi::reactor::eval_action(game, action);
+  return hanabi::reactor::eval_action(game, action);
 }
 
 double clue_eval_value(const Game& game, const Clue& clue) {
@@ -757,6 +760,51 @@ PerformAction Game::take_action() const {
     // Solver returned no winning action or winrate < 1%; fall through to heuristic.
   }
 
+  // --- Reactor0 decision phase 1 (DECISION_MAKING.md "Precedence") ---
+  //
+  // The candidate clue set is built HERE, above the urgent return, rather than
+  // where the play/discard candidates are gathered. Two reasons, in order of
+  // importance:
+  //
+  //   1. Precedence step 1 is "an H4 clue, if one is available", and it
+  //      outranks step 2, "a pending REACTION". `urgent_action` below IS that
+  //      pending reaction, so an H4 check has to run before it or it can never
+  //      win. This is the one thing that outranks a reaction; everything else
+  //      about phase 1 sits below.
+  //   2. Building it once and analysing it once means the H4 pre-check and the
+  //      full walk further down share a single `Game::simulate` per candidate,
+  //      instead of paying for the candidate set twice on every urgent turn.
+  //
+  // The enumeration itself is pure -- it reads `s` and allocates -- so hoisting
+  // it changes nothing for the paths between here and its old home.
+  bool can_clue_now = s.can_clue() &&
+                       (waiting.empty() || waiting.front().receiver != s.our_player_index);
+
+  std::vector<std::pair<PerformAction, Action>> all_clues;
+  if (can_clue_now) {
+    for (int target = 0; target < s.num_players; ++target) {
+      if (target == s.our_player_index) continue;
+      for (const Clue& clue : s.all_valid_clues(target)) {
+        PerformAction perform = clue.kind == ClueKind::COLOUR
+                                     ? PerformAction{PerformColour{clue.target, clue.value}}
+                                     : PerformAction{PerformRank{clue.target, clue.value}};
+        ClueAction act{s.our_player_index, clue.target,
+                        s.clue_touched(s.hands[target], clue.kind, clue.value),
+                        clue.base()};
+        all_clues.emplace_back(perform, Action{act});
+      }
+    }
+  }
+
+
+  std::vector<hanabi::reactor0::ClueCandidate> r0_clues;
+  if (convention == Convention::REACTOR0 && !all_clues.empty()) {
+    r0_clues = hanabi::reactor0::analyse_clues(*this, all_clues);
+    if (auto h4 = hanabi::reactor0::choose_h4_clue(*this, r0_clues)) {
+      return *h4;
+    }
+  }
+
   if (urgent_action) return *urgent_action;
 
   // --- Find playable orders ---
@@ -853,38 +901,16 @@ PerformAction Game::take_action() const {
     playable_orders = m.thinks_playables(*this, s.our_player_index);
   }
 
-  bool can_clue_now = s.can_clue() &&
-                       (waiting.empty() || waiting.front().receiver != s.our_player_index);
-
-  std::vector<std::pair<PerformAction, Action>> all_clues;
-  if (can_clue_now) {
-    for (int target = 0; target < s.num_players; ++target) {
-      if (target == s.our_player_index) continue;
-      for (const Clue& clue : s.all_valid_clues(target)) {
-        PerformAction perform = clue.kind == ClueKind::COLOUR
-                                     ? PerformAction{PerformColour{clue.target, clue.value}}
-                                     : PerformAction{PerformRank{clue.target, clue.value}};
-        ClueAction act{s.our_player_index, clue.target,
-                        s.clue_touched(s.hands[target], clue.kind, clue.value),
-                        clue.base()};
-        all_clues.emplace_back(perform, Action{act});
-      }
-    }
-  }
-
-  // Reactor0 §2b: a reactive whose entire content is "you two both discard"
-  // is not worth a token when a stable clue to Bob would get a card played
-  // instead. This runs ONCE per turn over the whole candidate set, because
-  // it is a comparison *between* clues — something eval_action, which sees a
-  // single Action and is called 2(n-1) times by the argmax below, cannot
-  // express. Reactive locks, and every 1- or 2-play reactive, are untouched;
-  // the filter is a no-op unless a stable Bob play clue worth giving
-  // survives, so `all_clues` can never be emptied by it. Modelled on the
-  // force-play override further down, and inert with respect to it: a
-  // surviving Bob play clue is exactly what makes that override's
-  // `any_clue_creates_play` scan true.
+  // Precedence step 3 -- the General Clue Evaluation List. On a value this IS
+  // reactor0's answer, so return it directly and skip both `eval_for` argmaxes.
+  // On nullopt the play/discard path runs with `all_clues` EMPTIED: the walk has
+  // already declined every candidate, and letting them back into the argmax
+  // below would reinstate exactly the scoring this replaces.
   if (convention == Convention::REACTOR0) {
-    hanabi::reactor0::drop_pointless_double_discards(*this, all_clues);
+    if (auto picked = hanabi::reactor0::choose_clue(*this, r0_clues)) {
+      return *picked;
+    }
+    all_clues.clear();
   }
 
   std::vector<std::pair<PerformAction, Action>> all_plays;

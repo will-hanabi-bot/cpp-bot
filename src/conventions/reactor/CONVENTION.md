@@ -805,8 +805,11 @@ worse play.
 
 `Game::take_action` (`src/basics/decide.cpp:651-1138`). Each stage that
 returns short-circuits the rest. It scores actions through the convention seam
-`eval_for` (`:632-636`), which routes reactor0 games to
-`reactor0::eval_action` and everything else to `reactor::eval_action`.
+`eval_for`, which is `reactor::eval_action` for every convention as of v7.0.0:
+reactor0 no longer scores clues at all — its `choose_clue` picks one by rule
+before the argmax is reached and empties the candidate set when it declines, so
+only plays and discards ever arrive at the seam, and those were always
+reactor's to evaluate.
 
 | Stage | What it does | Cite |
 |---|---|---|
@@ -944,10 +947,11 @@ stack.
 
 ## 2.4 Scoring a clue: `get_result`
 
-`src/conventions/reactor/state_eval.cpp:152-291`. **Reactor only** since
-v2.3.0 — reactor0 ports this into `reactor0::get_result` and drops the flat
-bad-touch penalty (`reactor0/CONVENTION.md` §2c). Changes here must be
-considered for that copy too.
+`src/conventions/reactor/state_eval.cpp:152-291`. **Reactor only.** Between
+v2.3.0 and v7.0.0 reactor0 carried a port of this that dropped the flat
+bad-touch penalty; v7.0.0 deleted it, so there is no longer a copy to keep in
+step. Reactor0 chooses clues by the ordered priority list in
+`reactor0/DECISION_MAKING.md` instead of by any score.
 
 **Hard rejections** (all return `−100`):
 - any newly-CTP'd card that isn't in `hypo.me().hypo_plays` — and, in the
@@ -1029,13 +1033,12 @@ entry 18.
 
 **Reactor only.** Reactor0 replaces this wholesale with its pace-clue tier
 gate — a wider window, a three-way tier and no "we hold a play" conjunct (see
-`src/conventions/reactor0/CONVENTION.md` §2a). Under reactor0 this gate never
-runs, because `reactor0::eval_action` owns the clue branch. **As of v2.3.0
-reactor0 also has its own `get_result`** (`reactor0` §2c) — a port of §2.4
-below that does not charge the flat bad-touch penalty — so nothing in §2.4 or
-this section applies to reactor0 games. Still common to both conventions:
-`eval_action`'s play and discard branches, `advance`, `eval_state` and
-`eval_game`.
+`reactor0/DECISION_MAKING.md`, *Decision phase 1*). Under reactor0 this gate
+never runs, because as of v7.0.0 reactor0 does not score clues at all: the
+General Clue Evaluation List chooses one by rule, and `clue_is_admissible` is
+the only tier check. So nothing in §2.4 or this section applies to reactor0
+games. Still common to both conventions: `eval_action`'s play and discard
+branches, `advance`, `eval_state` and `eval_game`.
 
 `state_eval.cpp:540-551`. When `clue_tokens < 3` **and** `pace() >= 3` **and**
 we hold a real (non-duplicated) obvious playable, a clue must be *high value*

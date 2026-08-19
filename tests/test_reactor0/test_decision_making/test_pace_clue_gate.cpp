@@ -1,15 +1,26 @@
-// Reactor0's pace-clue tier gate (src/conventions/reactor0/state_eval.cpp,
-// CONVENTION.md §2a) — the window it fires in, and which tier it demands.
+// Reactor0's pace-clue tier gate (`clue_is_admissible`,
+// src/conventions/reactor0/decision.cpp; DECISION_MAKING.md "Decision phase 1"
+// items 1 and 2) — the window it fires in, and which tier it demands.
 //
-//   window: pace() >= 3 && clue_tokens <= 3
+//   window: pace() >= 3, and clue_tokens <= 3, or clue_tokens < 8 when Alice
+//           is occupied
 //   required tier: HIGH when Alice holds a card stamped CALLED_TO_PLAY, or —
 //                  in a variant containing an inverted suit — a card stamped
 //                  CALLED_TO_DISCARD. Otherwise NOT-LOW (HIGH or MEDIUM).
 //
-// A clue below its required tier scores a flat -1.0, reactor's rejection
-// signature. Unlike reactor's low-clue-count gate this window is one token
-// wider (`<= 3`, not `< 3`) and has NO "we hold a real play" conjunct, so it
-// also fires when Alice has nothing queued.
+// Unlike reactor's low-clue-count gate this window is one token wider
+// (`<= 3`, not `< 3`) and has NO "we hold a real play" conjunct, so it also
+// fires when Alice has nothing queued.
+//
+// v7.0.0 NOTE. These assertions used to read the gate off a SCORE: reactor0's
+// `eval_action` returned a flat -1.0 for a clue below its required tier, so
+// `EXPECT_EQ(eval_action(...), -1.0)` meant "rejected". That scorer is deleted,
+// and the gate is now a predicate the priority walk consults directly, so the
+// same boundaries are asserted as `admissible(...)` — false where the score
+// used to be -1.0, true where it used to be anything else. Every boundary
+// pinned before is pinned here; only the observable changed. The one call to
+// REACTOR's `eval_action` further down is untouched, because reactor keeps its
+// scorer.
 #include <gtest/gtest.h>
 
 #include <variant>
@@ -18,6 +29,7 @@
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/conventions/reactor/state_eval.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
@@ -39,6 +51,23 @@ Action make_clue(const Game& g, int giver, int target, ClueKind kind,
 ClueTier tier_of(const Game& g, const Action& clue) {
   Game hypo = g.simulate(clue);
   return hanabi::reactor0::clue_tier(g, hypo, std::get<ClueAction>(clue));
+}
+
+// Does the gate let this clue through? Built through `analyse_clues` rather
+// than by hand, so the test exercises the same construction `take_action`
+// hands to the priority walk.
+bool admissible(const Game& g, const Action& clue) {
+  const auto& ca = std::get<ClueAction>(clue);
+  PerformAction perform =
+      ca.clue.kind == ClueKind::COLOUR
+          ? PerformAction{PerformColour{ca.target, ca.clue.value}}
+          : PerformAction{PerformRank{ca.target, ca.clue.value}};
+  auto cands = hanabi::reactor0::analyse_clues(g, {{perform, clue}});
+  // `analyse_clues` drops a MISTAKE outright, which is a stronger rejection
+  // than the gate's; no fixture here produces one.
+  EXPECT_EQ(cands.size(), 1u) << "guard: the candidate survived analysis";
+  if (cands.size() != 1) return false;
+  return hanabi::reactor0::clue_is_admissible(g, cands.front());
 }
 
 // A position where every hand is inert: Bob's chop is duplicated in his own
@@ -78,12 +107,12 @@ TEST(Reactor0PaceClueGate, FiresAtThreeClueTokens) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: this clue must be LOW";
 
-  EXPECT_EQ(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_FALSE(admissible(g, clue))
       << "at exactly 3 clues the reactor0 gate is active and rejects a LOW "
          "clue; reactor's `< 3` window would have let it through.";
 }
 
-// One token above the window the gate is silent and the clue scores normally.
+// One token above the window the gate is silent and every clue is admissible.
 TEST(Reactor0PaceClueGate, SilentAtFourClueTokens) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 4;
@@ -92,7 +121,7 @@ TEST(Reactor0PaceClueGate, SilentAtFourClueTokens) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
-  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_TRUE(admissible(g, clue))
       << "clue_tokens == 4 is outside the window; the gate must not fire.";
 }
 
@@ -109,7 +138,7 @@ TEST(Reactor0PaceClueGate, SilentBelowPaceThree) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
-  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_TRUE(admissible(g, clue))
       << "pace == 2 is outside the window; the gate must not fire.";
 }
 
@@ -124,7 +153,7 @@ TEST(Reactor0PaceClueGate, FiresAtPaceThree) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
-  EXPECT_EQ(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_FALSE(admissible(g, clue))
       << "pace == 3 is inside the window; a LOW clue must be rejected.";
 }
 
@@ -240,7 +269,7 @@ TEST(Reactor0PaceClueGate, CtpStampFiresTheGateAboveThreeTokens) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: this clue must be LOW";
 
-  EXPECT_EQ(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_FALSE(admissible(g, clue))
       << "with a call standing the HIGH requirement reaches past 3 tokens; "
          "the old window stopped here and let this LOW clue through.";
 }
@@ -258,14 +287,13 @@ TEST(Reactor0PaceClueGate, WithoutAStampFourTokensIsStillOutsideTheWindow) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
-  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_TRUE(admissible(g, clue))
       << "the MEDIUM requirement still stops at 3 tokens.";
 }
 
 // The forced-clue exemption. At 8 tokens discarding is illegal, so gating would
-// flatten every non-HIGH clue to the same -1.0 and let the argmax break the tie
-// arbitrarily — losing the ranking exactly when there is no alternative to
-// cluing.
+// reject every non-HIGH clue at once and leave section 4 nothing to rank —
+// losing the ordering exactly when there is no alternative to cluing.
 TEST(Reactor0PaceClueGate, SilentAtEightTokensEvenWithACallStanding) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 8;
@@ -276,7 +304,7 @@ TEST(Reactor0PaceClueGate, SilentAtEightTokensEvenWithACallStanding) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
-  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_TRUE(admissible(g, clue))
       << "at 8 tokens the bot cannot discard, so the gate stands down.";
 }
 
@@ -295,6 +323,6 @@ TEST(Reactor0PaceClueGate, SilentBelowPaceThreeEvenWithACallStanding) {
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
-  EXPECT_NE(hanabi::reactor0::eval_action(g, clue), -1.0)
+  EXPECT_TRUE(admissible(g, clue))
       << "pace < 3 keeps the gate shut regardless of the widened token range.";
 }

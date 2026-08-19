@@ -14,7 +14,7 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity.h"
-#include "hanabi/conventions/reactor0/state_eval.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/logging/state_snapshot.h"
 #include "replay_helpers.h"
 #include "test_harness.h"
@@ -1787,24 +1787,34 @@ TEST(DecisionMaking1942181, T41PrefersStablePlayOverPointlessDoubleDiscard) {
   }
   ASSERT_GE(blue, 0) << "every EA suit in this variant clues as Blue";
 
-  // Pin the two predicates directly on this position. It is the only place
-  // they can be tested against a REAL rank Phase C: hand-built fixtures tend
-  // to hard-reject in Phase A or B and never reach the double discard.
+  // Pin the two SHAPES directly on this position. It is the only place they can
+  // be read off a REAL rank Phase C: hand-built fixtures tend to hard-reject in
+  // Phase A or B and never reach the double discard.
+  //
+  // v7.0.0: these were `is_pointless_double_discard` and
+  // `is_stable_play_clue_for_bob`, the two predicates behind the standalone
+  // §2b filter. Both are deleted. The priority list needs no filter because the
+  // same two facts now fall out of the classifier: rank 3 to Cathy is a
+  // DOUBLE_DISCARD, which is not a priority-2 shape (priority 2 is one play and
+  // one discard), while Blue to Bob is a STABLE_PLAY, which rung 3.1 selects.
+  // Rung 3.1 is above the only rungs a double discard can reach — 3.6 and 4.8 —
+  // so the ordering that used to be hand-coded is now structural.
   {
     hanabi::ClueAction dd{alice, cathy,
                           s.clue_touched(s.hands[cathy], hanabi::ClueKind::RANK, 3),
                           hanabi::BaseClue{hanabi::ClueKind::RANK, 3}};
     hanabi::Game hypo = game.simulate(hanabi::Action{dd});
-    EXPECT_TRUE(hanabi::reactor0::is_pointless_double_discard(game, hypo, dd))
-        << "rank 3 to Cathy is a zero-play Phase C aimed at a safe receiver";
+    EXPECT_EQ(hanabi::reactor0::read_clue(game, hypo, dd).shape,
+              hanabi::reactor0::ClueShape::DOUBLE_DISCARD)
+        << "rank 3 to Cathy is a zero-play Phase C";
 
     hanabi::ClueAction blue_bob{
         alice, bob, s.clue_touched(s.hands[bob], hanabi::ClueKind::COLOUR, blue),
         hanabi::BaseClue{hanabi::ClueKind::COLOUR, blue}};
     hanabi::Game blue_hypo = game.simulate(hanabi::Action{blue_bob});
-    EXPECT_TRUE(hanabi::reactor0::is_stable_play_clue_for_bob(game, blue_hypo,
-                                                              blue_bob))
-        << "Blue to Bob is the play-producing stable clue that licenses the drop";
+    EXPECT_EQ(hanabi::reactor0::read_clue(game, blue_hypo, blue_bob).shape,
+              hanabi::reactor0::ClueShape::STABLE_PLAY)
+        << "Blue to Bob is the play-producing stable clue that outranks it";
   }
 
   hanabi::PerformAction action = game.take_action();

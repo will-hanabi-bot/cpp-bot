@@ -517,10 +517,7 @@ const ClueCandidate* rung_1(const Game& g, const std::vector<ClueCandidate>& cs)
 // --- priority 2: a reactive discard clue Alice can afford ----------------
 const ClueCandidate* rung_2(const Game& g, const std::vector<ClueCandidate>& cs) {
   Pool p = select(cs, [&g](const ClueCandidate& c) {
-    if (c.reading.shape != ClueShape::REACTIVE_DISCARD &&
-        c.reading.shape != ClueShape::DOUBLE_DISCARD) {
-      return false;
-    }
+    if (c.reading.shape != ClueShape::REACTIVE_DISCARD) return false;
     auto sides = discarded_sides(g, c.reading);
     if (sides.empty()) return false;
     // EVERY discarded card must be affordable. The spec says "the discarded
@@ -785,7 +782,6 @@ std::optional<PerformAction> choose_clue(
     rung = "4.eight_clues";
   }
   if (!pick) return std::nullopt;
-
   hanabi::logging::log_branch("reactor0.choose_clue",
                               {{"rung", rung},
                                {"shape", shape_name(pick->reading.shape)},

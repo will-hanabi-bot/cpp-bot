@@ -1,6 +1,6 @@
 # Reactor0 decision making
 
-> **STATUS — phase 1 implemented in v7.0.0; phase 2 is specification only.**
+> **STATUS — phase 1 shipped in v7.0.0; phase 2 is specification only.**
 > This document is the ruling reference for **how reactor0 decides what to do on
 > its turn**. `CONVENTION.md` remains the ruling reference for what a clue
 > *means*.
@@ -30,29 +30,30 @@ We will mostly borrow the existing implementations of high/medium/low tier clues
 Note the change to H1 to also require that Cathy's chop be either playable or
 critical.
 
-A clue tier (`clue_tier`, `state_eval.cpp:405-447`) is HIGH iff **any** of:
+A clue tier (`clue_tier`, `state_eval.cpp:312-373`) is HIGH iff **any** of:
 
 1. **H1** — ALL of H1a, H1b, and H1c.
     - **H1a — Bob's chop is endangered.** Bob is not locked, and has no safe
       action (no obvious play, no known trash, no CTD — all three are covered by
       `thinks_trash`, `player_game.cpp:115-132`), and his chop is *endangered*
-      (below). `:417-421`.
+      (below). `:327-331`.
     - **H1b** — Cathy's chop is not playable or critical, **judged from Alice's
       full visibility** (the same viewpoint as *endangered chop* below, not
       common knowledge). If Cathy has no chop, this condition is vacuously true.
     - **H1c** — Cathy's chop is either a trash or a same-hand-dupe, *or* Bob does
       not have a colour stable clue to give to Cathy.
 2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed suit,
-   via `variants::is_first_or_second_rank`). `:423`.
+   via `variants::is_first_or_second_rank`). `:346`.
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank
-   (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:425`.
+   (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:348`.
 4. **H4** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
-   finesse**.
+   finesse** (`clue_is_h4`, `:301-310`; the finesse detector itself is
+   `clue_gets_finesse`, `:280-299`).
 
 NOT-LOW iff any of H1a, H2, H3, H4, or:
 
 5. **N5 — Bob's chop is playable** and is not duplicated in his own hand
-   (`has_playable_chop`, `:151-159`; applied at `:428-432`). Like H1 this is a
+   (`has_playable_chop`, `:151-159`; applied at `:354-358`). Like H1 this is a
    property of the **position, not of the candidate clue**, so it lifts every
    clue that turn to at least MEDIUM. Deliberately weaker than `at_risk_chop`: it
    asks only "playable, and Bob cannot just pitch a spare copy", and does *not*
@@ -60,12 +61,12 @@ NOT-LOW iff any of H1a, H2, H3, H4, or:
    is not that the card is in danger but that it is a play the team should be
    collecting, and Cathy is already expecting Alice to save it or get it played.
 
-…or, when **Cathy's** chop is endangered (`:434-445`):
+…or, when **Cathy's** chop is endangered (`:360-370`):
 
-6. **N3** — the clue gets two new plays. `:436-437`.
+6. **N3** — the clue gets two new plays. `:361-362`.
 7. **N2** — the clue is **reactive** and Bob has no colour stable play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
-   since dispatch is positional (§1a, `interpret_clue.cpp:620-631`). `:438-444`.
+   since dispatch is positional (§1a, `interpret_clue.cpp:620-631`). `:363-369`.
 
 MEDIUM is NOT-LOW and not HIGH; LOW is everything else. "New plays" are counted as
 CTP-status transitions between the real game and the clue's hypo
@@ -144,6 +145,13 @@ Two things outrank the phases below, and one thing sits between them:
 Step 2 is **reacter-only**. A pending reaction is urgent because the receiver is
 decoding against it, so it interrupts everything below it and only an H4 clue
 outranks it.
+
+Step 1 is implemented as `choose_h4_clue` (`decision.cpp`), spliced into
+`Game::take_action` **above** the urgent return that actions the reaction. It
+deliberately does not apply §4's floor: the floor exists so §4 always returns
+something at 8 tokens, and applying it here would let an arbitrary clue outrank
+a reaction. The candidate set is built and analysed once per turn and shared
+with step 3, so the pre-check costs no extra simulation.
 
 A **receiver**-side call carries no such urgency. It makes Alice *occupied*, which
 is what phase 1 rule 1a keys on — so Alice may give **any HIGH-tier clue** while
@@ -414,8 +422,19 @@ list by priority:
 
 ## How this maps to code
 
-Nothing in this section is implemented yet; it records the machinery the
-implementation is expected to reuse rather than reinvent.
+The machinery *Decision phase 1* reuses rather than reinvents. The list itself
+lives in `src/conventions/reactor0/decision.cpp`:
+
+| Piece | Symbol |
+|---|---|
+| one analysed candidate | `ClueCandidate` |
+| the per-turn simulation pass | `analyse_clues` |
+| the tier gate (phase 1 items 1 and 2) | `clue_is_admissible` |
+| Precedence step 1 | `choose_h4_clue` |
+| Precedence step 3 — the walk | `choose_clue` |
+| shape classification | `read_clue` / `outcome_of` |
+| priority 2's admissibility | `discard_is_affordable` |
+| the §3.6 / §4.8 tiebreak | `missing_connectors` |
 
 | Rule | Existing machinery | Where |
 |---|---|---|

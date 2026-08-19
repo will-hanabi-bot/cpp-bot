@@ -1,6 +1,10 @@
 # PLAN — reactor0's rules-based decision framework (v7.0.0 / v7.1.0)
 
-**Status: proposal for review. No implementation has started.**
+**Status: phase 1 (v7.0.0) is SHIPPED. Phase 2 (v7.1.0) is still a proposal.**
+
+Everything below describes the v7.0.0 work as it landed, except §7, which scopes
+phase 2 and remains unbuilt. `src/conventions/reactor0/DECISION_MAKING.md` is the
+ruling reference; this file is the plan of record for how the change was staged.
 
 This document scopes the replacement of reactor0's tuned-constant decision layer
 with the ordered, rules-based procedure specified in
@@ -226,8 +230,10 @@ it anyway.
 
 | File | Why |
 |---|---|
-| `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | 11 assertions hard-code the removed `-1.0` (`:81, :95, :112, :127, :243, :261, :279, :298`). They become assertions on the new admissibility predicate. `:145` calls **reactor's** `eval_action` and stays. |
-| `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | Its four subject predicates are deleted; rewritten against priority 2's admissibility rule. |
+| `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | **8** assertions hard-code the removed `-1.0` (`:81, :95, :112, :127, :243, :261, :279, :298`). They became assertions on `clue_is_admissible`. The one call to **reactor's** `eval_action` stays. *(This row read "11" while the plan was a proposal; the enumeration beside it was always 8, and 8 is right.)* |
+| `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | Its subject predicates are deleted; rewritten against `discard_is_affordable` and the shape facts. 11 tests → 9: the two `receiver_is_safe` CTP/CTD cases and `ReactiveToEndangeredReceiverIsNeverPointless` pinned a question priority 2 does not ask (it judges the CARD THROWN, not the receiver's position) and have no successor; `CopyVisibleElsewhereIsAffordable` is new. |
+| `tests/test_reactor0/test_decision_making/test_replay_1942181_...cpp` | **Missed by this section while it was a proposal.** It calls two deleted predicates directly; they became shape assertions. Its pinned action assertions did not move. |
+| `tests/test_reactor0/test_misc/test_replay_1957905_...cpp` | **Diverged, and was adjudicated.** Its "rank 2 is a direct play clue" reading is now asserted on the shape; the secondary "and it is chosen" moved to the reactive play clue, because rung 1 outranks rung 3.1 unconditionally. See the comment in the file. |
 
 ### Survives untouched
 
@@ -246,31 +252,33 @@ cases for H1b/H1c/H4.
 and the divergence is reported** — old action, new action, and the rule that
 fired — for adjudication before the test is touched.
 
-### Expected inert in v7.0.0
+### Expected inert in v7.0.0 — revised
 
-The nine play/discard-asserting reactor0 replays (1942458, 1942525, 1942777,
-1957936, 1957942, 1957953, 1959065, 1961419, plus
-`test_urgent_skips_known_trash.cpp`) resolve through the urgent and endgame paths,
-which phase 1 does not touch. They become the phase-2 corpus for v7.1.0.
+This section originally claimed the nine play/discard-asserting reactor0 replays
+(1942458, 1942525, 1942777, 1957936, 1957942, 1957953, 1959065, 1961419, plus
+`test_urgent_skips_known_trash.cpp`) could not be touched by phase 1, because
+they resolve through the urgent and endgame paths.
 
----
-
-## 9. Open spec items
-
-These need a ruling before phase-1 code is written. Proposed wording will be added
-to `DECISION_MAKING.md`; each is flagged there and here until confirmed.
-
-1. **§4 fallback.** At 8 clue tokens a clue is forced, but §4 lists only 4.1-4.4.
-   What is given when none of them is available? (Proposal: the best clue by the
-   default tiebreak, ignoring tier.)
-2. **Does the `>= N clues**` relaxation apply to 3.6?** It is the only sub-item of
-   priority 3 with no explicit clue-count condition.
-3. **H1b's viewpoint.** Is "Cathy's chop is playable or critical" judged from
-   Alice's full visibility, like `at_risk_chop`, or from common knowledge?
-4. **H4 vs a pending reaction when Alice is the *receiver*.** The settled rule
-   covers Alice as reacter; does an H4 finesse also outrank a receiver-side call?
+**That stopped being true when Precedence step 1 was implemented.** The H4
+pre-check is spliced ABOVE the urgent return, so a turn that would have actioned
+a pending reaction can now give a finesse instead. All nine were run; none moved.
+They remain the phase-2 corpus for v7.1.0.
 
 ---
+
+## 9. Open spec items — CLOSED
+
+All four were ruled on before phase-1 code was written, and the rulings are folded
+into `DECISION_MAKING.md` itself rather than tracked here:
+
+1. **§4 fallback at 8 tokens** — the floor: best clue by the default tiebreak,
+   ignoring tier. Rungs 4.5 and 4.6 were deferred to v7.1.0 at the same time, and
+   the floor sits beneath them.
+2. **Does `>= N clues**` reach 3.6?** No. 3.6 is unconditional.
+3. **H1b's viewpoint** — Alice's full visibility, matching `at_risk_chop`.
+4. **H4 vs a receiver-side call** — a receiver call makes Alice *occupied* but
+   never blocks a HIGH clue; only the *reacter* step of Precedence is a hard
+   interrupt, and only H4 outranks it.
 
 ## 10. Documentation moves (landing with this proposal)
 

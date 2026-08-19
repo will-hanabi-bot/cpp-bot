@@ -22,6 +22,7 @@
 
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/basics/identity.h"
 #include "hanabi/logging/state_snapshot.h"
 #include "replay_helpers.h"
@@ -1495,9 +1496,40 @@ TEST(MiscReplay1957905, OrangeChuckTargetMustBePlayable) {
          "can see is already on the stacks (§1g: giver-only knowledge rejects)";
 
   // The fix's payoff: the rank whose only useful identity is the playable
-  // orange is now a direct play clue, and it is the best action available.
+  // orange reads as a direct play clue rather than a chuck. That reading is
+  // what this replay exists to pin, and it is asserted on the SHAPE below
+  // rather than on the chosen action.
+  {
+    hanabi::ClueAction rank_two{
+        s.our_player_index, yagami,
+        s.clue_touched(s.hands[yagami], hanabi::ClueKind::RANK, 2),
+        hanabi::BaseClue{hanabi::ClueKind::RANK, 2}};
+    hanabi::Game hypo = game.simulate(hanabi::Action{rank_two});
+    EXPECT_EQ(hanabi::reactor0::read_clue(game, hypo, rank_two).shape,
+              hanabi::reactor0::ClueShape::STABLE_PLAY)
+        << "rank 2 to yagami_black names the playable orange as a play";
+  }
+
+  // v7.0.0: this test used to additionally assert that rank 2 to yagami_black
+  // was the action CHOSEN. It no longer is, and the change is intended.
+  //
+  // Reactor0 now picks by walking DECISION_MAKING.md's General Clue Evaluation
+  // List instead of by argmax over a score. Rank 1 to the third seat classifies
+  // REACTIVE_PLAY -- two cards played -- and priority 1 is "Alice has a reactive
+  // play clue available", which sits above rung 3.1's stable play clue to Bob
+  // and carries no quality condition. So the reactive wins on the ordering.
+  //
+  // The old scorer preferred rank 2 because its default tiebreak read +1.99
+  // against the reactive's -2.00. That -2.00 is bad touch alone: a reactive
+  // calls cards by POSITION, so the two cards it gets played are unrelated to
+  // the two trash cards it happens to touch. Ranking one play above two on the
+  // strength of that number is exactly the reasoning v7.0.0 deletes.
+  //
+  // Adjudicated when the divergence surfaced; the spec was held to be right and
+  // this expectation updated.
   auto* rank = std::get_if<hanabi::PerformRank>(&action);
   ASSERT_NE(rank, nullptr) << "expected a rank clue";
-  EXPECT_EQ(rank->value, 2);
-  EXPECT_EQ(rank->target, yagami);
+  EXPECT_EQ(rank->value, 1);
+  EXPECT_EQ(rank->target, s.next_player_index(yagami))
+      << "the reactive play clue to the third seat is priority 1";
 }

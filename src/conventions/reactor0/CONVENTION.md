@@ -40,12 +40,14 @@ giver, Bob the next player, Cathy the one after.
   `advance` simulates a playable orange with the Discard button, `eval_state`
   scores 3+ strikes at `−100`, and `eval_game` prices an orange CTD as a play
   call (reactor's §2.6/§2.7).
-- **Not shared**: everything about *which clue to give*. Reactor0 owns
-  `eval_action`'s clue branch, its own `get_result` and a candidate filter run
-  before the argmax, all in `src/conventions/reactor0/state_eval.cpp`.
-  `src/basics/decide.cpp:632-636` dispatches on `Game::convention`; `:886-887`
-  runs the filter. **All three are scheduled for removal in v7.0.0** — see
-  [DECISION_MAKING.md](DECISION_MAKING.md) and [PLAN.md](../../../PLAN.md).
+- **Not shared**: everything about *which clue to give*. As of v7.0.0 reactor0
+  chooses a clue by walking the ordered **General Clue Evaluation List**
+  (`choose_clue`, `src/conventions/reactor0/decision.cpp`) rather than by
+  scoring candidates and taking an argmax. Its fork of `eval_action` /
+  `get_result` / `clue_branch_value`, and the standalone
+  pointless-double-discard filter, are all deleted. `src/basics/decide.cpp`
+  splices the walk into `take_action` behind a `Convention::REACTOR0` guard.
+  See [DECISION_MAKING.md](DECISION_MAKING.md), which is the ruling reference.
 - **Absent by design** (present in reactor): the reactive focus, referential
   play for colour clues, response inversion and rewinds, the loadedness
   dispatcher, deferral-carries-reactive, re-tasking. Reactor0's dispatcher is
@@ -613,10 +615,11 @@ What used to be documented here, and where it went:
 | §2b The pointless-double-discard filter | Deleted in v7.0.0 — the General Clue Evaluation List's priority 2 admissibility condition subsumes it |
 | §2c Clue scoring — reactor0's own `get_result` | Deleted in v7.0.0 — replaced by the ordered priority list |
 
-Until v7.0.0 ships, the **code** still runs the tuned-constant layer
-(`src/conventions/reactor0/state_eval.cpp`), and DECISION_MAKING.md marks itself
-as specification rather than description. Reactor is unaffected throughout; its
-decision rules stay in [reactor's CONVENTION.md §2](../reactor/CONVENTION.md).
+As of v7.0.0 the **code** runs the priority list, and DECISION_MAKING.md
+describes the build for everything in *Decision phase 1*; *Decision phase 2* and
+rungs §4.5/§4.6 remain specification, and that file's *Not yet implemented*
+table says so. Reactor is unaffected throughout; its decision rules stay in
+[reactor's CONVENTION.md §2](../reactor/CONVENTION.md).
 
 ## Test coverage
 
@@ -652,6 +655,8 @@ decision rules stay in [reactor's CONVENTION.md §2](../reactor/CONVENTION.md).
 | `tests/test_basics/test_snapshot_convention.cpp` | convention/rlocks snapshot round-trip + reactor back-compat |
 | `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | Clue tiers (DECISION_MAKING.md) — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim |
 | `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | The two gate windows (DECISION_MAKING.md, *Decision phase 1*) (both boundaries incl. `clue_tokens == 3`, the HIGH row reaching past 3, the 8-token exemption, and the no-stamp negative that pins the split), required tier, and that reactor's own gate is unchanged |
-| `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | The pointless-double-discard predicates (removed in v7.0.0) — every `receiver_is_safe` clause, and the negatives that keep the filter off stable clues, colour reactives and endangered receivers |
-| `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | Prefers a stable play over a double discard, end to end on the replay that motivated them, plus both predicates on a real Phase C |
+| `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | Which reactives priority 2 refuses to propose — all three arms of `discard_is_affordable` and its negative, plus the shape facts the rungs select on (a clue to Bob is never reactive; a colour reactive is never a double discard; a playless clue to Bob is not a stable play) |
+| `tests/test_reactor0/test_decision_making/test_clue_shape.cpp` | Clue-shape classification — result-orientation on inverted suits, and the receiver judged against the stacks the reacter leaves behind |
+| `tests/test_reactor0/test_decision_making/test_clue_priority.cpp` | The General Clue Evaluation List itself — the default tiebreak, all three gate windows, `discard_is_affordable`, `missing_connectors` against the spec's worked example, rung 1 outranking the lower rungs, the §4 floor and its empty-set counterpart, and `choose_h4_clue` as Precedence step 1 |
+| `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | Prefers a stable play over a double discard, end to end on the replay that motivated it, plus both shapes read off a real Phase C |
 | `tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp` | N5 end to end — a playable non-duped chop on Bob lifts every clue, so a direct play clue beats the lock the flattened gate used to pick |
