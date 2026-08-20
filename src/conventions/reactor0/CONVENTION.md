@@ -97,6 +97,12 @@ play in reactor0.** Priority:
 4. **The orange ladder** (`:274-314`), reached only when no playable orange
    was revealed. An orange colour clue names one orange card to get rid of or
    to stack:
+   A card called to **pitch** (press Play) is additionally narrowed by
+   `drop_playable_inverted`: it cannot be the inverted suit's currently playable
+   card, because that reading would have been a *chuck*. `reactor::target_play`
+   narrows a play call to the PLAYABLE set, which contains exactly that card, so
+   it has to be filtered back out (replay 1966286 T7).
+
    The ladder applies only to a colour clue that **names the inverted suit**
    (`names_inverted_suit`). Selecting on "touched a card that could be orange"
    is a different question wherever a variant lets a non-orange card be touched

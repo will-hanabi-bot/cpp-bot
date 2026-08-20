@@ -163,6 +163,27 @@ std::vector<int> orange_touched(const Game& game, const ClueAction& action) {
   return out;
 }
 
+}  // namespace
+
+void drop_playable_inverted(Game& game, int order) {
+  const State& state = game.state;
+  if (!variants::includes_inverted(state)) return;
+  const IdentitySet& before = game.common.thoughts[order].inferred;
+  if (before.is_empty()) return;
+  IdentitySet after = before.filter([&state](Identity i) {
+    return !(variants::is_inverted_id(state, i) && state.is_playable(i));
+  });
+  if (after.is_empty()) return;  // would erase the reading; leave it alone
+  if (after == before) return;
+  game.with_thought(order, [&after](const Thought& t) {
+    Thought out = t;
+    out.inferred = after;
+    return out;
+  });
+}
+
+namespace {
+
 // Stamp a CHUCK. Mirrors reactor's idiom (`target_play` +
 // `called_focus_status`, reactor/interpret_clue.cpp:132 and
 // variants/inverted.cpp:53-61): narrow `inferred` to the identities that
@@ -381,8 +402,12 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
         !(target_id && game.state.is_playable(*target_id))) {
       return std::nullopt;
     }
-    return hanabi::reactor::target_play(game, action, *target,
-                                        /*urgent=*/false, /*stable=*/true);
+    auto interp = hanabi::reactor::target_play(game, action, *target,
+                                              /*urgent=*/false, /*stable=*/true);
+    // A pitch target is not the playable orange -- that would have been a
+    // chuck. `target_play` narrows to the playable set, which includes it.
+    if (interp) drop_playable_inverted(game, *target);
+    return interp;
   }
 
   // 4. The receiver knows none of the touched cards can be playable.

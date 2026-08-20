@@ -365,6 +365,11 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
             ? stamp_orange_pitch(game, action, react_order, /*urgent=*/true)
             : target_play(game, action, react_order, /*urgent=*/true,
                           /*stable=*/false);
+    // The reacter is being told to PITCH, so their card is not the playable
+    // orange; `target_play` leaves it in because it narrows to the playable set.
+    if (interp && !target_inverted && !free_pitch) {
+      drop_playable_inverted(game, react_order);
+    }
     if (!interp) continue;
     if (!stamp_receiver_play(prev, game, action, target)) continue;
     auto target_id = state.deck[target].id();
@@ -431,6 +436,11 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
                       ? target_discard(game, action, react_order, /*urgent=*/true)
                       : target_play(game, action, react_order, /*urgent=*/true,
                                     /*stable=*/false);
+    // Phase B calls the reacter to PITCH the connector, so their card is not
+    // the playable orange -- that reading would have been a chuck.
+    if (interp && !variants::target_is_inverted(state, receive_order)) {
+      drop_playable_inverted(game, react_order);
+    }
     if (!interp) {
       rb.undo();
       return std::nullopt;

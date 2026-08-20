@@ -25,6 +25,9 @@
 // `Player::order_trash` then reports as known trash.
 #include <gtest/gtest.h>
 
+#include <cstdio>
+#include <string>
+
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/clue.h"
@@ -32,6 +35,7 @@
 #include "hanabi/basics/interp.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
@@ -486,4 +490,83 @@ TEST(Reactor0Orange, ColourClueNotNamingOrangeSkipsTheLadder) {
       << "narrowing to a single identity here is the bug: it pinned Orange 1";
   EXPECT_FALSE(inf.is_exactly(Identity{orange, 1}))
       << "the holder must not be told their Blue 1 is an Orange 1";
+}
+
+// Replay 1966286 T7. A card called to PITCH cannot be the inverted suit's
+// currently playable card: if it were, the convention would have called a
+// CHUCK, since pressing Discard is how an orange reaches its stack.
+//
+// `reactor::target_play` narrows a play call to the PLAYABLE set, and on an
+// inverted suit that set contains exactly the card a pitch cannot be. With
+// stacks r1/b0/o1 the playable set is {r2, b1, o2}, so a reacter called to
+// pitch was left believing their card might be Orange 2 -- which they would
+// have chucked onto its stack rather than thrown away.
+//
+// The rule is pinned directly here. Reaching it through a clue needs a reactive
+// whose reacter call survives to the playable-set narrowing, and the three
+// reactor0 stamp sites that do so are covered by the suites; what matters for
+// correctness is the predicate itself.
+TEST(Reactor0Orange, DropPlayableInvertedRemovesOnlyTheChuckCandidate) {
+  SetupOptions opts;
+  opts.variant_name = "Rainbow-Ones & Orange (3 Suits)";
+  opts.hands = {
+      {"b3", "b4", "r4", "r5", "b5"},
+      {"r2", "o4", "b4", "o5", "r5"},
+      {"o3", "r3", "b2", "o1", "r1"},
+  };
+  opts.play_stacks = {1, 0, 1};  // playable = r2, b1, o2
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int orange = 2;
+  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted);
+  ASSERT_TRUE(g.state.is_playable(Identity{orange, 2}))
+      << "guard: Orange 2 is playable, which is what makes it a chuck target";
+  ASSERT_TRUE(g.state.is_playable(Identity{0, 2})) << "guard: Red 2 playable";
+
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  // Exactly what `target_play` leaves behind on a pitch call at these stacks.
+  g.with_thought(o, [](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::from_iter(
+        {Identity{0, 2}, Identity{1, 1}, Identity{2, 2}});
+    return out;
+  });
+
+  hanabi::reactor0::drop_playable_inverted(g, o);
+
+  const IdentitySet& inf = g.common.thoughts[o].inferred;
+  EXPECT_FALSE(inf.contains(Identity{orange, 2}))
+      << "the playable orange is the one identity a PITCH call cannot mean";
+  EXPECT_TRUE(inf.contains(Identity{0, 2})) << "Red 2 is a genuine pitch target";
+  EXPECT_TRUE(inf.contains(Identity{1, 1})) << "Blue 1 likewise";
+}
+
+// It refuses to empty the set. If the playable orange is all that is left the
+// reading is already contradictory, and narrowing to nothing would destroy the
+// evidence rather than record it.
+TEST(Reactor0Orange, DropPlayableInvertedNeverEmptiesTheSet) {
+  SetupOptions opts;
+  opts.variant_name = "Rainbow-Ones & Orange (3 Suits)";
+  opts.hands = {
+      {"b3", "b4", "r4", "r5", "b5"},
+      {"r2", "o4", "b4", "o5", "r5"},
+      {"o3", "r3", "b2", "o1", "r1"},
+  };
+  opts.play_stacks = {1, 0, 1};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  g.with_thought(o, [](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::single(Identity{2, 2});  // only the playable o2
+    return out;
+  });
+
+  hanabi::reactor0::drop_playable_inverted(g, o);
+  EXPECT_TRUE(g.common.thoughts[o].inferred.contains(Identity{2, 2}))
+      << "an empty inference is worse than a contradictory one";
 }

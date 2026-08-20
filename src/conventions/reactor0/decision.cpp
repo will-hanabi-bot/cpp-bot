@@ -557,18 +557,21 @@ const ClueCandidate* rung_1(const Game& g, const std::vector<ClueCandidate>& cs)
 const ClueCandidate* rung_2(const Game& g, const std::vector<ClueCandidate>& cs) {
   Pool p = select(cs, [&g](const ClueCandidate& c) {
     if (c.reading.shape != ClueShape::REACTIVE_DISCARD) return false;
-    auto sides = discarded_sides(g, c.reading);
-    if (sides.empty()) return false;
-    // EVERY discarded card must be affordable. The spec says "the discarded
-    // card"; a double discard throws two, and losing either is a real loss, so
-    // the conservative reading is the one that cannot cost the team a card.
-    for (const auto& side : sides) {
-      if (!discard_is_affordable(g, side.first, side.second)) return false;
-    }
-    return true;
+    // BOB is the one who plays, and CATHY is the one who discards. A reactive
+    // discard the other way round -- Cathy playing, Bob throwing something away
+    // -- is not priority 2 and falls to the rungs below. The tiebreaks are
+    // written entirely about Bob's played card, which is what makes the
+    // direction load-bearing rather than cosmetic.
+    if (c.reading.reacter_side.outcome != Outcome::PLAY) return false;
+    if (c.reading.receiver_side.outcome != Outcome::DISCARD) return false;
+    // Cathy's discarded card is the one that has to be affordable.
+    return discard_is_affordable(g, cathy_of(g), c.reading.receiver_side.order);
   });
+  // `require_bob_plays` is now vacuous here -- the rung already demands it --
+  // but it is kept so the chain still reads as the spec writes it, and so
+  // priority 1 and priority 2 keep sharing one definition.
   std::vector<Term> chain = bob_card_chain(g, /*require_bob_plays=*/true);
-  // 6. the discarded card is a same-hand-dupe
+  // 6. Cathy's discarded card is a same-hand-dupe
   chain.push_back([&g](const ClueCandidate& c) {
     for (const auto& side : discarded_sides(g, c.reading)) {
       auto id = id_of(g.state, side.second);
@@ -576,7 +579,7 @@ const ClueCandidate* rung_2(const Game& g, const std::vector<ClueCandidate>& cs)
     }
     return false;
   });
-  // 7. the discarded card is trash
+  // 7. Cathy's discarded card is trash
   chain.push_back([&g](const ClueCandidate& c) {
     for (const auto& side : discarded_sides(g, c.reading)) {
       auto id = id_of(g.state, side.second);

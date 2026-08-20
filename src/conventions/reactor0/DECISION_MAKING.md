@@ -258,7 +258,7 @@ is judged from Alice's own inference, not common knowledge.
     5. Bob's card is a clue-regain card (5's in normal variants, 1 in reversed)
     6. Default tiebreak.
 
-2. **Alice has a reactive discard clue available**, where the discarded card is
+2. **Alice has a reactive discard clue available where Bob plays a card**, where Cathy's discarded card is
    trash, a same-hand-dupe, or a good card that Alice sees at least one dupe of in
    any other player's hand (including her own). Tiebreak by the following:
     1. If Bob plays, then Bob's card connects to another card in either Bob's or
