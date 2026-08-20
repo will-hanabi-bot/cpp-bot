@@ -19,13 +19,60 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import pathlib
 import re
 import sys
+
+if hasattr(sys.stdout, "reconfigure"):  # Windows consoles default to cp1252,
+    sys.stdout.reconfigure(encoding="utf-8")  # which cannot encode the arrows
+    sys.stderr.reconfigure(encoding="utf-8")  # and the empty-set glyph below.
 from typing import Any
 
-SUIT_ABBR = ["r", "y", "g", "b", "p", "i"]  # red, yellow, green, blue, purple, ???
-# Variant-specific suit letters are in data/suits.json; for snapshot display
-# we just lean on the suit_index numeric form when out of range.
+# Fallback only. The real suit list depends on the VARIANT, so this positional
+# guess is wrong for anything that is not the default 5-suit game -- in
+# "Rainbow-Ones & Orange (3 Suits)" the suits are Red/Blue/Orange, and this list
+# renders Blue as "y" and Orange as "g". That mislabelling made an orange
+# inversion bug read as a green one, so the real names are loaded below and this
+# is used only when the variant cannot be resolved.
+SUIT_ABBR = ["r", "y", "g", "b", "p", "i"]
+
+_VARIANTS_PATH = pathlib.Path(__file__).resolve().parent.parent / "data" / "variants.json"
+
+
+def suit_abbrs_for(variant_name: str | None) -> list[str]:
+    """Per-suit letters for `variant_name`, from data/variants.json.
+
+    Collisions are disambiguated by taking more letters, so Blue and Black do
+    not both come out as "b".
+    """
+    if not variant_name:
+        return SUIT_ABBR
+    try:
+        with open(_VARIANTS_PATH, encoding="utf-8") as f:
+            variants = json.load(f)
+    except OSError:
+        return SUIT_ABBR
+    entries = variants if isinstance(variants, list) else variants.get("variants", [])
+    suits = None
+    for v in entries:
+        if isinstance(v, dict) and v.get("name") == variant_name:
+            suits = v.get("suits")
+            break
+    if not suits:
+        return SUIT_ABBR
+    out = []
+    for name in suits:
+        tag = name[0].lower()
+        n = 1
+        while tag in out and n < len(name):
+            n += 1
+            tag = name[:n].lower()
+        out.append(tag)
+    return out
+
+
+# Set once the STATE record's variant is known.
+_ACTIVE_ABBR: list[str] = SUIT_ABBR
 
 
 def decode_empathy(bits: int) -> str:
@@ -42,7 +89,7 @@ def decode_empathy(bits: int) -> str:
         if bits & (1 << k):
             suit = k // 5
             rank = (k % 5) + 1
-            tag = SUIT_ABBR[suit] if suit < len(SUIT_ABBR) else f"s{suit}"
+            tag = _ACTIVE_ABBR[suit] if suit < len(_ACTIVE_ABBR) else f"s{suit}"
             ids.append(f"{tag}{rank}")
     return ",".join(ids)
 
@@ -63,7 +110,10 @@ def render_state(rec: dict[str, Any]) -> None:
     dbg = rec.get("debug", {})
     replay = rec.get("replay", {})
     print(f"--- STATE turn={rec.get('turn')} game_id={rec.get('game_id')} bot={rec.get('bot')} ---")
-    print(f"  variant: {replay.get('variant')}")
+    global _ACTIVE_ABBR
+    _ACTIVE_ABBR = suit_abbrs_for(replay.get("variant"))
+    print(f"  variant: {replay.get('variant')}"
+          f"  suits: {'/'.join(_ACTIVE_ABBR)}")
     print(f"  current_player: {dbg.get('current_player_index')} / {replay.get('num_players')}")
     print(f"  stacks: {dbg.get('play_stacks')}  max_ranks: {dbg.get('max_ranks')}")
     print(f"  clues: {dbg.get('clue_tokens')}  strikes: {dbg.get('strikes')}  "
