@@ -9,6 +9,7 @@
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/reversed.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::reactor0 {
 
@@ -212,6 +213,26 @@ bool chuck_button_is_safe(const Game& game, int order) {
 
 }  // namespace
 
+namespace {
+
+// Every rung returns through here, so a trace always names the rung that fired
+// and the button it pressed. Decision phase 2 had no branch logging at all
+// until this was added, which made "why did it pitch that?" unanswerable from a
+// log.
+std::optional<PerformAction> taken(const Game& game, const char* rung, int order,
+                                   bool pitch) {
+  hanabi::logging::log_branch(
+      "reactor0.choose_action",
+      {{"rung", rung},
+       {"order", order},
+       {"button", pitch ? "play(pitch)" : "discard(chuck)"},
+       {"clue_tokens", game.state.clue_tokens}});
+  if (pitch) return PerformAction{PerformPlay{order}};
+  return PerformAction{PerformDiscard{order}};
+}
+
+}  // namespace
+
 std::optional<PerformAction> choose_action(const Game& game) {
   const State& s = game.state;
   const int alice = s.our_player_index;
@@ -222,7 +243,7 @@ std::optional<PerformAction> choose_action(const Game& game) {
   // 2 -- pitch a card that sets up a card Bob or Cathy already holds.
   for (int o : lists.pitch) {
     auto id = alice_knows(game, o);
-    if (id && sets_up_a_partner(game, *id)) return PerformPlay{o};
+    if (id && sets_up_a_partner(game, *id)) return taken(game, "2.sets_up_partner", o, true);
   }
 
   // 3 -- chuck a KNOWN inverted card that does the same. Pressing Discard on
@@ -231,34 +252,38 @@ std::optional<PerformAction> choose_action(const Game& game) {
     auto id = alice_knows(game, o);
     if (id && variants::is_inverted_id(s, *id) &&
         sets_up_a_partner(game, *id)) {
-      return PerformDiscard{o};
+      return taken(game, "3.chuck_sets_up_partner", o, false);
     }
   }
 
   // 4 -- pitch the head of a chain that has dependants. Playing it is what
   // unblocks the rest of its chain, so it is worth more than a lone card.
   for (const auto& chain : lists.pitch_chains) {
-    if (chain.size() > 1) return PerformPlay{chain.front()};
+    if (chain.size() > 1) return taken(game, "4.chain_head", chain.front(), true);
   }
 
   // 5, 6, 7 -- pitch a critical card, lowest first in play direction, then the
   // clue-regain rank. `direction_rank` folds the reversed-suit case away.
-  auto pitch_critical = [&](auto&& pred) -> std::optional<PerformAction> {
+  auto pitch_critical = [&](const char* label,
+                            auto&& pred) -> std::optional<PerformAction> {
     for (int o : lists.pitch) {
       auto id = alice_knows(game, o);
-      if (id && s.is_critical(*id) && pred(*id)) return PerformPlay{o};
+      if (id && s.is_critical(*id) && pred(*id)) return taken(game, label, o, true);
     }
     return std::nullopt;
   };
   if (auto a = pitch_critical(
+          "5.critical_rank1",
           [&](Identity i) { return variants::direction_rank(s, i) == 1; })) {
     return a;
   }
   if (auto a = pitch_critical(
+          "6.critical_rank2",
           [&](Identity i) { return variants::direction_rank(s, i) == 2; })) {
     return a;
   }
   if (auto a = pitch_critical(
+          "7.critical_clue_regain",
           [&](Identity i) { return variants::is_clue_regain_rank(s, i); })) {
     return a;
   }
@@ -277,30 +302,30 @@ std::optional<PerformAction> choose_action(const Game& game) {
         best_rank = r;
       }
     }
-    if (best >= 0) return PerformPlay{best};
+    if (best >= 0) return taken(game, "8.lowest_stack_rank", best, true);
     // Nothing on the pitch list has a pinned identity. Its cards are still
     // playable by empathy, so pitching the leftmost is better than falling
     // through to a discard.
-    if (!lists.pitch.empty()) return PerformPlay{lists.pitch.front()};
+    if (!lists.pitch.empty()) return taken(game, "8.leftmost_unpinned", lists.pitch.front(), true);
   }
 
   // 9 -- chuck a known inverted card. No connection to set up, but it still
   // advances a stack.
   for (int o : lists.chuck) {
     auto id = alice_knows(game, o);
-    if (id && variants::is_inverted_id(s, *id)) return PerformDiscard{o};
+    if (id && variants::is_inverted_id(s, *id)) return taken(game, "9.chuck_known_inverted", o, false);
   }
 
   // 10 -- chuck a card that COULD be inverted. Weaker than rung 9's "known",
   // and the distinction is the point: it might advance a stack.
   for (int o : lists.chuck) {
     if (variants::possible_has_inverted(s, game.me().thoughts[o].possible)) {
-      return PerformDiscard{o};
+      return taken(game, "10.chuck_maybe_inverted", o, false);
     }
   }
 
   // 11 -- chuck the leftmost card on the list.
-  if (!lists.chuck.empty()) return PerformDiscard{lists.chuck.front()};
+  if (!lists.chuck.empty()) return taken(game, "11.chuck_leftmost", lists.chuck.front(), false);
 
   // 12 / 13 -- the floor, both lists empty.
   //
@@ -312,14 +337,14 @@ std::optional<PerformAction> choose_action(const Game& game) {
   if (!chop) {
     // A locked hand has no chop. Pitch the leftmost card rather than return
     // nothing -- `take_action` must produce a move.
-    return PerformPlay{s.hands[alice].front()};
+    return taken(game, "12.locked_no_chop", s.hands[alice].front(), true);
   }
-  if (s.clue_tokens == 8) return PerformPlay{*chop};
-  if (chuck_button_is_safe(game, *chop)) return PerformDiscard{*chop};
+  if (s.clue_tokens == 8) return taken(game, "13.pitch_chop_at_eight", *chop, true);
+  if (chuck_button_is_safe(game, *chop)) return taken(game, "12.discard_chop", *chop, false);
   // Neither button is safe for a card straddling an inverted and a plain suit
   // (decide.cpp says so at its own orange-safety filter). Pitching is the
   // lesser evil: it can lose the card, but it cannot strike.
-  return PerformPlay{*chop};
+  return taken(game, "12.pitch_chop_unsafe_button", *chop, true);
 }
 
 }  // namespace hanabi::reactor0

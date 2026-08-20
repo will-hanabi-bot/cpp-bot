@@ -925,20 +925,54 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
 std::optional<PerformAction> choose_h4_clue(
     const Game& game, const std::vector<ClueCandidate>& cands) {
   std::vector<ClueCandidate> h4;
+  int h4_seen = 0;
   for (const ClueCandidate& c : cands) {
-    if (c.is_h4 && clue_is_admissible(game, c)) h4.push_back(c);
+    if (!c.is_h4) continue;
+    ++h4_seen;
+    if (clue_is_admissible(game, c)) h4.push_back(c);
   }
-  if (h4.empty()) return std::nullopt;
+  if (h4.empty()) {
+    // Logged even when it declines: this is Precedence step 1, so "no H4 clue"
+    // is exactly why a pending reaction was allowed to proceed, and that is
+    // worth being able to read off a trace.
+    hanabi::logging::log_branch("reactor0.choose_h4_clue",
+                                {{"fired", false},
+                                 {"h4_candidates", h4_seen},
+                                 {"candidates", cands.size()}});
+    return std::nullopt;
+  }
   // Rank the H4 clues against each other with the ordinary list, minus the
   // section 4 floor -- an H4 clue outranks a pending reaction, an arbitrary one
   // does not.
-  if (const ClueCandidate* c = rung_1(game, h4)) return c->perform;
-  if (const ClueCandidate* c = rung_2(game, h4)) return c->perform;
-  if (const ClueCandidate* c = rung_3(game, h4)) return c->perform;
-  Pool all;
-  for (const ClueCandidate& c : h4) all.push_back(&c);
-  const ClueCandidate* best = first_of(game, std::move(all));
-  return best ? std::optional<PerformAction>{best->perform} : std::nullopt;
+  const ClueCandidate* pick = nullptr;
+  const char* rung = "";
+  if ((pick = rung_1(game, h4))) {
+    rung = "1.reactive_play";
+  } else if ((pick = rung_2(game, h4))) {
+    rung = "2.reactive_discard";
+  } else if ((pick = rung_3(game, h4))) {
+    rung = "3.bob_chop";
+  } else {
+    Pool all;
+    for (const ClueCandidate& c : h4) all.push_back(&c);
+    pick = first_of(game, std::move(all));
+    rung = "default_tiebreak";
+  }
+  if (!pick) return std::nullopt;
+  // An H4 clue OUTRANKS a pending reaction (DECISION_MAKING.md Precedence step
+  // 1), so when this fires it is the reason the urgent path never ran. Record
+  // enough to tell that from a trace without a debugger.
+  hanabi::logging::log_branch(
+      "reactor0.choose_h4_clue",
+      {{"fired", true},
+       {"rung", rung},
+       {"shape", shape_name(pick->reading.shape)},
+       {"target", pick->action.target},
+       {"kind", pick->action.clue.kind == ClueKind::COLOUR ? "colour" : "rank"},
+       {"value", pick->action.clue.value},
+       {"h4_candidates", h4_seen},
+       {"outranked_a_reaction", !game.waiting.empty()}});
+  return pick->perform;
 }
 
 std::optional<PerformAction> choose_clue(
@@ -967,6 +1001,12 @@ std::optional<PerformAction> choose_clue(
                               {{"rung", rung},
                                {"shape", shape_name(pick->reading.shape)},
                                {"target", pick->action.target},
+                               {"kind", pick->action.clue.kind == ClueKind::COLOUR
+                                            ? "colour"
+                                            : "rank"},
+                               {"value", pick->action.clue.value},
+                               {"tier", static_cast<int>(pick->tier)},
+                               {"candidates", ok.size()},
                                {"clue_tokens", game.state.clue_tokens}});
   return pick->perform;
 }

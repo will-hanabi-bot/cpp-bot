@@ -31,6 +31,7 @@
 
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
+#include "hanabi/logging/game_logger.h"
 #include "hanabi/logging/state_snapshot.h"
 
 namespace {
@@ -42,11 +43,12 @@ struct Args {
   std::optional<int> turn;
   bool rerun = false;
   bool diff = false;
+  bool trace = false;
   std::optional<std::string> emit_test_path;
 };
 
 void print_usage(std::ostream& os) {
-  os << "Usage: replay_log <log_file> --turn <N> [--rerun] [--diff] "
+  os << "Usage: replay_log <log_file> --turn <N> [--rerun] [--trace] [--diff] "
         "[--emit-test <out.cpp>]\n";
 }
 
@@ -58,6 +60,8 @@ std::optional<Args> parse_args(int argc, char** argv) {
       a.turn = std::atoi(argv[++i]);
     } else if (s == "--rerun") {
       a.rerun = true;
+    } else if (s == "--trace") {
+      a.trace = true;
     } else if (s == "--diff") {
       a.diff = true;
     } else if (s == "--emit-test" && i + 1 < argc) {
@@ -259,6 +263,21 @@ int main(int argc, char** argv) {
             << " strikes=" << game.state.strikes << "\n";
 
   if (args.rerun || args.diff) {
+    // --trace installs a GameLogger for the duration of take_action, so the
+    // DECIDE records the convention emits (LogScope, log_branch) are actually
+    // produced. Without one every logging helper no-ops, which is why a plain
+    // --rerun shows the action but never the branch that chose it.
+    std::optional<hanabi::logging::GameLogger> trace_logger;
+    std::optional<hanabi::logging::CurrentLoggerGuard> trace_guard;
+    std::string trace_path;
+    if (args.trace) {
+      std::filesystem::path dir =
+          std::filesystem::temp_directory_path() / "hanabi_replay_trace";
+      std::filesystem::create_directories(dir);
+      trace_logger.emplace("trace", report_id >= 0 ? report_id : 0, dir.string());
+      trace_path = trace_logger->path();
+      trace_guard.emplace(&*trace_logger);
+    }
     hanabi::PerformAction chosen;
     try {
       chosen = game.take_action();
@@ -267,6 +286,29 @@ int main(int argc, char** argv) {
       return 2;
     }
     std::cout << "rerun chose: " << perform_action_summary(chosen) << "\n";
+
+    if (args.trace) {
+      trace_guard.reset();
+      trace_logger.reset();
+      std::ifstream tf(trace_path);
+      std::string line;
+      std::cout << "--- DECIDE branches ---\n";
+      while (std::getline(tf, line)) {
+        json r;
+        try {
+          r = json::parse(line);
+        } catch (const std::exception&) {
+          continue;
+        }
+        if (r.value("record", "") != "DECIDE") continue;
+        json info = r;
+        for (const char* k : {"record", "ts", "turn", "game_id", "database_id",
+                              "bot", "bot_name"}) {
+          info.erase(k);
+        }
+        std::cout << "  " << info.dump() << "\n";
+      }
+    }
 
     if (args.diff) {
       auto orig = find_outbound_after_turn(records, turn);

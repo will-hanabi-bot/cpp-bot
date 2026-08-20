@@ -47,7 +47,8 @@ A clue tier (`clue_tier`, `state_eval.cpp:312-373`) is HIGH iff **any** of:
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank
    (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:348`.
 4. **H4** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
-   finesse** (`clue_is_h4`, `:301-310`; the finesse detector itself is
+   finesse**. A reactive **lock** is explicitly not a finesse, however its
+   predicted slot looks at clue time (`clue_is_h4`, `:301-310`; the finesse detector itself is
    `clue_gets_finesse`, `:280-299`).
 
 NOT-LOW iff any of H1a, H2, H3, H4, or:
@@ -74,7 +75,12 @@ CTP-status transitions between the real game and the clue's hypo
 uses.
 
 **"Gets a finesse"** (H4) means the clue's interpretation is reactive rank
-**Phase B** — the blind-play phase that walks one-away targets and calls the
+**Phase B**, and *only* Phase B. A reactive lock has to be excluded explicitly
+(`predicts_reactive_lock`): it stamps CHOP_MOVED a turn later, so at clue time
+the receiver's predicted slot carries no status and looks exactly like an
+un-stamped Phase B target. Since H4 is the one thing that outranks a pending
+reaction, a lock misread as a finesse lets Alice abandon a reaction to give it —
+replay 1966091 T10, which cost a strike — the blind-play phase that walks one-away targets and calls the
 reacter onto the prerequisite (`interpret_reactive.cpp:383-447`). Phase A (double
 play, `:307-382`) and Phase C (double discard, `:448-482`) are not finesses.
 

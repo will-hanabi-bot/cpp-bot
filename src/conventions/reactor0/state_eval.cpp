@@ -285,6 +285,13 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   if (action.target == bob) return false;             // stable: no finesse
   if (action.clue.kind != ClueKind::RANK) return false;  // Phase B is rank-only
   if (!wc_is_fresh(game, hypo, alice, action.target, bob)) return false;
+  // A reactive LOCK is not a finesse. It stamps CHOP_MOVED only a turn later,
+  // in `reactive_lock`, so at clue time the receiver's predicted slot carries
+  // no status at all -- which sails straight past the "stamped: Phase A, not B"
+  // test below. If that slot happens to hold a one-away card, a lock then reads
+  // as a finesse and, because H4 outranks a pending reaction, it lets Alice
+  // abandon a reaction to give it. That is replay 1966091 T10.
+  if (predicts_reactive_lock(hypo)) return false;
   auto receive_order = predicted_receiver_order(hypo);
   if (!receive_order) return false;
   if (hypo.meta[*receive_order].status != game.meta[*receive_order].status) {

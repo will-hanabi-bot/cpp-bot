@@ -24,6 +24,7 @@
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/calls.h"
+#include "hanabi/logging/decide_trace.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
 #include "hanabi/conventions/variants/inverted.h"
@@ -806,7 +807,17 @@ PerformAction Game::take_action() const {
     }
   }
 
-  if (urgent_action) return *urgent_action;
+  if (urgent_action) {
+    // Precedence step 2 -- a pending reaction. Logged because "why did it not
+    // clue?" and "why did it not action its call?" are the same question asked
+    // from two sides, and until v7.3.0 neither side left a trace.
+    hanabi::logging::log_branch(
+        "precedence.urgent_reaction",
+        {{"order", urgent_order ? *urgent_order : -1},
+         {"waiting", !waiting.empty()},
+         {"clue_tokens", s.clue_tokens}});
+    return *urgent_action;
+  }
 
   // --- Find playable orders ---
   auto common_p = common.obvious_playables(*this, s.our_player_index);
