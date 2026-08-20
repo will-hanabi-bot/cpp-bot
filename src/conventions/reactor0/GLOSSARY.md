@@ -46,7 +46,7 @@ cards *outside* such a group rather than identifying one inside it.
 
 ### pace-clue tier gate
 Reactor0's replacement for reactor's low-clue-count gate, and the reason a
-clue has to earn its token. Two windows, both needing `pace() >= 3`:
+clue has to earn its token. Two windows, both needing `pace() >= 1`:
 
 * Alice already holds a card stamped `CALLED_TO_PLAY` (or, in a variant with
   an inverted suit, `CALLED_TO_DISCARD`) — she has something to do either way,

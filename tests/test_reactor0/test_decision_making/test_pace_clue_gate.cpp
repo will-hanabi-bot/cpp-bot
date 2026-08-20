@@ -2,7 +2,7 @@
 // src/conventions/reactor0/decision.cpp; DECISION_MAKING.md "Decision phase 1"
 // items 1 and 2) — the window it fires in, and which tier it demands.
 //
-//   window: pace() >= 3, and clue_tokens <= 3, or clue_tokens < 8 when Alice
+//   window: pace() >= 1, and clue_tokens <= 3, or clue_tokens < 8 when Alice
 //           is occupied
 //   required tier: HIGH when Alice holds a card stamped CALLED_TO_PLAY, or —
 //                  in a variant containing an inverted suit — a card stamped
@@ -92,6 +92,16 @@ SetupOptions inert_position() {
 const std::vector<std::string> kTenOnes = {"r1", "r1", "y1", "y1", "g1",
                                            "g1", "b1", "b1", "p1", "p1"};
 
+// `inert_position` starts at pace 13, so kTenOnes lands on 3. Each rank-2 has
+// two copies, and discarding ONE of a suit leaves a copy, so max_score does not
+// move and pace falls by exactly one per card.
+std::vector<std::string> discards_for_pace(int target_pace) {
+  static const std::vector<std::string> kExtras = {"r2", "y2", "g2", "b2", "p2"};
+  std::vector<std::string> out = kTenOnes;
+  for (int i = 0; i < 3 - target_pace; ++i) out.push_back(kExtras[i]);
+  return out;
+}
+
 }  // namespace
 
 // --- the window ----------------------------------------------------------
@@ -103,7 +113,7 @@ TEST(Reactor0PaceClueGate, FiresAtThreeClueTokens) {
   opts.clue_tokens = 3;
   Game g = setup(std::move(opts));
 
-  ASSERT_GE(g.state.pace(), 3) << "guard: window needs pace >= 3";
+  ASSERT_GE(g.state.pace(), 1) << "guard: window needs pace >= 1";
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: this clue must be LOW";
 
@@ -125,36 +135,56 @@ TEST(Reactor0PaceClueGate, SilentAtFourClueTokens) {
       << "clue_tokens == 4 is outside the window; the gate must not fire.";
 }
 
-// Below pace 3 the gate is silent even at a low clue count — with no pace to
-// spare, spending a token beats burning a card.
-TEST(Reactor0PaceClueGate, SilentBelowPaceThree) {
+// Only at pace 0 is the gate silent. The threshold was `pace() >= 3` through
+// v7.3.0, inherited from reactor's low-clue-count gate; replay 1966119 T5 showed
+// the hole that left, so it is now `pace() >= 1`. Pace 0 is the true floor:
+// there, every remaining turn must produce a play or the game cannot finish, so
+// hoarding a token for a better clue is pointless.
+TEST(Reactor0PaceClueGate, SilentAtPaceZero) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 2;
-  opts.discarded = kTenOnes;
-  opts.discarded.push_back("r2");  // one more, pushing pace to 2
+  opts.discarded = discards_for_pace(0);
   Game g = setup(std::move(opts));
 
-  ASSERT_EQ(g.state.pace(), 2) << "guard: fixture must sit just below the window";
+  ASSERT_EQ(g.state.pace(), 0) << "guard: fixture must sit just below the window";
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
   EXPECT_TRUE(admissible(g, clue))
-      << "pace == 2 is outside the window; the gate must not fire.";
+      << "pace == 0 is outside the window; the gate must not fire.";
 }
 
-// ...and fires again at exactly pace 3.
-TEST(Reactor0PaceClueGate, FiresAtPaceThree) {
+// ...and fires at exactly pace 1, the new boundary.
+TEST(Reactor0PaceClueGate, FiresAtPaceOne) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 2;
-  opts.discarded = kTenOnes;
+  opts.discarded = discards_for_pace(1);
   Game g = setup(std::move(opts));
 
-  ASSERT_EQ(g.state.pace(), 3) << "guard: fixture must sit on the boundary";
+  ASSERT_EQ(g.state.pace(), 1) << "guard: fixture must sit on the boundary";
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
   EXPECT_FALSE(admissible(g, clue))
-      << "pace == 3 is inside the window; a LOW clue must be rejected.";
+      << "pace == 1 is inside the window; a LOW clue must be rejected.";
+}
+
+// The pace that used to be the boundary is now well inside the window. Kept
+// because it is the position replay 1966119 T5 sat at (pace 2, occupied, a LOW
+// reactive discard admitted) and the whole point of the change is that it is
+// now refused.
+TEST(Reactor0PaceClueGate, FiresAtPaceTwoWhichUsedToBeOutsideTheWindow) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 2;
+  opts.discarded = discards_for_pace(2);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.state.pace(), 2) << "guard: the old gate stood down here";
+  Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+  ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
+
+  EXPECT_FALSE(admissible(g, clue))
+      << "pace == 2 is inside the window now; a LOW clue must be rejected.";
 }
 
 // --- reactor is untouched ------------------------------------------------
@@ -264,7 +294,7 @@ TEST(Reactor0PaceClueGate, CtpStampFiresTheGateAboveThreeTokens) {
   Game g = setup(std::move(opts));
   g.meta[order_at(g, TestPlayer::ALICE, 1)].status = CardStatus::CALLED_TO_PLAY;
 
-  ASSERT_GE(g.state.pace(), 3) << "guard: window needs pace >= 3";
+  ASSERT_GE(g.state.pace(), 1) << "guard: window needs pace >= 1";
   ASSERT_TRUE(hanabi::reactor0::requires_high_tier(g)) << "guard: call stands";
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: this clue must be LOW";
@@ -308,17 +338,16 @@ TEST(Reactor0PaceClueGate, SilentAtEightTokensEvenWithACallStanding) {
       << "at 8 tokens the bot cannot discard, so the gate stands down.";
 }
 
-// The pace half of the window is untouched by the split: below pace 3 there is
-// no reason to hoard tokens, call standing or not.
-TEST(Reactor0PaceClueGate, SilentBelowPaceThreeEvenWithACallStanding) {
+// The pace half of the window is untouched by the split: at pace 0 there is no
+// reason to hoard tokens, call standing or not.
+TEST(Reactor0PaceClueGate, SilentAtPaceZeroEvenWithACallStanding) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 5;
-  opts.discarded = kTenOnes;
-  opts.discarded.push_back("r2");  // one more, pushing pace to 2
+  opts.discarded = discards_for_pace(0);
   Game g = setup(std::move(opts));
   g.meta[order_at(g, TestPlayer::ALICE, 1)].status = CardStatus::CALLED_TO_PLAY;
 
-  ASSERT_EQ(g.state.pace(), 2) << "guard: fixture must sit below the window";
+  ASSERT_EQ(g.state.pace(), 0) << "guard: fixture must sit below the window";
   ASSERT_TRUE(hanabi::reactor0::requires_high_tier(g)) << "guard: call stands";
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";

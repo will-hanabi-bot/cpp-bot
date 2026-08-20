@@ -129,7 +129,7 @@ TEST(Reactor0CluePriority, DefaultScoreCountsNewTouchesOnly) {
 // --- the tier gate --------------------------------------------------------
 
 // Lifted verbatim from the deleted `eval_action`, so its boundaries must not
-// move: occupied Alice needs HIGH while pace >= 3 and tokens < 8; an unoccupied
+// move: occupied Alice needs HIGH while pace >= 1 and tokens < 8; an unoccupied
 // Alice needs only MEDIUM, and only while tokens <= 3.
 TEST(Reactor0CluePriority, GateIsSilentOutsideItsWindow) {
   SetupOptions opts;
@@ -164,7 +164,7 @@ TEST(Reactor0CluePriority, GateDemandsMediumAtThreeTokens) {
   opts.starting = TestPlayer::ALICE;
   use_reactor0(opts);
   Game g = setup(std::move(opts));
-  ASSERT_GE(g.state.pace(), 3) << "guard: the gate only runs with pace to spare";
+  ASSERT_GE(g.state.pace(), 1) << "guard: the gate only runs above pace zero";
 
   for (const auto& c : analysed(g)) {
     EXPECT_EQ(hanabi::reactor0::clue_is_admissible(g, c), c.tier >= ClueTier::MEDIUM)

@@ -185,16 +185,25 @@ deferred play. This is the predicate
 Whether a clue should be given is then:
 
 1. **Alice is occupied.**
-    - 1a. If `pace() >= 3 && clue_tokens < 8`, Alice gives the best clue from the
+    - 1a. If `pace() >= 1 && clue_tokens < 8`, Alice gives the best clue from the
       General Clue Evaluation List satisfying the **HIGH** tier requirements.
     - 1b. Otherwise, Alice gives the best clue from the General Clue Evaluation
       List below.
 2. **Alice is not occupied.**
-    - 2a. If `pace() >= 3 && clue_tokens < 4`, Alice gives the best clue from the
+    - 2a. If `pace() >= 1 && clue_tokens < 4`, Alice gives the best clue from the
       General Clue Evaluation List satisfying the **HIGH** or **MEDIUM** tier
       requirements.
     - 2b. Otherwise, Alice gives the best clue from the General Clue Evaluation
       List below.
+
+**On the pace condition.** It was `pace() >= 3` through v7.3.0, inherited from
+reactor's low-clue-count gate. That left a hole: at replay 1966119 T5 an occupied
+Alice sat at pace 2, the gate stood down, and a LOW-tier reactive discard became
+admissible — neither a HIGH clue nor the pending call. Low pace is if anything a
+worse time to spend a token on a LOW clue, not a better one, so the threshold is
+now `pace() >= 1`. Pace 0 remains exempt: there every remaining turn must produce
+a play or the game cannot finish, and hoarding a token for a better clue is
+pointless.
 
 If Alice does not have a clue available from the General Clue Evaluation List,
 Alice moves to the play/discard decision phase.

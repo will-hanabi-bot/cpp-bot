@@ -443,7 +443,12 @@ std::vector<ClueCandidate> analyse_clues(
 bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   const State& s = game.state;
   if (c.action.giver != s.our_player_index) return true;  // fails open
-  if (s.pace() < 3) return true;
+  // The gate runs at any pace above zero. It was `pace() >= 3` through v7.3.0,
+  // inherited from reactor's low-clue-count gate, and that left a hole: at
+  // replay 1966119 T5 will-bot69 was occupied by a receiver-CTP, pace was 2, so
+  // the gate stood down and a LOW reactive discard was admissible. Low pace is
+  // if anything a worse time to spend a token on a LOW clue, not a better one.
+  if (s.pace() < 1) return true;
   const bool occupied = requires_high_tier(game);
   const bool in_window = occupied ? s.clue_tokens < 8 : s.clue_tokens <= 3;
   if (!in_window) return true;

@@ -263,6 +263,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966091_h4_lock_must_not_outrank_reaction.cpp
+  tests/test_reactor0/test_decision_making/test_replay_1966119_occupied_low_pace_actions_its_call.cpp
   tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp
   tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp
