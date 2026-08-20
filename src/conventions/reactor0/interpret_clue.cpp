@@ -120,6 +120,38 @@ bool could_reach_stacks(const Game& game, int order) {
   });
 }
 
+// Does this colour clue actually NAME the inverted suit?
+//
+// The orange ladder below is specified as "a colour clue naming the inverted
+// suit", but it used to select purely on `orange_touched`, i.e. on cards that
+// COULD be orange. Those are different questions the moment a variant lets a
+// non-orange card be touched alongside the oranges. Rainbow-Ones is exactly
+// that: every colour clue touches every 1, so at replay 1966119 T1 a BLUE clue
+// swept a Blue 1 into the ladder, chucked it, and narrowed its inference to
+// {Orange 1} -- a card the holder does not have.
+//
+// Probed at a rank the special-rank rule does not cover, so the rainbow ones
+// cannot make any colour look like the orange colour. A variant whose special
+// rank is the whole suit would fall back to "not named", which is the safe
+// answer: the ladder declines and the ordinary play reading applies.
+bool names_inverted_suit(const State& state, const BaseClue& clue) {
+  if (clue.kind != ClueKind::COLOUR) return false;
+  const auto& suits = state.variant->suits;
+  for (size_t si = 0; si < suits.size(); ++si) {
+    if (!suits[si].suit_type.inverted) continue;
+    for (int rank = 1; rank <= 5; ++rank) {
+      if (state.variant->special_rank && *state.variant->special_rank == rank) {
+        continue;
+      }
+      if (state.variant->id_touched(Identity{static_cast<int>(si), rank},
+                                    ClueKind::COLOUR, clue.value)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // The touched cards that could be orange, LEFT to RIGHT. `state.hands` is
 // stored leftmost (newest) first, which is the same walk
 // `leftmost_could_be_playable` does.
@@ -293,7 +325,13 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
   //    The chuck target is then vetted against what the GIVER can see (§1g):
   //    a chuck of a card we can see is not currently playable strikes, so we
   //    reject the clue rather than retarget.
-  std::vector<int> oranges = orange_touched(game, action);
+  //    The ladder only applies to a clue that NAMES the inverted suit. Without
+  //    that test, any colour clue touching a card which merely COULD be orange
+  //    claimed it -- see `names_inverted_suit`.
+  std::vector<int> oranges;
+  if (names_inverted_suit(state, action.clue)) {
+    oranges = orange_touched(game, action);
+  }
   if (!oranges.empty()) {
     const bool pitch_mode =
         !variants::includes_dark_inverted(state) && state.pace() > 3;

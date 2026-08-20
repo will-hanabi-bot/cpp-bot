@@ -97,6 +97,13 @@ play in reactor0.** Priority:
 4. **The orange ladder** (`:274-314`), reached only when no playable orange
    was revealed. An orange colour clue names one orange card to get rid of or
    to stack:
+   The ladder applies only to a colour clue that **names the inverted suit**
+   (`names_inverted_suit`). Selecting on "touched a card that could be orange"
+   is a different question wherever a variant lets a non-orange card be touched
+   alongside the oranges — under Rainbow-Ones every colour clue touches every 1,
+   so a blue clue would otherwise claim a Blue 1, chuck it, and pin its
+   inference to Orange 1 (replay 1966119 T1).
+
    - non-dark orange at `pace() > 3` → **pitch** the leftmost touched orange
      the receiver does not know is critical (`holder_knows_critical`,
      `src/basics/player_game.cpp`). A pitch presses Play, which for an

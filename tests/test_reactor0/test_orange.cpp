@@ -428,3 +428,62 @@ TEST(Reactor0Orange, NonDarkOrangeTargetKeepsTheOrdinaryDiscardReading) {
       << "the chuck branch pins with info_lock; the ordinary reading does not, "
          "so this proves the fix did not broaden to every orange";
 }
+
+// --- §1b: the ladder is for clues that NAME orange ------------------------
+
+// Replay 1966119 T1. "Rainbow-Ones & Orange (3 Suits)": every colour clue
+// touches every 1, so a BLUE clue touches the holder's Blue 1 AND their Orange
+// 1 AND their Red 1.
+//
+// The orange ladder selects on `orange_touched`, which is "could this card be
+// orange" read off `possible` — and under Rainbow-Ones that is true of every
+// card a blue clue touches. So the ladder claimed a Blue 1, chucked it, and
+// narrowed its inference to exactly {Orange 1}: a card the holder does not
+// hold, and one that pressing Discard on would have thrown away rather than
+// played.
+//
+// The spec always said the ladder is for "a colour clue naming the inverted
+// suit". Nothing tested that until now.
+TEST(Reactor0Orange, ColourClueNotNamingOrangeSkipsTheLadder) {
+  SetupOptions opts;
+  opts.variant_name = "Rainbow-Ones & Orange (3 Suits)";
+  // Seats relabelled so the receiver is index 0. Their slot 1 is Blue 1.
+  opts.hands = {
+      {"b1", "o1", "r1", "b5", "o4"},
+      {"o3", "b4", "o2", "r2", "b2"},
+      {"b2", "o4", "r3", "o2", "r5"},
+  };
+  opts.play_stacks = {0, 0, 0};
+  opts.starting = TestPlayer::CATHY;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int orange = 2;
+  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted)
+      << "guard: suit 2 is the inverted one";
+
+  // Blue touches slots 1-4: the two real blues, plus the rainbow Red 1 and
+  // Orange 1.
+  g = take_turn(std::move(g), "Cathy clues blue to Alice (slot 1,2,3,4)");
+
+  const int slot1 = order_at(g, TestPlayer::ALICE, 1);
+  EXPECT_EQ(status_at(g, TestPlayer::ALICE, 1), CardStatus::CALLED_TO_PLAY)
+      << "a blue clue does not name orange, so this is an ordinary play call "
+         "(a PITCH), not the ladder's chuck";
+  EXPECT_NE(status_at(g, TestPlayer::ALICE, 1), CardStatus::CALLED_TO_DISCARD);
+
+  // The load-bearing assertion: the holder must not come away believing they
+  // hold a card they do not. Blue 1 is what they actually have.
+  const IdentitySet& inf = g.common.thoughts[slot1].inferred;
+  EXPECT_TRUE(inf.contains(Identity{1, 1}))
+      << "Blue 1 is the true card and must survive the narrowing";
+  int n = 0;
+  for (Identity i : inf) {
+    (void)i;
+    ++n;
+  }
+  EXPECT_GT(n, 1)
+      << "narrowing to a single identity here is the bug: it pinned Orange 1";
+  EXPECT_FALSE(inf.is_exactly(Identity{orange, 1}))
+      << "the holder must not be told their Blue 1 is an Orange 1";
+}
