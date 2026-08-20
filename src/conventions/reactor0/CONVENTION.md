@@ -40,6 +40,16 @@ giver, Bob the next player, Cathy the one after.
   `advance` simulates a playable orange with the Discard button, `eval_state`
   scores 3+ strikes at `−100`, and `eval_game` prices an orange CTD as a play
   call (reactor's §2.6/§2.7).
+- **Not shared**: how a card's **inferred** set may shrink. Once an
+  interpretation has built it, reactor0 narrows it only through `card_elim` --
+  that is, only on evidence that every copy of an identity is accounted for
+  under COMMON knowledge. In particular `Game::update_turn`'s re-intersection of
+  a standing call with the CURRENT `playable_set`
+  (`src/basics/decide.cpp`) is skipped: it fires on every turn advance, so
+  another player's play narrows a card their play says nothing about. Reactor
+  keeps it. Good-touch elimination does not apply either, and in fact never runs
+  for any convention -- `Game::good_touch` is false everywhere in the tree.
+
 - **Not shared**: everything about *which clue to give*. As of v7.0.0 reactor0
   chooses a clue by walking the ordered **General Clue Evaluation List**
   (`choose_clue`, `src/conventions/reactor0/decision.cpp`) rather than by

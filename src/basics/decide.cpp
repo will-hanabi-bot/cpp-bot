@@ -383,7 +383,23 @@ void Game::update_turn(const TurnAction& action) {
     waiting.clear();
   }
 
-  if (next_queued_playable) {
+  // Reactor0 does not re-narrow a standing call as the stacks move. Once the
+  // interpretation has built a card's inferred set, only `card_elim` may shrink
+  // it -- that is, only evidence that all copies of an identity are accounted
+  // for under COMMON knowledge.
+  //
+  // The intersection below is the other kind: it re-reads the CURRENT
+  // playable_set every turn, so another player's play narrows a card it says
+  // nothing about. Replay 1966286: yagami's clued 2 was inferred {r2, b2, o2}
+  // at T10 with stacks r1/b1/o1; will-bot69 played a b2 and will-bot67 an r2,
+  // and by T13 the stacks were r2/b2/o1, so the intersection left {o2}. The
+  // card was the OTHER b2 -- a copy the play said nothing about, and one that
+  // `possible` still correctly listed.
+  //
+  // `refresh_play_links` (player_elim.cpp) removed the same mistake in v0.26
+  // for resolved play links, with the same reasoning; this site survived.
+  const bool may_renarrow_calls = convention != Convention::REACTOR0;
+  if (next_queued_playable && may_renarrow_calls) {
     int order = *next_queued_playable;
     IdentitySet new_inferred =
         common.thoughts[order].inferred.intersect(state.playable_set);
