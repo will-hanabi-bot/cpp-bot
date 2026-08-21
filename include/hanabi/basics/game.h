@@ -106,6 +106,37 @@ class Game {
   int rewind_depth = 0;
   bool in_progress = true;
   bool good_touch = false;
+
+  // Deferred reactive negative inference (reactor/interpret_reaction.cpp).
+  //
+  // On a colour reactive the reacter plays and the receiver is called to
+  // DISCARD, and `elim_play_dc` then reasons "the slots before the target were
+  // passed over, so they are not playable". That is only sound if the target
+  // really was a discard. On an inverted suit a CTD is a CHUCK -- it puts the
+  // card on its stack -- so the walk did not pass over a playable at all, and
+  // the inference is unfounded.
+  //
+  // So the elimination is deferred until the receiver actually discards, and
+  // applied only if the card turned out to be trash, which is what proves
+  // nothing playable was skipped. Everything needed is captured at reaction
+  // time, because "playable" and "trash" must be read as of THEN.
+  //
+  // A pure function of action history, so `apply_snapshot` rebuilds it by
+  // replay and it needs no serialisation.
+  struct PendingDcElim {
+    bool active = false;
+    int target_order = -1;  // fires when this card is discarded
+    int hand_size = 5;
+    int focus_slot = 0;
+    int target_slot = 0;
+    std::vector<int> receiver_hand;
+    std::vector<int> reacter_hand;
+    std::vector<char> receiver_was_clued;  // parallel to receiver_hand
+    bool target_was_clued = false;
+    IdentitySet playable;  // prev_state.playable_set, as of the reaction
+    IdentitySet trash;     // prev_state.trash_set, likewise
+  };
+  PendingDcElim pending_dc_elim;
   // Reactor /allplays toggle. When true, every reactive clue (color or rank)
   // is interpreted as play+play; both the receiver and the reacter end up
   // CALLED_TO_PLAY. When false (default), color clues are play+dc and rank

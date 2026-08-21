@@ -40,6 +40,16 @@ giver, Bob the next player, Cathy the one after.
   `advance` simulates a playable orange with the Discard button, `eval_state`
   scores 3+ strikes at `−100`, and `eval_game` prices an orange CTD as a play
   call (reactor's §2.6/§2.7).
+- **Not shared**: WHEN the reactive negative inference runs. On a colour
+  reactive the reacter plays and the receiver is called to discard, and
+  `elim_play_dc` reasons "the slots before the target were passed over, so they
+  are not playable". Reactor applies that at reaction time. Reactor0 **defers**
+  it: a called discard on an inverted suit is a CHUCK that puts the card on its
+  stack, so the walk passed over nothing and the inference is unfounded. It is
+  applied only once the receiver actually discards AND the card proves to be
+  basic trash, which is the evidence that nothing playable was skipped
+  (`Game::pending_dc_elim`, applied from `Game::interpret_discard`).
+
 - **Not shared**: how a card's **inferred** set may shrink. Once an
   interpretation has built it, reactor0 narrows it only through `card_elim` --
   that is, only on evidence that every copy of an identity is accounted for

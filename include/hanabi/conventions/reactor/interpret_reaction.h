@@ -62,4 +62,14 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
 bool react_play(const Game& prev, Game& game, int player_index, int order,
                  const ReactorWC& wc);
 
+// Apply the deferred reactive negative inference recorded in
+// `Game::pending_dc_elim`, then leave the caller to clear it.
+//
+// Called from `Game::interpret_discard` once the receiver's called discard has
+// actually happened AND the card proved to be trash -- which is the evidence
+// that the target walk really did pass over the earlier slots without finding a
+// play. Running it at reaction time instead is unsound on an inverted suit,
+// where a called discard is a CHUCK that puts the card on its stack.
+void apply_pending_dc_elim(Game& game);
+
 }  // namespace hanabi::reactor

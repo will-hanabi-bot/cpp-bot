@@ -273,6 +273,18 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
     waiting.clear();
   }
 
+  // The deferred reactive negative inference (reactor/interpret_reaction.cpp).
+  // It was recorded when the reacter played and the receiver was called to
+  // discard; it may only be applied now, and only if the card really was thrown
+  // away. A called discard on an INVERTED suit is a chuck that advances a
+  // stack, so the target walk passed over nothing and the inference does not
+  // hold. Basic trash is the proof that it does.
+  if (pending_dc_elim.active && action.order == pending_dc_elim.target_order) {
+    const bool was_trash = !failed && id && prev.state.is_basic_trash(*id);
+    if (was_trash) hanabi::reactor::apply_pending_dc_elim(*this);
+    pending_dc_elim = Game::PendingDcElim{};
+  }
+
   bool useful_dc = !failed && prev.state.deck[action.order].clued && id.has_value() &&
                     state.is_useful(*id) &&
                     prev.meta[action.order].status != CardStatus::CALLED_TO_DISCARD &&

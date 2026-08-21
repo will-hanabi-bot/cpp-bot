@@ -14,7 +14,6 @@ namespace hanabi::reactor0 {
 using hanabi::reactor::calc_target_slot;
 using hanabi::reactor::elim_dc_dc;
 using hanabi::reactor::elim_dc_play;
-using hanabi::reactor::elim_play_dc;
 using hanabi::reactor::elim_play_play;
 using hanabi::reactor::target_i_discard;
 using hanabi::reactor::target_i_play;
@@ -113,8 +112,41 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
       reactive_lock(game, wc);
     } else {
       target_i_discard(prev, game, wc, target_slot);
-      elim_play_dc(prev.state, game, wc.receiver_hand, wc.reacter,
-                   wc.focus_slot, target_slot);
+      // DEFERRED, not applied here. `elim_play_dc`'s inference is "the slots
+      // before the target were passed over, so they are not playable", and that
+      // holds only if the target really is a discard. On an INVERTED suit a
+      // called discard is a CHUCK -- it puts the card on its stack -- so the
+      // walk passed over nothing and the inference is unfounded.
+      //
+      // Replay 1966351: the receiver's CTD was an Orange 3 with the orange
+      // stack at 2, so chucking it was a play. Running this immediately
+      // stripped the playable m3 from three muddy cards, and two turns later a
+      // reactive skipped its intended Red 4 target because the paired react
+      // slot no longer looked playable -- the reacter chucked an Orange 4
+      // instead.
+      //
+      // Everything is captured as of NOW, because "playable" and "trash" must
+      // be read at reaction time. `Game::interpret_discard` applies it once the
+      // card is actually discarded AND proves to be trash, which is the
+      // evidence that nothing playable was skipped.
+      Game::PendingDcElim pend;
+      pend.active = true;
+      pend.hand_size = kHandSize[prev.state.num_players];
+      pend.focus_slot = wc.focus_slot;
+      pend.target_slot = target_slot;
+      pend.receiver_hand = wc.receiver_hand;
+      pend.reacter_hand = prev.state.hands[wc.reacter];
+      pend.playable = prev.state.playable_set;
+      pend.trash = prev.state.trash_set;
+      for (int o : wc.receiver_hand) {
+        pend.receiver_was_clued.push_back(prev.state.deck[o].clued ? 1 : 0);
+      }
+      if (target_slot - 1 >= 0 &&
+          target_slot - 1 < static_cast<int>(wc.receiver_hand.size())) {
+        pend.target_order = wc.receiver_hand[target_slot - 1];
+        pend.target_was_clued = prev.state.deck[pend.target_order].clued;
+      }
+      if (pend.target_order >= 0) game.pending_dc_elim = std::move(pend);
     }
   }
   return false;

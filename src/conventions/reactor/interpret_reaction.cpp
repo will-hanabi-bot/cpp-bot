@@ -246,6 +246,80 @@ void elim_play_dc(const State& prev_state, Game& game,
   }
 }
 
+void apply_pending_dc_elim(Game& game) {
+  const Game::PendingDcElim& p = game.pending_dc_elim;
+  if (!p.active) return;
+
+  // elim_play_play's half: a slot the walk passed over is not playable. When
+  // the reacter's paired card had exactly one playable identity, that identity
+  // is kept -- it is the one the pairing would have named.
+  for (int i = 0; i < p.target_slot - 1; ++i) {
+    if (i >= static_cast<int>(p.receiver_hand.size())) break;
+    int receive_order = p.receiver_hand[i];
+    CardStatus status = game.meta[receive_order].status;
+    if (status == CardStatus::CALLED_TO_PLAY ||
+        status == CardStatus::CALLED_TO_DISCARD) {
+      continue;
+    }
+    int react_slot = calc_slot(p.focus_slot, i + 1, p.hand_size);
+    if (react_slot < 1 || react_slot > static_cast<int>(p.reacter_hand.size())) {
+      continue;
+    }
+    int react_order = p.reacter_hand[react_slot - 1];
+    IdentitySet intersect =
+        game.common.thoughts[react_order].possible.intersect(p.playable);
+    if (intersect.length() == 0) continue;
+    if (intersect.length() == 1) {
+      Identity id = intersect.head();
+      IdentitySet ps = p.playable;
+      game.with_thought(receive_order, [&](const Thought& t) {
+        Thought out = t;
+        out.inferred = t.inferred.filter(
+            [&](Identity iid) { return !ps.contains(iid) || iid == id; });
+        return out;
+      });
+    } else {
+      IdentitySet ps = p.playable;
+      game.with_thought(receive_order, [&](const Thought& t) {
+        Thought out = t;
+        out.inferred = t.inferred.difference(ps);
+        return out;
+      });
+    }
+    mark_trash_if_empty(game, receive_order);
+  }
+
+  // elim_play_dc's own half: the trash differencing, with its skip rules.
+  for (int i = 0; i < p.target_slot - 1; ++i) {
+    if (i >= static_cast<int>(p.receiver_hand.size())) break;
+    int receive_order = p.receiver_hand[i];
+    CardStatus status = game.meta[receive_order].status;
+    int react_slot = calc_slot(p.focus_slot, i + 1, p.hand_size);
+    const bool was_clued = i < static_cast<int>(p.receiver_was_clued.size()) &&
+                           p.receiver_was_clued[i] != 0;
+    bool skip = status == CardStatus::CALLED_TO_PLAY ||
+                status == CardStatus::CALLED_TO_DISCARD ||
+                (p.target_was_clued && !was_clued);
+    if (skip) continue;
+    if (react_slot < 1 || react_slot > static_cast<int>(p.reacter_hand.size())) {
+      continue;
+    }
+    int react_order = p.reacter_hand[react_slot - 1];
+    IdentitySet ps = p.playable;
+    bool can_elim = game.meta[react_order].status != CardStatus::CALLED_TO_PLAY &&
+                    game.common.thoughts[react_order].possible.exists(
+                        [&](Identity id) { return ps.contains(id); });
+    if (can_elim) {
+      IdentitySet ts = p.trash;
+      game.with_thought(receive_order, [&](const Thought& t) {
+        Thought out = t;
+        out.inferred = t.inferred.difference(ts);
+        return out;
+      });
+    }
+  }
+}
+
 void elim_dc_play(const State& prev_state, Game& game,
                    const std::vector<int>& receiver_hand,
                    int reacter, int focus_slot, int target_slot) {
