@@ -120,6 +120,28 @@ behind the O(1) reactive test, because it is the only costly term.
 
 ---
 
+## Inferred sets survive a strike
+
+Once an inferred set is constructed it is only ever **narrowed**, and never
+reset. A strike does not reset it, and neither does a strike remove a CTP or CTD
+stamp from any card.
+
+This is a reactor0-only rule (`decide.cpp:249-262`). Reactor resets on a bomb,
+because there a strike means a finesse or dupe chain was misread and the
+convention chain that produced the misplayed card is broken. Under reactor0 a
+strike is a **normal outcome of the convention**: the stamp is the instruction,
+so a card stamped CTD is chucked, and on an inverted suit a chuck that turns out
+unplayable simply bombs. Nothing was miscommunicated, so the promises other
+clues made about other cards still stand.
+
+Replay 1966687: will-bot67 chucked an Orange 4 on T14, and the resulting strike
+wiped will-bot69's slot 1 from `{o2}` back to `{o1,o2,o3}` and dropped its CTD
+stamp with it.
+
+The narrowing rules themselves are unchanged: an inferred set is narrowed only
+by `card_elim` and by the reactive negative inferences, never by good-touch
+elimination.
+
 ## Framework
 
 The priority of evaluation on a given player (Alice)'s turn is:
@@ -483,6 +505,25 @@ play attempt, and a trash orange is by definition not playable, so the chuck
 strikes. Such a card is pitched. Likewise a chuck only advances a stack when the
 card is currently **playable**, which is what rungs 3 and 9 of the Actionable
 Card Priority require of a "known inverted suit" (replay 1966569 T10).
+
+**Known same-hand duplicates also join the chuck list**
+(`reactor0/calls.cpp:105-142`, `:222`). A player who can pin two of their own
+cards to the same identity holds one card too many: discarding either loses
+nothing, since the other copy still carries it. Such a card is *not* trash — the
+identity is still needed — so "chuckable" above does not reach it, and a hand
+made entirely of known dupes would otherwise have an **empty chuck list** and
+fall through to the rung-12 floor. Two conditions bound the arm:
+
+- **The leftmost copy only.** Put both on the list and the team can throw the
+  identity away entirely. `state.hands` runs newest slot first, so the left copy
+  is the first one the walk meets.
+- **Plain suits only.** On an inverted suit Discard is a play attempt, so
+  chucking a duplicated orange strikes unless it happens to be playable — and
+  when it is playable the "playable inverted" arm has already taken it.
+
+Replay 1966687 T14 is the motivating case, and it cost a strike: will-bot67 held
+b4 in slots 3 and 5 with blue on 1, found nothing chuckable, and threw its
+unknown slot-1 chop instead. That card was an Orange 4.
 
 When a card is pitched from the pitch list, the front of the corresponding list is
 popped out, and the pitch list is reconstructed. This may seem overkill but will

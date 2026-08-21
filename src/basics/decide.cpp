@@ -246,7 +246,18 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
     id = Identity(action.suit_index, action.rank);
   }
 
-  if (failed) {
+  // Reactor0 never resets on a strike. There a strike is a NORMAL outcome of
+  // the convention rather than evidence of a miscommunication: "the stamp is
+  // the instruction", so a chuck on an inverted card that turns out unplayable
+  // bombs without anything having been misread. The inferred set a clue built
+  // is a promise about that card's identity, and a bomb elsewhere in the hand
+  // is not evidence against it. Replay 1966687: will-bot67 chucked an orange 4
+  // on T14, and the strike wiped will-bot69's slot 1 from {o2} back to
+  // {o1,o2,o3} and stripped its CTD stamp with it.
+  //
+  // Reactor keeps the reset -- there a strike really does mean a finesse or
+  // dupe chain was misread (tests/test_basics/test_strike_preserves_ctp.cpp).
+  if (failed && convention != Convention::REACTOR0) {
     // Bombed - clear conv info, except for cards explicitly CALLED_TO_PLAY.
     // A strike (often a dupe-strike on an already-played card or a finesse
     // miscommunication) breaks the convention chain that produced the

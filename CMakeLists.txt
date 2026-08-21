@@ -215,6 +215,8 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_candidate_rollback.cpp
   tests/test_reactor0/test_colour_value.cpp
   tests/test_reactor0/test_call_invariants.cpp
+  tests/test_reactor0/test_chuck_dupes.cpp
+  tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp
   tests/test_reactor0/test_dispatch.cpp
   tests/test_reactor0/test_endgame/test_replay_1966675_sole_holder_of_both_red_fours.cpp
   tests/test_reactor0/test_efficiency.cpp
@@ -234,6 +236,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_bad_reactive_target/test_replay_1957942_trash_orange_pitch_is_a_valid_reaction.cpp
   tests/test_reactor0/test_bad_reactive_target/test_replay_1966351_wrong_target_from_early_dc_elim.cpp
   tests/test_reactor0/test_stable_rank_omni.cpp
+  tests/test_reactor0/test_strike_no_reset.cpp
   tests/test_reactor0/test_urgent_skips_known_trash.cpp
   tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp
   tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp

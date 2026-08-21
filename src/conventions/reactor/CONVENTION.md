@@ -460,6 +460,19 @@ clue *selection* rather than inside `target_discard` (`decide.cpp:538-567`).
 
 ### 1a.6 Resolving the reaction
 
+**A bomb resets reactor's convention state.** `Game::interpret_discard`'s failed
+branch (`decide.cpp:249-273`) restores `inferred` to `possible`, drops
+`info_lock` / `old_inferred`, clears every ConvData and empties `waiting`, for
+every card in every hand that is not explicitly `CALLED_TO_PLAY`. A strike under
+reactor means a finesse or dupe chain was misread, so the chain that produced
+the misplayed card is broken; CTPs stamped by *separate* clues survive, which is
+what `tests/test_basics/test_strike_preserves_ctp.cpp` pins.
+
+**Reactor0 is exempt** (`:249`, the `convention != REACTOR0` guard). There a
+strike is a normal outcome of the convention rather than evidence of a
+miscommunication — see `reactor0/DECISION_MAKING.md`, "Inferred sets survive a
+strike".
+
 When the reacter finally plays or discards, `Game::interpret_play` /
 `interpret_discard` (`decide.cpp:272-284`, `:319-327`) route into
 `react_play` / `react_discard` (`interpret_reaction.cpp:249-369`).

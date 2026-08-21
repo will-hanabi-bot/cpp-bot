@@ -391,8 +391,14 @@ touched slot-1 card is demoted, so the focus prefers an older touched card.
 
 ### notes
 Text the bot publishes back to hanab.live per card: `turn N: [f] <ids>` on a
-new CTP, `[kt]` on a new CTD, `[reset]` when one clears. Card order 0 carries
-the bot version. `src/net/notes.cpp:12-70`.
+new CTP, `turn N: [d] <ids>` on a new CTD, `[reset]` when one clears. Both kinds
+write the inferred set out in full, and both re-emit whenever it narrows. Card
+order 0 carries the bot version. `src/net/notes.cpp:12-95`.
+
+A CTD used to note as a bare `[kt]` — "known trash". That was wrong twice over:
+a CTD is not necessarily trash (on an inverted suit it is how reactor0 asks for
+a **play**), and the bare tag threw away the thing a reader actually wants,
+which is *which* identities the call leaves open.
 
 ### odd plays
 `/settings` label for **colour** clues: reacter discards and receiver plays —

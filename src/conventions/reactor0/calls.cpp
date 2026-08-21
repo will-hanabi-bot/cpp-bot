@@ -102,6 +102,48 @@ bool is_chuckable(const Game& game, int player, int order) {
   return all_plain_trash || all_inverted_playable;
 }
 
+// The leftmost copy of every identity the holder can pin TWICE in their own
+// hand. Holding both copies makes one of them expendable: pressing Discard on
+// it loses nothing, because the other copy still carries the identity. Such a
+// card is not `is_chuckable` -- it is not basic trash, since the identity is
+// still needed -- so without this arm a hand full of known dupes has an EMPTY
+// chuck list and phase 2 falls through to the rung-12 floor and throws away an
+// unknown chop instead. Replay 1966687 T14: will-bot67 held b4 in slots 3 and 5
+// and discarded its unknown slot-1 chop, which was an orange 4, striking.
+//
+// Judged from the HOLDER's view, like `is_chuckable`. `has_same_hand_dupe`
+// (reactor0/state_eval.cpp:117) answers the same question but reads
+// `state.deck[o].id()`, which is nullopt for one's own cards -- it is only ever
+// asked about somebody ELSE's hand, and cannot serve here.
+//
+// Plain suits only. On an inverted suit pressing Discard is a play attempt, so
+// chucking a duplicate orange strikes unless it happens to be playable -- and
+// when it is playable `is_chuckable`'s second arm has already taken it.
+//
+// "Leftmost" is the tiebreak, and it is load-bearing rather than cosmetic:
+// without it BOTH copies join the chuck list and the team can throw the
+// identity away entirely. `state.hands` runs newest slot first (see
+// `Game::chop`'s second pass, basics/decide.cpp:485), so the first copy this
+// walk meets IS the left one.
+std::vector<int> redundant_dupes(const Game& game, int player) {
+  const State& s = game.state;
+  const Player& p = game.players[player];
+  std::vector<int> out;
+  std::vector<std::pair<Identity, int>> first_seen;  // identity -> left copy
+  for (int o : s.hands[player]) {
+    auto id = p.thoughts[o].id(/*infer=*/true);
+    if (!id || variants::is_inverted_id(s, *id)) continue;
+    auto it = std::find_if(first_seen.begin(), first_seen.end(),
+                           [&](const auto& e) { return e.first == *id; });
+    if (it == first_seen.end()) {
+      first_seen.emplace_back(*id, o);
+    } else if (std::find(out.begin(), out.end(), it->second) == out.end()) {
+      out.push_back(it->second);
+    }
+  }
+  return out;
+}
+
 }  // namespace
 
 namespace {
@@ -218,6 +260,7 @@ ActionLists action_lists(const Game& game, int player) {
   }
 
   // --- the chuck list -----------------------------------------------------
+  const std::vector<int> dupes = redundant_dupes(game, player);
   for (int o : game.state.hands[player]) {
     const CardStatus st = game.meta[o].status;
     // A standing CTD is ALWAYS chuckable -- the stamp is the instruction, and
@@ -225,7 +268,8 @@ ActionLists action_lists(const Game& game, int player) {
     // strike. `is_chuckable` is the test for cards carrying no call at all.
     if (st == CardStatus::CALLED_TO_DISCARD) {
       if (call_is_actionable(game, player, o)) out.chuck.push_back(o);
-    } else if (is_chuckable(game, player, o)) {
+    } else if (is_chuckable(game, player, o) ||
+               std::find(dupes.begin(), dupes.end(), o) != dupes.end()) {
       out.chuck.push_back(o);
     }
   }

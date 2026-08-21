@@ -16,7 +16,7 @@ struct State;
 namespace hanabi::net {
 
 std::string format_play_segment(int turn, IdentitySet ids, const State& state);
-std::string format_discard_segment(int turn);
+std::string format_discard_segment(int turn, IdentitySet ids, const State& state);
 std::string format_reset_segment(int turn);
 
 // (card_order, segment) per change between prev and new.
