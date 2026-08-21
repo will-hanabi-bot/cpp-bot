@@ -410,6 +410,17 @@ blind-play a react slot with no playability check at all, which strikes.
 `variants::would_lose_inverted_reacter` was already swap-aware at both sites,
 which is why only this vet was wrong.
 
+**A re-targeted slot gets its inferences rebuilt.** When the reacter acts,
+`target_i_play` narrows the receiver's target to its playable identities. If
+`inferred` no longer admits any playable, reactor0 rebuilds the narrowing from
+`possible` rather than skipping it (`reactor/interpret_reaction.cpp:150-172`).
+The call is direct evidence of playability and outranks the derived negative
+that emptied the set. Skipping it made the call evaporate silently: the stamp
+landed, and `enforce_call_invariants` rule 3 dropped it again as a dead play
+call, so the card ended the turn with no stamp and no note. Replay 1966710 —
+will-bot67's blue 2 on slot 3 lost b2 to a T6 negative, was re-targeted at T8,
+and discarded its chop at T13 instead of playing.
+
 **The resolution side has to honour the swap too.** When the reacter acts, the
 receiver's target is re-stamped by the shared `target_i_play` /
 `target_i_discard` (reactor's §2 "Resolving the reaction"). For an inverted

@@ -481,10 +481,24 @@ When the reacter finally plays or discards, `Game::interpret_play` /
 `react_slot`, through `calc_slot` to a `target_slot`, and validates that the
 resulting card is still in the receiver's hand.
 
-- `target_i_play` (`:139-173`) stamps the receiver's slot `CALLED_TO_PLAY` and
+- `target_i_play` (`:139-190`) stamps the receiver's slot `CALLED_TO_PLAY` and
   intersects `inferred` with `playable_set ∪ next-ranks-of-obvious-playables`.
   The CTP is stamped **unconditionally**, even when that intersection is empty,
   so delayed chains survive; the narrowing applies only when non-empty.
+
+  **Under reactor0 only**, an empty intersection is rebuilt from `possible`
+  instead (`:150-172`). An explicit call is *direct* evidence that the card is
+  playable, and it outranks whatever narrowed `inferred` — which at this point
+  is always a derived negative (`elim_*_play` / `elim_*_dc` concluding "the
+  slots the walk passed over are not playable"), resting on an assumption about
+  an earlier reaction that this clue contradicts. `possible` carries the
+  empathy and `card_elim` facts and nothing derived.
+
+  Reactor is excluded deliberately. It has no `drop_dead_play_calls`, so the
+  stamp survives there on its own and the rebuild buys nothing, while the
+  narrowing it performs emits a note that reactor suppresses on purpose —
+  `MiscReplay1882573.Turn18NoteDoesNotResetU5` pins the
+  "`turn 17: [f] u5 | turn 17: [reset]`" oscillation that motivated it.
 - `target_i_discard` (`:56-137`) stamps `CALLED_TO_DISCARD` and removes
   `critical_set` from `inferred`, marking `meta.trash` if that empties it —
   **except when that narrowing comes out empty on a card the holder knows is

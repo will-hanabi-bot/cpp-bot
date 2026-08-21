@@ -147,6 +147,30 @@ void target_i_play(const Game& /*prev*/, Game& game, const ReactorWC& wc,
     }
   }
   IdentitySet new_inferred = game.common.thoughts[order].inferred.intersect(self_playables);
+  if (new_inferred.is_empty() && game.convention == Convention::REACTOR0) {
+    // The card's `inferred` no longer admits any playable — but this call is
+    // DIRECT evidence that it is one, and it outranks whatever narrowed the
+    // set. What narrows it here is always a derived negative: `elim_*_play` /
+    // `elim_*_dc` conclude "the slots the walk passed over are not playable",
+    // which rests on an assumption about an EARLIER reaction that this clue
+    // now contradicts. Rebuild from `possible`, which carries the empathy and
+    // `card_elim` facts and nothing derived.
+    //
+    // Without this the call silently evaporates under reactor0: `inferred`
+    // stays stale, the CTP is stamped, and `enforce_call_invariants` rule 3
+    // immediately drops it again as a dead play call. Replay 1966710 --
+    // will-bot67's blue 2 on slot 3 lost b2 to a turn-6 negative, was
+    // re-targeted by the turn-8 reactive, and came out of turn 9 with no
+    // stamp, no note and no play; it discarded its chop on T13 instead.
+    //
+    // REACTOR0 ONLY. Reactor has no `drop_dead_play_calls`, so there the
+    // stamp survives on its own and the rebuild buys nothing — while the
+    // narrowing it performs emits a note that reactor deliberately suppresses.
+    // `MiscReplay1882573.Turn18NoteDoesNotResetU5` pins that: order 4 must not
+    // be marked and narrowed at turn 17 only to reset, which is the
+    // "turn 17: [f] u5 | turn 17: [reset]" oscillation the original report saw.
+    new_inferred = game.common.thoughts[order].possible.intersect(self_playables);
+  }
   // Stamp CTP unconditionally — the convention's "play this slot" signal must
   // reach the reacter even when no currently-playable identity overlaps the
   // card's inferred set (e.g. a delayed-play chain where the prerequisite
