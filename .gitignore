@@ -8,3 +8,5 @@ compile_commands.json
 *.o
 *.obj
 .env*
+# Agent worktrees — each is its own git repo, never part of this tree.
+.claude/worktrees/

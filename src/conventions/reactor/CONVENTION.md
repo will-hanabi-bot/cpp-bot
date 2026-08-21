@@ -1168,20 +1168,40 @@ by `take_action`'s main path. It simulates each clue and:
 than the base-game definition — and is what switches the various eval
 constants to their endgame values.
 
-**Forced-endgame rules** (`src/endgame/forced_endgame.cpp:249-281`), only when
-`cards_left == 1` (`:253`). Both **short-circuit the solver** — whatever they
+**Forced-endgame rules** (`src/endgame/forced_endgame.cpp:333-370`), only when
+`cards_left == 1` (`:337`). Both **short-circuit the solver** — whatever they
 return is `take_action`'s answer — so a rule that fires wrongly is expensive.
 
-- **Rule 2 — two-critical play** (`:154-210`), checked first. Fires when
+- **Rule 2 — two-critical play** (`:154-219`), checked first. Fires when
   `clue_tokens < num_players` and the current player holds ≥ 2
   singleton-critical cards with ≥ 1 playable. Returns a play, preferring the
   playable critical whose successor is held by another player — the "unblock"
   bonus (`:182-208`, replay 1899527 T47).
+- **Rule 3 — sole holder of a blocking card** (`:248-306`), checked after Rule
+  2 and under the same `clue_tokens < num_players` guard. Fires when CP can pin
+  a card of theirs to one identity (their own view intersected with common
+  knowledge), that identity is playable, **no other copy exists outside CP's
+  hand**, and the card still has an obtainable successor. Then CP is the only
+  route to the rest of that suit, and with one card left there is no later
+  chance — the play is forced. Returns `PerformDiscard` on an inverted suit,
+  since that is the button that plays there.
+
+  Rule 2 does not subsume this: it requires two **singleton**-critical cards,
+  and CP *holding both copies* is precisely what makes `is_critical` false.
+  Replay 1966675 T26 — will-bot67 held both red 4s with one card left and
+  discarded. Rule 2 runs first so that when both fire, Rule 2's unblock
+  tiebreak has already chosen which critical to lead with.
+
+  "Obtainable successor" is two checks, not one: `is_basic_trash` only says
+  "at or below the stack", so a successor whose every copy has been discarded
+  needs `max_ranks` to rule it out (`:270`). Without that the rule forces a
+  play to buy a turn for a card that can never be played.
+
 - **Rule 1 — 5-lockout** (`:48-115`), needs `clue_tokens > 0`. Fires for a suit
   when its stack is below 4, its 5 is still in someone's hand, and **every
   4-holder's cycle offset is ≥ the 5-holder's** — playing now would empty the
   deck and lock the 5-holder out. The response is to give the top
-  `find_all_clues` result (`:274-275`), falling back to any legal clue.
+  `find_all_clues` result (`:355-356`), falling back to any legal clue.
 
   **CP has two opportunities, and which one counts depends on the card**
   (`:106-110`). Drawing the last card sets `endgame_turns = num_players`
@@ -1229,7 +1249,8 @@ unconditional `PerformDiscard`, and since it is the only discard the solver
 ever sees, a known-trash orange had a guaranteed misplay as its sole option —
 bug_report_5_0_0.txt, replay 1957953 T30, which struck.
 
-The same routing now applies to forced Rule 2 (`forced_endgame.cpp:209-218`):
+The same routing now applies to forced Rules 2 and 3
+(`forced_endgame.cpp:209-218`, `:296-305`):
 its candidates are filtered by `is_playable`, which on an inverted suit means
 *the chuck advances the stack*, so returning `PerformPlay` pitched a
 singleton-critical card into the discard pile.
@@ -1303,6 +1324,7 @@ Behavioural rules above are pinned by:
 | `tests/test_reactor/test_receiver_misinterpretation/` | Re-tasking a pending reacter (1916791) |
 | `tests/test_reactor/test_decision_making/` | Low-clue-count gate, high-value-clue conditions, the v1.7.0 destroyed-play rule |
 | `tests/test_reactor/test_endgame/` | 10 endgame replay regressions: solver winrate, forced-endgame 5-lockout / two-critical, final-round stall-vs-play |
+| `tests/test_reactor0/test_endgame/` | reactor0 endgame replay regressions: forced-endgame Rule 3 (sole holder of a blocking card, 1966675 T26) |
 | `tests/test_reactor/test_misc/` | 36 mid-game convention replay regressions: empathy narrowing, focus/target selection, pink promise, play-queue order, clue eval |
 | `tests/test_endgame/` | Convention-neutral solver unit tests (forced-endgame rules, helper, smoke) |
 

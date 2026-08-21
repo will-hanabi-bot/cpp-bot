@@ -216,6 +216,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_colour_value.cpp
   tests/test_reactor0/test_call_invariants.cpp
   tests/test_reactor0/test_dispatch.cpp
+  tests/test_reactor0/test_endgame/test_replay_1966675_sole_holder_of_both_red_fours.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp
   tests/test_reactor0/test_pov_reject.cpp

@@ -193,6 +193,11 @@ TEST(ForcedEndgame, TwoCriticalPlayDoesNotFireWhenOnlyOneCrit) {
   SetupOptions opts = two_crit_base();
   opts.play_stacks = {3, 0, 0};
   opts.clue_tokens = 2;
+  // Kill the r5 so nothing is blocked behind the r4. Without this, Rule 3
+  // ("sole holder of a blocking card") fires on the same position and this
+  // stops being a Rule 2 negative -- Alice holds the only playable r4 and the
+  // r5 behind it is still live, which forces the play for a different reason.
+  opts.discarded.push_back("r5");
   Game g = setup(std::move(opts));
   g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
   g = with_cards_left(std::move(g), 1);
@@ -424,4 +429,83 @@ TEST(ForcedEndgame, TwoCriticalPlayChucksAPlayableOrange) {
       << "an orange is stacked by pressing Discard — the chuck; PerformPlay "
          "would pitch the last copy into the discard pile";
   EXPECT_EQ(std::get<PerformDiscard>(*forced).target, o4_order);
+}
+
+// --- Rule 3: sole holder of a blocking card ------------------------------
+
+// Replay 1966675 T26. Alice holds BOTH copies of the Red 4 with the red stack
+// at 3, one card left in the deck. Nobody else can put an r4 on the stack, so
+// if she does not play it now she must play it on her final-round turn instead
+// and the r5 behind it can never land. She discarded.
+//
+// Rule 2 cannot cover this: with both copies in her own hand `is_critical(r4)`
+// is false, so it sees no singleton critical at all. Criticality was never the
+// load-bearing property -- being the only one who can play the card is, and
+// holding two copies makes that more certain rather than less.
+TEST(ForcedEndgame, SoleHolderOfABlockingCardMustPlayIt) {
+  SetupOptions opts;
+  opts.hands = {
+      {"r4", "r4", "o1", "o2", "o3"},  // Alice: BOTH red 4s
+      {"r1", "r2", "b1", "b2", "o4"},
+      {"r1", "r3", "b1", "b3", "o4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {3, 0, 0};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = with_cards_left(std::move(g), 1);
+
+  ASSERT_FALSE(g.state.is_critical(Identity{0, 4}))
+      << "guard: two copies live, so Rule 2's singleton test cannot see this";
+
+  auto action = hanabi::endgame::forced_endgame_action(g);
+  ASSERT_TRUE(action.has_value()) << "the play is forced";
+  auto* play = std::get_if<PerformPlay>(&*action);
+  ASSERT_NE(play, nullptr) << "and it is a PLAY, not a clue or a discard";
+  EXPECT_EQ(play->target, g.state.hands[0][0]);
+}
+
+// Negative: another player holds a copy, so Alice is not the sole holder and
+// the card is not blocked on her. Nothing is forced.
+TEST(ForcedEndgame, SoleHolderDoesNotFireWhenSomeoneElseHoldsACopy) {
+  SetupOptions opts;
+  opts.hands = {
+      {"r4", "b4", "o1", "o2", "o3"},
+      {"r4", "r2", "b1", "b2", "o4"},  // Bob holds the other r4
+      {"r1", "r3", "b1", "b3", "o4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {3, 0, 0};
+  opts.clue_tokens = 2;
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = with_cards_left(std::move(g), 1);
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "Bob can play the r4 too, so it is not blocked on Alice";
+}
+
+// Negative: nothing is blocked behind the card. Playing it is still fine, but
+// it is not FORCED -- no successor is waiting on the turn it would buy.
+TEST(ForcedEndgame, SoleHolderDoesNotFireWithNothingBehindTheCard) {
+  SetupOptions opts;
+  opts.hands = {
+      {"r4", "r4", "o1", "o2", "o3"},
+      {"r1", "r2", "b1", "b2", "o4"},
+      {"r1", "r3", "b1", "b3", "o4"},
+  };
+  opts.variant_name = "Orange (3 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {3, 0, 0};
+  opts.clue_tokens = 2;
+  opts.discarded = {"r5"};  // the only r5 is gone, so the line is dead
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::ALICE, 1, "r4");
+  g = with_cards_left(std::move(g), 1);
+
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value())
+      << "with the r5 gone the r4 blocks nothing, so the play is not forced";
 }

@@ -217,6 +217,82 @@ std::optional<PerformAction> two_critical_play_action(const Game& game) {
   return PerformAction{PerformPlay{best.first}};
 }
 
+// Rule 3 — "sole holder of a blocking card".
+//
+// Precondition: `cards_left == 1`, `clue_tokens < num_players`, and CP knows
+// they hold a currently playable identity X that NO other player holds, whose
+// successor is still needed.
+//
+// Why play is forced. Nobody else can put X on its stack, so if CP does not
+// play it now they must play it on their final-round turn instead -- and the
+// successor above it can then never be played, because no turns remain after
+// that. Playing X now is what buys the team the turn in which the successor
+// lands.
+//
+// This is NOT Rule 2 with the criticality dropped, and the difference is the
+// whole reason it exists. Rule 2 wants two SINGLETON-critical cards; replay
+// 1966675 T26 has CP holding BOTH copies of the Red 4, so `is_critical(r4)` is
+// false, Rule 2 never fires, and the bot discarded. Criticality was never the
+// load-bearing property here -- being the only one who can play the card is.
+// Holding two copies makes that MORE certain, not less.
+//
+// The `clue_tokens < num_players` guard is Rule 2's, for Rule 2's reason: it
+// rules out the team cycling clues to hold the deck at 1, which would give CP
+// the skipped play turn back.
+//
+// "No other player holds X" reads `state.deck` over the OTHER hands, which is
+// giver-side knowledge CP genuinely has -- they can see every hand but their
+// own. The last card of the deck may also be an X, and that is deliberately not
+// checked: a copy drawn on the final round arrives too late for the successor
+// either way, so it cannot make the play unnecessary.
+std::optional<PerformAction> sole_holder_play_action(const Game& game) {
+  const State& s = game.state;
+  const int cp = s.current_player_index;
+  const Player& me = game.players[cp];
+
+  auto successor = [&](Identity id) -> std::optional<Identity> {
+    const auto& st = s.variant->suits[id.suit_index].suit_type;
+    return st.reversed ? id.prev() : id.next();
+  };
+  auto held_elsewhere = [&](Identity id) {
+    for (int p = 0; p < s.num_players; ++p) {
+      if (p == cp) continue;
+      for (int o : s.hands[p]) {
+        auto deck_id = s.deck[o].id();
+        if (deck_id && *deck_id == id) return true;
+      }
+    }
+    return false;
+  };
+
+  for (int o : s.hands[cp]) {
+    // Same tight view Rule 2 uses: common alone can carry basic trash that
+    // nothing has stripped, per-player alone can be wider in seeded fixtures.
+    IdentitySet tight =
+        game.common.thoughts[o].inferred.intersect(me.thoughts[o].inferred);
+    if (tight.length() != 1) continue;
+    Identity id = tight.head();
+    if (!s.is_playable(id)) continue;
+    if (held_elsewhere(id)) continue;
+    auto succ = successor(id);
+    if (!succ) continue;                       // top of its suit, nothing behind
+    if (s.is_basic_trash(*succ)) continue;     // successor already played
+    // ...and it has to still be OBTAINABLE. `is_basic_trash` only means "at or
+    // below the stack", so it says nothing about a successor whose every copy
+    // has been discarded; `max_ranks` is what carries that. Without this the
+    // rule forces a play to buy a turn for a card that can never be played.
+    if (succ->rank > s.max_ranks[succ->suit_index]) continue;
+    // The button that stacks the card, as Rule 2 does: on an inverted suit
+    // `is_playable` means "a CHUCK advances the stack", and pressing Play would
+    // pitch it into the discard pile instead.
+    if (s.variant->suits[id.suit_index].suit_type.inverted) {
+      return PerformAction{PerformDiscard{o}};
+    }
+    return PerformAction{PerformPlay{o}};
+  }
+  return std::nullopt;
+}
+
 // Fallback: enumerate every (target, kind, value) triple and return the
 // first one that legally touches at least one card in the target's hand.
 // Used only if `Game::find_all_clues` returns empty (very rare — would
@@ -266,6 +342,9 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
   // delay" would skip a play turn and lose a critical.
   if (s.clue_tokens < s.num_players) {
     if (auto a = two_critical_play_action(game)) return a;
+    // Rule 3 after Rule 2: when both fire, Rule 2's tiebreak has already
+    // reasoned about which critical to lead with.
+    if (auto a = sole_holder_play_action(game)) return a;
   }
 
   if (s.clue_tokens == 0) return std::nullopt;
