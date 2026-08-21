@@ -119,11 +119,42 @@ void drop_dead_play_calls(Game& game, const std::vector<int>& hand) {
   }
 }
 
+// Rule 4, the mirror of rule 3 for the other button: erase a CTD whose chuck
+// can no longer do anything but strike.
+//
+// A chuck presses Discard, which on an INVERTED suit is a play attempt. So a
+// CTD dies when every reading left is an inverted card that is not the next
+// for its stack -- tested against `chuck_candidates`, exactly as rule 3 tests
+// a CTP against `pitch_candidates`.
+//
+// Leaving the dead call in place is not harmless. `Game::chop`'s first pass
+// returns a CTD, so a stale one silently becomes the hand's chop; and
+// `requires_high_tier` counts it, so the holder stays "occupied" and every
+// clue they offer is gated to HIGH for no reason. Replay 1967287: the call was
+// stamped when the orange stack was on 0, o1 went trash two turns later, and
+// the card was still carrying the chuck.
+void drop_dead_chuck_calls(Game& game, const std::vector<int>& hand) {
+  IdentitySet allowed;
+  bool computed = false;
+  for (int o : hand) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_DISCARD) continue;
+    if (!computed) {
+      allowed = chuck_candidates(game.state);
+      computed = true;
+    }
+    const Thought& t = game.common.thoughts[o];
+    const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+    if (set.is_empty()) continue;
+    if (set.intersect(allowed).is_empty()) erase_call(game, o);
+  }
+}
+
 }  // namespace
 
 void enforce_call_invariants(Game& game) {
   for (const auto& hand : game.state.hands) {
     drop_dead_play_calls(game, hand);
+    drop_dead_chuck_calls(game, hand);
     enforce_play_order(game, hand);
     enforce_single_discard_call(game, hand);
   }

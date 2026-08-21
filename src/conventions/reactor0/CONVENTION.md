@@ -124,11 +124,29 @@ play in reactor0.** Priority:
 
 1. **Fix** — `check_fix` reports a reset/duplicate → `FIX` (`:237-240`).
 2. **Play reveal** — a previously-clued card the clue fills in as a new
-   obvious playable/connectable → `REVEAL` (`find_play_reveal`, `:60-85`,
-   mirroring reactor's fill-in machinery). Normally no stamp; empathy carries
-   it. **Exception:** if the revealed card is a known playable *orange*, it is
-   stamped `CALLED_TO_DISCARD` (`:244-253`), because that is the button which
-   advances an inverted stack — see the orange ladder below.
+   **actionable** playable/connectable → `REVEAL` (`find_play_reveal`), and the
+   revealed card is stamped `CALLED_TO_PLAY`, entering the receiver-CTP queue.
+   **Exception:** a revealed known playable *orange* is stamped
+   `CALLED_TO_DISCARD` instead, because that is the button which advances an
+   inverted stack — see the orange ladder below.
+
+   **Actionable, not merely playable.** `obvious_playables` answers "could this
+   card play", which in an inverted variant is a different question from "can
+   the holder act on it". A card reading `{r2, o2}` with both stacks on 1 is
+   playable either way, but `r2` needs the **Play** button and `o2` needs
+   **Discard**, so the holder cannot move. A clue that resolves WHICH BUTTON is
+   a genuine reveal even though playability did not change, so both the before
+   and after sets are filtered to the cards whose every reading sits in one
+   button's candidate set (`pitch_candidates` / `chuck_candidates`).
+
+   Replay 1967279 T8 is the worked example. A red clue pinned an already
+   `{r2, o2}` card to `r2`; the old test saw no new playable, priority 2 was
+   skipped, and priority 5 stamped the **leftmost touched** card with a `{m2}`
+   promise the clue never made — while the r2 it actually resolved got nothing.
+
+   The stamp is new in v7.25.0. Priority 2 used to stamp nothing and leave the
+   action to empathy, which meant phase 2 had to rediscover the card through
+   `thinks_playables` and the reveal carried no queue position at all.
 3. **Orange play reveal** (`:255-269`) — an orange colour clue that reveals a
    playable orange is a play reveal, and the receiver **chucks** the revealed
    card. `find_play_reveal` alone does not cover it: on a colour clue it only

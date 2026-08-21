@@ -425,6 +425,36 @@ std::optional<PerformAction> choose_action(const Game& game) {
   // 11 -- chuck the leftmost card on the list.
   if (!lists.chuck.empty()) return taken(game, "11.chuck_leftmost", lists.chuck.front(), false);
 
+  // 11b -- pitch a card known to be dead on an INVERTED suit.
+  //
+  // Such a card is on neither list: chucking it strikes (Discard on an
+  // inverted suit is a play attempt, and it is not the next for its stack) and
+  // it is not playable, so `thinks_playables` never offers it. Pressing PLAY on
+  // an inverted card sends it to the discard pile, which is the only safe way
+  // to be rid of it.
+  //
+  // Deliberately here and not on the pitch list. A dead o1 has
+  // `direction_rank` 1, so on the pitch list it would win rung 8's "leftmost
+  // card of the lowest stack rank" against a genuine playable. It is disposal,
+  // so it ranks with the other disposal rungs.
+  //
+  // Not critical, because pitching throws the card away for good. A critical
+  // dead orange cannot arise -- if every copy were needed the suit could still
+  // reach it -- but the guard costs nothing and states the intent.
+  {
+    const State& s2 = game.state;
+    for (int o : s2.hands[alice]) {
+      const Thought& t = game.players[alice].thoughts[o];
+      const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+      if (set.is_empty()) continue;
+      const bool dead_inverted = set.forall([&s2](Identity i) {
+        return variants::is_inverted_id(s2, i) && !s2.is_playable(i) &&
+               !s2.is_critical(i);
+      });
+      if (dead_inverted) return taken(game, "11b.pitch_dead_inverted", o, true);
+    }
+  }
+
   // 12 / 13 -- the floor, both lists empty.
   //
   // The spec lists 13 after 12, but it is a condition on 12 rather than a rung

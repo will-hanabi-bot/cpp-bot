@@ -64,15 +64,49 @@ std::optional<int> find_play_reveal(const Game& prev, Game& game,
   int target = action.target;
   int next_player_index = game.state.next_player_index(giver);
 
-  auto prev_playables = unique_concat(
+  // `obvious_playables` answers "could this card play", which in an inverted
+  // variant is not the same question as "can the holder ACT on it". A card
+  // whose readings are {r2, o2} with both stacks on 1 is playable either way,
+  // but r2 needs the Play button and o2 needs Discard, so the holder cannot
+  // move. A clue that resolves WHICH BUTTON is a genuine reveal even though
+  // playability did not change -- replay 1967279 T8, where the reveal was
+  // missed and the clue fell through to the direct play, stamping the leftmost
+  // touched card with a promise it never made.
+  //
+  // So both sides are filtered to the ACTIONABLE ones. `pitch_candidates` and
+  // `chuck_candidates` already name the two buttons, so the test is "every
+  // reading is in one of them" rather than a third notion of playable.
+  auto actionable = [&](const Game& g, int o) {
+    const IdentitySet live = g.common.thoughts[o].possibilities();
+    if (live.is_empty()) return false;
+    const IdentitySet pitch = pitch_candidates(g.state);
+    const IdentitySet chuck = chuck_candidates(g.state);
+    // A pitch only advances a stack on a PLAIN suit, so restrict to the
+    // playable half of `pitch_candidates` -- its inverted arm is disposal.
+    const IdentitySet play_button = pitch.filter(
+        [&g](Identity i) { return g.state.is_playable(i); });
+    const IdentitySet discard_button = chuck.filter(
+        [&g](Identity i) { return g.state.is_playable(i); });
+    return live.forall([&](Identity i) { return play_button.contains(i); }) ||
+           live.forall([&](Identity i) { return discard_button.contains(i); });
+  };
+  auto only_actionable = [&](const Game& g, std::vector<int> orders) {
+    std::vector<int> out;
+    for (int o : orders) {
+      if (actionable(g, o)) out.push_back(o);
+    }
+    return out;
+  };
+
+  auto prev_playables = only_actionable(prev, unique_concat(
       prev.common.obvious_playables(prev, target),
-      connectable_simple(prev, prev.players[giver], next_player_index, target));
+      connectable_simple(prev, prev.players[giver], next_player_index, target)));
 
   std::vector<Interp> saved_history = game.move_history;
   game.move_history.push_back(ClueInterp::PLAY);
-  auto playables = unique_concat(
+  auto playables = only_actionable(game, unique_concat(
       game.common.obvious_playables(game, target),
-      connectable_simple(game, game.players[giver], next_player_index, target));
+      connectable_simple(game, game.players[giver], next_player_index, target)));
   game.move_history = std::move(saved_history);
 
   for (int o : playables) {
@@ -341,6 +375,20 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
   if (auto revealed = find_play_reveal(prev, game, action)) {
     if (known_playable_inverted(game, *revealed)) {
       stamp_orange_chuck(game, action, *revealed);
+    } else {
+      // The reveal goes into the receiver-CTP queue. It used to stamp nothing
+      // and leave the physical action to empathy, which meant phase 2 had to
+      // rediscover the card through `thinks_playables` and the reveal carried
+      // no queue position at all.
+      const int turn = state.turn_count;
+      const int giver_i = action.giver;
+      game.with_meta(*revealed, [turn, giver_i](ConvData& m) {
+        m.focused = true;
+        m.status = CardStatus::CALLED_TO_PLAY;
+        m.by = giver_i;
+        m = m.reason(turn).signal(turn);
+      });
+      narrow_to_stamped_button(game, *revealed);
     }
     return ClueInterp::REVEAL;
   }

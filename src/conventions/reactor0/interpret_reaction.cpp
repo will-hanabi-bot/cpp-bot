@@ -1,6 +1,7 @@
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 
 #include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/variants/predicates.h"
 
 #include <algorithm>
@@ -159,6 +160,19 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
       reactive_lock(game, wc);
     } else {
       target_i_discard(prev, game, wc, target_slot);
+      // The receiver's inference must match the button they were just handed.
+      // `target_i_discard` is reactor's shared helper and only removes
+      // `critical_set`; reactor0 additionally narrows to `chuck_candidates`,
+      // the identities the Discard button actually handles. The clue-time
+      // stamp already does this (interpret_reactive.cpp); without it here the
+      // promise stays far too wide, so `chuck_would_strike` never fires when
+      // the called orange goes trash. Replay 1967287: the promise was recorded
+      // as {o1,o2,o3,o4} instead of {o1}, o1 went trash two turns later, and
+      // the chuck struck.
+      if (target_slot - 1 >= 0 &&
+          target_slot - 1 < static_cast<int>(wc.receiver_hand.size())) {
+        narrow_to_stamped_button(game, wc.receiver_hand[target_slot - 1]);
+      }
       defer_receiver_chuck_elim(prev, game, wc, target_slot,
                                 Game::PendingDcElim::Kind::PlayDc);
     }
@@ -207,6 +221,19 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
       reactive_lock(game, wc);
     } else {
       target_i_discard(prev, game, wc, target_slot);
+      // The receiver's inference must match the button they were just handed.
+      // `target_i_discard` is reactor's shared helper and only removes
+      // `critical_set`; reactor0 additionally narrows to `chuck_candidates`,
+      // the identities the Discard button actually handles. The clue-time
+      // stamp already does this (interpret_reactive.cpp); without it here the
+      // promise stays far too wide, so `chuck_would_strike` never fires when
+      // the called orange goes trash. Replay 1967287: the promise was recorded
+      // as {o1,o2,o3,o4} instead of {o1}, o1 went trash two turns later, and
+      // the chuck struck.
+      if (target_slot - 1 >= 0 &&
+          target_slot - 1 < static_cast<int>(wc.receiver_hand.size())) {
+        narrow_to_stamped_button(game, wc.receiver_hand[target_slot - 1]);
+      }
       // DEFERRED for the same reason the colour branch above defers
       // `elim_play_dc` -- the receiver is called to CHUCK, and a chuck on an
       // inverted suit is a play. Replay 1966710 T6.

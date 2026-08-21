@@ -26,8 +26,16 @@ TEST(Reactor0StableColour, PlayRevealFillsInPreviouslyCluedCard) {
   g = take_turn(std::move(g), "Alice clues red to Bob");
 
   EXPECT_EQ(last_clue_interp(g), ClueInterp::REVEAL);
-  // The reveal needs no stamp — empathy now identifies r3 as playable.
-  EXPECT_FALSE(any_status(g, TestPlayer::BOB, CardStatus::CALLED_TO_PLAY));
+  // v7.25.0: the reveal goes into the receiver-CTP queue. It used to stamp
+  // nothing and leave the action to empathy, which meant phase 2 had to
+  // rediscover the card and the reveal carried no queue position.
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY)
+      << "the REVEALED card carries the call";
+  int calls = 0;
+  for (int o : g.state.hands[static_cast<int>(TestPlayer::BOB)]) {
+    if (g.meta[o].status == CardStatus::CALLED_TO_PLAY) ++calls;
+  }
+  EXPECT_EQ(calls, 1) << "and nothing else in the hand is called";
   auto obvious = g.common.obvious_playables(g, static_cast<int>(TestPlayer::BOB));
   EXPECT_TRUE(std::find(obvious.begin(), obvious.end(),
                         order_at(g, TestPlayer::BOB, 2)) != obvious.end());

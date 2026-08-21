@@ -588,6 +588,19 @@ list by priority:
 10. Alice chucks a card in the chuck list that could potentially be an inverted
     suit.
 11. Alice chucks the leftmost card in the chuck list.
+11b. Alice **pitches** a card every one of whose readings is on an inverted
+    suit, not playable, and not critical (`calls.cpp`,
+    `11b.pitch_dead_inverted`). Such a card is on neither list — chucking it
+    strikes, since Discard on an inverted suit is a play attempt and it is not
+    the next for its stack, and it is not playable so `thinks_playables` never
+    offers it. Pressing **Play** sends it to the discard pile, which is the only
+    safe way to be rid of it.
+
+    Deliberately here rather than on the pitch list: a dead `o1` has
+    `direction_rank` 1, so on the pitch list it would win rung 8's "leftmost
+    card of the lowest stack rank" against a genuine playable. It is disposal,
+    so it ranks with the other disposal rungs. Not critical, because pitching
+    is a permanent loss.
 12. **Floor — both lists are empty.** Alice **chucks** her chop (`Game::chop`:
     the most-recently-signalled CTD, else the newest unclued status-`NONE`
     card). Discard is the default button, and she deviates from it only when

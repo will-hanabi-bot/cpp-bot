@@ -1,6 +1,6 @@
 // reactor0: the shape a hand's outstanding calls are allowed to take.
 //
-// Two rules, both enforced after every reactor0 interpretation rather than at
+// Four rules, all enforced after every reactor0 interpretation rather than at
 // each stamping site, so no path can forget them.
 //
 // 1. **Play calls run in play order.** A hand may carry several
@@ -36,7 +36,16 @@ class Game;
 
 namespace hanabi::reactor0 {
 
-// Enforce both rules across every hand. Idempotent. Call after any reactor0
+// Rule 4 -- a CTD whose chuck could now only strike is erased, the mirror of
+// rule 3 for the other button. A chuck presses Discard, which on an INVERTED
+// suit is a play attempt, so the call dies when every remaining reading is an
+// inverted card that is not next for its stack (tested against
+// `chuck_candidates`). Leaving it in place is not harmless: `Game::chop`'s
+// first pass returns a CTD, so a stale one silently becomes the hand's chop,
+// and `requires_high_tier` counts it, so the holder stays "occupied". Replay
+// 1967287.
+//
+// Enforce every rule across all hands. Idempotent. Call after any reactor0
 // interpretation that may have stamped a call.
 void enforce_call_invariants(Game& game);
 

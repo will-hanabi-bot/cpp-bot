@@ -214,8 +214,10 @@ gtest_discover_tests(hanabi_reactor_tests PROPERTIES LABELS "reactor")
 add_executable(hanabi_reactor0_tests
   tests/test_harness.cpp
   tests/test_reactor0/test_allplays_parity.cpp
+  tests/test_reactor0/test_dead_chuck_call.cpp
   tests/test_reactor0/test_candidate_rollback.cpp
   tests/test_reactor0/test_colour_value.cpp
+  tests/test_reactor0/test_button_reveal.cpp
   tests/test_reactor0/test_call_invariants.cpp
   tests/test_reactor0/test_chuck_dupes.cpp
   tests/test_reactor0/test_deferred_elim.cpp
@@ -224,6 +226,8 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1966696_mixed_rank_direct_play_stamps_ctp.cpp
   tests/test_reactor0/test_misc/test_replay_1966710_reactive_ctp_survives_earlier_negative.cpp
   tests/test_reactor0/test_misc/test_replay_1966745_deferral_keeps_reacter_call.cpp
+  tests/test_reactor0/test_misc/test_replay_1967279_colour_reveal_resolves_the_button.cpp
+  tests/test_reactor0/test_misc/test_replay_1967287_dead_chuck_call_is_erased.cpp
   tests/test_reactor0/test_dispatch.cpp
   tests/test_reactor0/test_endgame/test_replay_1966675_sole_holder_of_both_red_fours.cpp
   tests/test_reactor0/test_endgame/test_replay_1966757_endgame_honours_reacter_call.cpp
