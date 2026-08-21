@@ -7,6 +7,7 @@
 #include <variant>
 
 #include "hanabi/basics/clue.h"
+#include "hanabi/basics/clue_result.h"
 #include "hanabi/basics/interp.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
@@ -20,6 +21,12 @@
 namespace hanabi::reactor0 {
 
 namespace variants = hanabi::reactor::variants;
+
+namespace {
+bool contains(const std::vector<int>& v, int x) {
+  return std::find(v.begin(), v.end(), x) != v.end();
+}
+}  // namespace
 
 const char* shape_name(ClueShape s) {
   switch (s) {
@@ -112,6 +119,27 @@ ClueReading read_stable(const Game& game, const Game& hypo,
     r.shape = out == Outcome::PLAY ? ClueShape::STABLE_PLAY
                                    : ClueShape::STABLE_DISCARD;
     return r;
+  }
+
+  // A PLAY REVEAL stamps no status either: it narrows a previously-clued card
+  // until empathy alone makes it obviously playable, and leaves the physical
+  // action to that (interpret_clue.cpp's branch 1). It is still a play clue --
+  // it is the whole point of the clue -- so the list has to be able to see one.
+  //
+  // Replay 1966633 T5: Light-Pink-Fives & Orange, where the 5s take every rank
+  // clue but no colour clue. Blue to Bob pinned his previously-clued card to
+  // exactly Blue 1, playable on an empty blue stack. Reading no stamp, this
+  // classified the clue OTHER, no rung could select it, `choose_clue` declined
+  // outright, and a locked Alice bombed her way out of the turn instead.
+  if (interp == ClueInterp::REVEAL) {
+    auto [_blind, playables] = hanabi::playables_result(game, hypo);
+    for (int o : playables) {
+      if (!contains(hypo.state.hands[target], o)) continue;
+      r.shape = ClueShape::STABLE_PLAY;
+      r.stable_subject = o;
+      r.stable_outcome = Outcome::PLAY;
+      return r;
+    }
   }
 
   // A trash reveal stamps no status at all - it sets meta.trash

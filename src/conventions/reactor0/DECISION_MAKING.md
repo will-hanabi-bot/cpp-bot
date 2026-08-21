@@ -547,6 +547,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:170-187` |
 | finesse (H4) | reactive rank Phase B | `interpret_reactive.cpp:383-447` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:448-482` |
+| a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |
 | reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:307-382`; `:503-560`, `:561-626` |
 | lock clue | `predicts_reactive_lock` | `interpret_reaction.cpp:31-47` |
 | "this clue creates a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |

@@ -209,3 +209,47 @@ TEST(ClueShape, StaleWaitingConnectionDoesNotLeakIntoAStableReading) {
          "freshness guard is not holding";
   EXPECT_EQ(dirtied.stable_subject, clean.stable_subject);
 }
+
+// --- a play reveal is a play clue ----------------------------------------
+
+// A REVEAL stamps no status: it narrows a previously-clued card until empathy
+// alone makes it obviously playable, and leaves the physical action to that.
+// The classifier still has to report it as a play clue, because it is one --
+// otherwise no rung of the priority list can ever select it.
+//
+// Replay 1966633 T5. "Light-Pink-Fives & Orange": the 5s take every RANK clue
+// but no COLOUR clue. Bob's slot 4 was already clued down to
+// {r1, r5, b1, b5, o1, o5}; Blue touches the 1 but not the 5, pinning it to
+// exactly Blue 1, playable on an empty blue stack.
+TEST(ClueShape, APlayRevealClassifiesAsAStablePlay) {
+  SetupOptions opts;
+  opts.variant_name = "Light-Pink-Fives & Orange (3 Suits)";
+  opts.hands = {
+      {"r2", "r3", "o2", "o3", "r4"},
+      {"b2", "o1", "b1", "r5", "b4"},
+      {"o4", "b3", "r1", "o5", "b5"},
+  };
+  opts.play_stacks = {1, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  // Pre-clue rank 1, which in this variant also touches every 5. Bob's slot 3
+  // is the Blue 1; it comes out of that clue ambiguous between the 1s and 5s.
+  g = pre_clue(std::move(g), TestPlayer::BOB, 3, {"1"});
+  const int b1 = order_at(g, TestPlayer::BOB, 3);
+  ASSERT_GT(g.common.thoughts[b1].possible.length(), 1)
+      << "guard: rank 1 leaves it ambiguous because the 5s are light pink";
+
+  Action blue = make_clue(g, 0, 1, ClueKind::COLOUR, 1);
+  Game hypo = g.simulate(blue);
+  ASSERT_TRUE(hypo.common.thoughts[b1].inferred.is_exactly(Identity{1, 1}))
+      << "guard: Blue pins it to exactly Blue 1 -- Blue does not touch the 5";
+  ASSERT_TRUE(g.state.is_playable(Identity{1, 1})) << "guard: and it plays";
+
+  auto r = hanabi::reactor0::read_clue(g, hypo, std::get<ClueAction>(blue));
+  EXPECT_EQ(r.shape, ClueShape::STABLE_PLAY)
+      << "a reveal that creates a play IS a play clue, stamp or no stamp; got "
+      << hanabi::reactor0::shape_name(r.shape);
+  EXPECT_EQ(r.stable_subject, b1) << "and its subject is the revealed card";
+}
