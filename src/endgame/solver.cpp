@@ -65,6 +65,19 @@ bool is_play_perform(const State& state, const PerformAction& p) {
   return std::holds_alternative<PerformDiscard>(p) && stacks_a_card(state, p);
 }
 
+// The action a standing reacter call names: the urgent-stamped card in
+// `player`'s hand, actioned with the BUTTON its stamp names -- CALLED_TO_DISCARD
+// presses Discard, CALLED_TO_PLAY presses Play. Nullopt when no call stands.
+std::optional<PerformAction> standing_call_action(const Game& game, int player) {
+  for (int o : game.state.hands[player]) {
+    if (!game.meta[o].urgent) continue;
+    return game.meta[o].status == CardStatus::CALLED_TO_PLAY
+               ? PerformAction{PerformPlay{o}}
+               : PerformAction{PerformDiscard{o}};
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 // --- perform_to_action (public, used by winnable.cpp's advance_game) ----
@@ -158,17 +171,13 @@ std::vector<EndgameSolver::ActionEntry> EndgameSolver::possible_actions(
     return ActionEntry{perform, std::get<WinnableWithDraws>(res).draws};
   };
 
-  // Urgent first.
-  std::optional<PerformAction> urgent_perform;
-  for (int urgent : state.hands[player_turn]) {
-    if (game.meta[urgent].urgent) {
-      CardStatus status = game.meta[urgent].status;
-      urgent_perform = (status == CardStatus::CALLED_TO_PLAY)
-                            ? PerformAction{PerformPlay{urgent}}
-                            : PerformAction{PerformDiscard{urgent}};
-      break;
-    }
-  }
+  // Urgent first. Note this restriction is per-HYPO: a world in which the
+  // called card is unplayable makes the call unwinnable *there*, so that hypo
+  // falls through and contributes its full action list. The cross-hypo union at
+  // the root therefore gets the call back on equal footing with everything
+  // else, which is why `solve` also tie-breaks toward it.
+  std::optional<PerformAction> urgent_perform =
+      standing_call_action(game, player_turn);
   if (urgent_perform) {
     auto r = try_action(*urgent_perform);
     if (r) return {*r};
@@ -627,6 +636,27 @@ SolveResult EndgameSolver::solve(const Game& game,
       {{"cards_left", game.state.cards_left}, {"clue_tokens", game.state.clue_tokens}});
   const State& state = game.state;
 
+  // A standing reacter call is a TIE-BREAK at the root, ranking above the
+  // stacks-a-card preference below. The solver stays free to deviate whenever
+  // deviating genuinely wins more often -- but among actions it rates EQUAL it
+  // takes the one the convention has already committed the seat to, because
+  // deviating there costs a card for nothing and mis-signals the receiver, who
+  // decodes the target from WHICH slot the reacter actioned.
+  //
+  // Replay 1966757 T25: will-bot67 held a CTD on slot 5 from a reactive blue
+  // clue. Chucking it and chucking slot 2 both came out at 1/3, and the solver
+  // took slot 2 -- an Orange 1 with the orange stack on 3, so it struck for
+  // nothing, and the slot it actioned decoded to a trash target.
+  //
+  // Reactor0 only. Reactor's endgame corpus is out of scope.
+  const std::optional<PerformAction> called_action =
+      game.convention == Convention::REACTOR0
+          ? standing_call_action(game, state.our_player_index)
+          : std::nullopt;
+  auto honours_call = [&called_action](const PerformAction& p) {
+    return called_action.has_value() && perform_eq(p, *called_action);
+  };
+
   // Trivial: one play wins. The winning BUTTON depends on the suit — for an
   // inverted (Orange / Dark Orange) card it is Discard, since pressing Play
   // would send the last needed card to the discard pile and lose outright.
@@ -950,9 +980,15 @@ SolveResult EndgameSolver::solve(const Game& game,
         best = {action, cur};
         break;
       }
-      bool better = cur > best.second ||
-                    (cur == best.second && is_play_perform(state, action) &&
-                      !is_play_perform(state, best.first));
+      const bool call_now = honours_call(action);
+      const bool call_best = honours_call(best.first);
+      const bool better =
+          cur > best.second ||
+          // the standing call wins a tie outright...
+          (cur == best.second && call_now && !call_best) ||
+          // ...and only when neither honours it does the play preference decide
+          (cur == best.second && call_now == call_best &&
+            is_play_perform(state, action) && !is_play_perform(state, best.first));
       if (better) best = {action, cur};
     }
     if (best.second == Fraction(0)) {
@@ -961,6 +997,15 @@ SolveResult EndgameSolver::solve(const Game& game,
     return SolveResult{best.first, best.second, ""};
   }
 
+  // Single hypo: `initial` is already best-first, so only entries TIED with the
+  // front are eligible -- this can never promote a worse winrate.
+  if (called_action) {
+    const Fraction top = initial.front().second;
+    std::stable_partition(initial.begin(), initial.end(),
+                            [&](const auto& kv) {
+                              return kv.second == top && honours_call(kv.first);
+                            });
+  }
   auto [best_action, best_winrate] = initial.front();
   return SolveResult{best_action, best_winrate, ""};
 }

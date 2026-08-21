@@ -788,6 +788,23 @@ enumerated every orange play as a `PerformPlay`, i.e. as a pitch into the
 discard pile, so any line needing an orange play scored as a loss
 (bug_report_3.txt 3.2, replay 1942723 T42).
 
+**A standing reacter call breaks a tie at the root** (`solve`,
+`src/endgame/solver.cpp`). `possible_actions` already offers the call as the
+ONLY action when it is winnable, but that restriction is per-HYPO: a world in
+which the called card is unplayable makes the call unwinnable *there*, so that
+hypo contributes its full action list and the cross-hypo union at the root puts
+the call back on equal footing. So among actions the solver rates **equal**, it
+now takes the one the convention committed the seat to — ranked above the
+stacks-a-card preference. It stays free to deviate whenever deviating genuinely
+wins more often; only ties move.
+
+Deviating on a tie costs a card for nothing *and* mis-signals: the receiver
+decodes their target from WHICH slot the reacter actioned. Replay 1966757 T25 —
+will-bot67 held a CTD on slot 5 from a reactive blue clue, chucking it and
+chucking slot 2 both came out at 1/3, and the solver took slot 2. That was an
+Orange 1 with the orange stack on 3, so it struck for nothing and the slot it
+actioned decoded to a trash target. Reactor0 only.
+
 ### 1b.6 Clue-touch rules
 
 `Variant::id_touched` (`src/basics/variant.cpp:199-246`) determines which

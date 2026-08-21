@@ -566,6 +566,14 @@ card at T16.
 (`decide.cpp`), so the receiver may never learn the target its reaction was meant
 to reveal. See `TODO.md`.
 
+**The endgame solver breaks ties toward a standing call.** Precedence step 0 is
+the endgame fork, which sits above the urgent return, so in the endgame the
+solver — not this convention — chooses the action. Among lines it rates equal it
+now takes the one the standing reacter call names (`src/endgame/solver.cpp`,
+reactor's §1b.5). It may still deviate when deviating genuinely wins more often.
+Replay 1966757 T25 is the case: the target scan was correct, and the solver
+overrode it with an equally-rated chuck that struck.
+
 ## §1e The reactive lock and `allow_reactive_locks`
 
 **Resolution** (`src/conventions/reactor0/interpret_reaction.cpp`): when the
