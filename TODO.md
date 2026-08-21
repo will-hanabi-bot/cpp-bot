@@ -4,7 +4,9 @@ The per-convention CONVENTION.md files
 ([reactor](src/conventions/reactor/CONVENTION.md),
 [reactor0](src/conventions/reactor0/CONVENTION.md)) describe the bot **as it
 behaves**. This file is the other half: rules that are part of a convention
-and legal to play, but that the current build does not produce or decode.
+and legal to play, but that the current build does not produce or decode, plus a
+few places where it decodes something incorrectly and the fix is blocked on an
+open question rather than on effort.
 Each entry is tagged with the convention(s) it applies to. Anything here is a
 known gap, not a disagreement about what the convention says.
 
@@ -573,3 +575,64 @@ same machinery entry 12 (an unpinned playable orange is still pitched) and entry
   pins the clue and carries a note pointing here.
 - The inverted-suit helpers in `src/conventions/variants/inverted.cpp`, and
   `discard_button_is_safe` (`src/basics/decide.cpp`).
+
+---
+
+## 24. `[reactor0]` A reaction is resolved by its button, not its outcome
+
+**Convention.** A reactive's parity is fixed by clue kind: under a RANK clue a
+reacter who **plays** means a double play, and one who **discards** means a
+double discard. What decides which happened is the OUTCOME, not which button was
+pressed. On an inverted suit a chuck — pressing Discard — puts the card on its
+stack, so it *is* a play, exactly as
+[DECISION_MAKING.md](src/conventions/reactor0/DECISION_MAKING.md)'s
+result-oriented vocabulary says ("a play refers to a pitch of a non-inverted suit
+and a chuck of an inverted suit").
+
+**Today.** `Game::interpret_discard` dispatches a physical discard to
+`react_discard` (`src/conventions/reactor0/interpret_reaction.cpp`), which reads
+the rank clue's "reacter discarded" branch and stamps the receiver's target as a
+**discard**, running `elim_dc_dc`'s eliminations. When the reacter's discard was
+an inverted chuck that advanced a stack, the agreement was a double **play**, and
+both the stamp and the eliminations are wrong.
+
+Seen at replays 1966351 T9 and 1966569 T9, both of which chucked an Orange 3 with
+the orange stack at 2.
+
+**What is already fixed, and is not this.** v7.8.0 deferred `elim_play_dc` until
+the receiver's discard proves the card was trash, which removes one *consequence*
+of the same confusion. This entry is the confusion itself, on the other branch.
+
+**Why it is not fixed.** Routing an inverted chuck to `react_play` is a two-line
+change and gets the parity right — I have had it working. It cannot land as-is
+because `reactor::target_i_play` then stamps `CALLED_TO_PLAY`, and on an inverted
+suit that is a PITCH, so the receiver throws away the playable orange instead of
+chucking it onto its stack. Verified: replay 1966569 T10 goes from
+`discard(order=3)` to `play(order=3)`.
+
+The repair that suggests itself does not work either. Swapping the stamp to CTD
+for an inverted target — as clue-time `stamp_receiver_play` does — reads
+`variants::target_is_inverted`, which is `state.deck[order].suit_index`. That is
+`-1` for the holder's own card, so it answers "no" for the one player who has to
+act on it and "yes" for every observer.
+
+Making the swap POV-symmetric by reading the shared inference instead ("stamp CTD
+when any live reading is an inverted playable") fixes 1966569 and breaks
+1966286 T13, whose target reads `{r2, b2, o2}` and is really the **b2** — a plain
+playable that a chuck would discard. Two positions of identical shape with
+opposite correct answers, and no rule over the shared inference separates them.
+
+**So the open question is not which button, but how a receiver learns that a play
+target is inverted at all**, given they cannot see it. Until that is settled the
+resolution path cannot route a chuck to `react_play` without the receiver
+diverging from everyone else.
+
+**Touchpoints.**
+- `react_discard` / `react_play` (`src/conventions/reactor0/interpret_reaction.cpp`);
+  reactor0 has its own pair, dispatched on convention in `src/basics/decide.cpp`.
+- `variants::discard_advances_stack` (`src/conventions/variants/inverted.cpp`) is
+  the outcome test the dispatch wants.
+- `variants::target_is_inverted` (same file) is the POV-asymmetric one.
+- `pitch_candidates` / `chuck_candidates`
+  (`include/hanabi/conventions/reactor0/interpret_clue.h`) are the sets any stamp
+  has to agree with, per v7.11.0.
