@@ -36,6 +36,16 @@ namespace hanabi {
 
 // --- Convention hooks: reactor implementation ----------------------------
 
+// Decide any held receiver-chuck inference. reactor0 only -- reactor applies all
+// four elims at its own call sites and never defers. Called after every
+// interpretation because the deciding fact ("was the called card the playable
+// orange") can arrive from any of them, and the receiver is under no obligation
+// to chuck the card for it to become known.
+void Game::resolve_deferred_elims() {
+  if (convention != Convention::REACTOR0) return;
+  hanabi::reactor::resolve_pending_dc_elim(*this);
+}
+
 void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   using namespace hanabi::reactor;
   check_missed(action.giver, /*sentinel=*/99);
@@ -222,6 +232,7 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
     }
   }
   elim();
+  resolve_deferred_elims();
   std::vector<int> plays_after;
   for (const auto& hand : state.hands) {
     for (int o : hand) {
@@ -284,18 +295,6 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
     waiting.clear();
   }
 
-  // The deferred reactive negative inference (reactor/interpret_reaction.cpp).
-  // It was recorded when the reacter played and the receiver was called to
-  // discard; it may only be applied now, and only if the card really was thrown
-  // away. A called discard on an INVERTED suit is a chuck that advances a
-  // stack, so the target walk passed over nothing and the inference does not
-  // hold. Basic trash is the proof that it does.
-  if (pending_dc_elim.active && action.order == pending_dc_elim.target_order) {
-    const bool was_trash = !failed && id && prev.state.is_basic_trash(*id);
-    if (was_trash) hanabi::reactor::apply_pending_dc_elim(*this);
-    pending_dc_elim = Game::PendingDcElim{};
-  }
-
   bool useful_dc = !failed && prev.state.deck[action.order].clued && id.has_value() &&
                     state.is_useful(*id) &&
                     prev.meta[action.order].status != CardStatus::CALLED_TO_DISCARD &&
@@ -356,6 +355,7 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   }
 
   elim();
+  resolve_deferred_elims();
   if (prev.state.can_clue()) reset_zcs();
 }
 
@@ -381,6 +381,7 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   }
   with_move(PlayInterp::NONE, /*overwrite=*/true);
   elim();
+  resolve_deferred_elims();
   if (prev.state.can_clue()) reset_zcs();
 }
 
@@ -442,6 +443,7 @@ void Game::update_turn(const TurnAction& action) {
     }
   }
   elim();
+  resolve_deferred_elims();
 }
 
 void Game::refresh_after_play(const Game&, const PlayAction&) {}

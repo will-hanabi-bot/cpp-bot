@@ -147,30 +147,6 @@ void target_i_play(const Game& /*prev*/, Game& game, const ReactorWC& wc,
     }
   }
   IdentitySet new_inferred = game.common.thoughts[order].inferred.intersect(self_playables);
-  if (new_inferred.is_empty() && game.convention == Convention::REACTOR0) {
-    // The card's `inferred` no longer admits any playable — but this call is
-    // DIRECT evidence that it is one, and it outranks whatever narrowed the
-    // set. What narrows it here is always a derived negative: `elim_*_play` /
-    // `elim_*_dc` conclude "the slots the walk passed over are not playable",
-    // which rests on an assumption about an EARLIER reaction that this clue
-    // now contradicts. Rebuild from `possible`, which carries the empathy and
-    // `card_elim` facts and nothing derived.
-    //
-    // Without this the call silently evaporates under reactor0: `inferred`
-    // stays stale, the CTP is stamped, and `enforce_call_invariants` rule 3
-    // immediately drops it again as a dead play call. Replay 1966710 --
-    // will-bot67's blue 2 on slot 3 lost b2 to a turn-6 negative, was
-    // re-targeted by the turn-8 reactive, and came out of turn 9 with no
-    // stamp, no note and no play; it discarded its chop on T13 instead.
-    //
-    // REACTOR0 ONLY. Reactor has no `drop_dead_play_calls`, so there the
-    // stamp survives on its own and the rebuild buys nothing — while the
-    // narrowing it performs emits a note that reactor deliberately suppresses.
-    // `MiscReplay1882573.Turn18NoteDoesNotResetU5` pins that: order 4 must not
-    // be marked and narrowed at turn 17 only to reset, which is the
-    // "turn 17: [f] u5 | turn 17: [reset]" oscillation the original report saw.
-    new_inferred = game.common.thoughts[order].possible.intersect(self_playables);
-  }
   // Stamp CTP unconditionally — the convention's "play this slot" signal must
   // reach the reacter even when no currently-playable identity overlaps the
   // card's inferred set (e.g. a delayed-play chain where the prerequisite
@@ -270,6 +246,64 @@ void elim_play_dc(const State& prev_state, Game& game,
   }
 }
 
+// Decide the fate of a held receiver-chuck inference, or leave it held.
+//
+// The inference is owed only if the receiver's called card was a real DISCARD.
+// It was not, if the card was an INVERTED identity that was playable at the time
+// the reactive clue was given -- then the chuck put it on its stack, the walk
+// passed over nothing, and nothing is owed. So the question is exactly "was it
+// the playable orange", asked against the clue-time snapshot rather than the
+// current stacks (they can differ by several turns of stack movement, and it is
+// the clue-time reading the convention spoke about).
+//
+// Judged from THIS SEAT'S knowledge, deliberately, not from common knowledge.
+// Every player except the receiver can see the card outright, so they know the
+// answer at reaction time and should have the correct inference immediately;
+// the receiver falls back to empathy and catches up when they work it out.
+// `state.deck[o].id()` is already that accessor -- populated for a card this
+// seat can see, `nullopt` for its own -- so no new machinery is needed, and the
+// revealed-on-discard case falls out for free.
+//
+// Three outcomes: every reading says it was a play (void it), no reading says so
+// (apply it), or it is still open (keep waiting). The card need NOT be discarded
+// for this to fire -- knowing is enough.
+void resolve_pending_dc_elim(Game& game) {
+  Game::PendingDcElim& p = game.pending_dc_elim;
+  if (!p.active) return;
+  if (p.target_order < 0 ||
+      p.target_order >= static_cast<int>(game.state.deck.size())) {
+    p = Game::PendingDcElim{};
+    return;
+  }
+
+  IdentitySet live;
+  if (auto id = game.state.deck[p.target_order].id()) {
+    live = IdentitySet::single(*id);
+  } else {
+    const Thought& t = game.common.thoughts[p.target_order];
+    live = t.inferred.non_empty() ? t.inferred : t.possible;
+  }
+  if (live.is_empty()) return;  // nothing to reason from yet
+
+  const State& s = game.state;
+  IdentitySet playable = p.playable;
+  auto was_play = [&s, playable](Identity i) {
+    return variants::is_inverted_id(s, i) && playable.contains(i);
+  };
+
+  if (live.forall(was_play)) {
+    // The chuck was a play. The inference was never owed.
+    p = Game::PendingDcElim{};
+    return;
+  }
+  if (!live.exists(was_play)) {
+    // The chuck was a discard, so the walk really did pass those slots over.
+    apply_pending_dc_elim(game);
+    p = Game::PendingDcElim{};
+  }
+  // Otherwise still open -- hold it and ask again on the next information.
+}
+
 void apply_pending_dc_elim(Game& game) {
   const Game::PendingDcElim& p = game.pending_dc_elim;
   if (!p.active) return;
@@ -277,6 +311,18 @@ void apply_pending_dc_elim(Game& game) {
   // elim_play_play's half: a slot the walk passed over is not playable. When
   // the reacter's paired card had exactly one playable identity, that identity
   // is kept -- it is the one the pairing would have named.
+  //
+  // Only the slots BEFORE the target, deliberately -- narrower than the
+  // immediate `elim_play_dc` / `elim_dc_dc`, which run this over the whole hand.
+  // Widening it to match was tried in v7.21.0 and is wrong: by the time a
+  // deferred inference applies, the receiver may have been told something
+  // better about the later slots, and the blanket "not playable" then overwrites
+  // it. Replay 1966675 T26 is the case -- order 7 came out of it with common
+  // knowledge of {o4} for a card that is really r4, contradicting both the
+  // holder's own view and the truth.
+  //
+  // Snapshotting the reacter's evidence at reaction time does NOT rescue the
+  // wider scope; it was tried too. The scope is the problem, not the staleness.
   for (int i = 0; i < p.target_slot - 1; ++i) {
     if (i >= static_cast<int>(p.receiver_hand.size())) break;
     int receive_order = p.receiver_hand[i];
@@ -313,7 +359,10 @@ void apply_pending_dc_elim(Game& game) {
     mark_trash_if_empty(game, receive_order);
   }
 
-  // elim_play_dc's own half: the trash differencing, with its skip rules.
+  // The owning elim's own half: the trash differencing, with its skip rules.
+  // The two differ only in the gate -- `elim_play_dc` asks whether the paired
+  // reacter card could have been playable, `elim_dc_dc` whether it is not
+  // all-critical.
   for (int i = 0; i < p.target_slot - 1; ++i) {
     if (i >= static_cast<int>(p.receiver_hand.size())) break;
     int receive_order = p.receiver_hand[i];
@@ -330,9 +379,13 @@ void apply_pending_dc_elim(Game& game) {
     }
     int react_order = p.reacter_hand[react_slot - 1];
     IdentitySet ps = p.playable;
-    bool can_elim = game.meta[react_order].status != CardStatus::CALLED_TO_PLAY &&
-                    game.common.thoughts[react_order].possible.exists(
-                        [&](Identity id) { return ps.contains(id); });
+    const bool can_elim =
+        p.kind == Game::PendingDcElim::Kind::PlayDc
+            ? (game.meta[react_order].status != CardStatus::CALLED_TO_PLAY &&
+               game.common.thoughts[react_order].possible.exists(
+                   [&](Identity id) { return ps.contains(id); }))
+            : !game.common.thoughts[react_order].possible.forall(
+                  [&](Identity id) { return p.critical.contains(id); });
     if (can_elim) {
       IdentitySet ts = p.trash;
       game.with_thought(receive_order, [&](const Thought& t) {

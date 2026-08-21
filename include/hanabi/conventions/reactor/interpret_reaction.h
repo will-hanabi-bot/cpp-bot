@@ -72,4 +72,11 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
 // where a called discard is a CHUCK that puts the card on its stack.
 void apply_pending_dc_elim(Game& game);
 
+// Decide a held receiver-chuck inference: void it if the chuck was a play,
+// apply it if the chuck was a discard, or leave it held while that is still
+// open. Judged from this seat's own knowledge -- observers resolve at reaction
+// time, the receiver when they work the identity out. Cheap and idempotent, so
+// it is safe to call after every interpretation. reactor0 only.
+void resolve_pending_dc_elim(Game& game);
+
 }  // namespace hanabi::reactor

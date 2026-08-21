@@ -216,6 +216,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_colour_value.cpp
   tests/test_reactor0/test_call_invariants.cpp
   tests/test_reactor0/test_chuck_dupes.cpp
+  tests/test_reactor0/test_deferred_elim.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp
   tests/test_reactor0/test_misc/test_replay_1966696_mixed_rank_direct_play_stamps_ctp.cpp
   tests/test_reactor0/test_misc/test_replay_1966710_reactive_ctp_survives_earlier_negative.cpp

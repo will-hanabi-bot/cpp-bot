@@ -89,6 +89,48 @@ void reactive_lock(Game& game, const ReactorWC& wc) {
   }
 }
 
+// Capture a receiver-chuck's negative inference instead of applying it.
+//
+// Both branches that call the receiver to CHUCK -- colour + reacter played
+// (`elim_play_dc`) and rank + reacter discarded (`elim_dc_dc`) -- reason "the
+// slots the walk passed over are not playable". That holds only if the chuck is
+// really a DISCARD. On an inverted suit a chuck puts the card on its stack, so
+// it is a PLAY: the walk passed over nothing and the inference is unfounded.
+//
+// Replay 1966710 is the case in full. The T5 reactive was rank + reacter
+// discards, so `elim_dc_dc` ran at once and its nested `elim_play_play` stripped
+// the playable b2 from the receiver's slot 3. But the receiver's called card was
+// an Orange 1 with the orange stack on 0 -- chucking it at T7 scored -- so the
+// reaction was never a double discard and no negative was ever owed. The clue
+// that re-targeted slot 3 at T8 then found an inferred set with no playable left
+// in it, and the call was dropped as dead.
+//
+// Everything is snapshotted as of NOW, because "playable" and "trash" have to be
+// read as of the reaction. `resolve_pending_dc_elim` decides its fate later.
+void defer_receiver_chuck_elim(const Game& prev, Game& game, const ReactorWC& wc,
+                               int target_slot, Game::PendingDcElim::Kind kind) {
+  Game::PendingDcElim pend;
+  pend.kind = kind;
+  pend.active = true;
+  pend.hand_size = kHandSize[prev.state.num_players];
+  pend.focus_slot = wc.focus_slot;
+  pend.target_slot = target_slot;
+  pend.receiver_hand = wc.receiver_hand;
+  pend.reacter_hand = prev.state.hands[wc.reacter];
+  pend.playable = prev.state.playable_set;
+  pend.trash = prev.state.trash_set;
+  pend.critical = prev.state.critical_set;
+  for (int o : wc.receiver_hand) {
+    pend.receiver_was_clued.push_back(prev.state.deck[o].clued ? 1 : 0);
+  }
+  if (target_slot - 1 >= 0 &&
+      target_slot - 1 < static_cast<int>(wc.receiver_hand.size())) {
+    pend.target_order = wc.receiver_hand[target_slot - 1];
+    pend.target_was_clued = prev.state.deck[pend.target_order].clued;
+  }
+  if (pend.target_order >= 0) game.pending_dc_elim = std::move(pend);
+}
+
 bool react_play(const Game& prev, Game& game, int player_index, int order,
                 const ReactorWC& wc) {
   hanabi::instr::ScopedTimer st("reactor0.react_play");
@@ -116,41 +158,8 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
       reactive_lock(game, wc);
     } else {
       target_i_discard(prev, game, wc, target_slot);
-      // DEFERRED, not applied here. `elim_play_dc`'s inference is "the slots
-      // before the target were passed over, so they are not playable", and that
-      // holds only if the target really is a discard. On an INVERTED suit a
-      // called discard is a CHUCK -- it puts the card on its stack -- so the
-      // walk passed over nothing and the inference is unfounded.
-      //
-      // Replay 1966351: the receiver's CTD was an Orange 3 with the orange
-      // stack at 2, so chucking it was a play. Running this immediately
-      // stripped the playable m3 from three muddy cards, and two turns later a
-      // reactive skipped its intended Red 4 target because the paired react
-      // slot no longer looked playable -- the reacter chucked an Orange 4
-      // instead.
-      //
-      // Everything is captured as of NOW, because "playable" and "trash" must
-      // be read at reaction time. `Game::interpret_discard` applies it once the
-      // card is actually discarded AND proves to be trash, which is the
-      // evidence that nothing playable was skipped.
-      Game::PendingDcElim pend;
-      pend.active = true;
-      pend.hand_size = kHandSize[prev.state.num_players];
-      pend.focus_slot = wc.focus_slot;
-      pend.target_slot = target_slot;
-      pend.receiver_hand = wc.receiver_hand;
-      pend.reacter_hand = prev.state.hands[wc.reacter];
-      pend.playable = prev.state.playable_set;
-      pend.trash = prev.state.trash_set;
-      for (int o : wc.receiver_hand) {
-        pend.receiver_was_clued.push_back(prev.state.deck[o].clued ? 1 : 0);
-      }
-      if (target_slot - 1 >= 0 &&
-          target_slot - 1 < static_cast<int>(wc.receiver_hand.size())) {
-        pend.target_order = wc.receiver_hand[target_slot - 1];
-        pend.target_was_clued = prev.state.deck[pend.target_order].clued;
-      }
-      if (pend.target_order >= 0) game.pending_dc_elim = std::move(pend);
+      defer_receiver_chuck_elim(prev, game, wc, target_slot,
+                                Game::PendingDcElim::Kind::PlayDc);
     }
   }
   return false;
@@ -197,8 +206,11 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
       reactive_lock(game, wc);
     } else {
       target_i_discard(prev, game, wc, target_slot);
-      elim_dc_dc(prev.state, game, wc.receiver_hand, wc.reacter,
-                 wc.focus_slot, target_slot);
+      // DEFERRED for the same reason the colour branch above defers
+      // `elim_play_dc` -- the receiver is called to CHUCK, and a chuck on an
+      // inverted suit is a play. Replay 1966710 T6.
+      defer_receiver_chuck_elim(prev, game, wc, target_slot,
+                                Game::PendingDcElim::Kind::DcDc);
     }
   }
   game.with_move(DiscardInterp::NONE);

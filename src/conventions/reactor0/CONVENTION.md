@@ -40,15 +40,36 @@ giver, Bob the next player, Cathy the one after.
   `advance` simulates a playable orange with the Discard button, `eval_state`
   scores 3+ strikes at `−100`, and `eval_game` prices an orange CTD as a play
   call (reactor's §2.6/§2.7).
-- **Not shared**: WHEN the reactive negative inference runs. On a colour
-  reactive the reacter plays and the receiver is called to discard, and
-  `elim_play_dc` reasons "the slots before the target were passed over, so they
-  are not playable". Reactor applies that at reaction time. Reactor0 **defers**
-  it: a called discard on an inverted suit is a CHUCK that puts the card on its
-  stack, so the walk passed over nothing and the inference is unfounded. It is
-  applied only once the receiver actually discards AND the card proves to be
-  basic trash, which is the evidence that nothing playable was skipped
-  (`Game::pending_dc_elim`, applied from `Game::interpret_discard`).
+- **Not shared**: WHEN the reactive negative inference runs. Whenever the
+  receiver is called to **chuck**, the elim reasons "the slots before the target
+  were passed over, so they are not playable". That is true only if the chuck is
+  a real DISCARD — on an inverted suit a chuck puts the card on its stack, so it
+  is a PLAY, the walk passed over nothing, and the inference is unfounded.
+
+  Reactor applies all four elims at reaction time. Reactor0 **defers both
+  receiver-chuck branches** — colour + reacter played (`elim_play_dc`) and rank +
+  reacter discarded (`elim_dc_dc`) — capturing them in `Game::pending_dc_elim`
+  (`reactor0/interpret_reaction.cpp`, `defer_receiver_chuck_elim`).
+
+  `resolve_pending_dc_elim` (`reactor/interpret_reaction.cpp`) then decides,
+  against the **clue-time** playable set rather than the current stacks:
+
+  | live readings of the called card | meaning | outcome |
+  |---|---|---|
+  | all are inverted **and** were playable | the chuck was a play | **void** it |
+  | none are | the chuck was a discard | **apply** it |
+  | mixed | not yet known | keep holding |
+
+  **The receiver need not chuck the card — knowing is enough.** And the question
+  is asked from each seat's OWN knowledge (`state.deck[o].id()`, `nullopt` only
+  for one's own cards), so every player except the receiver can see the card and
+  settles at reaction time; only the receiver waits. That is deliberate: the
+  others genuinely know the answer, so they should hold the right inference.
+
+  Replay 1966710 is the case. A rank double discard applied `elim_dc_dc` at once
+  and stripped a playable b2 from the receiver's slot 3, but the receiver's
+  called card was an Orange 1 with the orange stack on 0 — chucking it scored, so
+  the reaction was never a double discard and no negative was ever owed.
 
 - **Not shared**: how a card's **inferred** set may shrink. Once an
   interpretation has built it, reactor0 narrows it only through `card_elim` --
@@ -524,8 +545,9 @@ reacter acts, `calc_target_slot` maps their slot to the receiver's target;
 the standard table applies — reacter play + RANK ⇒ receiver plays
 (`elim_play_play`); play + COLOUR ⇒ receiver discards (`elim_play_dc`);
 discard + COLOUR ⇒ receiver plays (`elim_dc_play`); discard + RANK ⇒
-receiver discards (`elim_dc_dc`) (`react_play` `:65-97`, `react_discard`
-`:99-146`). Parity keys on `wc.clue.kind` **alone** (`:80`, `:129`);
+receiver discards (`elim_dc_dc`). The two **receiver-chuck** rows —
+`elim_play_dc` and `elim_dc_dc` — are captured rather than applied; see
+"WHEN the reactive negative inference runs" above. Parity keys on `wc.clue.kind` **alone** (`:80`, `:129`);
 `wc.all_plays` is deliberately not consulted, because reading it let
 resolution contradict the reading every seat agreed on at clue time. Should a
 waiting connection carry the flag anyway (a replayed snapshot, or a reactor WC

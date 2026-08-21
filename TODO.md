@@ -599,9 +599,16 @@ both the stamp and the eliminations are wrong.
 Seen at replays 1966351 T9 and 1966569 T9, both of which chucked an Orange 3 with
 the orange stack at 2.
 
-**What is already fixed, and is not this.** v7.8.0 deferred `elim_play_dc` until
-the receiver's discard proves the card was trash, which removes one *consequence*
-of the same confusion. This entry is the confusion itself, on the other branch.
+**What is already fixed, and is not this.** v7.8.0 deferred `elim_play_dc`, and
+v7.21.0 deferred `elim_dc_dc` as well and moved both onto a knowledge test — the
+inference is voided when the receiver's called card was a playable inverted at
+clue time, applied when it was not, and held while that is open. Between them
+those remove the *consequences* of this confusion on the RECEIVER's side.
+
+This entry is the confusion itself, on the REACTER's side: when the reacter's own
+discard was an inverted chuck that advanced a stack, the agreement was a double
+**play**, and the parity — which branch runs at all — is read wrongly before any
+elim is reached.
 
 **Why it is not fixed.** Routing an inverted chuck to `react_play` is a two-line
 change and gets the parity right — I have had it working. It cannot land as-is

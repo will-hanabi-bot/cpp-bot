@@ -527,9 +527,18 @@ outcome can be eliminated.
 | Function | Case | Rule | Cite |
 |---|---|---|---|
 | `elim_play_play` | rank, reacter played | For each earlier slot, look at the reacter slot it would have mapped to. If that card's `possible ∩ playable_set` is a singleton, keep only that identity among playables; otherwise drop all playables. | `:115-148` |
-| `elim_play_dc` | colour, reacter played | Run `elim_play_play` over *all* slots, then drop `trash_set` from earlier slots whose mapped reacter card could have been playable. | `:150-185` |
+| `elim_play_dc` | colour, reacter played | Run `elim_play_play` over *all* slots, then drop `trash_set` from earlier slots whose mapped reacter card could have been playable. **Reactor0 defers this** — see its `CONVENTION.md`. | `:150-185` |
 | `elim_dc_play` | colour, reacter discarded | Drop `playable_set` from earlier slots whose mapped reacter card isn't entirely critical. | `:187-210` |
-| `elim_dc_dc` | rank, reacter discarded | Run `elim_play_play` over all slots, then drop `trash_set` similarly. | `:212-245` |
+| `elim_dc_dc` | rank, reacter discarded | Run `elim_play_play` over all slots, then drop `trash_set` similarly. **Reactor0 defers this too**, from v7.21.0. | `:212-245` |
+
+Both deferred rows share `apply_pending_dc_elim`, whose first half runs over the
+slots **before the target only** — narrower than the immediate versions above,
+which sweep the whole hand. That is deliberate: by the time a deferred inference
+applies, the receiver may have been told something better about the later slots,
+and a blanket "not playable" would overwrite it. Widening it to match was tried
+and reverted (replay 1966675 T26 came out of it with common knowledge of `{o4}`
+for a card that is really `r4`); snapshotting the reacter's evidence at reaction
+time does not rescue the wider scope either.
 
 All four skip slots already CTP'd or CTD'd, and the two `_dc` variants
 additionally skip a slot when the target was pre-clued and that slot wasn't

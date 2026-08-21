@@ -16,7 +16,7 @@
 
 // Variant: Omni-Fives & Orange (3 Suits). 3 players, our_player_index=0.
 
-TEST(MiscReplay1966710, ReactiveCtpOutranksAnEarlierDerivedNegative) {
+TEST(MiscReplay1966710, ReceiverChuckOfAPlayableOrangeAppliesNoNegative) {
   // Reconstruct exactly the Game the live bot saw at turn 13.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
@@ -840,21 +840,26 @@ TEST(MiscReplay1966710, ReactiveCtpOutranksAnEarlierDerivedNegative) {
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   // Order 2 is will-bot67's slot 3, a blue card touched by the turn-3 colour
-  // clue. Three things happened to it in sequence:
+  // clue. What happened to it:
   //
-  //   T6  the turn-5 reactive resolved, and its negative inference ("the slots
-  //       the walk passed over are not playable") stripped the playable b2,
-  //       leaving inferred = {b1, b3}.
-  //   T8  a second reactive clue re-targeted this very slot.
-  //   T9  will-bot69 reacted. `target_i_play` computed
-  //       inferred /\ playables = {b1,b3} /\ {r2,b2,o2} = EMPTY, so it skipped
-  //       the narrowing, stamped CTP anyway -- and `enforce_call_invariants`
+  //   T5  a RANK reactive; the reacter discarded on T6, so reactor0 read a
+  //       double discard and ran `elim_dc_dc` at once. Its nested
+  //       `elim_play_play` swept every receiver slot and stripped the playable
+  //       b2, leaving inferred = {b1, b3}.
+  //   T8  a second reactive re-targeted this very slot.
+  //   T9  the reacter played, and `target_i_play` found
+  //       inferred /\ playables = {b1,b3} /\ {r2,b2,o2} = EMPTY. It skipped
+  //       the narrowing and stamped CTP anyway, and `enforce_call_invariants`
   //       rule 3 dropped the stamp again as a dead play call.
   //
-  // The call evaporated: no stamp, no note, and on T13 the chop (order 17)
-  // went instead of the b2. An explicit call is direct evidence that the card
-  // is playable and outranks the earlier DERIVED negative, so the inferred set
-  // is rebuilt from `possible`.
+  // The T6 inference was never owed. The receiver was called to CHUCK slot 1,
+  // and "the walk passed these slots over, so they are not playable" holds only
+  // if that chuck was a real DISCARD. It was not: slot 1 held an Orange 1 with
+  // the orange stack on 0, and chucking it on T7 scored. The chuck was a PLAY,
+  // nothing was passed over, and no negative was owed -- so b2 should never
+  // have left the inferred set and the T8 call should have landed cleanly.
+  //
+  // The result: play the blue 2 on slot 3 (order 2), not the chop (order 17).
   hanabi::PerformAction action = game.take_action();
   ASSERT_TRUE(std::holds_alternative<hanabi::PerformPlay>(action))
       << "the re-targeted slot carries a live reactive play call";

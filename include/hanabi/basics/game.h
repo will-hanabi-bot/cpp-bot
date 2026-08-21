@@ -124,6 +124,12 @@ class Game {
   // A pure function of action history, so `apply_snapshot` rebuilds it by
   // replay and it needs no serialisation.
   struct PendingDcElim {
+    // Which elim is being held. The two differ in their SECOND half:
+    // `elim_play_dc` gates the trash-differencing on "the paired reacter card
+    // could have been playable", `elim_dc_dc` on "the paired reacter card is
+    // not all-critical". Their first halves are identical.
+    enum class Kind { PlayDc, DcDc };
+    Kind kind = Kind::PlayDc;
     bool active = false;
     int target_order = -1;  // fires when this card is discarded
     int hand_size = 5;
@@ -135,8 +141,12 @@ class Game {
     bool target_was_clued = false;
     IdentitySet playable;  // prev_state.playable_set, as of the reaction
     IdentitySet trash;     // prev_state.trash_set, likewise
+    IdentitySet critical;  // prev_state.critical_set, likewise (DcDc's gate)
   };
   PendingDcElim pending_dc_elim;
+  // Decide any held receiver-chuck inference (reactor0 only). Called after every
+  // interpretation -- the deciding fact can arrive from any of them.
+  void resolve_deferred_elims();
   // Reactor /allplays toggle. When true, every reactive clue (color or rank)
   // is interpreted as play+play; both the receiver and the reacter end up
   // CALLED_TO_PLAY. When false (default), color clues are play+dc and rank
