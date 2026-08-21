@@ -190,7 +190,7 @@ Whether a clue should be given is then:
     - 1b. Otherwise, Alice gives the best clue from the General Clue Evaluation
       List below.
 2. **Alice is not occupied.**
-    - 2a. If `pace() >= 1 && clue_tokens < 4`, Alice gives the best clue from the
+    - 2a. If `pace() >= 1 && clue_tokens < 4`, and Alice is not locked, Alice gives the best clue from the
       General Clue Evaluation List satisfying the **HIGH** or **MEDIUM** tier
       requirements.
     - 2b. Otherwise, Alice gives the best clue from the General Clue Evaluation
@@ -331,7 +331,7 @@ is judged from Alice's own inference, not common knowledge.
     5. Give any other stall clue that cannot be misinterpreted by Bob as some
        other type of stable clue that would cause a strike or a discard of a
        critical card.
-    6. Same as 3.9
+    6. Give a lock clue to Bob.
 
    **When §4 is reachable at all.** §3 sits above §4, and its own last rung (3.9)
    is a lock with the same `>= 2 clues**` condition — which 8 tokens always

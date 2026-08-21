@@ -1032,7 +1032,19 @@ std::optional<PerformAction> choose_clue(
   for (const ClueCandidate& c : cands) {
     if (clue_is_admissible(game, c)) ok.push_back(c);
   }
-  if (ok.empty()) return std::nullopt;
+  // Logged on decline as well as on a pick. "Why did it not clue?" is the same
+  // question as "which rung fired?", asked from the other side, and until now
+  // only one of the two left a trace.
+  if (ok.empty()) {
+    hanabi::logging::log_branch("reactor0.choose_clue",
+                                {{"picked", false},
+                                 {"reason", "tier_gate_rejected_all"},
+                                 {"candidates", cands.size()},
+                                 {"pace", game.state.pace()},
+                                 {"clue_tokens", game.state.clue_tokens},
+                                 {"occupied", requires_high_tier(game)}});
+    return std::nullopt;
+  }
 
   const ClueCandidate* pick = nullptr;
   const char* rung = "";
@@ -1045,7 +1057,15 @@ std::optional<PerformAction> choose_clue(
   } else if ((pick = rung_4(game, ok))) {
     rung = "4.locked_or_eight_clues";
   }
-  if (!pick) return std::nullopt;
+  if (!pick) {
+    hanabi::logging::log_branch("reactor0.choose_clue",
+                                {{"picked", false},
+                                 {"reason", "no_rung_matched"},
+                                 {"admissible", ok.size()},
+                                 {"candidates", cands.size()},
+                                 {"clue_tokens", game.state.clue_tokens}});
+    return std::nullopt;
+  }
   hanabi::logging::log_branch("reactor0.choose_clue",
                               {{"rung", rung},
                                {"shape", shape_name(pick->reading.shape)},
