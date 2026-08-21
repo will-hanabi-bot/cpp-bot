@@ -288,7 +288,8 @@ is judged from Alice's own inference, not common knowledge.
    Cathy has on chop a trash, a same-hand-dupe, or a good card that Alice sees at
    least one dupe of in any other player's hand (including her own). Tiebreak by
    the following:
-    1. Give a stable play clue to Bob if there are `>= 2 clues**`
+    1. Give a stable play clue to Bob if there are `>= 2 clues**`. This includes
+       direct rank or color play clues and play reveals given with either rank or color. 
     2. If Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.
@@ -319,7 +320,7 @@ is judged from Alice's own inference, not common knowledge.
    visible → 3; `g4` needs `g1 g2 g3`, and `g3` is in Bob's hand → 2; `r4` needs
    `r1 r2 r3`, and `r2` is in Bob's hand and `r3` in Cathy's → 1. So `b4` wins.
 
-4. **Alice is at 8 clues and is forced to clue or pitch.** Tiebreak by the following:
+4. **Alice is locked or at 8 clues and is forced to clue or pitch.** Tiebreak by the following:
     1. Same as 3.1
     2. Same as 3.3
     3. Same as 3.5
@@ -354,8 +355,10 @@ is judged from Alice's own inference, not common knowledge.
        see leading up to that card, or a reactive play or reactive discard that stamps CTP on a
        non-critical inverted card in Bob's hand, tiebreak by the same criteria.
 
-   **§4 always returns a clue.** At 8 clue tokens a discard is illegal, so
-   something must be given. If none of 4.1-4.8 applies, give the clue that
+   **§4 always returns a clue.** Both entry conditions are positions where the
+   ordinary list has run out and Alice still has to do something: at 8 clue
+   tokens a discard is illegal, and locked she has no chop to discard, so her
+   only alternative to cluing is burning a card. If none of 4.1-4.8 applies, give the clue that
    maximises the default tiebreak, **ignoring tier**. This floor sits beneath the
    whole of §4, so the branch can never fall through to the play/discard phase and
    leave the engine to burn a blind slot-1 play.

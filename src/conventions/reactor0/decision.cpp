@@ -906,8 +906,21 @@ const ClueCandidate* rung_safe_stall(const Game& g,
 
 // --- priority 4: Alice is at 8 clues and must clue or pitch ---------------
 const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs) {
-  if (g.state.clue_tokens != 8) return nullptr;
-  if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;         // 4.1
+  // "Alice is LOCKED or at 8 clues and is forced to clue or pitch." Both are
+  // positions where the ordinary list has run out and she still has to do
+  // something: at 8 tokens a discard is illegal, and locked she has no chop to
+  // discard, so her only alternative to cluing is burning a card.
+  //
+  // Replay 1966633 T5 is the locked half. Bob held a standing CTD, so the whole
+  // of priority 3 declined on "no safe play or discard", section 4 needed 8
+  // tokens and there were 7, and a locked Alice bombed her way out of the turn
+  // with a perfectly good play reveal on the table.
+  const bool locked = g.common.thinks_locked(g, alice_of(g));
+  if (g.state.clue_tokens != 8 && !locked) return nullptr;
+  // 4.1 is "same as 3.1", which carries 3.1's own clue-count condition.
+  if (clues_at_least(g, 2)) {
+    if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;       // 4.1
+  }
   if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;  // 4.2
   if (auto* c = first_of(g, pool_stable_ditch_dupe(g, cs))) return c;   // 4.3
   // 4.4 and 4.5 sit ABOVE the lock deliberately. A lock commits Bob's whole
@@ -1030,7 +1043,7 @@ std::optional<PerformAction> choose_clue(
   } else if ((pick = rung_3(game, ok))) {
     rung = "3.bob_chop";
   } else if ((pick = rung_4(game, ok))) {
-    rung = "4.eight_clues";
+    rung = "4.locked_or_eight_clues";
   }
   if (!pick) return std::nullopt;
   hanabi::logging::log_branch("reactor0.choose_clue",
