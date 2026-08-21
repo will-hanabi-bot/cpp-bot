@@ -12,6 +12,7 @@
 
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
+#include "hanabi/basics/identity_set.h"
 #include "hanabi/basics/identity.h"
 #include "hanabi/basics/state.h"
 
@@ -73,5 +74,28 @@ bool clue_is_h4(const Game& game, const Game& hypo, const ClueAction& action);
 // card? A structural replay of `stable_colour`'s target choice and its three
 // guards, not a simulation. The costliest fact here — evaluate it last.
 bool has_colour_play_clue_for(const Game& game, int giver, int receiver);
+
+// --- private sight -------------------------------------------------------
+//
+// `order`'s empathy set, narrowed by what THIS SEAT can see: an identity drops
+// out when every copy still in the game is visible in somebody else's hand.
+//
+// The Player layer cannot express this. Per-player views are copied from
+// `common` (basics/game.cpp) and re-elim'd, and `card_elim` accounts for a copy
+// only when a CLUE pins it (`certain_map`) -- never when a player merely looks
+// at it. Private sight is `state.deck[o].id()`, which is nullopt for one's own
+// cards, so this is deliberately a PER-SEAT reading: see CONVENTION.md §1g.
+//
+// Built on `possible`, not `inferred`: sight REFUTES a promise rather than
+// refining it, so it must start from raw empathy.
+//
+// `Player::unknown_ids` (basics/player.cpp) is the same arithmetic over
+// empathy; this is its sight-based twin, kept separate so that function's
+// existing callers are untouched.
+IdentitySet sight_narrowed(const Game& game, int order);
+
+// True when every identity `sight_narrowed` leaves is basic trash -- the holder
+// can PROVE the card is worthless, even though common knowledge cannot.
+bool provably_trash(const Game& game, int order);
 
 }  // namespace hanabi::reactor0

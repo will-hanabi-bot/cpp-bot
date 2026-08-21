@@ -7,6 +7,7 @@
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/logging/decide_trace.h"
@@ -81,7 +82,26 @@ namespace {
 // basic trash is known trash, even if the holder cannot say which trash it is.
 bool is_chuckable(const Game& game, int player, int order) {
   const Thought& t = game.players[player].thoughts[order];
-  const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+  IdentitySet set = t.inferred.non_empty() ? t.inferred : t.possible;
+  // For our OWN hand, narrow by what this seat can SEE. The Player layer is
+  // common-derived (basics/game.cpp copies `possible` from `common`, and
+  // `card_elim` accounts for a copy only when a CLUE pins it), so a duplicate
+  // sitting unclued in somebody else's hand never reaches it. Replay 1967478:
+  // blue was on 4 and will-bot69 could see the last b5 in will-bot67's hand, so
+  // both of its clued blues were trash -- but empathy alone still admitted b5
+  // and neither card was chuckable.
+  //
+  // Only for our own seat: for anybody else's hand `sight_narrowed` would apply
+  // OUR eyes to THEIR card, which is not their knowledge. `choose_action` calls
+  // `action_lists` with alice == our_player_index, so this is the path that
+  // matters.
+  if (player == game.state.our_player_index) {
+    const IdentitySet seen = sight_narrowed(game, order);
+    if (!seen.is_empty()) {
+      const IdentitySet narrowed = set.intersect(seen);
+      if (!narrowed.is_empty()) set = narrowed;
+    }
+  }
   if (set.is_empty()) return false;
   const State& s = game.state;
   // The spec's two arms: "either trash NON-INVERTED or playable inverted".

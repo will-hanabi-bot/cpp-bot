@@ -316,6 +316,40 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
 // but DECISION_MAKING.md's Precedence rule singles out an H4 clue specifically —
 // it is the one clue that outranks a pending reaction — so the decision layer
 // has to be able to ask for it apart from the other HIGH terms.
+IdentitySet sight_narrowed(const Game& game, int order) {
+  const State& s = game.state;
+  if (order < 0 || order >= static_cast<int>(game.common.thoughts.size())) {
+    return IdentitySet::empty();
+  }
+  const IdentitySet base = game.common.thoughts[order].possible;
+  return base.filter([&s, order](Identity i) {
+    const int ord = i.to_ord();
+    // Copies still unaccounted for: total, minus those already played or
+    // discarded.
+    const int remaining = s.card_count[ord] - s.base_count[ord];
+    if (remaining <= 0) return false;  // every copy is already gone
+    int seen = 0;
+    for (int p = 0; p < s.num_players; ++p) {
+      // Never our OWN hand: we cannot see it. In production `deck[o].id()` is
+      // already nullopt there, but saying so explicitly keeps the rule true
+      // when a caller hands us a fully-populated deck.
+      if (p == s.our_player_index) continue;
+      for (int o : s.hands[p]) {
+        if (o == order) continue;
+        if (s.deck[o].id() == i) ++seen;
+      }
+    }
+    return seen < remaining;  // at least one copy this seat cannot place
+  });
+}
+
+bool provably_trash(const Game& game, int order) {
+  const IdentitySet live = sight_narrowed(game, order);
+  if (live.is_empty()) return false;  // no information, not a proof
+  const State& s = game.state;
+  return live.forall([&s](Identity i) { return s.is_basic_trash(i); });
+}
+
 bool clue_is_h4(const Game& game, const Game& hypo, const ClueAction& action) {
   const State& s = game.state;
   const int alice = s.our_player_index;

@@ -762,6 +762,32 @@ and never reaches a reactor0 game at all (§0).
 
 ## §1g POV invariance — shared knowledge retargets, giver-only knowledge rejects
 
+**One reading is deliberately PER-SEAT: a direct play whose focus the holder can
+prove is trash.** §1b priority 5 and §1c priority 1 both decline when
+`provably_trash` (`reactor0/facts.h`) says every identity still open for the
+focus is basic trash once the copies THIS SEAT can see are accounted for.
+
+The empathy layer cannot express that. Per-player views are copied from `common`
+(`basics/game.cpp`) and re-elim'd, and `card_elim` accounts for a copy only when
+a **clue** pins it — never when a player merely looks at it. So a duplicate
+sitting UNCLUED in another hand is invisible to every `Player` object. Private
+sight is `state.deck[o].id()`, which is `nullopt` for one's own cards, and
+`sight_narrowed` skips our own hand for that reason.
+
+The receiver and the giver therefore both decline, while the player *holding*
+the duplicate cannot see it and still reads a play. That divergence is accepted:
+the seat that ACTS has the right reading, so no strike results, and the holder's
+model corrects itself the moment anyone clues that card.
+
+`is_chuckable` (`reactor0/calls.cpp`) applies the same narrowing for our own
+seat, so a card we can prove is worthless reaches the chuck list — empathy alone
+still admits the duplicate.
+
+Replay 1967478 T42: blue on 4, so `b5` was the only useful blue and will-bot67
+held it unclued. will-bot69's two clued blues were both trash, yet the leftmost
+carried a CTP narrowed to `{b5}`, and T42 played it.
+
+
 **A reactive must not call two copies of the same card to play**
 (`calls_two_copies_to_play`, `reactor0/decision.cpp`). The reacter acts first,
 so their copy stacks the identity and the receiver's is trash by the time they

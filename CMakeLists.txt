@@ -232,6 +232,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1967363_no_duplicate_play_clue.cpp
   tests/test_reactor0/test_misc/test_replay_1967376_reacter_ctd_narrows_to_chuckable.cpp
   tests/test_reactor0/test_misc/test_replay_1967416_h4_finesse_is_parity_not_kind.cpp
+  tests/test_reactor0/test_misc/test_replay_1967478_no_ctp_on_provably_trash_focus.cpp
   tests/test_reactor0/test_dispatch.cpp
   tests/test_reactor0/test_endgame/test_replay_1966675_sole_holder_of_both_red_fours.cpp
   tests/test_reactor0/test_endgame/test_replay_1966757_endgame_honours_reacter_call.cpp
@@ -240,6 +241,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_giver_filters.cpp
   tests/test_reactor0/test_h4_parity.cpp
   tests/test_reactor0/test_pov_reject.cpp
+  tests/test_reactor0/test_provably_trash_focus.cpp
   tests/test_reactor0/test_reactive_assignment.cpp
   tests/test_reactor0/test_reactive_override_effect.cpp
   tests/test_reactor0/test_reactive_colour.cpp

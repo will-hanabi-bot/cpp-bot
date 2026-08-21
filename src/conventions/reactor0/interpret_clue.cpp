@@ -1,3 +1,4 @@
+#include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 
 #include <algorithm>
@@ -477,6 +478,18 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
     // `possible` always contains its true identity, so an actually-orange
     // target can no longer reach this branch.
     if (game.is_blind_playing(*target)) return std::nullopt;
+    // The receiver can see more than common knowledge does. If every identity
+    // still open for this card is basic trash once the copies THIS SEAT can see
+    // are accounted for, the clue cannot be asking for a play -- taking the CTP
+    // would be playing a card the holder can prove is worthless.
+    //
+    // Replay 1967478 T42: blue on 4, so b5 was the only useful blue, and
+    // will-bot69 could see it in will-bot67's hand. Its two clued blues were
+    // both trash, yet the leftmost was stamped CTP and narrowed to {b5}.
+    //
+    // Deliberately PER-SEAT (§1g): the holder of the b5 cannot see it, so they
+    // alone still read a play here. The seat that ACTS has the right reading.
+    if (provably_trash(game, *target)) return ClueInterp::STALL;
     auto target_id = game.state.deck[*target].id();
     if (game.meta[*target].status == CardStatus::CALLED_TO_DISCARD &&
         !(target_id && game.state.is_playable(*target_id))) {
@@ -657,7 +670,12 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
             }
             return false;
           });
-      if (unnecessary_focus) return ClueInterp::STALL;
+      // ...and the same sight-based test as §1b's direct play: `possible` here
+      // is common knowledge, which cannot see a duplicate sitting unclued in
+      // another hand. Replay 1967478 T42.
+      if (unnecessary_focus || provably_trash(game, *focus)) {
+        return ClueInterp::STALL;
+      }
 
       IdentitySet new_inferred = game.common.thoughts[*focus].inferred.filter(
           [&](Identity i) {
