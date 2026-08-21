@@ -483,6 +483,12 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       return out;
     });
     auto interp = target_discard(game, action, react_order, /*urgent=*/true);
+    // Same as Phase A and Phase B above. `target_discard` narrows to the
+    // NON-CRITICAL ids, which is the plain-suit reading of "throw this away";
+    // on an inverted suit a chuck is a play attempt, so the card must be
+    // PLAYABLE -- and a playable orange 5 is critical, so that narrowing keeps
+    // the trash orange and drops the one the call actually meant.
+    if (interp) narrow_to_stamped_button(game, react_order);
     if (!interp) continue;
     if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
     return ClueInterp::REACTIVE;
@@ -557,6 +563,10 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
                         ? target_play(game, action, react_order, /*urgent=*/true,
                                       /*stable=*/false)
                         : target_discard(game, action, react_order, /*urgent=*/true);
+      // As Phase A and Phase B do. Replay 1967376: this is where an Odds and
+      // Evens RANK clue lands (the odd bucket runs this ruleset), and without
+      // the narrowing the reacter-CTD kept a trash o1 and lost the playable o5.
+      if (interp) narrow_to_stamped_button(game, react_order);
       if (!interp) continue;
       if (!stamp_receiver_play(prev, game, action, target)) continue;
       if (!game.waiting.empty()) game.waiting.front().react_order = react_order;

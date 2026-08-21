@@ -1,4 +1,5 @@
 #include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/reactive_assignment.h"
 
 #include <algorithm>
 #include <initializer_list>
@@ -71,9 +72,15 @@ namespace {
 // react_discard (reactor0/interpret_reaction.cpp:82, :88-91, :131, :136-139).
 // The receiver is not stamped at clue time on the phases that matter here, so
 // the reading has to come from the parity rather than from the meta.
-CardStatus receiver_button(ClueKind kind, CardStatus reacter_button) {
+//
+// Keyed on the PARITY, not the clue kind. The even bucket is normally the rank
+// clue, but Odds and Evens swaps the two and `/set` can move an individual
+// clue, so reading `ClueKind` here would invert every reactive clue's shape in
+// those variants -- and the shape is what rungs 1 and 2 of the General Clue
+// Evaluation List select on.
+CardStatus receiver_button(bool even_parity, CardStatus reacter_button) {
   const bool reacter_plays = reacter_button == CardStatus::CALLED_TO_PLAY;
-  if (kind == ClueKind::RANK) {
+  if (even_parity) {
     return reacter_plays ? CardStatus::CALLED_TO_PLAY
                          : CardStatus::CALLED_TO_DISCARD;
   }
@@ -202,7 +209,11 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   if (r.reacter_side.outcome == Outcome::PLAY) {
     if (auto id = s.deck[wc.react_order].id()) after_bob = s.with_play(*id);
   }
-  const CardStatus rb = receiver_button(action.clue.kind, reacter_status);
+  const CardStatus rb = receiver_button(
+      reactive_assignment(*s.variant, game.reactive_overrides, action.clue.kind,
+                          action.clue.value)
+          .even,
+      reacter_status);
   r.receiver_side = {*receive_order, rb,
                      outcome_of(after_bob, *receive_order, rb)};
   r.shape = shape_of(r.reacter_side.outcome, r.receiver_side.outcome);

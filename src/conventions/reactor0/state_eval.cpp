@@ -1,4 +1,5 @@
 #include "hanabi/conventions/reactor0/state_eval.h"
+#include "hanabi/conventions/reactor0/reactive_assignment.h"
 
 #include "hanabi/conventions/reactor0/facts.h"
 
@@ -283,7 +284,17 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   const int alice = s.our_player_index;
   const int bob = s.next_player_index(alice);
   if (action.target == bob) return false;             // stable: no finesse
-  if (action.clue.kind != ClueKind::RANK) return false;  // Phase B is rank-only
+  // Phase B is not RANK-only -- it belongs to a RULESET, not a clue kind. It
+  // lives in `reactive_rank`, which is the EVEN-parity family; Odds and Evens
+  // makes that the colour clue, and `/set` can move an individual clue. Reading
+  // the kind here made H4 unreachable in those variants, so a finesse was
+  // invisible to the pre-check that outranks everything else (replay 1967416
+  // T1: yellow to Cathy was the finesse, and the bot clued yellow to Bob).
+  if (!reactive_assignment(*s.variant, game.reactive_overrides, action.clue.kind,
+                           action.clue.value)
+           .even) {
+    return false;
+  }
   if (!wc_is_fresh(game, hypo, alice, action.target, bob)) return false;
   // A reactive LOCK is not a finesse. It stamps CHOP_MOVED only a turn later,
   // in `reactive_lock`, so at clue time the receiver's predicted slot carries

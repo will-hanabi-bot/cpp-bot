@@ -633,6 +633,19 @@ reactor's §1b.5). It may still deviate when deviating genuinely wins more often
 Replay 1966757 T25 is the case: the target scan was correct, and the solver
 overrode it with an equally-rated chuck that struck.
 
+**Every reacter stamp narrows to its button.** A call is stamped by reactor's
+shared `target_play` / `target_discard`, whose narrowing is the PLAIN-suit
+reading — `target_discard` drops the criticals ("do not throw away a critical"),
+which on an inverted suit is exactly backwards, since a chuck there is a play
+attempt and the playable orange 5 is critical. `narrow_to_stamped_button`
+(`interpret_clue.cpp`) corrects it to `chuck_candidates` / `pitch_candidates`,
+and **all four** reacter sites call it: Phase A, Phase B, Phase C, and colour
+mode 1.
+
+Phase C and colour mode 1 did not until v7.28.0. Replay 1967376: an Odds and
+Evens rank clue runs the odd bucket, which is colour mode 1's ruleset, and the
+reacter-CTD kept a trash `o1` while dropping the playable `o5`.
+
 ## §1e The reactive lock and `allow_reactive_locks`
 
 **Resolution** (`src/conventions/reactor0/interpret_reaction.cpp`): when the

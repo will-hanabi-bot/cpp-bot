@@ -47,7 +47,11 @@ A clue tier (`clue_tier`, `state_eval.cpp:312-373`) is HIGH iff **any** of:
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank
    (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:348`.
 4. **H4** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
-   finesse**. A reactive **lock** is explicitly not a finesse, however its
+   finesse**. A finesse is reactive Phase B, which belongs to the **even-parity
+   ruleset** rather than to a clue kind: normally that is the rank clue, but
+   Odds and Evens makes it the colour clue and `/set` can move an individual
+   one, so the test reads `reactive_assignment(...).even`. Testing the kind
+   instead made H4 unreachable in those variants (replay 1967416 T1). A reactive **lock** is explicitly not a finesse, however its
    predicted slot looks at clue time (`clue_is_h4`, `:301-310`; the finesse detector itself is
    `clue_gets_finesse`, `:280-299`).
 
