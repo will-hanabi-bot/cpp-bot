@@ -362,6 +362,7 @@ bool has_no_safe_action(const Game& g, int player) {
          g.common.thinks_trash(g, player).empty();
 }
 
+
 // Cathy's "relief", which is what relaxes a `>= N clues**` threshold by one:
 // she has a safe discard, or her chop is something she can afford to lose.
 bool cathy_has_relief(const Game& g) {
@@ -495,6 +496,33 @@ bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   const bool in_window = occupied ? s.clue_tokens < 8 : s.clue_tokens <= 3;
   if (!in_window) return true;
   return c.tier >= (occupied ? ClueTier::HIGH : ClueTier::MEDIUM);
+}
+
+// Does `player` already hold a card they can safely press DISCARD on, judged
+// from COMMON knowledge -- the shared view Alice and Bob both have?
+//
+// NOT the same as holding known trash, and that difference is the whole reason
+// this exists rather than reusing `thinks_trash`. In an inverted variant
+// Discard is a play ATTEMPT, so a card the holder knows is a dead Orange 1 is
+// known trash and yet has no safe discard button at all: chucking it strikes.
+// Only a card every one of whose readings is trash on a PLAIN suit can simply
+// be thrown away.
+bool has_safe_discard(const Game& g, int player) {
+  const State& s = g.state;
+  for (int o : s.hands[player]) {
+    const Thought& t = g.common.thoughts[o];
+    const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+    if (set.is_empty()) continue;
+    bool safe = true;
+    for (Identity i : set) {
+      if (!s.is_basic_trash(i) || variants::is_inverted_id(s, i)) {
+        safe = false;
+        break;
+      }
+    }
+    if (safe) return true;
+  }
+  return false;
 }
 
 namespace {
@@ -792,8 +820,12 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   if (has_cathy(g) && !chop_is_expendable(g, cathy_of(g))) {
     if (auto* c = first_of(g, pool_double_discard(g, cs))) return c;
   }
-  // 3.3 -- a stable discard or trash reveal to Bob.
-  if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;
+  // 3.3 -- a stable discard or trash reveal to Bob, and only when Bob does not
+  // already have a safe discard. Telling him about a second dead card buys
+  // nothing if he can already throw one away.
+  if (!has_safe_discard(g, bob_of(g))) {
+    if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;
+  }
   // 3.4 -- the same double discard as 3.2, now unconditional on Cathy's chop.
   if (auto* c = first_of(g, pool_double_discard(g, cs))) return c;
   // 3.5 -- a stable discard to Bob on a card Alice can see a copy of elsewhere.
@@ -935,7 +967,10 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   if (clues_at_least(g, 2)) {
     if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;       // 4.1
   }
-  if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;  // 4.2
+  // 4.2 is "same as 3.3", and carries 3.3's safe-discard condition with it.
+  if (!has_safe_discard(g, bob_of(g))) {
+    if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;  // 4.2
+  }
   if (auto* c = first_of(g, pool_stable_ditch_dupe(g, cs))) return c;   // 4.3
   // 4.4 and 4.5 sit ABOVE the lock deliberately. A lock commits Bob's whole
   // hand, so at a forced clue it is worth less than information or than a

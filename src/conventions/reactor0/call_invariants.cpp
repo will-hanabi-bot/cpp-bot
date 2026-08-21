@@ -4,6 +4,7 @@
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
+#include "hanabi/conventions/reactor0/interpret_clue.h"
 
 namespace hanabi::reactor0 {
 
@@ -84,10 +85,45 @@ void enforce_single_discard_call(Game& game, const std::vector<int>& hand) {
   }
 }
 
+// Rule 3: a call is only as good as the card. Once COMMON knowledge leaves the
+// stamped button with no identity it handles correctly, the call is dead and
+// every seat drops it -- which also takes the card out of the reacter-CTP and
+// receiver-CTP structures, since those are derived from these stamps.
+//
+// Replay 1966653: yagami was called to play a Red 2 and never did, while the
+// other copy went down; by T17 the red stack was at 3, so the card was globally
+// known to be unplayable and the standing CTP would have walked him into a
+// second strike.
+//
+// Tested against `pitch_candidates` rather than against playability, because a
+// CTP on an INVERTED card is a pitch -- throwing it away -- and being unplayable
+// is exactly what makes that call sensible. What kills the call is having no
+// valid pitch left at all.
+//
+// Common knowledge only. The holder's own view may be narrower, but a call is a
+// shared commitment and has to die for every seat at the same moment, or they
+// disagree about what is still standing.
+void drop_dead_play_calls(Game& game, const std::vector<int>& hand) {
+  IdentitySet allowed;
+  bool computed = false;
+  for (int o : hand) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (!computed) {
+      allowed = pitch_candidates(game.state);
+      computed = true;
+    }
+    const Thought& t = game.common.thoughts[o];
+    const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+    if (set.is_empty()) continue;
+    if (set.intersect(allowed).is_empty()) erase_call(game, o);
+  }
+}
+
 }  // namespace
 
 void enforce_call_invariants(Game& game) {
   for (const auto& hand : game.state.hands) {
+    drop_dead_play_calls(game, hand);
     enforce_play_order(game, hand);
     enforce_single_discard_call(game, hand);
   }

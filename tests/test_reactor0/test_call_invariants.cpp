@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "hanabi/basics/game.h"
+#include "hanabi/conventions/reactor0/call_invariants.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
 using namespace hanabi;
@@ -260,4 +261,71 @@ TEST(Reactor0CallInvariants, RevealedTrashIsNotADiscardCall) {
       << "revealed trash is not a discard call and must survive";
   EXPECT_TRUE(g.meta[bob_s3].trash)
       << "several revealed-trash cards at once are fine — only CTD is capped";
+}
+
+// --- rule 3: a dead call is dropped --------------------------------------
+
+// A call is only as good as the card. Once common knowledge leaves the stamped
+// button with no identity it handles correctly, every seat drops it.
+//
+// Replay 1966653: yagami was called to play a Red 2 and never did, while the
+// other copy went down. By T17 the red stack was at 3, so the card was globally
+// known to be unplayable and the standing CTP would have walked him into a
+// second strike.
+TEST(Reactor0CallInvariants, ACtpDiesOnceNoPitchIsLeft) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y4", "g4", "b4", "p4", "y5"},
+      {"r2", "y3", "g3", "b3", "p3"},
+      {"g2", "b2", "p2", "y2", "g5"},
+  };
+  opts.play_stacks = {3, 0, 0, 0, 0};  // red is past 2, so r2 is dead
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int r2 = order_at(g, TestPlayer::BOB, 1);
+  ASSERT_TRUE(g.state.is_basic_trash(Identity{0, 2})) << "guard: r2 is dead";
+  g.meta[r2].status = CardStatus::CALLED_TO_PLAY;
+  g.with_thought(r2, [](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::single(Identity{0, 2});
+    return out;
+  });
+
+  hanabi::reactor0::enforce_call_invariants(g);
+  EXPECT_NE(g.meta[r2].status, CardStatus::CALLED_TO_PLAY)
+      << "pressing Play on a dead plain card strikes, so the call is dead too";
+}
+
+// But a CTP on an unplayable ORANGE is a PITCH -- throwing it away -- and being
+// unplayable is exactly what makes that call sensible. It must survive.
+TEST(Reactor0CallInvariants, ACtpOnASpareOrangeSurvives) {
+  SetupOptions opts;
+  opts.variant_name = "Orange (4 Suits)";
+  opts.hands = {
+      {"r3", "b4", "g4", "r5", "b5"},
+      {"o3", "r2", "g3", "b3", "r4"},
+      {"g2", "b2", "r3", "g5", "o4"},
+  };
+  opts.play_stacks = {0, 0, 0, 0};  // orange stack 0, so o3 is NOT playable
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int orange = 3;
+  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted);
+  const int o3 = order_at(g, TestPlayer::BOB, 1);
+  ASSERT_FALSE(g.state.is_playable(Identity{orange, 3}));
+  ASSERT_FALSE(g.state.is_critical(Identity{orange, 3}));
+  g.meta[o3].status = CardStatus::CALLED_TO_PLAY;
+  g.with_thought(o3, [orange](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::single(Identity{orange, 3});
+    return out;
+  });
+
+  hanabi::reactor0::enforce_call_invariants(g);
+  EXPECT_EQ(g.meta[o3].status, CardStatus::CALLED_TO_PLAY)
+      << "a pitch of a spare orange is a live call, not a dead one";
 }

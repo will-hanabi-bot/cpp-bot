@@ -866,7 +866,13 @@ TEST(DecisionMaking1966286, T13CallInferenceIsNotRenarrowedByTheStacks) {
   // yagami_black's slot 1: clued rank 2, CALLED_TO_PLAY, and genuinely the
   // SECOND Blue 2.
   const int order = 14;
-  ASSERT_EQ(game.meta[order].status, hanabi::CardStatus::CALLED_TO_PLAY);
+  // The call itself is DEAD by this turn and correctly dropped (call invariants
+  // rule 3, v7.15.0): the readings are {r2, b2, o2}, and with stacks r2/b2/o1
+  // pressing Play strikes on the two plain cards and throws away a playable
+  // orange on the third. The card really is the b2, so dropping it averts a
+  // strike. What this test is about is the INFERENCE, which must survive intact
+  // either way.
+  EXPECT_NE(game.meta[order].status, hanabi::CardStatus::CALLED_TO_DISCARD);
   auto truth = s.deck[order].id();
   ASSERT_TRUE(truth.has_value());
   EXPECT_EQ(truth->rank, 2);

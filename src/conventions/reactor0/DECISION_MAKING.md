@@ -301,8 +301,9 @@ is judged from Alice's own inference, not common knowledge.
     2. If Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.
-    3. Give a stable discard clue or trash reveal clue to Bob that stamps CTD on a
-       trash card or same-hand-dupe, or a CTP to a trash card in an inverted suit
+    3. If Bob does not already have a safe discard that is common knowledge between Alice and Bob,
+       give a stable discard clue or trash reveal clue to Bob that stamps CTD on a trash card
+       or same-hand-dupe, or a CTP to a trash card in an inverted suit
     4. Give a double discard clue that stamps CTD on two trash cards or same-hand-dupes,
        or CTP to a trash or same-hand-dupe in an inverted suit.
     5. Give a stable discard clue to Bob that stamps CTD on a card for which a
@@ -428,6 +429,19 @@ makes that button a misplay. A chuck misplays only on an inverted card that is
 not next for its stack; a pitch misplays only on a *plain* card that is not
 playable. "Makes it a misplay" means every remaining possibility misplays;
 anything less and the holder still has a reading under which the call is sound.
+
+**A dead call is dropped.** A call is only as good as the card. Once common
+knowledge leaves the stamped button with no identity it handles correctly, every
+seat drops the stamp — which also takes the card out of the reacter-CTP and
+receiver-CTP structures, since those are derived from it. Judged against the
+candidate sets below, not against playability: a CTP on an inverted card is a
+*pitch*, and being unplayable is exactly what makes that call sensible.
+
+**"A safe discard" is not "known trash".** In an inverted variant Discard is a
+play attempt, so a card its holder knows is a dead Orange 1 is known trash and
+still has no safe discard button — chucking it strikes. Only a card every one of
+whose readings is trash on a **plain** suit can simply be thrown away. This is
+what rungs 3.3 and 4.2 test.
 
 **A call's inferred set is built to match its button**, which is what makes the
 rule above safe. The set contains exactly the identities the stamped button

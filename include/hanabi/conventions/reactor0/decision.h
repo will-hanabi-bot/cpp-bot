@@ -92,6 +92,15 @@ ClueReading read_clue(const Game& game, const Game& hypo,
 bool connects_to_hand(const Game& game, Identity x, int player,
                       int exclude_order = -1);
 
+// Does `player` already hold a card they can safely press DISCARD on, judged
+// from COMMON knowledge? The condition on rungs 3.3 and 4.2: telling Bob about
+// a second dead card buys nothing if he can already throw one away.
+//
+// NOT the same as holding known trash. In an inverted variant Discard is a play
+// ATTEMPT, so a card known to be a dead Orange 1 is trash and still has no safe
+// discard button -- chucking it strikes. Only trash on a PLAIN suit qualifies.
+bool has_safe_discard(const Game& game, int player);
+
 // Priority 2's admissibility condition, and the rung-3.3 / 3.5 / 4.7 test: can
 // the team afford to have `order` thrown away? True when it is basic trash, a
 // same-hand-dupe, or a good card Alice can see a second copy of in some other

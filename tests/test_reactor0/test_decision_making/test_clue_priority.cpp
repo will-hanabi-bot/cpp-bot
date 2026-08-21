@@ -589,3 +589,52 @@ TEST(Reactor0CluePriority, SafeStallDesignatesNothing) {
         << "an OTHER reading names no card, which is the whole of its safety";
   }
 }
+
+// --- 3.3 / 4.2's safe-discard condition ----------------------------------
+
+// "Bob already has a safe discard" is NOT the same as "Bob has known trash",
+// and the difference is the whole reason the condition needs its own predicate.
+// In an inverted variant Discard is a play ATTEMPT, so a card the holder knows
+// is a dead Orange 1 is known trash and still has no safe discard button:
+// chucking it strikes. Only trash on a PLAIN suit can simply be thrown away.
+TEST(Reactor0CluePriority, KnownDeadOrangeIsNotASafeDiscard) {
+  SetupOptions opts;
+  opts.variant_name = "Orange (4 Suits)";
+  opts.hands = {
+      {"r3", "b4", "g4", "r5", "b5"},
+      {"o1", "r4", "g3", "b3", "r2"},
+      {"g2", "b2", "r3", "g5", "o4"},
+  };
+  opts.play_stacks = {0, 0, 0, 2};  // orange past 1, so o1 is dead
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int orange = 3;
+  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted);
+  ASSERT_TRUE(g.state.is_basic_trash(Identity{orange, 1}))
+      << "guard: the Orange 1 really is trash";
+  ASSERT_FALSE(g.state.is_playable(Identity{orange, 1}))
+      << "guard: and not playable, so a chuck would strike";
+
+  // Bob's slot 1, known to everyone to be exactly that dead Orange 1.
+  const int o1 = order_at(g, TestPlayer::BOB, 1);
+  g.with_thought(o1, [orange](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::single(Identity{orange, 1});
+    return out;
+  });
+
+  EXPECT_FALSE(hanabi::reactor0::has_safe_discard(g, 1))
+      << "known trash on an INVERTED suit has no safe discard button";
+
+  // Give him a dead card on a plain suit instead, and he does.
+  g.with_thought(o1, [](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::single(Identity{0, 1});  // r1, plain
+    return out;
+  });
+  g.state.play_stacks[0] = 2;  // r1 now dead
+  EXPECT_TRUE(hanabi::reactor0::has_safe_discard(g, 1))
+      << "trash on a plain suit is simply thrown away";
+}

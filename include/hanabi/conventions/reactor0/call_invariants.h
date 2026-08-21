@@ -15,6 +15,14 @@
 //    urgent scan in `Game::take_action` correct without consulting signal
 //    turns: the first urgent card in slot order *is* the most recent call.
 //
+// 3. **A dead call is dropped.** A call is only as good as the card. Once
+//    common knowledge leaves the stamped button with no identity it handles
+//    correctly, every seat drops it -- which also removes the card from the
+//    reacter-CTP and receiver-CTP structures, since those are derived from
+//    these stamps. Judged against `pitch_candidates`, not against playability:
+//    a CTP on an inverted card is a PITCH, and being unplayable is what makes
+//    that call sensible in the first place.
+//
 // 2. **At most one discard call.** Unlike play calls, CALLED_TO_DISCARD does
 //    not stack: a player holds at most one at a time, and a new call
 //    replaces the standing one. Cards merely *revealed* to be basic trash
