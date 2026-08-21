@@ -12,6 +12,26 @@ enum class ClueKind : std::int8_t {
   RANK = 1,
 };
 
+// A manual reassignment of one clue's reactive meaning, from `/set`.
+//
+// Every clue belongs to one of two PARITY buckets -- even (double play, or
+// double discard) or odd (exactly one play) -- and carries a reactive value
+// within it. Normally rank clues are the even bucket and colour clues the odd;
+// Odds and Evens swaps them. `/set` moves a single clue between buckets and
+// gives it a value, overriding whatever the variant would have assigned.
+//
+// Plain data, held here because `ClueKind` is: the rules that read it live in
+// reactor0 (`conventions/reactor0/reactive_assignment.h`), which is the only
+// convention that honours them.
+struct ReactiveOverride {
+  ClueKind kind;
+  int clue_value;      // rank, or index into Variant::clue_colour_names
+  bool even;           // which parity bucket
+  int reactive_value;  // the anchor within that bucket
+
+  constexpr auto operator<=>(const ReactiveOverride&) const = default;
+};
+
 struct BaseClue {
   ClueKind kind;
   int value;

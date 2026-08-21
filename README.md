@@ -437,8 +437,9 @@ available anywhere; the rest only in a private message.
 
 | Command | Where | Effect |
 |---|---|---|
-| `/settings` | anywhere | Print the active convention's reactive tables (reactor: slot tables; reactor0: colour values + rlocks) |
+| `/settings` | anywhere | Print the active convention's reactive tables (reactor: slot tables; reactor0: the two parity buckets + rlocks) |
 | `/setall reactor\|reactor0` | anywhere | Switch which convention **new** games use, for every bot in the room. Running games keep theirs. Unrecognised values are ignored silently — other bot families answer `/setall` too |
+| `/set <clue> odd\|even <value>` | anywhere | reactor0: move one clue into the odd or even reactive bucket with the given reactive value, e.g. `/set Yellow even 4`. `<clue>` is a colour name or a rank (`Odd`/`Even` under Odds and Evens), matched case-insensitively. Retro-applies to running games; reactions already in flight keep the meaning they were given with |
 | `/rlocks [on\|off]` | anywhere | reactor0: enable/disable reactive locks, overriding the per-variant default. Retro-applies to running games. With no argument, reports the current setting |
 | `/allplays [on\|off]` | anywhere | reactor: promote colour reactives to play+play. With no argument, reports the current setting |
 | `/getversion` | anywhere | Report the running `kBotVersion` |

@@ -28,10 +28,8 @@
 
 namespace hanabi::reactor0 {
 
-// The `/settings` line for a reactor0 table: the colour->value map plus
-// the rlocks state. Reactor prints a reactive *slot* table instead; these
-// are deliberately different messages.
-std::string format_settings(const Variant& variant, bool rlocks);
+// The `/settings` line now lives in `reactive_assignment.h`, which prints both
+// parity buckets rather than just the colour map.
 
 // Value (1..5) for the colour clue with this index into clue_colour_names.
 int colour_clue_value(const Variant& variant, int colour_index);

@@ -87,26 +87,6 @@ std::vector<int> colour_value_table(const Variant& variant) {
   return table;
 }
 
-std::string format_settings(const Variant& variant, bool rlocks) {
-  auto table = colour_value_table(variant);
-  std::string out = "reactor0 — colour values: {";
-  for (size_t i = 0; i < table.size(); ++i) {
-    if (i) out += ", ";
-    out += variant.clue_colour_names[i] + "=" + std::to_string(table[i]);
-  }
-  // Under Odds and Evens a rank clue names a parity rather than a rank, so it
-  // maps odd -> 3 / even -> 4, and it carries the ODD parity (one play) while
-  // the colour clue carries the even one. Printing "the rank" there would tell
-  // a human partner the opposite of what the bot does.
-  if (variant.odds_and_evens) {
-    out += "}, rank value: odd=3, even=4 (rank is the ODD/one-play half, "
-           "colour the even), rlocks: ";
-  } else {
-    out += "}, rank value: the rank, rlocks: ";
-  }
-  out += rlocks ? "on" : "off";
-  return out;
-}
 
 int colour_clue_value(const Variant& variant, int colour_index) {
   auto table = colour_value_table(variant);

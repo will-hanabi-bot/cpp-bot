@@ -16,6 +16,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "hanabi/basics/clue.h"
+
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
 #include <nlohmann/json.hpp>
@@ -76,6 +78,9 @@ class BotClient {
   // (starting required efficiency <= 1.42). Set via "/rlocks on|off";
   // propagated into every active Game like all_plays.
   std::optional<bool> rlocks_mode_;
+  // reactor0 `/set` reassignments, bot-wide. Copied into each new Game and
+  // retro-applied to running ones, like rlocks.
+  std::vector<ReactiveOverride> reactive_overrides_;
 
   // Dedicated compute thread for take_action. Without this, the long-running
   // endgame solver blocks the network io_context (held by BotTransport), the
@@ -133,6 +138,16 @@ class BotClient {
                        const std::string& room);
   void chat_rlocks(const std::vector<std::string>& args, const nlohmann::json& data,
                      const std::string& room);
+  // The variant and player count for a table, resolved the way `/settings`
+  // does. Nullopt when the table is unknown or names a variant we cannot load.
+  struct TableInfo {
+    const Variant* variant = nullptr;
+    int num_players = 3;
+  };
+  std::optional<TableInfo> table_info(int table_id) const;
+
+  void chat_set(const std::vector<std::string>& args, const nlohmann::json& data,
+                const std::string& room);
   void chat_setall(const std::vector<std::string>& args, const nlohmann::json& data,
                      const std::string& room);
   void chat_version(const nlohmann::json& data, const std::string& room);

@@ -133,6 +133,15 @@ void defer_receiver_chuck_elim(const Game& prev, Game& game, const ReactorWC& wc
   if (pend.target_order >= 0) game.pending_dc_elim = std::move(pend);
 }
 
+// The parity this WC was GIVEN under. Bound at clue time so a `/set` landing
+// mid-game cannot change what an already-given clue meant -- the same
+// insulation `wc.rlocks` provides. Absent only for a WC built without it (a
+// reactor WC resolved under reactor0), where the variant rule still answers.
+bool wc_even_parity(const Game& prev, const ReactorWC& wc) {
+  if (wc.even_parity) return *wc.even_parity;
+  return variants::uses_even_parity(*prev.state.variant, wc.clue.kind);
+}
+
 bool react_play(const Game& prev, Game& game, int player_index, int order,
                 const ReactorWC& wc) {
   hanabi::instr::ScopedTimer st("reactor0.react_play");
@@ -148,7 +157,7 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
   // Parity is fixed by clue kind alone — `wc.all_plays` is deliberately not
   // consulted (reactor0 never sets it; see interpret_reactive.cpp). Reading
   // it here is what made resolution contradict clue-time selection.
-  if (variants::uses_even_parity(*prev.state.variant, wc.clue.kind)) {
+  if (wc_even_parity(prev, wc)) {
     // Even parity: reacter played → double play.
     target_i_play(prev, game, wc, target_slot);
     elim_play_play(prev.state, game, wc.receiver_hand, wc.reacter,
@@ -210,7 +219,7 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
   auto [react_slot, target_slot] = *slots;
   (void)react_slot;
   // Parity is fixed by clue kind alone; see react_play.
-  if (!variants::uses_even_parity(*prev.state.variant, wc.clue.kind)) {
+  if (!wc_even_parity(prev, wc)) {
     // Odd parity: reacter discarded → the receiver plays the target.
     target_i_play(prev, game, wc, target_slot);
     elim_dc_play(prev.state, game, wc.receiver_hand, wc.reacter,

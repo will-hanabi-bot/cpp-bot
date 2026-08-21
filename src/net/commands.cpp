@@ -14,6 +14,7 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
+#include "hanabi/conventions/reactor0/reactive_assignment.h"
 #include "hanabi/conventions/reactor0/efficiency.h"
 #include "hanabi/conventions/variants/reactive_table.h"
 #include "hanabi/instrumentation/timer.h"
@@ -176,6 +177,10 @@ void BotClient::on_chat(const json& data) {
   }
   if (cmd == "rlocks") {
     chat_rlocks(args, data, room);
+    return;
+  }
+  if (cmd == "set") {
+    chat_set(args, data, room);
     return;
   }
   if (cmd == "setall") {
@@ -816,44 +821,48 @@ void BotClient::chat_leaveall(const std::string& room) {
   transport_.queue_send(cmd, json{{"tableID", *tid}});
 }
 
-void BotClient::chat_settings(const std::string& room) {
-  auto tid = resolve_target_table(room);
-  if (!tid) return;
-
-  // Determine the variant + hand_size.
-  const Variant* variant = nullptr;
-  int hand_size = 0;
-
-  auto table_it = tables_.find(*tid);
-  if (table_it == tables_.end()) return;
+std::optional<BotClient::TableInfo> BotClient::table_info(int table_id) const {
+  auto table_it = tables_.find(table_id);
+  if (table_it == tables_.end()) return std::nullopt;
   const auto& table = table_it->second;
+
   std::string variant_name;
   if (table.contains("options") && table["options"].is_object()) {
     variant_name = table["options"].value("variantName", "");
   }
-  if (variant_name.empty()) {
-    variant_name = table.value("variant", "");
-  }
-  if (variant_name.empty()) return;
+  if (variant_name.empty()) variant_name = table.value("variant", "");
+  if (variant_name.empty()) return std::nullopt;
 
+  TableInfo info;
   try {
-    variant = &get_variant(variant_name);
+    info.variant = &get_variant(variant_name);
   } catch (const std::exception& e) {
-    std::cerr << "settings: unknown variant '" << variant_name << "': " << e.what() << "\n";
-    return;
+    std::cerr << "unknown variant '" << variant_name << "': " << e.what() << "\n";
+    return std::nullopt;
   }
 
-  int num_players = 3;
+  info.num_players = 3;
   if (table.contains("options") && table["options"].is_object() &&
       table["options"].contains("numPlayers")) {
-    num_players = table["options"].value("numPlayers", 3);
+    info.num_players = table["options"].value("numPlayers", 3);
   } else if (table.contains("numPlayers")) {
-    num_players = table.value("numPlayers", 3);
+    info.num_players = table.value("numPlayers", 3);
   }
-  if (num_players < 2 || num_players >= static_cast<int>(kHandSize.size())) {
-    num_players = 3;
+  if (info.num_players < 2 ||
+      info.num_players >= static_cast<int>(kHandSize.size())) {
+    info.num_players = 3;
   }
-  hand_size = kHandSize[num_players];
+  return info;
+}
+
+void BotClient::chat_settings(const std::string& room) {
+  auto tid = resolve_target_table(room);
+  if (!tid) return;
+  auto info = table_info(*tid);
+  if (!info) return;
+  const Variant* variant = info->variant;
+  const int num_players = info->num_players;
+  const int hand_size = kHandSize[num_players];
 
   // Prefer the active game's flag (so the report matches what the bot is
   // actually doing at this table). Fall back to the bot-wide setting if no
@@ -862,11 +871,13 @@ void BotClient::chat_settings(const std::string& room) {
   Convention conv = convention_mode_;
   bool rlocks = rlocks_mode_.value_or(
       hanabi::reactor0::default_allow_reactive_locks(*variant, num_players));
+  std::vector<ReactiveOverride> overrides = reactive_overrides_;
   auto game_it = games_.find(*tid);
   if (game_it != games_.end() && game_it->second) {
     all_plays = game_it->second->all_plays;
     conv = game_it->second->convention;
     rlocks = game_it->second->allow_reactive_locks;
+    overrides = game_it->second->reactive_overrides;
   }
 
   // Reactor0 has no reactive value table — its anchors are clue values —
@@ -874,7 +885,7 @@ void BotClient::chat_settings(const std::string& room) {
   // (tests/test_reactor/test_reactive_table.cpp pins it verbatim).
   std::string msg =
       conv == Convention::REACTOR0
-          ? hanabi::reactor0::format_settings(*variant, rlocks)
+          ? hanabi::reactor0::format_settings(*variant, overrides, rlocks)
           : hanabi::reactor::variants::format_reactive_settings(*variant, hand_size,
                                                                 all_plays);
   transport_.queue_send(
@@ -938,6 +949,87 @@ std::optional<BotClient::GameModes> BotClient::debug_game_snapshot(int table_id)
   if (it == games_.end() || !it->second) return std::nullopt;
   return GameModes{it->second->convention, it->second->allow_reactive_locks,
                    it->second->all_plays};
+}
+
+void BotClient::chat_set(const std::vector<std::string>& args, const json& data,
+                          const std::string& room) {
+  // `/set` is not ours alone -- other bot families answer their own grammar in
+  // the same room, so anything we cannot parse as OUR command is ignored
+  // SILENTLY. Same rule `chat_setall` documents.
+  if (args.size() < 4) return;
+
+  auto reply = [&](const std::string& text) {
+    if (data.value("recipient", "") == username_) {
+      chat_reply(text, data.value("who", ""));
+    } else {
+      transport_.queue_send(
+          "chat", json{{"msg", text}, {"recipient", ""}, {"room", room}});
+    }
+  };
+
+  // The table decides the variant and the convention; without one there is no
+  // table to reassign.
+  auto tid = resolve_target_table(room);
+  if (!tid) return;
+  auto info = table_info(*tid);
+  if (!info) return;
+  const Variant* variant = info->variant;
+  const int num_players = info->num_players;
+  Convention conv = convention_mode_;
+  auto game_it = games_.find(*tid);
+  if (game_it != games_.end() && game_it->second) conv = game_it->second->convention;
+  if (conv != Convention::REACTOR0) return;  // reactor has no per-clue table
+
+  auto clue = hanabi::reactor0::parse_clue_label(*variant, args[1]);
+  if (!clue) return;  // not a clue in this variant -- somebody else's command
+
+  // Past this point the first argument named one of OUR clues, so a malformed
+  // rest of the line is worth a usage reply rather than silence.
+  std::string bucket = args[2];
+  for (char& c : bucket) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  if (bucket != "odd" && bucket != "even") {
+    reply("usage: /set <clue> odd|even <reactive value>");
+    return;
+  }
+  int value = 0;
+  try {
+    value = std::stoi(args[3]);
+  } catch (const std::exception&) {
+    reply("usage: /set <clue> odd|even <reactive value>");
+    return;
+  }
+  const int hand = kHandSize[num_players];
+  if (value < 1 || value > hand) {
+    reply("reactive value must be 1-" + std::to_string(hand));
+    return;
+  }
+
+  ReactiveOverride ov{clue->first, clue->second, bucket == "even", value};
+  auto same = [&](const ReactiveOverride& o) {
+    return o.kind == ov.kind && o.clue_value == ov.clue_value;
+  };
+  reactive_overrides_.erase(
+      std::remove_if(reactive_overrides_.begin(), reactive_overrides_.end(), same),
+      reactive_overrides_.end());
+  reactive_overrides_.push_back(ov);
+
+  // Retro-apply to running games, like /rlocks. In-flight reactives are
+  // insulated: the parity and anchor bind at clue time into the ReactorWC, so
+  // a clue already given keeps the meaning it was given with.
+  for (auto& [t, game] : games_) {
+    if (game) game->reactive_overrides = reactive_overrides_;
+    (void)t;
+  }
+
+  const std::string label =
+      hanabi::reactor0::clue_label(*variant, ov.kind, ov.clue_value);
+  bool rlocks = rlocks_mode_.value_or(
+      hanabi::reactor0::default_allow_reactive_locks(*variant, num_players));
+  if (game_it != games_.end() && game_it->second) {
+    rlocks = game_it->second->allow_reactive_locks;
+  }
+  reply(username_ + ": " + label + " -> " + bucket + " " + std::to_string(value));
+  reply(hanabi::reactor0::format_settings(*variant, reactive_overrides_, rlocks));
 }
 
 void BotClient::chat_setall(const std::vector<std::string>& args, const json& data,

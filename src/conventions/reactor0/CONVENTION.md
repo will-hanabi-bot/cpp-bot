@@ -364,6 +364,47 @@ no clue ever made; being same-turn, such a call competes with the real one for
 being actioned first, and when it is played the receiver has nothing to
 interpret.
 
+### The reactive table — two parity buckets
+
+Every clue sits in one of two **parity buckets** and carries a **reactive
+value** (its anchor) there:
+
+| bucket | meaning |
+|---|---|
+| **even** | a double play, or a double discard |
+| **odd** | exactly one play |
+
+Normally rank clues are the even bucket and colour clues the odd
+(`variants::uses_even_parity`); Odds and Evens swaps them. A rank clue's value
+is the rank (odd→3 / even→4 under Odds and Evens); a colour clue's comes from
+the table below.
+
+`reactive_assignment` (`reactor0/reactive_assignment.h`) answers both questions
+for one clue and is what the interpretation reads — the anchor and the
+`reactive_rank` / `reactive_colour` dispatch both come from it.
+
+**`/set <clue> odd|even <value>`** moves a single clue between buckets and gives
+it a value, overriding the variant's assignment
+(`Game::reactive_overrides`). `/settings` prints the result:
+
+```
+reactor0 — even reactive values: {1=1, 2=2, 3=3, 4=4, 5=5}, odd reactive values: {Red=1, Yellow=2, Green=3, Blue=4, Purple=5}, rlocks: on
+```
+
+after `/set Yellow even 4`:
+
+```
+reactor0 — even reactive values: {1=1, 2=2, 3=3, 4=4, 5=5, Yellow=4}, odd reactive values: {Red=1, Green=3, Blue=4, Purple=5}, rlocks: on
+```
+
+Rows are enumerated rank-first then colour, so a moved clue appears at the END
+of its new bucket. An **empty** override list reproduces the built-in table
+exactly, which is every game that has not used the command.
+
+The command retro-applies to running games, but a reaction already in flight
+keeps the meaning it was given with: the parity binds into `ReactorWC::even_parity`
+at clue time, the same insulation `wc.rlocks` provides.
+
 ### Colour values
 
 `colour_clue_value` (`src/conventions/reactor0/colour_value.cpp:89-95`), whose
@@ -855,6 +896,8 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_reactive_colour.cpp` | both colour modes, critical skip, dupe targets, MISTAKE rejection |
 | `tests/test_reactor0/test_reactive_lock.cpp` | lock in both modes, rlocks-off sacrifice, trash-on-oldest-slot |
 | `tests/test_reactor0/test_colour_value.cpp` | the colour-value table incl. the spec's worked example |
+| `tests/test_reactor0/test_reactive_assignment.cpp` | the two parity buckets, the `/settings` lines verbatim, and `/set` label parsing |
+| `tests/test_reactor0/test_reactive_override_effect.cpp` | a `/set` override changing the ruleset and anchor, and the in-flight insulation |
 | `tests/test_reactor0/test_reactive_inverted_vet.cpp` | §1d — the react-slot vet follows the inverted swap, each swapped case paired with its un-swapped control, plus the giver-only reject |
 | `tests/test_reactor0/test_bad_reactive_target/test_replay_1942777_orange_reactive_vet_follows_swap.cpp` | bug 4.1 end to end — the reacter discards slot 5, not the Phase C lock's slot 3 |
 | `tests/test_reactor0/test_bad_reactive_target/test_replay_1957942_trash_orange_pitch_is_a_valid_reaction.cpp` | bug_report_4_1_0.txt 4.1.0b end to end — the reacter pitches the trash orange instead of discarding a critical 5 |

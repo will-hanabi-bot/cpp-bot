@@ -66,6 +66,12 @@ struct ReactorWC {
   // be triaged without re-deriving the reacter's called slot (added while
   // debugging replay 1916791).
   int react_order = -1;
+  // Snapshot of the clue's PARITY BUCKET at WC creation (reactor0 only), so a
+  // `/set` that lands mid-game cannot change what an already-given clue meant.
+  // The same insulation `rlocks` gets below. Nullopt for a WC built without it
+  // -- notably a reactor WC resolved under reactor0 -- where resolution falls
+  // back to `variants::uses_even_parity`.
+  std::optional<bool> even_parity;
   // Snapshot of Game::allow_reactive_locks at WC creation (reactor0 only):
   // resolution happens a turn later and /rlocks can be flipped mid-game,
   // so the reading must bind at clue time. Reactor never reads it. Kept
@@ -163,6 +169,10 @@ class Game {
   // from the variant's starting required efficiency, or the /rlocks
   // override. Reactor ignores it.
   bool allow_reactive_locks = true;
+  // reactor0 only: manual `/set` reassignments of clue -> (bucket, reactive
+  // value). Empty means "the variant decides", which is every game that has not
+  // used the command -- so an empty list reproduces the built-in table exactly.
+  std::vector<ReactiveOverride> reactive_overrides;
 
   // Reactive-family state (shared by reactor and reactor0).
   std::vector<ReactorWC> waiting;

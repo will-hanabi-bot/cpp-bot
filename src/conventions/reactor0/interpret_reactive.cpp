@@ -15,6 +15,7 @@
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
+#include "hanabi/conventions/reactor0/reactive_assignment.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/predicates.h"
@@ -647,12 +648,12 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   int receiver = action.target;
   const auto& clue = action.clue;
 
-  // The anchor. A rank clue's value is normally the rank itself; under Odds
-  // and Evens it names a parity and maps odd -> 3, even -> 4. Colour anchors
-  // are unchanged in every variant.
-  int anchor = clue.kind == ClueKind::RANK
-                   ? variants::rank_reactive_value(*state.variant, clue.value)
-                   : colour_clue_value(*state.variant, clue.value);
+  // The clue's reactive assignment: which parity bucket it is in, and its
+  // anchor within that bucket. `/set` overrides both; with no overrides this is
+  // the variant's built-in table.
+  const ReactiveAssignment assign = reactive_assignment(
+      *state.variant, game.reactive_overrides, clue.kind, clue.value);
+  int anchor = assign.value;
   ReactorWC wc{giver,
                reacter,
                receiver,
@@ -666,6 +667,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                // WC — carrying it would let reaction resolution contradict
                // the reading every seat already agreed on at clue time.
                /*all_plays=*/false};
+  wc.even_parity = assign.even;
   wc.rlocks = game.allow_reactive_locks;
   game.waiting.clear();
   game.waiting.push_back(std::move(wc));
@@ -678,8 +680,9 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // Dispatch on the PARITY, not the clue kind: `reactive_rank` is the
   // even-parity ruleset (double play / double discard) and `reactive_colour`
   // the odd one (exactly one play). Odds and Evens swaps which kind carries
-  // which, so a colour clue there runs the `reactive_rank` ruleset.
-  if (!variants::uses_even_parity(*state.variant, clue.kind)) {
+  // which, and `/set` can move a single clue, so the bucket is read off the
+  // assignment rather than from the kind.
+  if (!assign.even) {
     return reactive_colour(prev, game, action, anchor, reacter);
   }
   return reactive_rank(prev, game, action, anchor, reacter);

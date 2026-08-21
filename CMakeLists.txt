@@ -41,6 +41,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor/interpret_reactive.cpp
   src/conventions/reactor/state_eval.cpp
   src/conventions/reactor0/colour_value.cpp
+  src/conventions/reactor0/reactive_assignment.cpp
   src/conventions/reactor0/call_invariants.cpp
   src/conventions/reactor0/efficiency.cpp
   src/conventions/reactor0/interpret_clue.cpp
@@ -236,6 +237,8 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp
   tests/test_reactor0/test_pov_reject.cpp
+  tests/test_reactor0/test_reactive_assignment.cpp
+  tests/test_reactor0/test_reactive_override_effect.cpp
   tests/test_reactor0/test_reactive_colour.cpp
   tests/test_reactor0/test_reactive_lock.cpp
   tests/test_reactor0/test_dc_target_leftmost.cpp

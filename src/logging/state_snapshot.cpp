@@ -246,6 +246,16 @@ json build_replay_section(const Game& game) {
   replay["all_plays"] = game.all_plays;
   replay["convention"] = std::string(convention_name(game.convention));
   replay["rlocks"] = game.allow_reactive_locks;
+  if (!game.reactive_overrides.empty()) {
+    json ov = json::array();
+    for (const ReactiveOverride& o : game.reactive_overrides) {
+      ov.push_back(json{{"kind", o.kind == ClueKind::COLOUR ? "C" : "R"},
+                        {"clue_value", o.clue_value},
+                        {"even", o.even},
+                        {"reactive_value", o.reactive_value}});
+    }
+    replay["reactive_overrides"] = std::move(ov);
+  }
   replay["zcs_turn"] = game.zcs_turn;
 
   // Ground-truth deck: for every order that has a known identity in
@@ -417,6 +427,18 @@ Game apply_snapshot(const json& record) {
   game.allow_reactive_locks = replay.value(
       "rlocks", hanabi::reactor0::default_allow_reactive_locks(
                     variant, static_cast<int>(game.state.names.size())));
+  // Absent means none, which is every snapshot predating `/set` -- and an
+  // empty list reproduces the variant's built-in table exactly.
+  game.reactive_overrides.clear();
+  if (replay.contains("reactive_overrides")) {
+    for (const auto& o : replay.at("reactive_overrides")) {
+      game.reactive_overrides.push_back(ReactiveOverride{
+          o.value("kind", std::string("R")) == "C" ? ClueKind::COLOUR
+                                                   : ClueKind::RANK,
+          o.value("clue_value", 0), o.value("even", false),
+          o.value("reactive_value", 1)});
+    }
+  }
 
   for (const auto& a_json : replay.at("actions")) {
     Action a = action_from_internal_json(a_json);
