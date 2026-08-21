@@ -48,7 +48,23 @@ void Game::resolve_deferred_elims() {
 
 void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   using namespace hanabi::reactor;
-  check_missed(action.giver, /*sentinel=*/99);
+  // Giving a clue counts as MISSING your own pending reaction -- under reactor.
+  // `check_missed` scans the giver's own hand for an urgent card and clears the
+  // stamp, reverting `inferred` to `old_inferred` (basics/game.cpp:95).
+  //
+  // Reactor0 is exempt. There a reacter is ALLOWED to defer: its Precedence puts
+  // an H4 clue above the urgent return, so a clue is exactly what a legitimate
+  // deferral looks like. The call has to survive it and be actioned on a later
+  // turn. Replay 1966745: will-bot69 held an urgent CTD on an Orange 1 with the
+  // orange stack on 0, deferred at T2 to give a finesse, and lost the call --
+  // so at T5 `requires_high_tier` said it was unoccupied, a non-HIGH clue was
+  // admitted instead of the chuck, and the team struck on that card at T16.
+  //
+  // The play/discard call sites (`:252`, `:365`) are untouched for both
+  // conventions: there the player really did act and skipped their urgent card.
+  if (convention != Convention::REACTOR0) {
+    check_missed(action.giver, /*sentinel=*/99);
+  }
 
   // Detect a "deferred reactive": the giver of this clue was the
   // reacter the previous reactive expected to act. Deferring (= clue

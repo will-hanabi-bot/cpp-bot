@@ -405,6 +405,9 @@ which is *which* identities the call leaves open.
 an odd number of plays. `reactive_table.cpp:167-173`.
 
 ### old_inferred
+(Reactor only from v7.22.0 — reactor0 exempts the giver-side `check_missed`, so
+a deferral there keeps the call; see its `CONVENTION.md` §1d.1.)
+
 Snapshot of `inferred` taken when an urgent call is stamped, so `check_missed`
 can revert it if the player doesn't act. `card.h:81`; `game.h:171-173`.
 

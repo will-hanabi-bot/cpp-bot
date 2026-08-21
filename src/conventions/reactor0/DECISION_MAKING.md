@@ -62,6 +62,9 @@ NOT-LOW iff any of H1a, H2, H3, H4, or:
    is not that the card is in danger but that it is a play the team should be
    collecting, and Cathy is already expecting Alice to save it or get it played.
 
+   §3's precondition takes this same predicate as its second arm, for the same
+   reason. Tier and priority agree: a safe-but-playable chop is worth a clue.
+
 …or, when **Cathy's** chop is endangered (`:360-370`):
 
 6. **N3** — the clue gets two new plays. `:361-362`.
@@ -312,8 +315,20 @@ is judged from Alice's own inference, not common knowledge.
    beating a stable play clue to Bob; now it cannot, because every rung a double
    discard can reach sits below rung 3.1.
 
-3. **Bob has a non-trash card on chop** (so in particular is not locked) **and no
-   safe play or discard.** Every condition marked `>= N clues**` below means the
+3. **Bob's chop is worth a clue** (so in particular he is not locked) **and he
+   has no safe play or discard.** Worth a clue means either of two things, and
+   "non-trash" — which is what this said until v7.22.0 — was too weak to
+   separate them from the case with neither:
+
+   - **endangered** (`at_risk_chop`, the same test H1a uses), or
+   - **playable** (`has_playable_chop`, N5's test).
+
+   A chop that is neither earns nothing. Replay 1966745 T5: Bob's chop was an r2
+   with red on 0, and Cathy held the other r2 — not endangered *and* not
+   playable — yet §3 fired and spent a clue on it. The second arm is equally
+   load-bearing: at replay 1942330 T33 Bob's chop was a **playable** Navy 2 also
+   duplicated in Cathy's hand, so it was in no danger, and the Blue play clue
+   that collects it is still right (`priority_3_applies`, `decision.cpp`). Every condition marked `>= N clues**` below means the
    condition also applies at `>= N-1` clues if Cathy has a safe discard, or if
    Cathy has on chop a trash, a same-hand-dupe, or a good card that Alice sees at
    least one dupe of in any other player's hand (including her own). Tiebreak by
@@ -366,10 +381,11 @@ is judged from Alice's own inference, not common knowledge.
 
    **When §4 is reachable at all.** §3 sits above §4, and its own last rung (3.9)
    is a lock with the same `>= 2 clues**` condition — which 8 tokens always
-   satisfies. So whenever §3's precondition holds (Bob has a non-trash chop and
-   no safe play or discard), 3.9 fires and none of §4 runs. §4 is therefore the
-   branch for a forced clue when **Bob is not in trouble**: his chop is trash, he
-   already has something safe to do, or he is locked. That is the right
+   satisfies. So whenever §3's precondition holds (Bob's chop is endangered or
+   playable, and he has no safe play or discard), 3.9 fires and none of §4 runs. §4 is therefore the
+   branch for a forced clue when **Bob is not in trouble**: his chop is neither
+   endangered nor playable, he already has something safe to do, or he is
+   locked. That is the right
    precedence — an endangered chop outranks a stall — but it is worth stating,
    because it means the rungs below are rarer than their position suggests.
 

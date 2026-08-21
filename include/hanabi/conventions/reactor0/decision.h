@@ -101,6 +101,14 @@ bool connects_to_hand(const Game& game, Identity x, int player,
 // discard button -- chucking it strikes. Only trash on a PLAIN suit qualifies.
 bool has_safe_discard(const Game& game, int player);
 
+// Priority 3's precondition: Bob is not locked, he has no safe play or discard,
+// and his chop is worth spending a clue on -- meaning it is either ENDANGERED
+// (`at_risk_chop`, the same test H1a uses) or PLAYABLE (`has_playable_chop`,
+// N5's test). A chop that is neither earns nothing; "non-trash" alone was too
+// weak, and spent a clue on a card duplicated in Cathy's hand (replay 1966745
+// T5). Exported so the rung fixtures can pin it directly.
+bool priority_3_applies(const Game& game);
+
 // Priority 2's admissibility condition, and the rung-3.3 / 3.5 / 4.7 test: can
 // the team afford to have `order` thrown away? True when it is basic trash, a
 // same-hand-dupe, or a good card Alice can see a second copy of in some other

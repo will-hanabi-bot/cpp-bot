@@ -792,19 +792,39 @@ const ClueCandidate* first_of(const Game& g, Pool p) {
   return settle(g, std::move(p), {});
 }
 
+}  // namespace
+
 // --- priority 3 ----------------------------------------------------------
-// Precondition: Bob has a non-trash card on chop (so is not locked) and no safe
-// play or discard. Note this is WEAKER than H1a, which additionally demands the
-// chop be endangered -- here it is enough that the card is worth something.
+// Precondition: Bob is not locked, he has no safe play or discard, and his
+// chop is worth a clue -- endangered or playable. See the body; this used to
+// be the weaker "non-trash", which spent clues on chops nothing was at stake for.
 bool priority_3_applies(const Game& g) {
   const int bob = bob_of(g);
   if (g.common.thinks_locked(g, bob)) return false;
-  auto chop = g.chop(bob);
-  if (!chop) return false;
-  auto id = id_of(g.state, *chop);
-  if (!id || g.state.is_basic_trash(*id)) return false;
+  // Two reasons to spend a clue on Bob's chop, and "non-trash" was too weak to
+  // separate them from the case with neither.
+  //
+  //   * `at_risk_chop` -- the same test H1a uses. It clears a same-hand dupe, a
+  //     copy sitting in a hand Alice can see, and a copy Alice can prove she
+  //     holds; in each case Bob loses nothing by throwing his.
+  //   * `has_playable_chop` -- N5's test. The card is not in DANGER, but it is
+  //     a play the team should be collecting, which is a reason of its own.
+  //
+  // Both replays turn on the difference. 1966745 T5: Bob's chop was an r2 with
+  // red on 0 and Cathy held the other r2 -- not endangered AND not playable, so
+  // §3 fired and spent a clue for nothing. 1942330 T33: Bob's chop was a
+  // PLAYABLE Navy 2, also duplicated in Cathy's hand -- not endangered either,
+  // but worth the Blue play clue that gets it onto the stacks.
+  //
+  // `at_risk_chop` also returns false for a locked hand and for a chop Alice
+  // cannot see, so the explicit guards this replaces are subsumed, not dropped.
+  if (!at_risk_chop(g, alice_of(g), bob) && !has_playable_chop(g, bob)) {
+    return false;
+  }
   return has_no_safe_action(g, bob);
 }
+
+namespace {
 
 const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs) {
   if (!priority_3_applies(g)) return nullptr;

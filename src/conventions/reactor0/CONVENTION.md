@@ -538,6 +538,34 @@ lock).
 Under rlocks, a trash candidate that happens to sit on the oldest slot is
 *also* flagged as the lock — see §1e.
 
+## §1d.1 A deferral keeps the reacter call
+
+**Giving a clue does not cancel your own pending reacter call.** The call stands
+until it is ACTIONED, and the holder remains *occupied* — so the HIGH-tier gate
+applies to any clue they do offer, and the urgent return chucks or pitches the
+called slot as soon as nothing outranks it.
+
+This is a reactor0-only rule (`basics/decide.cpp`, the `convention !=
+REACTOR0` guard on the giver-side `check_missed`). Reactor cancels: there a clue
+instead of a reaction means the chain broke, and `check_missed`
+(`basics/game.cpp:95-118`) clears the stamp and reverts `inferred` to
+`old_inferred`. Reactor0 cannot do that, because its Precedence puts an **H4
+clue above the urgent return** — a clue is exactly what a legitimate deferral
+looks like, so cancelling on one punishes the convention's own rule.
+
+The play/discard call sites are untouched for both conventions: there the player
+really did act and skipped their urgent card.
+
+Replay 1966745: will-bot69 was stamped an urgent CTD on an Orange 1 with the
+orange stack on 0, deferred at T2 to give a finesse, and lost the call. At T5
+`requires_high_tier` therefore reported it unoccupied, the unoccupied MEDIUM gate
+admitted a non-HIGH clue instead of the chuck, and the team struck on that same
+card at T16.
+
+**Known gap.** The waiting connection is still cleared on a deferral
+(`decide.cpp`), so the receiver may never learn the target its reaction was meant
+to reveal. See `TODO.md`.
+
 ## §1e The reactive lock and `allow_reactive_locks`
 
 **Resolution** (`src/conventions/reactor0/interpret_reaction.cpp`): when the

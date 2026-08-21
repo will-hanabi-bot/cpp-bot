@@ -638,3 +638,88 @@ TEST(Reactor0CluePriority, KnownDeadOrangeIsNotASafeDiscard) {
   EXPECT_TRUE(hanabi::reactor0::has_safe_discard(g, 1))
       << "trash on a plain suit is simply thrown away";
 }
+
+// --- priority 3's precondition: the chop must actually be worth a clue -----
+
+// "Non-trash" was too weak. Priority 3 spends a clue on Bob's chop, and there
+// are exactly two reasons to: the card is in DANGER (`at_risk_chop`, the same
+// test H1a uses), or it is a PLAY the team should collect (`has_playable_chop`,
+// N5's test). A chop that is neither earns nothing.
+//
+// Replay 1966745 T5 is the case that was wrong: Bob's chop was an r2 with red
+// on 0 -- unplayable -- and Cathy held the other r2, so throwing it cost the
+// team nothing. Priority 3 fired anyway and spent a clue.
+//
+// One fixture, one card changed, so the precondition is what moves. Bob's chop
+// is a b2; Cathy either holds the second copy (nothing at stake) or does not.
+namespace {
+
+Game bob_chop_position(std::string cathy_slot_1) {
+  SetupOptions opts;
+  opts.play_stacks = {1, 0, 0, 0, 0};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      // Bob: chop b2 on slot 1, and no safe action anywhere else.
+      {"b2", "g3", "b3", "g4", "y4"},
+      {std::move(cathy_slot_1), "p3", "p4", "y3", "p5"},
+  };
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  return setup(std::move(opts));
+}
+
+}  // namespace
+
+TEST(Reactor0CluePriority, PriorityThreeSkipsAChopDuplicatedInCathysHand) {
+  Game g = bob_chop_position("b2");
+  const int bob = static_cast<int>(TestPlayer::BOB);
+
+  ASSERT_FALSE(hanabi::reactor0::at_risk_chop(g, 0, bob))
+      << "guard: Cathy holds the other b2, so Bob's chop is in no danger";
+  ASSERT_FALSE(hanabi::reactor0::has_playable_chop(g, bob))
+      << "guard: b2 is not playable with blue on 0, so there is no play to "
+         "collect either";
+
+  EXPECT_FALSE(hanabi::reactor0::priority_3_applies(g))
+      << "neither endangered nor playable -- priority 3 has no business here";
+}
+
+// The positive it is carved out of: remove the duplicate and the very same chop
+// IS endangered, so priority 3 applies again.
+TEST(Reactor0CluePriority, PriorityThreeAppliesWhenTheChopIsGenuinelyAtRisk) {
+  Game g = bob_chop_position("p2");
+  const int bob = static_cast<int>(TestPlayer::BOB);
+
+  ASSERT_TRUE(hanabi::reactor0::at_risk_chop(g, 0, bob))
+      << "guard: the only other b2 is gone, so Bob's chop is now at risk";
+
+  EXPECT_TRUE(hanabi::reactor0::priority_3_applies(g));
+}
+
+// And the other arm: a chop that is safe but PLAYABLE still earns a clue, which
+// is why the precondition is a disjunction rather than `at_risk_chop` alone.
+// Replay 1942330 T33 turns on this -- Bob's playable Navy 2 was duplicated in
+// Cathy's hand, and the Blue play clue that collects it is still right.
+TEST(Reactor0CluePriority, PriorityThreeAppliesToASafeButPlayableChop) {
+  SetupOptions opts;
+  opts.play_stacks = {1, 1, 0, 0, 0};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      // Bob's chop y2 is playable on a yellow stack of 1.
+      {"y2", "g3", "b3", "g4", "p4"},
+      // Cathy holds the other y2, so the chop is NOT at risk.
+      {"y2", "p3", "b4", "y3", "p5"},
+  };
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+  const int bob = static_cast<int>(TestPlayer::BOB);
+
+  ASSERT_FALSE(hanabi::reactor0::at_risk_chop(g, 0, bob))
+      << "guard: the duplicate in Cathy's hand keeps it out of danger";
+  ASSERT_TRUE(hanabi::reactor0::has_playable_chop(g, bob))
+      << "guard: but it is playable";
+
+  EXPECT_TRUE(hanabi::reactor0::priority_3_applies(g))
+      << "a play the team should collect is a reason of its own";
+}

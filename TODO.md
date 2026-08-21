@@ -643,3 +643,39 @@ diverging from everyone else.
 - `pitch_candidates` / `chuck_candidates`
   (`include/hanabi/conventions/reactor0/interpret_clue.h`) are the sets any stamp
   has to agree with, per v7.11.0.
+
+---
+
+## 25. `[reactor0]` A deferral keeps the call but loses the waiting connection
+
+**Convention.** From v7.22.0 a reacter may defer — give a clue instead of
+reacting — and the reacter call survives it, to be actioned on a later turn
+(`CONVENTION.md` §1d.1). The receiver still has to be able to decode that
+reaction when it finally happens.
+
+**Today.** Only the *stamp* survives. `Game::interpret_clue`
+(`src/basics/decide.cpp`) still runs
+`if (!waiting.empty() && waiting.front().reacter == action.giver) waiting.clear();`
+a few lines below the `check_missed` guard, so the waiting connection the call
+came from is destroyed. When the deferring reacter eventually chucks or pitches,
+`react_play` / `react_discard` see an empty (or replaced) `waiting` and decode
+nothing — so the receiver may never learn the target the reaction was meant to
+reveal.
+
+**Why it was not fixed with the call.** reactor0 stores at most one waiting
+connection (`reactor0/interpret_reactive.cpp` clears then pushes), so keeping the
+old one is not simply additive. Leaving it in place newly exposes the five
+`if (!game.waiting.empty()) game.waiting.front().react_order = react_order;`
+writes in `reactor0/interpret_reactive.cpp`, which today are skipped because
+`waiting` is empty by the time they run, and would start mutating a connection
+that is about to be discarded anyway. Getting this right means deciding what a
+reactor0 seat should hold when two reactives are live at once, which is a
+convention question and not a code tidy.
+
+**Touchpoints.**
+- the `waiting.clear()` in `Game::interpret_clue` (`src/basics/decide.cpp`).
+- `reactor0/interpret_reactive.cpp` — the single-WC install and the
+  `react_order` writes above it.
+- `react_play` / `react_discard` (`reactor0/interpret_reaction.cpp`), which take
+  `waiting.front()` rather than searching for the connection whose `reacter`
+  matches the acting player.
