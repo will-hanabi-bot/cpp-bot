@@ -260,17 +260,6 @@ bool sets_up_a_partner(const Game& game, Identity id) {
   return false;
 }
 
-// `discard_button_is_safe`, which lives as a lambda inside `Game::take_action`
-// (src/basics/decide.cpp) and so cannot be called from here. Same three
-// clauses: an explicit discard call is always safe; a pinned identity is safe
-// because the engine routes it correctly; otherwise the card must not be able
-// to be on an inverted suit, since pressing Discard there is a play attempt.
-bool chuck_button_is_safe(const Game& game, int order) {
-  if (game.meta[order].status == CardStatus::CALLED_TO_DISCARD) return true;
-  if (game.me().thoughts[order].id(/*infer=*/true)) return true;
-  return !variants::possible_has_inverted(game.state,
-                                          game.me().thoughts[order].possible);
-}
 
 }  // namespace
 
@@ -405,11 +394,25 @@ std::optional<PerformAction> choose_action(const Game& game) {
     return taken(game, "12.locked_no_chop", s.hands[alice].front(), true);
   }
   if (s.clue_tokens == 8) return taken(game, "13.pitch_chop_at_eight", *chop, true);
-  if (chuck_button_is_safe(game, *chop)) return taken(game, "12.discard_chop", *chop, false);
-  // Neither button is safe for a card straddling an inverted and a plain suit
-  // (decide.cpp says so at its own orange-safety filter). Pitching is the
-  // lesser evil: it can lose the card, but it cannot strike.
-  return taken(game, "12.pitch_chop_unsafe_button", *chop, true);
+  // CHUCK is the default. Discard on a plain suit simply discards, so the only
+  // way it goes wrong is an inverted card that is not playable -- and the bar
+  // is that EVERY reading is such a card, the same standard `call_is_actionable`
+  // applies to a standing call.
+  //
+  // This used to ask `chuck_button_is_safe`, a copy of decide.cpp's
+  // `discard_button_is_safe`. That predicate exists to FILTER discard
+  // candidates -- "is this one provably safe" -- and using it to CHOOSE a
+  // button inverts it: a chop nobody knows anything about is not provably safe,
+  // and it pitched instead. Replay 1966667 T10: the chop was a completely
+  // unknown card, so chucking was safe on all ten plain identities and on the
+  // playable orange, while pitching strikes on any plain card that is not
+  // playable. It pitched.
+  if (!chuck_would_strike(game, alice, *chop)) {
+    return taken(game, "12.discard_chop", *chop, false);
+  }
+  // Every reading chucks into a strike, so the chop is a known dead orange.
+  // Pitch it: on an inverted suit Play is exactly the harmless throw-away.
+  return taken(game, "12.pitch_dead_orange_chop", *chop, true);
 }
 
 }  // namespace hanabi::reactor0

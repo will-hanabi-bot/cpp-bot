@@ -531,10 +531,16 @@ list by priority:
 10. Alice chucks a card in the chuck list that could potentially be an inverted
     suit.
 11. Alice chucks the leftmost card in the chuck list.
-12. **Floor — both lists are empty.** Alice discards her chop (`Game::chop`,
-    `decide.cpp:432-461`: the most-recently-signalled CTD, else the newest unclued
-    status-`NONE` card), pressing whichever button is safe for it
-    (`discard_button_is_safe`, `decide.cpp:938-958`). If Alice is in an endgame
+12. **Floor — both lists are empty.** Alice **chucks** her chop (`Game::chop`:
+    the most-recently-signalled CTD, else the newest unclued status-`NONE`
+    card). Discard is the default button, and she deviates from it only when
+    chucking would certainly strike — every reading an inverted card that is not
+    playable — in which case the chop is a known dead orange and she pitches it,
+    which throws it away harmlessly. Note this is NOT
+    `discard_button_is_safe` (`decide.cpp`): that predicate FILTERS discard
+    candidates, asking "is this one provably safe", and an unknown chop is never
+    provably safe. Using it to choose a button pitches into a strike on any
+    plain card that is not playable. If Alice is in an endgame
     state where she must give a clue instead, the endgame rules at step 0 of the
     Precedence section have already returned and this step is not reached.
 13. If Alice is at 8 clues where she has no known CTPs or CTDs, she should pitch
