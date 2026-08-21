@@ -65,6 +65,14 @@ int reactive_focus(const State& state, int receiver, const ClueAction& action) {
     return focus_i + 1;
   }
   // Rank
+  // Odds and Evens first: the clue value names a PARITY, not a rank, so it
+  // cannot pick a slot positionally the way a vanilla rank clue does. It maps
+  // odd -> 3, even -> 4, which is the same rule reactor0 uses, so both
+  // conventions read the clue identically. Above the pinkish check for the
+  // same reason pinkish is above the positional fallback.
+  if (state.variant->odds_and_evens) {
+    return variants::rank_reactive_value(*state.variant, clue.value);
+  }
   if (variants::includes_pinkish(state) || state.variant->pink_s) {
     return clue.value;
   }
@@ -808,7 +816,13 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   game.waiting.push_back(std::move(wc));
 
   if (receiver == state.our_player_index) return ClueInterp::REACTIVE;
-  if (clue.kind == ClueKind::COLOUR && !game.all_plays) {
+  // Dispatch on the PARITY, not the clue kind. `interpret_reactive_rank` is
+  // the even-parity ruleset (double play, or double discard) and
+  // `interpret_reactive_colour` the odd one (exactly one play); Odds and Evens
+  // swaps which kind carries which. `all_plays` still forces the rank side,
+  // being a reactor toggle orthogonal to the variant.
+  if (!variants::uses_even_parity(*state.variant, clue.kind) &&
+      !game.all_plays) {
     return interpret_reactive_colour(prev, game, action, focus_slot, reacter,
                                         looks_stable);
   }

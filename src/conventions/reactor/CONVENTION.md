@@ -805,6 +805,29 @@ chucking slot 2 both came out at 1/3, and the solver took slot 2. That was an
 Orange 1 with the orange stack on 3, so it struck for nothing and the slot it
 actioned decoded to a trash target. Reactor0 only.
 
+### 1b.5b Matryoshka and Odds and Evens
+
+**Matryoshka** needs no rule. Its nested colour touches (Red reaches all six
+suits, Teal only Taupe) fall out of `data/suits.json` and `id_touched`'s
+colour-name matching. See reactor0's `CONVENTION.md` §1f.
+
+**Odds and Evens** swaps which clue kind carries which reactive parity — COLOUR
+becomes the double play / double discard and RANK the one-play reactive — and
+maps a rank clue's anchor odd → 3, even → 4 since the value no longer names a
+rank. `variants::uses_even_parity` and `variants::rank_reactive_value`
+(`conventions/variants/predicates.h`) own both rules, and reactor reads them at
+its clue-time dispatch (`interpret_clue.cpp`), its `reactive_focus` anchor, and
+its resolution parity (`interpret_reaction.cpp`).
+
+Reactor matters here even though reactor0 is the live default: reactor0 is gated
+to **three** players (`src/net/commands.cpp`), so a 4+ seat Odds and Evens game
+runs reactor. The two conventions use the same mapping so they read a table
+identically. `/allplays` still forces the even-parity side regardless, being a
+reactor toggle orthogonal to the variant.
+
+Reactor's rank anchor is normally POSITIONAL — the focus slot — and only reads
+the clue value for a pinkish variant. Odds and Evens overrides it the same way.
+
 ### 1b.6 Clue-touch rules
 
 `Variant::id_touched` (`src/basics/variant.cpp:199-246`) determines which

@@ -36,4 +36,15 @@ bool includes_dark_inverted(const State& state) {
   return false;
 }
 
+bool uses_even_parity(const Variant& variant, ClueKind kind) {
+  return variant.odds_and_evens ? kind == ClueKind::COLOUR
+                                : kind == ClueKind::RANK;
+}
+
+int rank_reactive_value(const Variant& variant, int clue_value) {
+  // odd (1) -> 3, even (2) -> 4. Both are valid slots at every hand size the
+  // reactive family runs at (5 cards at 3 players, 4 at 4-5).
+  return variant.odds_and_evens ? clue_value + 2 : clue_value;
+}
+
 }  // namespace hanabi::reactor::variants

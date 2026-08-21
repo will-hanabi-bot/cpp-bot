@@ -94,7 +94,16 @@ std::string format_settings(const Variant& variant, bool rlocks) {
     if (i) out += ", ";
     out += variant.clue_colour_names[i] + "=" + std::to_string(table[i]);
   }
-  out += "}, rank value: the rank, rlocks: ";
+  // Under Odds and Evens a rank clue names a parity rather than a rank, so it
+  // maps odd -> 3 / even -> 4, and it carries the ODD parity (one play) while
+  // the colour clue carries the even one. Printing "the rank" there would tell
+  // a human partner the opposite of what the bot does.
+  if (variant.odds_and_evens) {
+    out += "}, rank value: odd=3, even=4 (rank is the ODD/one-play half, "
+           "colour the even), rlocks: ";
+  } else {
+    out += "}, rank value: the rank, rlocks: ";
+  }
   out += rlocks ? "on" : "off";
   return out;
 }

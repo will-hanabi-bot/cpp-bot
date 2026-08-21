@@ -512,11 +512,22 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   }
   if (pinkish_flag) {
     const int rv = clue.value;
-    const std::optional<int> special =
-        state.variant->pink_s ? state.variant->special_rank : std::nullopt;
-    touchable = touchable.filter([rv, special](Identity i) {
-      return i.rank == rv || (special && i.rank == *special);
-    });
+    // Odds and Evens: the clue value names a PARITY class, so `rank == value`
+    // is meaningless -- ask the variant which identities the clue can touch.
+    // Deliberately scoped to that flag: `id_touched` and the expression below
+    // disagree for pink_s / deceptive_s variants, and reconciling them is a
+    // separate change with its own blast radius.
+    if (state.variant->odds_and_evens) {
+      const Variant& v = *state.variant;
+      touchable = touchable.filter(
+          [&v, rv](Identity i) { return v.id_touched(i, ClueKind::RANK, rv); });
+    } else {
+      const std::optional<int> special =
+          state.variant->pink_s ? state.variant->special_rank : std::nullopt;
+      touchable = touchable.filter([rv, special](Identity i) {
+        return i.rank == rv || (special && i.rank == *special);
+      });
+    }
   }
   bool all_trash = true;
   bool playable_rank = true;

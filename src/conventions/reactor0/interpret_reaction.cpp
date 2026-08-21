@@ -1,6 +1,7 @@
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 
 #include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/variants/predicates.h"
 
 #include <algorithm>
 
@@ -146,7 +147,7 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
   // Parity is fixed by clue kind alone — `wc.all_plays` is deliberately not
   // consulted (reactor0 never sets it; see interpret_reactive.cpp). Reading
   // it here is what made resolution contradict clue-time selection.
-  if (wc.clue.kind == ClueKind::RANK) {
+  if (variants::uses_even_parity(*prev.state.variant, wc.clue.kind)) {
     // Even parity: reacter played → double play.
     target_i_play(prev, game, wc, target_slot);
     elim_play_play(prev.state, game, wc.receiver_hand, wc.reacter,
@@ -195,7 +196,7 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
   auto [react_slot, target_slot] = *slots;
   (void)react_slot;
   // Parity is fixed by clue kind alone; see react_play.
-  if (wc.clue.kind == ClueKind::COLOUR) {
+  if (!variants::uses_even_parity(*prev.state.variant, wc.clue.kind)) {
     // Odd parity: reacter discarded → the receiver plays the target.
     target_i_play(prev, game, wc, target_slot);
     elim_dc_play(prev.state, game, wc.receiver_hand, wc.reacter,

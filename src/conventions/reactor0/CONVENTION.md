@@ -618,6 +618,54 @@ target-play/discard swaps at every reactive site), and reversed suits (free
 from `State`'s direction-aware helpers, plus `variants::connector_of` for the
 finesse prerequisite, which runs **up** the ranks on a reversed suit).
 
+### Matryoshka — no rule change
+
+Suits Ruby, Yam, Geas, Beatnik, Plum, Taupe, with **nested** colour touches:
+Red reaches every suit, Yellow everything from Yam on, Green from Geas on, Blue
+from Beatnik on, Purple only Plum and Taupe, Teal only Taupe.
+
+No convention rule implements this, and none needs to. The nesting is data:
+`data/suits.json` gives each suit exactly the colours that reach it (Ruby
+`["Red"]` … Taupe `["Red","Yellow","Green","Blue","Purple","Teal"]`), and
+`Variant::id_touched`'s colour branch matches the clue colour NAME against that
+list. `make_variant` derives `clue_colour_names` in order of first appearance,
+which for these six yields `[Red, Yellow, Green, Blue, Purple, Teal]`. None of
+the six names trips a `SuitType::of_name` substring flag, so every suit is
+plain. Pinned in `tests/test_basics/test_variants.cpp`.
+
+### Odds and Evens — the two clue kinds swap reactive roles
+
+A rank clue names a **parity**, not a rank: value 1 is "odd" and touches ranks
+1/3/5, value 2 is "even" and touches 2/4 (`Variant::id_touched`, guarded by the
+`oddsAndEvens` flag and sitting below the pinkish / brownish / special-rank
+branches, which keep their own rules). `clueRanks` restricts the offered values
+to `{1, 2}` (`State::all_valid_clues`).
+
+The reactive roles swap with it:
+
+| | normally | Odds and Evens |
+|---|---|---|
+| **even** parity — double play, or double discard | RANK | COLOUR |
+| **odd** parity — exactly one play | COLOUR | RANK |
+
+One predicate owns the swap — `variants::uses_even_parity`
+(`conventions/variants/predicates.h`) — and every reactive site reads it rather
+than testing `ClueKind` directly: the clue-time dispatch and the resolution
+parity in both conventions.
+
+**Anchors.** A rank clue's value can no longer serve as its own anchor, so it
+maps **odd → 3, even → 4** (`variants::rank_reactive_value`). Colour anchors are
+unchanged. Anchors 3 and 4 therefore become reachable from either clue kind;
+that is unambiguous because the clue KIND still selects which parity ruleset
+applies. Both conventions use the same mapping, so they read a given clue
+identically — reactor's anchor is normally POSITIONAL for rank, and Odds and
+Evens overrides it exactly as pinkish already does.
+
+**Stable clues are NOT swapped.** A colour clue to Bob is still read by
+`stable_colour` and a rank clue by `stable_rank`. Only §1c's touchable filter
+changes, and only under this flag: `rank == value` is meaningless for a parity
+class, so it defers to `id_touched`.
+
 **Not inherited: the stable side of the orange compensation.** From v4.0.0
 reactor0 owns its own readings for inverted suits, and they are a
 cross-version compatibility break with reactor. **v5.0.0 widens the second

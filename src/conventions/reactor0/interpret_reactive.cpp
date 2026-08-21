@@ -17,6 +17,7 @@
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/variants/predicates.h"
 #include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
@@ -646,8 +647,11 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   int receiver = action.target;
   const auto& clue = action.clue;
 
+  // The anchor. A rank clue's value is normally the rank itself; under Odds
+  // and Evens it names a parity and maps odd -> 3, even -> 4. Colour anchors
+  // are unchanged in every variant.
   int anchor = clue.kind == ClueKind::RANK
-                   ? clue.value
+                   ? variants::rank_reactive_value(*state.variant, clue.value)
                    : colour_clue_value(*state.variant, clue.value);
   ReactorWC wc{giver,
                reacter,
@@ -671,7 +675,11 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // hand).
   if (receiver == state.our_player_index) return ClueInterp::REACTIVE;
 
-  if (clue.kind == ClueKind::COLOUR) {
+  // Dispatch on the PARITY, not the clue kind: `reactive_rank` is the
+  // even-parity ruleset (double play / double discard) and `reactive_colour`
+  // the odd one (exactly one play). Odds and Evens swaps which kind carries
+  // which, so a colour clue there runs the `reactive_rank` ruleset.
+  if (!variants::uses_even_parity(*state.variant, clue.kind)) {
     return reactive_colour(prev, game, action, anchor, reacter);
   }
   return reactive_rank(prev, game, action, anchor, reacter);

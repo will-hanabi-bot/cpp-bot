@@ -88,6 +88,15 @@ struct Variant {
   // still follow their own touch rules inside these variants.
   bool funnels = false;
   bool chimneys = false;
+  // Odds and Evens: a rank clue names a PARITY class, not a rank. Clue value 1
+  // is "odd" and touches ranks 1/3/5; value 2 is "even" and touches 2/4. It
+  // also swaps which clue kind carries which reactive parity -- see
+  // `variants::uses_even_parity` (conventions/variants/predicates.h).
+  bool odds_and_evens = false;
+  // The rank clue values this variant actually offers, from `clueRanks`.
+  // Defaults to {1,2,3,4,5}. Odds and Evens gives {1,2}; the Number Mute
+  // family gives {} (no rank clues at all).
+  std::vector<int> clue_ranks{1, 2, 3, 4, 5};
 
   // Convenience: dereference colourable_suit_indices into actual Suit refs.
   std::vector<Suit> colourable_suits() const;

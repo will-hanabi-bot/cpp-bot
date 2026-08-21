@@ -450,3 +450,122 @@ TEST(Variants, SuitCatalogExposesClueColors) {
   EXPECT_EQ(catalog.at("Lime").clue_colors,
              (std::vector<std::string>{"Yellow", "Green"}));
 }
+
+// --- Matryoshka -----------------------------------------------------------
+//
+// Nested colour touches: Red hits every suit, Yellow everything from Yam on,
+// Green from Geas on, Blue from Beatnik on, Purple only Plum and Taupe, Teal
+// only Taupe.
+//
+// No production rule implements this. It falls out of `data/suits.json`, where
+// each suit lists exactly the colours that reach it (Ruby ["Red"] ... Taupe
+// ["Red","Yellow","Green","Blue","Purple","Teal"]), and `id_touched`'s colour
+// branch matches the clue colour NAME against that list. These tests pin the
+// data and the derivation together, since either drifting would break the
+// variant silently.
+TEST(Variants, MatryoshkaColoursAreNested) {
+  const Variant& v = get_variant("Matryoshka (6 Suits)");
+  ASSERT_EQ(v.suits.size(), 6u);
+  EXPECT_EQ(v.clue_colour_names,
+            (std::vector<std::string>{"Red", "Yellow", "Green", "Blue",
+                                      "Purple", "Teal"}));
+  EXPECT_EQ(v.colourable_suit_indices, (std::vector<int>{0, 1, 2, 3, 4, 5}));
+
+  // colour c touches suit s exactly when s >= c.
+  for (int colour = 0; colour < 6; ++colour) {
+    for (int suit = 0; suit < 6; ++suit) {
+      const bool expected = suit >= colour;
+      EXPECT_EQ(v.id_touched(Identity(suit, 3), ClueKind::COLOUR, colour),
+                expected)
+          << "colour=" << v.clue_colour_names[colour]
+          << " suit=" << v.suits[suit].name << " expected=" << expected;
+    }
+  }
+}
+
+// The two ends of the nesting, stated directly so a failure names the rule
+// rather than a loop index.
+TEST(Variants, MatryoshkaRedTouchesAllAndTealOnlyTaupe) {
+  const Variant& v = get_variant("Matryoshka (6 Suits)");
+  for (int suit = 0; suit < 6; ++suit) {
+    EXPECT_TRUE(v.id_touched(Identity(suit, 1), ClueKind::COLOUR, 0))
+        << "Red must touch " << v.suits[suit].name;
+    EXPECT_EQ(v.id_touched(Identity(suit, 1), ClueKind::COLOUR, 5), suit == 5)
+        << "Teal must touch Taupe alone; suit=" << v.suits[suit].name;
+  }
+  // The negative that separates Matryoshka from a plain variant: Yellow does
+  // NOT reach Ruby, even though Red reaches Yam.
+  EXPECT_FALSE(v.id_touched(Identity(0, 1), ClueKind::COLOUR, 1))
+      << "Yellow must not touch Ruby";
+  EXPECT_TRUE(v.id_touched(Identity(1, 1), ClueKind::COLOUR, 0))
+      << "but Red does touch Yam";
+}
+
+// Matryoshka carries no special flag and none of its suit names collide with a
+// `SuitType::of_name` substring, so every suit must classify as plain.
+TEST(Variants, MatryoshkaSuitsAreAllPlain) {
+  const Variant& v = get_variant("Matryoshka (6 Suits)");
+  for (const Suit& s : v.suits) {
+    const SuitType& t = s.suit_type;
+    EXPECT_FALSE(t.whitish || t.rainbowish || t.pinkish || t.brownish ||
+                 t.dark || t.prism || t.muddy || t.inverted || t.reversed)
+        << s.name << " must classify as a plain suit";
+  }
+  EXPECT_FALSE(v.odds_and_evens);
+  EXPECT_EQ(v.clue_ranks, (std::vector<int>{1, 2, 3, 4, 5}));
+}
+
+// --- Odds and Evens -------------------------------------------------------
+
+// A rank clue names a PARITY, not a rank: value 1 is "odd" and touches ranks
+// 1/3/5, value 2 is "even" and touches 2/4.
+TEST(Variants, OddsAndEvensRankCluesTouchByParity) {
+  const Variant& v = get_variant("Odds and Evens (5 Suits)");
+  ASSERT_TRUE(v.odds_and_evens);
+  EXPECT_EQ(v.clue_ranks, (std::vector<int>{1, 2}));
+
+  for (int suit = 0; suit < 5; ++suit) {
+    for (int rank = 1; rank <= 5; ++rank) {
+      const bool odd = rank % 2 == 1;
+      EXPECT_EQ(v.id_touched(Identity(suit, rank), ClueKind::RANK, 1), odd)
+          << "odd clue, suit=" << suit << " rank=" << rank;
+      EXPECT_EQ(v.id_touched(Identity(suit, rank), ClueKind::RANK, 2), !odd)
+          << "even clue, suit=" << suit << " rank=" << rank;
+    }
+  }
+  // Colour clues are untouched by the variant.
+  EXPECT_TRUE(v.id_touched(Identity(0, 4), ClueKind::COLOUR, 0));
+  EXPECT_FALSE(v.id_touched(Identity(1, 4), ClueKind::COLOUR, 0));
+}
+
+// A pinkish suit keeps its own rule inside the variant: the parity branch sits
+// BELOW the pinkish/brownish checks, so Pink still takes every rank clue.
+TEST(Variants, OddsAndEvensPinkStillTakesEveryRankClue) {
+  const Variant& v = get_variant("Odds and Evens & Pink (5 Suits)");
+  ASSERT_TRUE(v.odds_and_evens);
+  const int pink = static_cast<int>(v.suits.size()) - 1;
+  ASSERT_TRUE(v.suits[pink].suit_type.pinkish) << "fixture: last suit is Pink";
+
+  for (int rank = 1; rank <= 5; ++rank) {
+    EXPECT_TRUE(v.id_touched(Identity(pink, rank), ClueKind::RANK, 1));
+    EXPECT_TRUE(v.id_touched(Identity(pink, rank), ClueKind::RANK, 2));
+  }
+  // ...while a plain suit in the same variant still splits by parity.
+  EXPECT_TRUE(v.id_touched(Identity(0, 3), ClueKind::RANK, 1));
+  EXPECT_FALSE(v.id_touched(Identity(0, 3), ClueKind::RANK, 2));
+}
+
+// `clueRanks` decides which rank clues exist at all. Absent means the full
+// 1-5; Odds and Evens gives {1,2}; the Number Mute family gives {} and offers
+// no rank clue whatsoever.
+TEST(Variants, ClueRanksLoadsFromTheVariantData) {
+  EXPECT_EQ(get_variant("No Variant").clue_ranks,
+            (std::vector<int>{1, 2, 3, 4, 5}));
+  EXPECT_EQ(get_variant("Odds and Evens (5 Suits)").clue_ranks,
+            (std::vector<int>{1, 2}));
+  EXPECT_TRUE(get_variant("Number Mute (5 Suits)").clue_ranks.empty());
+  // Pink-Ones drops rank 1, which `rank_blocked` already enforced -- the two
+  // must agree, or `all_valid_clues` would start offering a clue it rejects.
+  EXPECT_EQ(get_variant("Pink-Ones (5 Suits)").clue_ranks,
+            (std::vector<int>{2, 3, 4, 5}));
+}

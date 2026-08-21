@@ -106,6 +106,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_identity_set.cpp
   tests/test_basics/test_clue.cpp
   tests/test_basics/test_action.cpp
+  tests/test_basics/test_odds_and_evens.cpp
   tests/test_basics/test_variants.cpp
   tests/test_basics/test_state.cpp
   tests/test_basics/test_game.cpp
@@ -144,6 +145,7 @@ add_executable(hanabi_reactor_tests
   tests/test_reactor/test_reactive_inferred_narrow.cpp
   tests/test_reactor/test_reversed.cpp
   tests/test_reactor/test_allplays.cpp
+  tests/test_reactor/test_odds_and_evens.cpp
   tests/test_reactor/test_orange.cpp
   tests/test_reactor/test_discard_penalty.cpp
   tests/test_reactor/test_dc_target_retarget.cpp
@@ -236,6 +238,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_stable_colour.cpp
   tests/test_reactor0/test_stable_colour_baseline.cpp
   tests/test_reactor0/test_stable_rank.cpp
+  tests/test_reactor0/test_odds_and_evens.cpp
   tests/test_reactor0/test_orange.cpp
   tests/test_reactor0/test_reactive_inverted_vet.cpp
   tests/test_reactor0/test_bad_reactive_target/test_replay_1942777_orange_reactive_vet_follows_swap.cpp

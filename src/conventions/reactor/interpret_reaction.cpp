@@ -9,6 +9,7 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/conventions/variants/inverted.h"
+#include "hanabi/conventions/variants/predicates.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -520,7 +521,7 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
     game.with_move(DiscardInterp::NONE);
     return false;
   }
-  if (wc.clue.kind == ClueKind::COLOUR) {
+  if (!variants::uses_even_parity(*prev.state.variant, wc.clue.kind)) {
     target_i_play(prev, game, wc, target_slot);
     elim_dc_play(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   } else {
@@ -571,7 +572,9 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
   (void)react_slot;
   // /allplays promotes COLOR reactives to play+play, matching the standard
   // RANK behavior (target_i_play + elim_play_play).
-  if (wc.all_plays || wc.clue.kind == ClueKind::RANK) {
+  // `all_plays` is a reactor toggle orthogonal to the variant, so it stays as
+  // its own term; only the kind test moves to the parity predicate.
+  if (wc.all_plays || variants::uses_even_parity(*prev.state.variant, wc.clue.kind)) {
     target_i_play(prev, game, wc, target_slot);
     elim_play_play(prev.state, game, wc.receiver_hand, wc.reacter, wc.focus_slot, target_slot);
   } else {

@@ -8,6 +8,7 @@
 #include <unordered_set>
 
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/variants/predicates.h"
 
 namespace hanabi::reactor::variants {
 namespace {
@@ -153,7 +154,19 @@ std::string format_reactive_settings(const Variant& variant, int hand_size,
   }
 
   std::string rank_half;
-  if (is_pinkish(variant)) {
+  if (variant.odds_and_evens) {
+    // The clue value names a parity, not a rank, so it maps odd -> 3 and
+    // even -> 4 rather than picking a slot positionally. Printed as the slots
+    // those two clues anchor on.
+    rank_half = "{";
+    for (int slot = 1; slot <= hand_size; ++slot) {
+      if (slot > 1) rank_half += ", ";
+      if (slot == rank_reactive_value(variant, 1)) rank_half += "odd";
+      else if (slot == rank_reactive_value(variant, 2)) rank_half += "even";
+      else rank_half += "-";
+    }
+    rank_half += "}";
+  } else if (is_pinkish(variant)) {
     rank_half = "{";
     for (int rank = 1; rank <= hand_size; ++rank) {
       if (rank > 1) rank_half += ", ";
@@ -169,6 +182,12 @@ std::string format_reactive_settings(const Variant& variant, int hand_size,
     // "{slot focus} + {slot focus}" to a single "{slot focus}".
     if (rank_half == colour_half) return "even plays: " + rank_half;
     return "even plays: " + rank_half + " + " + colour_half;
+  }
+  // Odds and Evens swaps which clue KIND carries which parity, so the labels
+  // swap with it -- printing the vanilla wording there would tell a human
+  // partner the opposite of what the bot will do.
+  if (variant.odds_and_evens) {
+    return "odd plays: " + rank_half + ", even plays: " + colour_half;
   }
   return "odd plays: " + colour_half + ", even plays: " + rank_half;
 }

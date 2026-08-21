@@ -69,7 +69,8 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
                      std::optional<int> critical_rank, bool clue_starved,
                      std::optional<int> special_rank, bool rainbow_s, bool white_s,
                      bool pink_s, bool brown_s, bool deceptive_s, bool scarce_ones,
-                     bool funnels, bool chimneys) {
+                     bool funnels, bool chimneys, bool odds_and_evens,
+                     std::vector<int> clue_ranks) {
   const auto& catalog = load_suit_catalog();
   Variant v;
   v.id = id;
@@ -85,6 +86,8 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
   v.scarce_ones = scarce_ones;
   v.funnels = funnels;
   v.chimneys = chimneys;
+  v.odds_and_evens = odds_and_evens;
+  v.clue_ranks = std::move(clue_ranks);
   v.suits.reserve(suit_names.size());
   v.short_forms.reserve(suit_names.size());
 
@@ -237,6 +240,11 @@ bool Variant::id_touched(Identity id, ClueKind kind, int value) const {
       return (id.suit_index % 4) + offset == value;
     }
   }
+  // Odds and Evens: the clue value names a PARITY, not a rank. 1 is "odd"
+  // (ranks 1/3/5), 2 is "even" (2/4). Sits below the pinkish / brownish /
+  // special-rank branches, which keep their own rules here as they do inside a
+  // funnels or chimneys variant.
+  if (odds_and_evens) return (rank % 2 == 1) == (value == 1);
   // Funnels / Chimneys apply only to non-pinkish, non-brownish suits
   // (those branches returned above). Pink/brown keep their own rules
   // even inside a funnels/chimneys variant.
@@ -320,7 +328,14 @@ Variant variant_from_json(const nlohmann::json& entry) {
       entry.value("specialRankDeceptive", false),
       entry.value("scarceOnes", false),
       entry.value("funnels", false),
-      entry.value("chimneys", false));
+      entry.value("chimneys", false),
+      entry.value("oddsAndEvens", false),
+      // Absent `clueRanks` means the full 1-5. Present-but-empty is the Number
+      // Mute family, which offers no rank clues at all -- so `value()` with a
+      // 1-5 default would be wrong, and the key has to be probed explicitly.
+      entry.contains("clueRanks")
+          ? entry.at("clueRanks").get<std::vector<int>>()
+          : std::vector<int>{1, 2, 3, 4, 5});
 }
 
 const std::unordered_map<std::string, Variant>& load_variants() {

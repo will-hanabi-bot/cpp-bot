@@ -217,6 +217,14 @@ std::vector<Clue> State::all_valid_clues(int target) const {
 
   for (int rank = 1; rank <= 5; ++rank) {
     if (rank_blocked && v.special_rank == rank) continue;
+    // `clue_ranks` is what the variant actually offers. For the Pink-Ones /
+    // Pink-Fives families it agrees exactly with `rank_blocked` above, so
+    // nothing moves; it is load-bearing for Odds and Evens ({1,2}) and for the
+    // Number Mute family ({}, no rank clues at all).
+    if (std::find(v.clue_ranks.begin(), v.clue_ranks.end(), rank) ==
+        v.clue_ranks.end()) {
+      continue;
+    }
     if (!clue_touched(hands[target], ClueKind::RANK, rank).empty()) {
       clues.emplace_back(ClueKind::RANK, rank, target);
     }
