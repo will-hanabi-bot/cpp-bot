@@ -196,6 +196,14 @@ Whether a clue should be given is then:
     - 2b. Otherwise, Alice gives the best clue from the General Clue Evaluation
       List below.
 
+**On 2a's locked clause.** An unoccupied Alice who is LOCKED is exempt from the
+MEDIUM bar. She has no chop to discard, so cluing is the only thing she can do
+that is not burning a card — the same reasoning that exempts 8 clue tokens,
+where a discard is illegal. Without it the gate can empty the candidate set
+before §4 is reached, and §4 is exactly the branch that promises to return a
+clue when she is out of alternatives. Rule 1a carries no such clause: an
+occupied Alice holds a call she can action, so she is not out of alternatives.
+
 **On the pace condition.** It was `pace() >= 3` through v7.3.0, inherited from
 reactor's low-clue-count gate. That left a hole: at replay 1966119 T5 an occupied
 Alice sat at pace 2, the gate stood down, and a LOW-tier reactive discard became

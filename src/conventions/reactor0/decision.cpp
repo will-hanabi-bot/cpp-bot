@@ -478,6 +478,20 @@ bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   // if anything a worse time to spend a token on a LOW clue, not a better one.
   if (s.pace() < 1) return true;
   const bool occupied = requires_high_tier(game);
+  // 2a carries an extra condition 1a does not: an UNOCCUPIED Alice is exempt
+  // while LOCKED. She has no chop to discard, so cluing is the only thing she
+  // can do that is not burning a card -- the same reasoning that exempts 8 clue
+  // tokens, where a discard is illegal. Without it the gate can empty the
+  // candidate set before section 4 is reached, and section 4 is precisely the
+  // branch that promises to return a clue when she is out of alternatives
+  // (replay 1966653 T17: pace 1, 2 tokens, seven LOW candidates, all rejected,
+  // and a locked Alice bombed a chop-moved card).
+  //
+  // An OCCUPIED Alice keeps 1a as written: she holds a call she can action, so
+  // she is not out of alternatives.
+  if (!occupied && game.common.thinks_locked(game, s.our_player_index)) {
+    return true;
+  }
   const bool in_window = occupied ? s.clue_tokens < 8 : s.clue_tokens <= 3;
   if (!in_window) return true;
   return c.tier >= (occupied ? ClueTier::HIGH : ClueTier::MEDIUM);
