@@ -493,83 +493,70 @@ TEST(Reactor0Orange, ColourClueNotNamingOrangeSkipsTheLadder) {
       << "the holder must not be told their Blue 1 is an Orange 1";
 }
 
-// Replay 1966286 T7. A card called to PITCH cannot be the inverted suit's
-// currently playable card: if it were, the convention would have called a
-// CHUCK, since pressing Discard is how an orange reaches its stack.
+// The candidate sets a stamped button admits (DECISION_MAKING.md, "the stamp
+// is the instruction"). A call's inferred set is built to match its button, so
+// there is never a case where the stamp is right but the button is wrong.
 //
-// `reactor::target_play` narrows a play call to the PLAYABLE set, and on an
-// inverted suit that set contains exactly the card a pitch cannot be. With
-// stacks r1/b0/o1 the playable set is {r2, b1, o2}, so a reacter called to
-// pitch was left believing their card might be Orange 2 -- which they would
-// have chucked onto its stack rather than thrown away.
-//
-// The rule is pinned directly here. Reaching it through a clue needs a reactive
-// whose reacter call survives to the playable-set narrowing, and the three
-// reactor0 stamp sites that do so are covered by the suites; what matters for
-// correctness is the predicate itself.
-TEST(Reactor0Orange, DropPlayableInvertedRemovesOnlyTheChuckCandidate) {
+// Both fixtures below are the worked examples from the two replays that forced
+// this rule out into the open.
+
+// PITCH. Replay 1966286's position: Rainbow-Ones & Orange, stacks r1/b1/o1.
+// A card stamped CTP, if completely untouched, admits {r2, b2, o1, o3, o4} --
+// the playable plain cards, plus the oranges that are NOT playable and are
+// affordable to throw away. o2 is excluded because it is the playable orange
+// (Play would pitch away the card its stack is waiting for) and o5 because it
+// is critical.
+TEST(Reactor0Orange, PitchCandidatesMatchTheWorkedExample) {
   SetupOptions opts;
   opts.variant_name = "Rainbow-Ones & Orange (3 Suits)";
   opts.hands = {
-      {"b3", "b4", "r4", "r5", "b5"},
-      {"r2", "o4", "b4", "o5", "r5"},
-      {"o3", "r3", "b2", "o1", "r1"},
+      {"r3", "b3", "r4", "b4", "r5"},
+      {"o2", "o3", "r5", "r2", "b2"},
+      {"o4", "o5", "b5", "r3", "b3"},
   };
-  opts.play_stacks = {1, 0, 1};  // playable = r2, b1, o2
+  opts.play_stacks = {1, 1, 1};
   opts.starting = TestPlayer::ALICE;
   use_reactor0(opts);
   Game g = setup(std::move(opts));
 
-  const int orange = 2;
-  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted);
-  ASSERT_TRUE(g.state.is_playable(Identity{orange, 2}))
-      << "guard: Orange 2 is playable, which is what makes it a chuck target";
-  ASSERT_TRUE(g.state.is_playable(Identity{0, 2})) << "guard: Red 2 playable";
-
-  const int o = order_at(g, TestPlayer::BOB, 1);
-  // Exactly what `target_play` leaves behind on a pitch call at these stacks.
-  g.with_thought(o, [](const Thought& t) {
-    Thought out = t;
-    out.inferred = IdentitySet::from_iter(
-        {Identity{0, 2}, Identity{1, 1}, Identity{2, 2}});
-    return out;
+  IdentitySet got = hanabi::reactor0::pitch_candidates(g.state);
+  IdentitySet want = IdentitySet::from_iter({
+      Identity{0, 2},  // r2, playable plain
+      Identity{1, 2},  // b2, playable plain
+      Identity{2, 1},  // o1, orange past its stack
+      Identity{2, 3},  // o3, orange not yet playable
+      Identity{2, 4},  // o4, likewise
   });
-
-  hanabi::reactor0::drop_playable_inverted(g, o);
-
-  const IdentitySet& inf = g.common.thoughts[o].inferred;
-  EXPECT_FALSE(inf.contains(Identity{orange, 2}))
-      << "the playable orange is the one identity a PITCH call cannot mean";
-  EXPECT_TRUE(inf.contains(Identity{0, 2})) << "Red 2 is a genuine pitch target";
-  EXPECT_TRUE(inf.contains(Identity{1, 1})) << "Blue 1 likewise";
+  EXPECT_EQ(got, want)
+      << "a pitch call admits playable plain cards and spare oranges only";
 }
 
-// It refuses to empty the set. If the playable orange is all that is left the
-// reading is already contradictory, and narrowing to nothing would destroy the
-// evidence rather than record it.
-TEST(Reactor0Orange, DropPlayableInvertedNeverEmptiesTheSet) {
+// CHUCK. Replay 1966569's position: Muddy Rainbow & Orange, stacks r1/m0/o3.
+// A card stamped CTD admits {r1, r3, r4, m2, m3, m4, o4} -- the plain cards
+// that are neither playable nor critical, plus the one orange that IS playable,
+// since Discard puts an orange on its stack.
+TEST(Reactor0Orange, ChuckCandidatesMatchTheWorkedExample) {
   SetupOptions opts;
-  opts.variant_name = "Rainbow-Ones & Orange (3 Suits)";
+  opts.variant_name = "Muddy Rainbow & Orange (3 Suits)";
   opts.hands = {
-      {"b3", "b4", "r4", "r5", "b5"},
-      {"r2", "o4", "b4", "o5", "r5"},
-      {"o3", "r3", "b2", "o1", "r1"},
+      {"r2", "m1", "r3", "m2", "r4"},
+      {"o1", "o2", "m3", "m4", "r5"},
+      {"o4", "o5", "m5", "r3", "m2"},
   };
-  opts.play_stacks = {1, 0, 1};
+  opts.play_stacks = {1, 0, 3};
   opts.starting = TestPlayer::ALICE;
   use_reactor0(opts);
   Game g = setup(std::move(opts));
 
-  const int o = order_at(g, TestPlayer::BOB, 1);
-  g.with_thought(o, [](const Thought& t) {
-    Thought out = t;
-    out.inferred = IdentitySet::single(Identity{2, 2});  // only the playable o2
-    return out;
+  IdentitySet got = hanabi::reactor0::chuck_candidates(g.state);
+  IdentitySet want = IdentitySet::from_iter({
+      Identity{0, 1}, Identity{0, 3}, Identity{0, 4},  // r1 r3 r4
+      Identity{1, 2}, Identity{1, 3}, Identity{1, 4},  // m2 m3 m4
+      Identity{2, 4},                                  // o4, the playable orange
   });
-
-  hanabi::reactor0::drop_playable_inverted(g, o);
-  EXPECT_TRUE(g.common.thoughts[o].inferred.contains(Identity{2, 2}))
-      << "an empty inference is worse than a contradictory one";
+  EXPECT_EQ(got, want)
+      << "a chuck call admits unplayable non-critical plain cards, and the "
+         "orange the stack is waiting for";
 }
 
 // Replay 1966569 T10. The chuck list takes "trash NON-INVERTED or playable

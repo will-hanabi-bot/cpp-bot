@@ -35,24 +35,34 @@ std::optional<int> leftmost_could_be_playable(
 //
 // Used by the §1b orange ladder's pitch branch and, with `urgent` set, by the
 // §1d rank Phase A reaction that pitches an expendable orange react slot.
-// A card called to PITCH (press Play) cannot be the inverted suit's currently
-// playable card.
+// The identities for which a stamped button is the RIGHT action.
 //
-// If it were, the convention would have called a CHUCK instead -- pressing
-// Discard is how an inverted card reaches its stack -- so being told to pitch is
-// itself evidence AGAINST holding the playable orange. `reactor::target_play`
-// narrows a play call to the PLAYABLE set, which on an inverted suit includes
-// exactly that card, so the identity has to be filtered back out afterwards.
+// The stamp is the instruction, so a call's inferred set is built to match it:
+// it contains exactly the identities the named button handles correctly, and
+// nothing the button would misfire on. That is what makes a call unambiguous
+// even when the holder cannot see their own suit -- there is no case where the
+// stamp is right but the button is wrong, because the set excludes it.
 //
-// Replay 1966286 T7: stacks were r1/b0/o1, so the playable set was {r2, b1, o2}
-// and the reacter was left thinking their pitch target might be Orange 2 -- a
-// card that, if it really were that, they would have chucked onto its stack
-// rather than thrown away.
+// PITCH (press Play). On a plain suit Play plays the card; on an inverted suit
+// it throws the card away. So a pitch call means either
+//   * a plain-suit card that is currently PLAYABLE, or
+//   * an inverted card that is NOT playable and is not critical -- i.e. one the
+//     team can afford to lose.
+IdentitySet pitch_candidates(const State& state);
+
+// CHUCK (press Discard). On a plain suit Discard discards; on an inverted suit
+// it puts the card on its stack. So a chuck call means either
+//   * a plain-suit card that is NOT playable and not critical, or
+//   * an inverted card that IS immediately playable.
+IdentitySet chuck_candidates(const State& state);
+
+// Narrow `order`'s inferred set to the candidates its own stamp admits.
 //
-// No-op outside an inverted variant, and refuses to empty the set: if the
-// playable orange is the ONLY identity left, the caller's reading is already
-// contradictory and narrowing to nothing would erase the evidence.
-void drop_playable_inverted(Game& game, int order);
+// Intersects `possible` -- which already carries the clue's positive and
+// negative information -- with the set above for whichever of CTP / CTD the
+// card carries. A no-op for an unstamped card, and it refuses to empty the set:
+// an empty inference erases the reading rather than recording it.
+void narrow_to_stamped_button(Game& game, int order);
 
 std::optional<ClueInterp> stamp_orange_pitch(Game& game, const ClueAction& action,
                                              int order, bool urgent = false);

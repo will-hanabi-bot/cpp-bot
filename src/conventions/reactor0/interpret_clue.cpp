@@ -165,19 +165,51 @@ std::vector<int> orange_touched(const Game& game, const ClueAction& action) {
 
 }  // namespace
 
-void drop_playable_inverted(Game& game, int order) {
-  const State& state = game.state;
-  if (!variants::includes_inverted(state)) return;
-  const IdentitySet& before = game.common.thoughts[order].inferred;
-  if (before.is_empty()) return;
-  IdentitySet after = before.filter([&state](Identity i) {
-    return !(variants::is_inverted_id(state, i) && state.is_playable(i));
-  });
-  if (after.is_empty()) return;  // would erase the reading; leave it alone
-  if (after == before) return;
-  game.with_thought(order, [&after](const Thought& t) {
-    Thought out = t;
-    out.inferred = after;
+IdentitySet pitch_candidates(const State& state) {
+  // Bound the walk to the variant's own identities. `create` defaults to every
+  // possible ordinal, which would invent cards on suits this variant does not
+  // have.
+  const int n = static_cast<int>(state.variant->suits.size()) * 5;
+  return IdentitySet::create([&state](Identity i) {
+    if (variants::is_inverted_id(state, i)) {
+      // Play throws it away: only worth calling on a card we can spare, and
+      // never on the one the stack is waiting for.
+      return !state.is_playable(i) && !state.is_critical(i);
+    }
+    return state.is_playable(i);
+  }, n);
+}
+
+IdentitySet chuck_candidates(const State& state) {
+  const int n = static_cast<int>(state.variant->suits.size()) * 5;
+  return IdentitySet::create([&state](Identity i) {
+    if (variants::is_inverted_id(state, i)) {
+      // Discard puts it on the stack, so it has to be the next card.
+      return state.is_playable(i);
+    }
+    return !state.is_playable(i) && !state.is_critical(i);
+  }, n);
+}
+
+void narrow_to_stamped_button(Game& game, int order) {
+  IdentitySet allowed;
+  switch (game.meta[order].status) {
+    case CardStatus::CALLED_TO_PLAY:
+      allowed = pitch_candidates(game.state);
+      break;
+    case CardStatus::CALLED_TO_DISCARD:
+      allowed = chuck_candidates(game.state);
+      break;
+    default:
+      return;
+  }
+  const Thought& t = game.common.thoughts[order];
+  IdentitySet next = t.possible.intersect(allowed);
+  if (next.is_empty()) return;  // would erase the reading; leave it alone
+  if (next == t.inferred) return;
+  game.with_thought(order, [&next](const Thought& th) {
+    Thought out = th;
+    out.inferred = next;
     return out;
   });
 }
@@ -404,9 +436,8 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
     }
     auto interp = hanabi::reactor::target_play(game, action, *target,
                                               /*urgent=*/false, /*stable=*/true);
-    // A pitch target is not the playable orange -- that would have been a
-    // chuck. `target_play` narrows to the playable set, which includes it.
-    if (interp) drop_playable_inverted(game, *target);
+    // Build the call's inference to match the button it stamped.
+    if (interp) narrow_to_stamped_button(game, *target);
     return interp;
   }
 

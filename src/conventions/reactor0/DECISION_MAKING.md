@@ -418,6 +418,25 @@ not next for its stack; a pitch misplays only on a *plain* card that is not
 playable. "Makes it a misplay" means every remaining possibility misplays;
 anything less and the holder still has a reading under which the call is sound.
 
+**A call's inferred set is built to match its button**, which is what makes the
+rule above safe. The set contains exactly the identities the stamped button
+handles correctly:
+
+* **CTP / pitch** (press Play) — every **plain** identity that is currently
+  playable, plus every **inverted** identity that is *not* playable and *not*
+  critical, i.e. one the team can afford to throw away. The playable inverted
+  card is excluded: Play would pitch away the very card its stack is waiting
+  for.
+* **CTD / chuck** (press Discard) — every **plain** identity that is *not*
+  playable and *not* critical, plus every **inverted** identity that *is*
+  immediately playable, since Discard is what puts an orange on its stack.
+
+Worked examples, both from live replays. At stacks r1/b1/o1 an untouched card
+stamped CTP admits `{r2, b2, o1, o3, o4}`. At stacks r1/m0/o3 a card stamped CTD
+admits `{r1, r3, r4, m2, m3, m4, o4}`. These are `pitch_candidates` and
+`chuck_candidates` (`reactor0/interpret_clue.h`), applied by
+`narrow_to_stamped_button` wherever reactor0 stamps a call.
+
 So a standing call is on its list whatever the card looks like on its own
 merits, and `call_is_actionable` (`calls.h`) is the only thing that removes it.
 Worked example: an Orange 1 stamped CTD is chucked happily; if the other Orange

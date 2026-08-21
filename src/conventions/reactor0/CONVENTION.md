@@ -117,11 +117,11 @@ play in reactor0.** Priority:
 4. **The orange ladder** (`:274-314`), reached only when no playable orange
    was revealed. An orange colour clue names one orange card to get rid of or
    to stack:
-   A card called to **pitch** (press Play) is additionally narrowed by
-   `drop_playable_inverted`: it cannot be the inverted suit's currently playable
-   card, because that reading would have been a *chuck*. `reactor::target_play`
-   narrows a play call to the PLAYABLE set, which contains exactly that card, so
-   it has to be filtered back out (replay 1966286 T7).
+   Every call reactor0 stamps is then narrowed by `narrow_to_stamped_button` to
+   the identities its own button handles correctly — `pitch_candidates` for a
+   CTP, `chuck_candidates` for a CTD. See DECISION_MAKING.md, "the stamp is the
+   instruction"; `reactor::target_play` narrows to the PLAYABLE set, which is
+   the wrong set for a pitch on an inverted suit.
 
    The ladder applies only to a colour clue that **names the inverted suit**
    (`names_inverted_suit`). Selecting on "touched a card that could be orange"
