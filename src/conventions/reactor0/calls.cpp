@@ -104,6 +104,50 @@ bool is_chuckable(const Game& game, int player, int order) {
 
 }  // namespace
 
+namespace {
+
+// Would pressing DISCARD on this card be a misplay? A chuck strikes exactly
+// when the card is on an inverted suit and is not the next card for that stack;
+// on a plain suit Discard always just discards. "Would strike" means EVERY
+// remaining possibility strikes -- anything less and the holder still has a
+// reading under which the call is sound.
+bool chuck_would_strike(const Game& game, int player, int order) {
+  const Thought& t = game.players[player].thoughts[order];
+  const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+  if (set.is_empty()) return false;
+  const State& s = game.state;
+  for (Identity i : set) {
+    if (!variants::is_inverted_id(s, i) || s.is_playable(i)) return false;
+  }
+  return true;
+}
+
+// The mirror. A pitch strikes exactly when the card is on a PLAIN suit and is
+// not playable; on an inverted suit Play always just throws the card away.
+bool pitch_would_strike(const Game& game, int player, int order) {
+  const Thought& t = game.players[player].thoughts[order];
+  const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+  if (set.is_empty()) return false;
+  const State& s = game.state;
+  for (Identity i : set) {
+    if (variants::is_inverted_id(s, i) || s.is_playable(i)) return false;
+  }
+  return true;
+}
+
+}  // namespace
+
+bool call_is_actionable(const Game& game, int player, int order) {
+  switch (game.meta[order].status) {
+    case CardStatus::CALLED_TO_DISCARD:
+      return !chuck_would_strike(game, player, order);
+    case CardStatus::CALLED_TO_PLAY:
+      return !pitch_would_strike(game, player, order);
+    default:
+      return true;
+  }
+}
+
 ActionLists action_lists(const Game& game, int player) {
   ActionLists out;
   const PlayerCalls calls = calls_of(game, player);
@@ -113,7 +157,12 @@ ActionLists action_lists(const Game& game, int player) {
   // deque, plus anything their own empathy already marks playable. The spec's
   // worked example includes a fully-clued g2 that no clue ever called, which is
   // exactly the second group.
-  std::vector<int> pitchable = calls.receiver_ctp;
+  // A standing CTP is ALWAYS pitchable, for the same reason, so the deque goes
+  // in whole -- minus any call that has since become unpitchable.
+  std::vector<int> pitchable;
+  for (int o : calls.receiver_ctp) {
+    if (call_is_actionable(game, player, o)) pitchable.push_back(o);
+  }
   // `thinks_playables`, not `obvious_playables`: the spec says "given all
   // empathy and inferences from Alice's point of view", which is the empathy
   // notion. `obvious_playables` additionally demands the card be touched, and
@@ -171,7 +220,12 @@ ActionLists action_lists(const Game& game, int player) {
   // --- the chuck list -----------------------------------------------------
   for (int o : game.state.hands[player]) {
     const CardStatus st = game.meta[o].status;
-    if (st == CardStatus::CALLED_TO_DISCARD || is_chuckable(game, player, o)) {
+    // A standing CTD is ALWAYS chuckable -- the stamp is the instruction, and
+    // the holder presses Discard on it until something proves that would
+    // strike. `is_chuckable` is the test for cards carrying no call at all.
+    if (st == CardStatus::CALLED_TO_DISCARD) {
+      if (call_is_actionable(game, player, o)) out.chuck.push_back(o);
+    } else if (is_chuckable(game, player, o)) {
       out.chuck.push_back(o);
     }
   }

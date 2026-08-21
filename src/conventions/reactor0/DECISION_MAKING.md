@@ -410,6 +410,20 @@ be dependent on Card B in the receiver-CTP deque if Card B is in front of card A
 *and* it is possible based on the (non-global) inferences of both cards that they
 could share the same suit.
 
+**The stamp is the instruction.** A player **chucks** a card stamped
+`CALLED_TO_DISCARD` — presses the Discard button — and **pitches** a card
+stamped `CALLED_TO_PLAY` — presses Play — always, until some later information
+makes that button a misplay. A chuck misplays only on an inverted card that is
+not next for its stack; a pitch misplays only on a *plain* card that is not
+playable. "Makes it a misplay" means every remaining possibility misplays;
+anything less and the holder still has a reading under which the call is sound.
+
+So a standing call is on its list whatever the card looks like on its own
+merits, and `call_is_actionable` (`calls.h`) is the only thing that removes it.
+Worked example: an Orange 1 stamped CTD is chucked happily; if the other Orange
+1 then plays and the holder learns their card is orange, the chuck would strike
+and the call is no longer actionable.
+
 ### Actionable card priority
 
 Given all empathy and inferences from Alice's point of view, construct a list of

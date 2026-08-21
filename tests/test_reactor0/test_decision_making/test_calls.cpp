@@ -441,3 +441,69 @@ TEST(Reactor0Action, APlayableInvertedCardIsChuckedNotPitched) {
   EXPECT_EQ(discarded(action), o2) << "chucked, which is how an orange plays";
   EXPECT_NE(played(action), o2);
 }
+
+// --- the stamp is the instruction ----------------------------------------
+
+// A card stamped CTD is chucked (press Discard) and a card stamped CTP is
+// pitched (press Play), always -- until some later information proves that
+// button would misplay. So a standing call is on its list regardless of what
+// `is_chuckable` would say about an uncalled card.
+TEST(Reactor0Calls, AStandingCallIsAlwaysOnItsList) {
+  SetupOptions opts = base();
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  Game g = setup(std::move(opts));
+
+  // Neither card is chuckable or playable on its own merits.
+  call(g, TestPlayer::BOB, 2, CardStatus::CALLED_TO_DISCARD, false);
+  call(g, TestPlayer::BOB, 4, CardStatus::CALLED_TO_PLAY, false);
+
+  ActionLists lists = hanabi::reactor0::action_lists(g, 1);
+  EXPECT_NE(std::find(lists.chuck.begin(), lists.chuck.end(),
+                      order_at(g, TestPlayer::BOB, 2)),
+            lists.chuck.end())
+      << "a CTD is chucked because it is a CTD, not because it looks chuckable";
+  EXPECT_NE(std::find(lists.pitch.begin(), lists.pitch.end(),
+                      order_at(g, TestPlayer::BOB, 4)),
+            lists.pitch.end())
+      << "and a CTP is pitched for the same reason";
+}
+
+// The exception, on your worked example. An Orange 1 stamped CTD is chucked
+// happily while the orange stack is at 0. Once the other Orange 1 plays and the
+// holder learns their card is orange, the chuck would strike -- so the call
+// stops being actionable and drops off the list.
+TEST(Reactor0Calls, ACallStopsBeingActionableOnceItsButtonWouldStrike) {
+  SetupOptions opts;
+  opts.variant_name = "Orange (4 Suits)";
+  opts.hands = {
+      {"r3", "b4", "g4", "r5", "b5"},
+      {"o1", "r2", "g3", "b3", "r4"},
+      {"g2", "b2", "r3", "g5", "o4"},
+  };
+  opts.play_stacks = {0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int orange = 3;
+  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted);
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  call(g, TestPlayer::BOB, 1, CardStatus::CALLED_TO_DISCARD, false);
+  // The holder knows only that it is orange, not which orange.
+  g.players[1].thoughts[o].inferred = IdentitySet::from_iter(
+      {Identity{orange, 1}, Identity{orange, 2}, Identity{orange, 3}});
+
+  EXPECT_TRUE(hanabi::reactor0::call_is_actionable(g, 1, o))
+      << "with the orange stack at 0, chucking could still advance it";
+
+  // The other Orange 1 plays, and the holder narrows to Orange 1.
+  g.state.play_stacks[orange] = 1;
+  g.players[1].thoughts[o].inferred = IdentitySet::single(Identity{orange, 1});
+
+  EXPECT_FALSE(hanabi::reactor0::call_is_actionable(g, 1, o))
+      << "an orange below its own stack cannot be chucked without striking";
+  ActionLists lists = hanabi::reactor0::action_lists(g, 1);
+  EXPECT_EQ(std::find(lists.chuck.begin(), lists.chuck.end(), o),
+            lists.chuck.end())
+      << "so it leaves the chuck list rather than being offered as a chuck";
+}

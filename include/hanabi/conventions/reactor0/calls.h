@@ -80,6 +80,21 @@ struct ActionLists {
   std::vector<int> chuck;
 };
 
+// Is a standing call still safe to action with the button it names?
+//
+// The rule is that the STAMP is the instruction: a card stamped CTD is chucked
+// (press Discard) and a card stamped CTP is pitched (press Play), always --
+// until some later information proves that button would misplay. A chuck
+// strikes only on an inverted card that is not the next for its stack; a pitch
+// strikes only on a PLAIN card that is not playable. "Proves" means every
+// remaining possibility strikes; anything less and the holder still has a
+// reading under which the call is sound.
+//
+// Worked example: an Orange 1 stamped CTD is chucked happily. If the other
+// Orange 1 then plays and the holder later learns their card is orange, the
+// chuck would now strike, and the call stops being actionable.
+bool call_is_actionable(const Game& game, int player, int order);
+
 ActionLists action_lists(const Game& game, int player);
 
 // --- Actionable Card Priority (DECISION_MAKING.md phase 2) ---------------
