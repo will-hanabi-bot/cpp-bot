@@ -708,6 +708,34 @@ and never reaches a reactor0 game at all (§0).
 
 ## §1g POV invariance — shared knowledge retargets, giver-only knowledge rejects
 
+**A reactive must not call two copies of the same card to play**
+(`calls_two_copies_to_play`, `reactor0/decision.cpp`). The reacter acts first,
+so their copy stacks the identity and the receiver's is trash by the time they
+act — but the receiver still reads their card as "the playable one", which by
+then is the NEXT rank, and bombs.
+
+Replay 1967363 T1 (Odds and Evens & Orange, where a colour clue is the
+even-parity family): both halves of a double play were an Orange 1. will-bot67
+chucked theirs onto the stack, then yagami_black chucked theirs for a strike,
+reading it as the o2 the stack was now waiting for.
+
+Two things make this a §1g **reject** rather than a retarget. It needs the
+giver's sight of two hands, which no other seat has, so a retarget would desync;
+and it is enforced as a candidate FILTER in `analyse_clues` — beside the MISTAKE
+drop — rather than as a reading, so every observer interpreting an
+already-given clue still runs the identical convention pipeline. The clue is
+simply never offered.
+
+**Exception:** the receiver whose card is already pinned to one identity in
+common knowledge cannot be fooled — they will see the first copy land and know
+theirs is dead — so the clue is allowed.
+
+It is **variant-independent**. The hazard is the double-play SHAPE, not the
+inverted suit; a vanilla rank reactive fails the same way. And it covers PLAYS
+only: two cards called to be *discarded* that happen to match is not a bomb, and
+throwing a spare copy is often right.
+
+
 Selection inputs are (a) common thoughts, and (b) deck identities invisible
 only to the receiver, who never runs selection. The line that matters is
 whether the **reacter** shares the knowledge:

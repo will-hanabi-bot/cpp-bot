@@ -412,6 +412,61 @@ std::vector<std::pair<int, int>> discarded_sides(const Game& g,
 
 }  // namespace
 
+// A reactive must not call TWO COPIES of the same card to play.
+//
+// The reacter acts first, so their copy stacks the identity and the receiver's
+// is trash by the time they act -- but the receiver still reads their card as
+// "the playable one", which by then is the NEXT rank, and bombs. Replay 1967363
+// T1: both halves of a double play were an Orange 1. will-bot67 chucked theirs
+// onto the stack and yagami_black chucked theirs for a strike, "thinking it is
+// orange 2".
+//
+// Giver-side only, and a candidate FILTER rather than an interpretation rule.
+// It reads the giver's sight of two hands, which no other seat has; making it a
+// reading would have observers decode the clue differently from the giver and
+// break POV invariance (CONVENTION.md 1g). Dropping the candidate simply means
+// the clue is never offered.
+//
+// Variant-independent: the hazard is the double-play SHAPE, not the inverted
+// suit. A vanilla rank reactive fails the same way.
+//
+// PLAYS only. Two cards called to be DISCARDED that happen to match is not a
+// bomb, and throwing a spare copy is often right.
+bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
+  if (hypo.waiting.empty()) return false;  // stable clues call one card
+  const ReactorWC& wc = hypo.waiting.front();
+  const State& s = game.state;
+
+  // The card this clue newly called, and whether the BUTTON it was handed
+  // would play it: CTP plays a plain card and throws an inverted one, CTD the
+  // reverse. Own cards have no deck id, so they are skipped -- the giver can
+  // only veto on what they can see.
+  auto called_to_play = [&](int player) -> std::optional<std::pair<Identity, int>> {
+    if (player < 0 || player >= static_cast<int>(s.hands.size())) return std::nullopt;
+    for (int o : s.hands[player]) {
+      const CardStatus now = hypo.meta[o].status;
+      if (now == game.meta[o].status) continue;  // not newly stamped
+      auto id = s.deck[o].id();
+      if (!id) continue;
+      const bool plays =
+          now == CardStatus::CALLED_TO_DISCARD
+              ? variants::discard_advances_stack(s, id)
+              : (now == CardStatus::CALLED_TO_PLAY &&
+                 !variants::is_inverted_id(s, *id) && s.is_playable(*id));
+      if (plays) return std::make_pair(*id, o);
+    }
+    return std::nullopt;
+  };
+
+  auto react_call = called_to_play(wc.reacter);
+  auto recv_call = called_to_play(wc.receiver);
+  if (!react_call || !recv_call) return false;
+  if (react_call->first != recv_call->first) return false;
+  // Unless the receiver already knows exactly what they hold -- then they
+  // cannot be fooled into pressing the button on a copy that has just died.
+  return game.common.thoughts[recv_call->second].possibilities().length() != 1;
+}
+
 std::vector<ClueCandidate> analyse_clues(
     const Game& game,
     const std::vector<std::pair<PerformAction, Action>>& all_clues) {
@@ -428,6 +483,7 @@ std::vector<ClueCandidate> analyse_clues(
         std::get<ClueInterp>(*move) == ClueInterp::MISTAKE) {
       continue;  // undecodable: no rung may propose it
     }
+    if (calls_two_copies_to_play(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), clue_is_h4(game, hypo, ca), 0.0};
     int useful = 0, trash = 0;
