@@ -490,6 +490,18 @@ blind-play a react slot with no playability check at all, which strikes.
 `variants::would_lose_inverted_reacter` was already swap-aware at both sites,
 which is why only this vet was wrong.
 
+**"Safe to throw away" excepts a playable inverted reading.** The discard vet
+asks whether every reading of the react slot is critical, and retargets when
+one is (`every_reading_loses` `interpret_reactive.cpp:232-239`). That is the
+PLAIN-suit reading of the Discard button: on an inverted suit Discard is a
+CHUCK, which puts the card on its stack, so a reading that is inverted *and*
+playable is not a loss at all — it is the play the call is asking for. Without
+the exception the vet was unsatisfiable in Dark Orange, where every card is
+one-of-each and therefore critical by construction: a react slot that could be
+dark was *always* walked past, which is precisely the shape where the chuck is
+most clearly right. Replay 1967491 T36 — will-bot67's slot 5 was `{d2, d4}`
+with the dark stack on 1, so chucking it stacks the `d2`.
+
 **A re-targeted slot gets its inferences rebuilt.** When the reacter acts,
 `target_i_play` narrows the receiver's target to its playable identities. If
 `inferred` no longer admits any playable, reactor0 rebuilds the narrowing from
@@ -645,6 +657,15 @@ mode 1.
 Phase C and colour mode 1 did not until v7.28.0. Replay 1967376: an Odds and
 Evens rank clue runs the odd bucket, which is colour mode 1's ruleset, and the
 reacter-CTD kept a trash `o1` while dropping the playable `o5`.
+
+Colour mode 1 goes further as of v7.30.0: when the react slot could be a
+playable inverted card it is stamped by `stamp_orange_chuck` outright rather
+than by `target_discard` (`interpret_reactive.cpp:587-598`). Narrowing after
+the fact is not enough there, because `target_discard` *refuses to stamp at
+all* when no non-critical id survives — which in Dark Orange is always — and
+the whole clue then reads as a `MISTAKE`. This is the same rule as the vet
+above, one layer down, and the same stamp the stable orange ladder uses
+(`interpret_clue.cpp:266`).
 
 ## §1e The reactive lock and `allow_reactive_locks`
 

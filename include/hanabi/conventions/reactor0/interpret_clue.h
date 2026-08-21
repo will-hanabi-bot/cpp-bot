@@ -64,6 +64,19 @@ IdentitySet chuck_candidates(const State& state);
 // an empty inference erases the reading rather than recording it.
 void narrow_to_stamped_button(Game& game, int order);
 
+// Stamp a CHUCK — press Discard, which on an inverted suit puts the card on
+// its stack. `reactor::target_discard` is NOT reusable here: it narrows
+// `inferred` to the NON-CRITICAL ids, which is the plain-suit reading of "throw
+// this away" and empties outright in Dark Orange, where every card is
+// one-of-each. This narrows to the identities a chuck actually advances.
+//
+// Exported for the same reason as the pitch twin below: the REACTIVE side needs
+// it. A reacter told to press Discard on a card that could be a playable orange
+// is chucking it, and `target_discard` would refuse to stamp at all (replay
+// 1967491 T36). `urgent` is what the reactive path adds.
+std::optional<ClueInterp> stamp_orange_chuck(Game& game, const ClueAction& action,
+                                             int order, bool urgent = false);
+
 std::optional<ClueInterp> stamp_orange_pitch(Game& game, const ClueAction& action,
                                              int order, bool urgent = false);
 

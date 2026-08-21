@@ -260,8 +260,11 @@ namespace {
 // to the NON-critical ids — the "this is safe to throw away" reading — which
 // is the opposite of what a chuck wants, and empties the set outright in Dark
 // Orange, where every card is critical (src/basics/variant.cpp:183).
+
+}  // namespace
+
 std::optional<ClueInterp> stamp_orange_chuck(Game& game, const ClueAction& action,
-                                             int order) {
+                                             int order, bool urgent) {
   const State& state = game.state;
   IdentitySet keep =
       game.common.thoughts[order].possibilities().filter([&](Identity i) {
@@ -277,16 +280,15 @@ std::optional<ClueInterp> stamp_orange_chuck(Game& game, const ClueAction& actio
   });
   const int turn = state.turn_count;
   const int giver = action.giver;
-  game.with_meta(order, [turn, giver](ConvData& m) {
+  game.with_meta(order, [turn, giver, urgent](ConvData& m) {
     m.focused = true;
     m.status = CardStatus::CALLED_TO_DISCARD;
     m.by = giver;
+    m.urgent = urgent;
     m = m.reason(turn).signal(turn);
   });
   return ClueInterp::PLAY;
 }
-
-}  // namespace
 
 // Stamp a PITCH — press Play, sending the orange to the discard pile and
 // regaining a clue. `reactor::target_play` is NOT reused: it narrows

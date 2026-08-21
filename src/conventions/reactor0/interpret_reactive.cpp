@@ -214,12 +214,29 @@ ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
   const State& state = game.state;
 
   if (!reacter_plays) {
-    // The reacter is being told to discard. It need not be playable — it must
-    // merely be safe to throw away. Common knowledge, so a failure retargets.
-    if (game.common.thoughts[react_order].possible.forall(
-            [&](Identity i) { return state.is_critical(i); })) {
-      return ReactVet::RETARGET;
-    }
+    // The reacter is being told to press DISCARD. It need not be playable — it
+    // must merely be safe to throw away. Common knowledge, so a failure
+    // retargets.
+    //
+    // "Throw away" is the PLAIN-suit reading of that button. On an inverted
+    // suit Discard is a CHUCK, which puts the card on its stack — so a reading
+    // that is inverted AND playable is not a loss at all, it is the play the
+    // call is asking for.
+    //
+    // Without the exception this is unreachable in Dark Orange, where every
+    // card is one-of-each and therefore critical by construction: a reacter
+    // slot that could be dark always answered "all critical" and was always
+    // retargeted. Replay 1967491 T36 — will-bot67's slot 5 was {d2, d4} with
+    // the dark stack on 1, so chucking it would have stacked the d2, and the
+    // clue came out a MISTAKE instead.
+    const bool every_reading_loses =
+        game.common.thoughts[react_order].possible.forall([&](Identity i) {
+          if (variants::is_inverted_id(state, i) && state.is_playable(i)) {
+            return false;  // the chuck stacks it — nothing is lost
+          }
+          return state.is_critical(i);
+        });
+    if (every_reading_loses) return ReactVet::RETARGET;
     return ReactVet::OK;
   }
 
@@ -559,10 +576,26 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
         out.old_inferred = t.inferred;
         return out;
       });
-      auto interp = variants::target_is_inverted(state, target)
-                        ? target_play(game, action, react_order, /*urgent=*/true,
-                                      /*stable=*/false)
-                        : target_discard(game, action, react_order, /*urgent=*/true);
+      // A reacter told to press Discard on a card that could be a playable
+      // INVERTED one is CHUCKING it, not throwing it away. `target_discard`
+      // narrows to the non-critical ids -- the plain-suit reading -- which in
+      // Dark Orange empties outright, since every card there is one-of-each, so
+      // it refuses to stamp and the whole clue reads as a MISTAKE. Replay
+      // 1967491 T36: will-bot67's slot 5 was {d2, d4} with the dark stack on 1,
+      // and chucking it stacks the d2. `stamp_orange_chuck` narrows to exactly
+      // the identities that button advances.
+      const bool react_could_chuck =
+          !target_inverted &&
+          game.common.thoughts[react_order].possible.exists([&](Identity i) {
+            return variants::is_inverted_id(state, i) && state.is_playable(i);
+          });
+      auto interp =
+          target_inverted
+              ? target_play(game, action, react_order, /*urgent=*/true,
+                            /*stable=*/false)
+          : react_could_chuck
+              ? stamp_orange_chuck(game, action, react_order, /*urgent=*/true)
+              : target_discard(game, action, react_order, /*urgent=*/true);
       // As Phase A and Phase B do. Replay 1967376: this is where an Odds and
       // Evens RANK clue lands (the odd bucket runs this ruleset), and without
       // the narrowing the reacter-CTD kept a trash o1 and lost the playable o5.
