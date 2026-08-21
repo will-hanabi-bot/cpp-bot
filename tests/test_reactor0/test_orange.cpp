@@ -35,6 +35,7 @@
 #include "hanabi/basics/interp.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
@@ -569,4 +570,50 @@ TEST(Reactor0Orange, DropPlayableInvertedNeverEmptiesTheSet) {
   hanabi::reactor0::drop_playable_inverted(g, o);
   EXPECT_TRUE(g.common.thoughts[o].inferred.contains(Identity{2, 2}))
       << "an empty inference is worse than a contradictory one";
+}
+
+// Replay 1966569 T10. The chuck list takes "trash NON-INVERTED or playable
+// inverted", and the non-inverted half of that first arm is load-bearing.
+//
+// A card that is trash but could be ORANGE is not safe to chuck: pressing
+// Discard on an inverted card is a play attempt, and a trash orange is by
+// definition not playable, so the chuck STRIKES. will-bot67 held {r1, o1} with
+// the red stack at 1 and the orange stack at 3 -- both identities trash -- and
+// chucked it into a strike. Such a card is pitched, never chucked.
+TEST(Reactor0Orange, TrashThatCouldBeOrangeIsNotChuckable) {
+  SetupOptions opts;
+  opts.variant_name = "Muddy Rainbow & Orange (3 Suits)";
+  opts.hands = {
+      {"r1", "m4", "m5", "r4", "r5"},
+      {"o5", "m2", "m3", "r3", "o2"},
+      {"m1", "r2", "o4", "m2", "r4"},
+  };
+  opts.play_stacks = {1, 0, 3};  // r1 trash, o1 trash (orange is past it)
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int orange = 2;
+  ASSERT_TRUE(g.state.variant->suits[orange].suit_type.inverted);
+  ASSERT_TRUE(g.state.is_basic_trash(Identity{0, 1})) << "guard: r1 is trash";
+  ASSERT_TRUE(g.state.is_basic_trash(Identity{orange, 1}))
+      << "guard: o1 is trash, the orange stack is past it";
+  ASSERT_FALSE(g.state.is_playable(Identity{orange, 1}))
+      << "guard: so chucking it is a misplay, not a play";
+
+  // Alice's slot 1, pinned to {r1, o1} -- every identity trash, one of them
+  // orange.
+  const int o = order_at(g, TestPlayer::ALICE, 1);
+  g.with_thought(o, [](const Thought& t) {
+    Thought out = t;
+    out.inferred =
+        IdentitySet::from_iter({Identity{0, 1}, Identity{2, 1}});
+    return out;
+  });
+
+  auto lists = hanabi::reactor0::action_lists(g, 0);
+  EXPECT_EQ(std::find(lists.chuck.begin(), lists.chuck.end(), o),
+            lists.chuck.end())
+      << "all-trash is not enough: if it could be orange, Discard is a play "
+         "attempt and the chuck strikes";
 }

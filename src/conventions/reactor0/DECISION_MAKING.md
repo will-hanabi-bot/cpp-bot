@@ -419,6 +419,13 @@ the first elements of each list the **pitch list**. Take all of the cards
 currently stamped CTD, and add all chuckable cards (either trash non-inverted or
 playable inverted) to it to form the **chuck list**.
 
+**"Trash non-inverted" means non-inverted.** A card that is trash but *could* be
+on the inverted suit is not chuckable: pressing Discard on an inverted card is a
+play attempt, and a trash orange is by definition not playable, so the chuck
+strikes. Such a card is pitched. Likewise a chuck only advances a stack when the
+card is currently **playable**, which is what rungs 3 and 9 of the Actionable
+Card Priority require of a "known inverted suit" (replay 1966569 T10).
+
 When a card is pitched from the pitch list, the front of the corresponding list is
 popped out, and the pitch list is reconstructed. This may seem overkill but will
 eventually be used for variants that rely on chaining of playables or in the

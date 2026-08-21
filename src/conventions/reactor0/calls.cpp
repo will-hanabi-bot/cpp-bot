@@ -84,15 +84,22 @@ bool is_chuckable(const Game& game, int player, int order) {
   const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
   if (set.is_empty()) return false;
   const State& s = game.state;
-  bool all_trash = true;
+  // The spec's two arms: "either trash NON-INVERTED or playable inverted".
+  //
+  // The non-inverted half of the first arm is load-bearing, not decoration. A
+  // card that is trash but could be ORANGE is not safe to chuck at all:
+  // pressing Discard on an inverted card is a play attempt, and a trash orange
+  // is by definition not playable, so the chuck STRIKES. Replay 1966569 T10 did
+  // exactly that -- slot 4 was {r1, o1} with both trash, the card was the o1,
+  // and chucking it took a strike. Such a card is pitched, never chucked.
+  bool all_plain_trash = true;
   bool all_inverted_playable = true;
   for (Identity i : set) {
-    if (!s.is_basic_trash(i)) all_trash = false;
-    if (!variants::is_inverted_id(s, i) || !s.is_playable(i)) {
-      all_inverted_playable = false;
-    }
+    const bool inverted = variants::is_inverted_id(s, i);
+    if (!s.is_basic_trash(i) || inverted) all_plain_trash = false;
+    if (!inverted || !s.is_playable(i)) all_inverted_playable = false;
   }
-  return all_trash || all_inverted_playable;
+  return all_plain_trash || all_inverted_playable;
 }
 
 }  // namespace
@@ -250,7 +257,9 @@ std::optional<PerformAction> choose_action(const Game& game) {
   // an inverted card advances its stack, so this is a play in all but name.
   for (int o : lists.chuck) {
     auto id = alice_knows(game, o);
-    if (id && variants::is_inverted_id(s, *id) &&
+    // Playability is the whole point: chucking an inverted card advances its
+    // stack only if it is the next card. A trash orange chucked here strikes.
+    if (id && variants::is_inverted_id(s, *id) && s.is_playable(*id) &&
         sets_up_a_partner(game, *id)) {
       return taken(game, "3.chuck_sets_up_partner", o, false);
     }
@@ -313,7 +322,9 @@ std::optional<PerformAction> choose_action(const Game& game) {
   // advances a stack.
   for (int o : lists.chuck) {
     auto id = alice_knows(game, o);
-    if (id && variants::is_inverted_id(s, *id)) return taken(game, "9.chuck_known_inverted", o, false);
+    if (id && variants::is_inverted_id(s, *id) && s.is_playable(*id)) {
+      return taken(game, "9.chuck_known_inverted", o, false);
+    }
   }
 
   // 10 -- chuck a card that COULD be inverted. Weaker than rung 9's "known",

@@ -1,5 +1,7 @@
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 
+#include "hanabi/conventions/variants/inverted.h"
+
 #include <algorithm>
 
 #include "hanabi/basics/card.h"
@@ -10,6 +12,8 @@
 #include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::reactor0 {
+
+namespace variants = hanabi::reactor::variants;
 
 using hanabi::reactor::calc_target_slot;
 using hanabi::reactor::elim_dc_dc;
