@@ -94,9 +94,18 @@ Game clue_colour(Game g, TestPlayer giver, TestPlayer target, int suit_index) {
 // the `poss` the log recorded. r1/b1 are basic trash at stacks of 1, r2/b2 are
 // playable, and o1 is playable *on paper*. It is not playable by this clue,
 // because a rank direct play clue pitches, and pitching Orange 1 puts it in
-// the discard pile. So priority 1 must not fire, and the clue falls through to
-// the referential discard, which locks because the focus is the lock slot.
-TEST(Reactor0Orange, RankDirectPlayDeclinesOrangeAndLocksInstead) {
+// the discard pile.
+//
+// Until v7.19.0 that made the whole reading decline, and the clue fell through
+// to the referential discard and locked. It no longer does: o1 is dropped from
+// the INFERENCES instead of killing the reading, so the focus is stamped CTP
+// and promised {r2, b2}. Declining cost replay 1966696 an entire clue — a
+// rank-1 on {r1,b1,o1} read as a bare REVEAL, and will-bot67 carried an
+// unstamped playable 1 for six turns before discarding its chop on T8.
+//
+// The original complaint in bug_report_3.txt 3.1 is still honoured: the card
+// must not be stamped CTD, which is what `order_trash` reported as known trash.
+TEST(Reactor0Orange, RankDirectPlayPitchesTheMixedSetPlainly) {
   SetupOptions opts = orange_opts("Pink-Ones & Orange (3 Suits)");
   opts.play_stacks = {1, 1, 0};
   opts.hands = {
@@ -112,14 +121,18 @@ TEST(Reactor0Orange, RankDirectPlayDeclinesOrangeAndLocksInstead) {
 
   g = take_turn(std::move(g), "Alice clues 2 to Bob");
 
-  EXPECT_EQ(last_clue_interp(g), ClueInterp::LOCK)
-      << "priority 1 must decline a promise set whose only inverted member is "
-         "useful — a pitch would discard it (bug_report_3.txt 3.1)";
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::PLAY)
+      << "a mixed useful set is a direct play clue: the button is Play, and "
+         "the inferences narrow to the identities that button advances";
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_PLAY)
+      << "CTP is the Play button — a pitch";
   EXPECT_NE(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_DISCARD)
-      << "the lock slot must not be stamped CTD: order_trash reports a CTD as "
-         "known trash, which is the '[kt]' the report saw";
-  EXPECT_NE(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_PLAY)
-      << "nor called to play";
+      << "bug_report_3.txt 3.1's actual complaint still holds: the lock slot "
+         "must not be stamped CTD, since order_trash reports a CTD as known "
+         "trash and that was the '[kt]' the report saw";
+  // o1 is dropped: pressing Play on an inverted card discards it, so an
+  // inverted identity is never what a pitch call means.
+  expect_infs(g, TestPlayer::BOB, TestPlayer::BOB, 5, {"r2", "b2"});
 }
 
 // The companion negative: (b) is confined to priority 1. A rank clue that
@@ -311,12 +324,17 @@ TEST(Reactor0Orange, RankDirectPlayChucksWhenEveryUsefulIdentityIsOrange) {
   expect_infs(g, TestPlayer::BOB, TestPlayer::BOB, 1, {"o2"});
 }
 
-// The companion negative, and the reason the rule is "ALL useful identities",
-// not "any". Stacks [1, 1, 1] leave r2, b2 AND o2 useful and playable, so the
-// receiver could not tell which button to press — a pitch would discard the
-// orange, a chuck would discard a playable red or blue. The clue must decline,
-// exactly as it did before this rule existed.
-TEST(Reactor0Orange, RankDirectPlayStillDeclinesAMixedUsefulSet) {
+// The companion to the orange-only chuck above: a MIXED useful set pitches.
+// Stacks [1, 1, 1] leave r2, b2 AND o2 useful and playable. The button is not
+// undecidable — the default for a rank direct play clue is Play, so the focus
+// is stamped CTP and its inferences narrow to the identities a pitch actually
+// advances, {r2, b2}.
+//
+// Bob's slot 1 really is an Orange 2 here, so acting on this call would pitch
+// it into the discard pile. That is a GIVER-side error rather than a flaw in
+// the reading: Alice can see Bob's hand and would not give this clue. The
+// fixture keeps the orange focus deliberately, to make the hazard concrete.
+TEST(Reactor0Orange, RankDirectPlayPitchesAMixedUsefulSet) {
   SetupOptions opts = orange_opts("Orange (3 Suits)");
   opts.play_stacks = {1, 1, 1};
   opts.hands = {
@@ -328,10 +346,13 @@ TEST(Reactor0Orange, RankDirectPlayStillDeclinesAMixedUsefulSet) {
 
   g = take_turn(std::move(g), "Alice clues 2 to Bob");
 
-  EXPECT_NE(last_clue_interp(g), ClueInterp::PLAY)
-      << "a mixed useful set leaves the physical action undecidable";
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::PLAY)
+      << "a mixed useful set is a direct play clue, not a decline";
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY)
+      << "the default button for a rank direct play clue is Play";
   EXPECT_NE(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_DISCARD);
-  EXPECT_NE(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
+  // o2 is dropped from the inferences — a pitch cannot advance it.
+  expect_infs(g, TestPlayer::BOB, TestPlayer::BOB, 1, {"r2", "b2"});
 }
 
 // Nothing to pitch and nothing to chuck: the clue is a stall. Orange sits at

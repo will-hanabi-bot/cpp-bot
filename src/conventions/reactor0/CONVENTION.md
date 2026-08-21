@@ -250,13 +250,30 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    The focus is narrowed to its playable identities, `info_lock` set, and
    stamped **`CALLED_TO_PLAY` — a pitch — unless the classification said
    `orange_only`, in which case `variants::called_focus_status` supplies
-   `CALLED_TO_DISCARD`, a chuck** (`:496-525`). The gate matters: that helper
-   returns CTD for *any* inverted member of the set, so a mixed set must never
-   reach it — and cannot, since step 3 already set `playable_rank = false` for
-   one. Under `orange_only` `new_inferred` is additionally narrowed to the
-   **inverted** playables (`:494-505`), the same narrowing `stamp_orange_chuck`
-   does, which keeps TODO #12's unpinned-playable-orange hazard away from the
-   focus. **reactor calls `called_focus_status` unconditionally at its own
+   `CALLED_TO_DISCARD`, a chuck** (`:496-525`).
+
+   **The inferences narrow to whatever the stamped button advances**
+   (`:593-605`). Under `orange_only` that is the **inverted** playables, the
+   same narrowing `stamp_orange_chuck` does, which keeps TODO #12's
+   unpinned-playable-orange hazard away from the focus. Otherwise it is the
+   **plain** playables: pressing Play on an inverted card sends it to the
+   discard pile, so an inverted identity is never what a pitch call means.
+
+   A **mixed** useful set — plain and inverted identities both playable — is a
+   direct play clue like any other. It used to set `playable_rank = false` and
+   decline outright, on the grounds that the receiver could not tell which
+   button to press. They can: the default is Play, and the inferences narrow to
+   match. Declining cost replay 1966696 an entire clue — a rank-1 on
+   `{r1,b1,o1}` at stacks `[0,0,0]` degraded to a bare `REVEAL` that stamped
+   nothing, and will-bot67 carried an unstamped playable 1 for six turns before
+   discarding its chop on T8.
+
+   The giver carries the matching duty: they can see the receiver's hand, so
+   they must not give a mixed rank clue whose focus is actually inverted — the
+   receiver will pitch it into the discard pile
+   (`RankDirectPlayPitchesAMixedUsefulSet` keeps that hazard concrete).
+
+   **reactor calls `called_focus_status` unconditionally at its own
    site** (`src/conventions/reactor/interpret_clue.cpp:504`).
    Returns `PLAY`. An *unnecessary* focus (every possibility trash or
    visible elsewhere) makes the clue a `STALL` instead (`:482-494`).
@@ -542,7 +559,7 @@ older build.
 | | reactor | reactor0 |
 |---|---|---|
 | Stable colour naming an orange | `ref_play`; `target_play` on an inverted target is rejected as a mistake | the §1b orange ladder — play reveal, then pitch or chuck, then a §1g reject if the giver can see the chuck target is unplayable |
-| Rank direct play with a possibly-orange focus | `called_focus_status` → CTD (a chuck) | `CALLED_TO_PLAY` (a pitch) for a mixed useful set, which is excluded from the reading in the first place; `called_focus_status` → CTD only when **every** useful identity of the rank is orange |
+| Rank direct play with a possibly-orange focus | `called_focus_status` → CTD (a chuck) | `CALLED_TO_PLAY` (a pitch) for a mixed useful set, with the inverted identities dropped from the inferences; `called_focus_status` → CTD only when **every** useful identity of the rank is orange |
 | `pace()` | not consulted for orange | selects pitch vs chuck |
 | Dark Orange | no special handling | always chucks |
 
@@ -678,7 +695,7 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_reactive_inverted_vet.cpp` | §1d — the react-slot vet follows the inverted swap, each swapped case paired with its un-swapped control, plus the giver-only reject |
 | `tests/test_reactor0/test_bad_reactive_target/test_replay_1942777_orange_reactive_vet_follows_swap.cpp` | bug 4.1 end to end — the reacter discards slot 5, not the Phase C lock's slot 3 |
 | `tests/test_reactor0/test_bad_reactive_target/test_replay_1957942_trash_orange_pitch_is_a_valid_reaction.cpp` | bug_report_4_1_0.txt 4.1.0b end to end — the reacter pitches the trash orange instead of discarding a critical 5 |
-| `tests/test_reactor0/test_orange.cpp` | §1b/§1c in inverted variants — bug 3.1's rank-2 lock, a rank clue still revealing a playable orange, pitch at pace > 3, chuck at pace <= 3, chuck in Dark Orange, play reveal outranking the pitch, the stall when nothing can reach the stacks, the §1b giver-side reject of an unplayable chuck target, and the §1c orange-only rank chuck plus its mixed-set negative |
+| `tests/test_reactor0/test_orange.cpp` | §1b/§1c in inverted variants — bug 3.1's rank-2 focus (now a pitch narrowed to the plain playables), a rank clue still revealing a playable orange, pitch at pace > 3, chuck at pace <= 3, chuck in Dark Orange, play reveal outranking the pitch, the stall when nothing can reach the stacks, the §1b giver-side reject of an unplayable chuck target, and the §1c orange-only rank chuck alongside the mixed-set pitch |
 | `tests/test_endgame/test_orange_chuck.cpp` | bug 3.2 — the solver offers a known playable orange as a chuck, and `perform_to_action` models a chuck of a non-playable orange as a misplay |
 | `tests/test_reactor0/test_stable_rank_omni.cpp` | §1c in an omni variant — rank 1 and rank 4 read as direct plays, an unplayable useful identity still blocks, and the pinkish focus is the leftmost |
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |

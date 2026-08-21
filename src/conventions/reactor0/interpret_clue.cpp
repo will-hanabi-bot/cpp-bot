@@ -531,18 +531,25 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
     if (!state.is_playable(id)) playable_rank = false;
   }
   // A rank direct play clue means PITCH (press Play) by default, and pitching
-  // an inverted card sends it to the discard pile instead of its stack. So a
-  // useful orange identity can only be read as playable when EVERY useful
-  // identity of the rank is orange — then the button is unambiguous and the
-  // focus is called to CHUCK (press Discard) instead. That is the case where
-  // every other suit's copy of the rank is already on the stacks, so the clue
-  // names the orange one and nothing else (replay 1957905 #31).
+  // an inverted card sends it to the discard pile instead of its stack. So the
+  // BUTTON is decided by whether any useful identity of the rank is plain:
   //
-  // A MIXED useful set stays undecidable — the receiver could not tell which
-  // button to press — and declines exactly as before (bug_report_3.txt 3.1,
-  // `RankDirectPlayDeclinesOrangeAndLocksInstead`).
+  //   * some plain playable exists -> PITCH. The focus is stamped CTP and its
+  //     inferred set narrowed to the plain playables. Any inverted identity is
+  //     dropped: pressing Play on it would throw it away, so it is not
+  //     something this call can mean.
+  //   * every useful identity is inverted -> CHUCK. The focus is stamped CTD
+  //     and narrowed to the inverted playables. That is the case where every
+  //     other suit's copy of the rank is already on the stacks, so the clue
+  //     names the orange one and nothing else (replay 1957905 #31).
+  //
+  // A MIXED set used to be declared undecidable and declined outright, on the
+  // grounds that the receiver could not tell which button to press. They can:
+  // the default is Play, and the inferences narrow to match it. Declining
+  // instead cost replay 1966696 the whole clue -- a rank-1 on {r1,b1,o1} at
+  // stacks [0,0,0] read as a bare REVEAL, so will-bot67 carried an unstamped
+  // playable 1 for six turns and discarded its chop on T8 instead of playing.
   const bool orange_only = useful_inverted && !useful_plain;
-  if (useful_inverted && useful_plain) playable_rank = false;
   // An empty set teaches nothing — fall through rather than claim every
   // identity is playable vacuously.
   if (!touchable.non_empty()) {
@@ -595,11 +602,14 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
 
       IdentitySet new_inferred = game.common.thoughts[*focus].inferred.filter(
           [&](Identity i) {
-            // Under the orange-only reading the call is a chuck, so narrow to
-            // the identities a chuck actually advances — same reasoning as
-            // `stamp_orange_chuck` above, and it keeps TODO #12's unpinned
-            // -playable-orange hazard away from this focus.
-            if (orange_only && !variants::is_inverted_id(state, i)) return false;
+            // Narrow to the identities the STAMPED BUTTON actually advances.
+            // Under the orange-only reading that is a chuck, so keep only the
+            // inverted ones -- same reasoning as `stamp_orange_chuck` above,
+            // and it keeps TODO #12's unpinned-playable-orange hazard away
+            // from this focus. Otherwise it is a pitch, so keep only the
+            // PLAIN ones: pressing Play on an inverted card discards it, so an
+            // inverted identity is never what a pitch call means.
+            if (variants::is_inverted_id(state, i) != orange_only) return false;
             return state.is_playable(i);
           });
       if (new_inferred.is_empty()) return std::nullopt;
@@ -615,9 +625,10 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
       // `variants::called_focus_status` is the shared helper for that
       // (it returns CTD for any inverted member of the set); reactor keeps it
       // at its own call site unconditionally
-      // (reactor/interpret_clue.cpp:504), reactor0 gates it on `orange_only`
-      // so a MIXED set can never reach it — a mixed set has already set
-      // `playable_rank = false` and cannot get here.
+      // (reactor/interpret_clue.cpp:504), reactor0 gates it on `orange_only`.
+      // The gate is what makes a MIXED set safe here: `new_inferred` has
+      // already dropped every inverted identity, so the helper would return
+      // CTP anyway, but gating says so without depending on that.
       const CardStatus status =
           orange_only ? variants::called_focus_status(state, new_inferred)
                       : CardStatus::CALLED_TO_PLAY;
