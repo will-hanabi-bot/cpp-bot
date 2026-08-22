@@ -1,29 +1,28 @@
-// A receiver-chuck's negative inference is held until the chuck is known.
+// A reaction's negative inference waits for the RECEIVER to act.
 //
-// Both reactive branches that call the receiver to CHUCK -- colour + reacter
-// played (`elim_play_dc`) and rank + reacter discarded (`elim_dc_dc`) -- reason
-// "the slots the walk passed over are not playable". That holds only if the
-// chuck is really a DISCARD. On an inverted suit a chuck puts the card on its
-// stack, so it is a PLAY: nothing was passed over and nothing is owed.
+// The negatives say "the slots the walk passed over were not playable". Which
+// slots, and which set, depend on what the receiver does with their target --
+// and that is not settled when the reacter acts. On an inverted suit the
+// reacter's own action does not even distinguish a play from a discard: a CTD
+// is a CHUCK, which puts the card on its stack.
 //
-// So the inference is captured (`Game::pending_dc_elim`) rather than applied,
-// and `resolve_pending_dc_elim` decides its fate later:
+// So the whole inference is captured at reaction time and fired when the
+// receiver actions the target (`Game::PendingReactionElim`,
+// `Game::fire_reaction_elim`). Three readings, decided by what the receiver put
+// on the table:
 //
-//   every reading says it was a playable inverted -> void it
-//   no reading says so                            -> apply it
-//   otherwise                                     -> keep holding
+//   receiver advanced a stack, NOT the reacter's -> passed-over slots only
+//   receiver advanced the SAME stack (a FINESSE) -> whole hand, plus one-away
+//                                                   on the passed-over slots
+//   receiver advanced nothing (they discarded)   -> whole hand
 //
-// The receiver does NOT have to chuck the card for this to fire -- knowing is
-// enough. And the question is asked against the CLUE-TIME playable set, not the
-// current stacks.
-//
-// Replay 1966710 is the motivating case: a rank double discard applied
-// `elim_dc_dc` at once, stripping a playable b2 from the receiver's slot 3. The
-// receiver's called card was an Orange 1 with the orange stack on 0, so the
-// chuck scored and the reaction was never a double discard at all.
+// Before v8.0.0 this was keyed on the receiver's card IDENTITY instead: the
+// hold was released as soon as anyone could prove the called card was or was
+// not a playable inverted. That answered a narrower question (was the chuck a
+// play?) and could not distinguish a finesse from an ordinary double play at
+// all.
 #include <gtest/gtest.h>
 
-#include <map>
 #include <string>
 #include <vector>
 
@@ -31,8 +30,6 @@
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity.h"
 #include "hanabi/basics/identity_set.h"
-#include "hanabi/basics/state.h"
-#include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
@@ -42,216 +39,164 @@ using namespace hanabi::test::reactor0;
 
 namespace {
 
-// "Orange (3 Suits)" -- r / b / o, with orange (index 2) inverted.
-constexpr int kOrange = 2;
-
-SetupOptions inv_opts() {
+// Red on 1, green on 1; everything else at 0. So the playables are
+// {r2, y1, g2, b1, p1} and the one-aways are {r3, y2, g3, b2, p2}.
+//
+// Cathy acts first so a fixture can arm the capture and then have her action
+// fire it, without threading a whole clue + reaction through the harness -- the
+// arming is exercised end-to-end by the reactive suites.
+SetupOptions elim_opts() {
   SetupOptions opts;
-  opts.variant_name = "Orange (3 Suits)";
-  opts.starting = TestPlayer::ALICE;
-  opts.play_stacks = {0, 0, 0};
+  opts.variant_name = "No Variant";
+  opts.starting = TestPlayer::CATHY;
+  opts.play_stacks = {1, 0, 1, 0, 0};
+  opts.clue_tokens = 5;  // a discard is illegal at 8
   opts.hands = {
-      // Alice (us). Face-down: the harness hands out ground truth otherwise,
-      // and the whole point of the receiver-side tests is that we CANNOT see
-      // our own card, so `deck[].id()` must come back nullopt.
-      {"xx", "xx", "xx", "xx", "xx"},
-      {"r1", "b1", "r2", "b2", "o5"},  // Bob   (reacter) -- slots 1/2 playable
-      {"r3", "b3", "o1", "r4", "b4"},  // Cathy (receiver) -- slot 3 is orange
+      {"xx", "xx", "xx", "xx", "xx"},  // Alice (us)
+      {"r4", "y4", "b4", "p4", "y3"},  // Bob
+      // Cathy: slot 3 is the reactive target. Slots 1-2 are the passed-over
+      // ones; slots 4-5 are outside the walk.
+      {"y5", "p5", "g2", "b5", "p3"},  // Cathy
   };
   use_reactor0(opts);
   return opts;
 }
 
-// Hand-build the capture `defer_receiver_chuck_elim` would have made.
-//
-// focus_slot 2 with a hand of 5 maps receiver slot 1 -> reacter slot 1
-// (`calc_slot(2,1,5) == 1`), which is a playable in every fixture here, so an
-// applied elim is observable on the receiver's slot 1. target_slot 3 makes the
-// receiver's slot 3 the called card.
-void arm_pending(Game& g, TestPlayer receiver, TestPlayer reacter) {
-  const int r = static_cast<int>(receiver);
-  Game::PendingDcElim p;
-  p.kind = Game::PendingDcElim::Kind::DcDc;
+// The capture `arm_reaction_elim` makes at reaction time, with the reacter's
+// advanced suit as the only knob.
+void arm(Game& g, int reacter_suit) {
+  Game::PendingReactionElim p;
   p.active = true;
-  p.hand_size = 5;
-  p.focus_slot = 2;
+  p.receiver = static_cast<int>(TestPlayer::CATHY);
   p.target_slot = 3;
-  p.receiver_hand = g.state.hands[r];
-  p.reacter_hand = g.state.hands[static_cast<int>(reacter)];
-  p.playable = g.state.playable_set;
-  p.trash = g.state.trash_set;
-  p.critical = g.state.critical_set;
-  for (int o : p.receiver_hand) {
-    p.receiver_was_clued.push_back(g.state.deck[o].clued ? 1 : 0);
-  }
+  p.receiver_hand = g.state.hands[static_cast<int>(TestPlayer::CATHY)];
   p.target_order = p.receiver_hand[2];
-  p.target_was_clued = g.state.deck[p.target_order].clued;
-  g.pending_dc_elim = std::move(p);
+  p.reacter_suit = reacter_suit;
+  p.playable = g.state.playable_set;
+  const int n = static_cast<int>(g.state.variant->suits.size()) * 5;
+  p.one_away = IdentitySet::create(
+      [&g](Identity i) { return g.state.playable_away(i) == 1; }, n);
+  g.pending_reaction_elim = std::move(p);
 }
 
-std::map<int, IdentitySet> hand_inferred(const Game& g, TestPlayer who) {
-  std::map<int, IdentitySet> out;
-  for (int o : g.state.hands[static_cast<int>(who)]) {
-    out[o] = g.common.thoughts[o].inferred;
-  }
-  return out;
+// Does this card still admit the identity? Keyed on ORDER, not slot: the
+// receiver's action shifts every slot number behind it, so a slot lookup after
+// the fact would read the freshly drawn card.
+bool admits(const Game& g, int order, Identity id) {
+  return g.common.thoughts[order].inferred.contains(id);
 }
 
-void pin_common(Game& g, int order, IdentitySet ids) {
-  g.with_thought(order, [ids](const Thought& t) {
-    Thought out = t;
-    out.inferred = ids;
-    return out;
-  });
+// Cathy's hand as orders, captured before she acts.
+std::vector<int> cathy_orders(const Game& g) {
+  return g.state.hands[static_cast<int>(TestPlayer::CATHY)];
 }
+
+const Identity kR2{0, 2};  // playable
+const Identity kB1{3, 1};  // playable
+const Identity kR3{0, 3};  // one away
+const Identity kB2{3, 2};  // one away
 
 }  // namespace
 
-// --- the deferral itself -------------------------------------------------
+// --- the hold -------------------------------------------------------------
 
-// The observer half of the rule, through the real reactive path.
-//
-// Our bot is Alice and the receiver is Cathy, so we can SEE her called card. It
-// is an r1 with red on 1 -- plain, and trash -- so the chuck really was a
-// discard, the question is settled the instant the reaction lands, and no
-// pending survives the turn. An observer therefore behaves exactly as it did
-// before the deferral existed, which is the point of ruling 2: everyone who can
-// see the card gets the right inference immediately, and only the receiver
-// waits.
-//
-// The receiver half is covered by the unit tests below and end-to-end by
-// `MiscReplay1966710`.
-TEST(Reactor0DeferredElim, ObserverSettlesTheNegativeAtReactionTime) {
-  SetupOptions opts;
-  opts.play_stacks = {1, 0, 0, 0, 0};
-  opts.hands = {
-      {"xx", "xx", "xx", "xx", "xx"},
-      {"y2", "y3", "b3", "g4", "y4"},
-      {"y4", "b4", "r1", "g4", "p4"},
-  };
-  use_reactor0(opts);
-  Game g = setup(std::move(opts));
+TEST(Reactor0ReactionElim, NothingIsAppliedUntilTheReceiverActs) {
+  Game g = setup(elim_opts());
+  const auto o = cathy_orders(g);
+  arm(g, /*reacter_suit=*/3);
 
-  g = take_turn(std::move(g), "Alice clues 4 to Cathy");
-  ASSERT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_DISCARD);
-  auto before = hand_inferred(g, TestPlayer::CATHY);
-  const int target = order_at(g, TestPlayer::CATHY, 3);
-
-  g = take_turn(std::move(g), "Bob discards y2 (slot 1)", "r3");
-
-  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_DISCARD)
-      << "the dc-target is still stamped -- only the ELIM is deferred";
-  ASSERT_EQ(g.state.deck[target].suit_index, 0) << "guard: the called card is r1";
-  EXPECT_FALSE(g.pending_dc_elim.active)
-      << "we can see the called card, so nothing is left hanging -- an "
-         "observer never holds a pending inference";
-  (void)before;
+  EXPECT_TRUE(admits(g, o[0], kR2))
+      << "the inference is captured, not applied -- what it says depends on "
+         "what the receiver does, which has not happened yet";
+  EXPECT_TRUE(g.pending_reaction_elim.active);
 }
 
-// --- the resolution rule, observer side ----------------------------------
-//
-// Every seat except the receiver can SEE the called card, so it resolves at
-// once. `state.deck[o].id()` is that knowledge and is already POV-aware.
+// --- the three readings ---------------------------------------------------
 
-TEST(Reactor0DeferredElim, VoidedWhenTheCalledCardIsAPlayableInverted) {
-  Game g = setup(inv_opts());
-  // Cathy's slot 3 is an Orange 1 with orange on 0 -- chucking it scores, so
-  // the reaction was a play and no negative is owed.
-  ASSERT_EQ(g.state.deck[order_at(g, TestPlayer::CATHY, 3)].suit_index, kOrange);
-  arm_pending(g, TestPlayer::CATHY, TestPlayer::BOB);
-  auto before = hand_inferred(g, TestPlayer::CATHY);
+// The receiver played a card on a stack the reacter did not touch: an ordinary
+// double play. Only the slots the walk passed over are spoken for.
+TEST(Reactor0ReactionElim, DifferentStackClearsThePassedOverSlotsOnly) {
+  Game g = setup(elim_opts());
+  const auto o = cathy_orders(g);
+  arm(g, /*reacter_suit=*/3);  // the reacter advanced BLUE
 
-  g.resolve_deferred_elims();
+  // Cathy plays the g2 on her slot 3 -- green, not blue.
+  g = take_turn(std::move(g), "Cathy plays g2 (slot 3)", "y1");
 
-  EXPECT_FALSE(g.pending_dc_elim.active) << "resolved, not left hanging";
-  for (const auto& entry : before) {
-    EXPECT_EQ(g.common.thoughts[entry.first].inferred, entry.second)
-        << "order " << entry.first
-        << ": a chuck that scores passed over nothing";
-  }
+  EXPECT_FALSE(admits(g, o[0], kR2)) << "slot 1 was passed over";
+  EXPECT_FALSE(admits(g, o[1], kR2)) << "slot 2 was passed over";
+  EXPECT_TRUE(admits(g, o[3], kR2))
+      << "slot 4 is to the RIGHT of the target -- the walk never reached it, "
+         "so this reading owes it nothing";
+  EXPECT_TRUE(admits(g, o[0], kR3))
+      << "and only DIRECT playables are cleared; one-away is the finesse's "
+         "extra negative, not this one";
 }
 
-TEST(Reactor0DeferredElim, AppliedWhenTheCalledCardIsPlain) {
-  SetupOptions opts = inv_opts();
-  // Slot 3 is now a plain b3, so the chuck really was a discard.
-  opts.hands[2] = {"r3", "b3", "b3", "r4", "b4"};
-  Game g = setup(std::move(opts));
-  arm_pending(g, TestPlayer::CATHY, TestPlayer::BOB);
-  const int slot1 = order_at(g, TestPlayer::CATHY, 1);
-  const IdentitySet before = g.common.thoughts[slot1].inferred;
-  ASSERT_TRUE(before.exists([&](Identity i) { return g.state.is_playable(i); }))
-      << "guard: slot 1 must still admit a playable, or there is nothing to see";
+// The receiver completed the very stack the reacter had just advanced: a
+// FINESSE. Their card was one away, not directly playable -- so nothing in the
+// hand was, and the passed-over slots were not one away either.
+TEST(Reactor0ReactionElim, SameStackIsAFinesseAndClearsTheWholeHand) {
+  Game g = setup(elim_opts());
+  const auto o = cathy_orders(g);
+  arm(g, /*reacter_suit=*/2);  // the reacter advanced GREEN, to 1
 
-  g.resolve_deferred_elims();
+  // Cathy's g2 completes that same green stack.
+  g = take_turn(std::move(g), "Cathy plays g2 (slot 3)", "y1");
 
-  EXPECT_FALSE(g.pending_dc_elim.active);
-  EXPECT_NE(g.common.thoughts[slot1].inferred, before)
-      << "the walk passed slot 1 over, so it is not playable";
-  EXPECT_FALSE(g.common.thoughts[slot1].inferred.exists(
-      [&](Identity i) { return g.state.is_playable(i); }));
+  EXPECT_FALSE(admits(g, o[0], kR2));
+  EXPECT_FALSE(admits(g, o[3], kR2))
+      << "a finesse speaks for the WHOLE hand, not just the passed-over slots";
+  EXPECT_FALSE(admits(g, o[0], kR3))
+      << "and the passed-over slots were not one away either, or one of them "
+         "would have been the target";
+  EXPECT_FALSE(admits(g, o[1], kB2));
+  EXPECT_TRUE(admits(g, o[3], kB2))
+      << "the one-away negative is scoped to the passed-over slots";
 }
 
-// --- the resolution rule, receiver side ----------------------------------
-//
-// The receiver cannot see their own card, so `deck[].id()` is nullopt and the
-// rule falls back to empathy. This is the branch that has to WAIT.
+// The receiver stacked nothing: they discarded. They would have been called to
+// play a playable, so they had none anywhere.
+TEST(Reactor0ReactionElim, NoStackMeansTheHandHeldNoPlayable) {
+  Game g = setup(elim_opts());
+  const auto o = cathy_orders(g);
+  arm(g, /*reacter_suit=*/3);
 
-TEST(Reactor0DeferredElim, HeldWhileTheReceiverCannotTellWhichItWas) {
-  Game g = setup(inv_opts());
-  arm_pending(g, TestPlayer::ALICE, TestPlayer::BOB);  // our own hand
-  const int target = order_at(g, TestPlayer::ALICE, 3);
-  ASSERT_FALSE(g.state.deck[target].id().has_value())
-      << "guard: we must not be able to see our own card";
-  // Two live readings: a playable orange, and a plain card. Undecided.
-  pin_common(g, target,
-             IdentitySet::single(Identity{kOrange, 1}).add(Identity{1, 3}));
-  auto before = hand_inferred(g, TestPlayer::ALICE);
+  g = take_turn(std::move(g), "Cathy discards g2 (slot 3)", "y1");
 
-  g.resolve_deferred_elims();
-
-  EXPECT_TRUE(g.pending_dc_elim.active)
-      << "neither answer is settled, so the inference keeps waiting";
-  for (const auto& entry : before) {
-    EXPECT_EQ(g.common.thoughts[entry.first].inferred, entry.second)
-        << "order " << entry.first
-        << " must not move while the question is open";
-  }
+  EXPECT_FALSE(admits(g, o[0], kR2));
+  EXPECT_FALSE(admits(g, o[3], kB1))
+      << "a discard speaks for the whole hand";
+  EXPECT_TRUE(admits(g, o[0], kR3))
+      << "but says nothing about one-away cards";
 }
 
-TEST(Reactor0DeferredElim, ReceiverResolvesOnKnowledgeWithoutChuckingTheCard) {
-  Game g = setup(inv_opts());
-  arm_pending(g, TestPlayer::ALICE, TestPlayer::BOB);
-  const int target = order_at(g, TestPlayer::ALICE, 3);
-  const int slot1 = order_at(g, TestPlayer::ALICE, 1);
-  const IdentitySet before = g.common.thoughts[slot1].inferred;
-  // We work out that our called card was a plain b3 -- so the chuck was a real
-  // discard. The card is still in our hand; we never had to throw it.
-  pin_common(g, target, IdentitySet::single(Identity{1, 3}));
+// --- scope ----------------------------------------------------------------
 
-  g.resolve_deferred_elims();
+// A card carrying its own call is spoken for by that call. The inference must
+// not touch it -- that is what let an earlier version strip a playable out of a
+// standing reactive-CTP (replay 1966710).
+TEST(Reactor0ReactionElim, ACardWithItsOwnCallIsLeftAlone) {
+  Game g = setup(elim_opts());
+  const auto o = cathy_orders(g);
+  g.with_meta(o[0], [](ConvData& m) { m.status = CardStatus::CALLED_TO_PLAY; });
+  arm(g, /*reacter_suit=*/3);
 
-  EXPECT_FALSE(g.pending_dc_elim.active);
-  EXPECT_NE(g.common.thoughts[slot1].inferred, before)
-      << "knowing is enough -- the card need not be chucked for the negative "
-         "to become owed";
+  g = take_turn(std::move(g), "Cathy discards g2 (slot 3)", "y1");
+
+  EXPECT_TRUE(admits(g, o[0], kR2))
+      << "slot 1 carries a play call; this inference is not evidence about it";
 }
 
-// The mirror: learning it WAS the playable orange voids the inference, again
-// with the card still in hand.
-TEST(Reactor0DeferredElim, ReceiverLearningItWasTheOrangeVoidsTheInference) {
-  Game g = setup(inv_opts());
-  arm_pending(g, TestPlayer::ALICE, TestPlayer::BOB);
-  const int target = order_at(g, TestPlayer::ALICE, 3);
-  pin_common(g, target, IdentitySet::single(Identity{kOrange, 1}));
-  // Snapshot AFTER the pin, so the only thing this can catch is the resolver.
-  auto before = hand_inferred(g, TestPlayer::ALICE);
+// Only the receiver's action on the TARGET fires it.
+TEST(Reactor0ReactionElim, AnotherCardDoesNotFireIt) {
+  Game g = setup(elim_opts());
+  const auto o = cathy_orders(g);
+  arm(g, /*reacter_suit=*/3);
 
-  g.resolve_deferred_elims();
+  g = take_turn(std::move(g), "Cathy discards p3 (slot 5)", "y1");
 
-  EXPECT_FALSE(g.pending_dc_elim.active);
-  for (const auto& entry : before) {
-    EXPECT_EQ(g.common.thoughts[entry.first].inferred, entry.second)
-        << "order " << entry.first
-        << ": the chuck was a play, so nothing is owed";
-  }
+  EXPECT_TRUE(admits(g, o[0], kR2))
+      << "the hold is waiting on the reactive target, not on any discard";
+  EXPECT_TRUE(g.pending_reaction_elim.active) << "and it is still waiting";
 }

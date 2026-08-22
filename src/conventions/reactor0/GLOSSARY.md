@@ -308,3 +308,29 @@ never be answered yes by a trash identity, which is how a free pitch came to be
 skipped — bug_report_4_1_0.txt 4.1.0b. The scope is *trash*, not *orange*:
 pitching a useful orange still loses a copy and is still rejected.
 `src/conventions/reactor0/interpret_reactive.cpp:187-262`.
+
+### bluff
+A reaction in which the reacter plays a card the pairing did not predict, so the
+receiver's call set comes out empty and the reaction advanced a **non-inverted**
+stack. Read by unwinding to the stacks as they were before the reaction and
+taking the identities exactly one away from playable on a non-inverted suit.
+The card is not playable yet, so the CALL IS DROPPED and only the inference is
+kept. `CONVENTION.md` §1d.1.
+
+### dupe bluff
+The rarer half of the same branch: not even a one-away reading survives, so the
+receiver must be holding the other copy of the card the reacter just played. It
+is trash now, and the chuck list collects it by the ordinary rules.
+`CONVENTION.md` §1d.1.
+
+### static inferred set
+The rule that a card's `inferred` may only ever be narrowed, never reset or
+widened — not by a strike, not by a re-derivation, and not by withdrawing the
+call that installed it. A stamp is a signal, an inference is permanent.
+The one exception is a genuine contradiction, which escalates through
+`CONVENTION.md` §1i's ladder.
+
+### `[?]`
+The note segment for ladder step (b): a narrowing emptied the set, resetting to
+global empathy and re-deriving emptied it again, so no reading explains the
+card. Left for diagnosis. `ConvData::note_mark`, `src/net/notes.cpp`.

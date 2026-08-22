@@ -18,6 +18,8 @@ namespace hanabi::net {
 std::string format_play_segment(int turn, IdentitySet ids, const State& state);
 std::string format_discard_segment(int turn, IdentitySet ids, const State& state);
 std::string format_reset_segment(int turn);
+// Ladder step (b): no reading explains this card. See ConvData::NoteMark.
+std::string format_unknown_segment(int turn);
 
 // (card_order, segment) per change between prev and new.
 std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,

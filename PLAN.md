@@ -192,9 +192,9 @@ site. They did not. They are **derived** instead
 (`reactor0/calls.{h,cpp}`, `calls_of`), because three properties already hold:
 
 - `ConvData::urgent` is set only on the **reacter's** call
-  (`reactor0/interpret_clue.cpp` takes it as a parameter; `stamp_receiver_play`
-  never sets it), which is exactly the reacter/receiver split the third bullet
-  below says is missing;
+  (`reactor0/interpret_clue.cpp` takes it as a parameter; the receiver's stamp,
+  made at reaction time since v8.0.0, never sets it), which is exactly the
+  reacter/receiver split the third bullet below says is missing;
 - `enforce_call_invariants` rule 1 keeps a hand's CTP calls running newest slot
   to oldest in play order, which **is** the deque, and is the spec's
   "pop from the front until the front is strictly older" rule already applied at

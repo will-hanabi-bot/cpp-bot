@@ -68,6 +68,9 @@ TEST(Reactor0ReactiveInvertedVet, RankPhaseAVetsTheSwappedDiscardNotAPlay) {
       << "the swap calls the reacter to discard, so the vet must be the "
          "discard vet (bug_report_4.txt 4.1)";
   EXPECT_TRUE(urgent_at(g, TestPlayer::BOB, 4));
+  // Since v8.0.0 the receiver's call is made when the reacter acts, not at
+  // clue time (CONVENTION.md 1d), so the reaction has to happen first.
+  g = take_turn(std::move(g), "Bob discards g4 (slot 4)", "b5");
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_DISCARD)
       << "an orange play target is stamped CTD — Discard is the button that "
          "advances its stack";
@@ -144,9 +147,12 @@ TEST(Reactor0ReactiveInvertedVet, ColourModeOneVetsTheSwappedPlayNotADiscard) {
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 2), CardStatus::NONE)
       << "the react slot for the orange target cannot be blind-played";
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_DISCARD);
-  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_PLAY);
   EXPECT_NE(status_at(g, TestPlayer::CATHY, 1), CardStatus::CALLED_TO_DISCARD)
       << "the orange target was abandoned, so it must carry no chuck call";
+  // Since v8.0.0 the receiver's call is made when the reacter acts, not at
+  // clue time (CONVENTION.md 1d), so the reaction has to happen first.
+  g = take_turn(std::move(g), "Bob discards g2 (slot 5)", "b5");
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_PLAY);
 }
 
 // Control: with a NON-inverted target mode 1 still makes the reacter discard,
@@ -169,6 +175,9 @@ TEST(Reactor0ReactiveInvertedVet, ColourModeOneKeepsTheDiscardVetWhenNotSwapped)
   EXPECT_EQ(last_clue_interp(g), ClueInterp::REACTIVE);
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_DISCARD)
       << "a discard call does not require the react slot to be playable";
+  // Since v8.0.0 the receiver's call is made when the reacter acts, not at
+  // clue time (CONVENTION.md 1d), so the reaction has to happen first.
+  g = take_turn(std::move(g), "Bob discards g4 (slot 5)", "b5");
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_PLAY);
 }
 
@@ -206,6 +215,10 @@ TEST(Reactor0ReactiveInvertedVet, RankPhaseAPitchesAnExpendableOrangeReactSlot) 
       << "CTP is the Play button, which on an orange card is the pitch";
   EXPECT_TRUE(urgent_at(g, TestPlayer::BOB, 3))
       << "a reaction must be actioned on the reacter's very next turn";
+  // Since v8.0.0 the receiver's call is made when the reacter acts, not at
+  // clue time (CONVENTION.md 1d). The reacter PITCHES -- presses Play -- and
+  // the engine sends the orange to the discard pile for them.
+  g = take_turn(std::move(g), "Bob plays o1 (slot 3)", "b5");
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 4), CardStatus::CALLED_TO_PLAY)
       << "and the receiver's r1 is the double play the pitch pays for";
 }

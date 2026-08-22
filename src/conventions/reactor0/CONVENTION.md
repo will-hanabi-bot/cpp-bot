@@ -46,30 +46,21 @@ giver, Bob the next player, Cathy the one after.
   a real DISCARD — on an inverted suit a chuck puts the card on its stack, so it
   is a PLAY, the walk passed over nothing, and the inference is unfounded.
 
-  Reactor applies all four elims at reaction time. Reactor0 **defers both
-  receiver-chuck branches** — colour + reacter played (`elim_play_dc`) and rank +
-  reacter discarded (`elim_dc_dc`) — capturing them in `Game::pending_dc_elim`
-  (`reactor0/interpret_reaction.cpp`, `defer_receiver_chuck_elim`).
+  Reactor applies all four elims at reaction time. **Reactor0 no longer has
+  them.** Since v8.0.0 a reaction's whole negative inference is captured at
+  reaction time (`Game::PendingReactionElim`) and fired when the RECEIVER
+  actions their target (`Game::fire_reaction_elim`), because what the negatives
+  say depends on what the receiver does — see §1d.2 for the three readings.
 
-  `resolve_pending_dc_elim` (`reactor/interpret_reaction.cpp`) then decides,
-  against the **clue-time** playable set rather than the current stacks:
+  This subsumes the old deferral, which released on the receiver's card
+  IDENTITY: it answered only "was the chuck a play?", and could not tell a
+  finesse from an ordinary double play at all.
 
-  | live readings of the called card | meaning | outcome |
-  |---|---|---|
-  | all are inverted **and** were playable | the chuck was a play | **void** it |
-  | none are | the chuck was a discard | **apply** it |
-  | mixed | not yet known | keep holding |
-
-  **The receiver need not chuck the card — knowing is enough.** And the question
-  is asked from each seat's OWN knowledge (`state.deck[o].id()`, `nullopt` only
-  for one's own cards), so every player except the receiver can see the card and
-  settles at reaction time; only the receiver waits. That is deliberate: the
-  others genuinely know the answer, so they should hold the right inference.
-
-  Replay 1966710 is the case. A rank double discard applied `elim_dc_dc` at once
-  and stripped a playable b2 from the receiver's slot 3, but the receiver's
-  called card was an Orange 1 with the orange stack on 0 — chucking it scored, so
-  the reaction was never a double discard and no negative was ever owed.
+  Replay 1966710 is the case the old deferral was built for. A rank double
+  discard applied `elim_dc_dc` at once and stripped a playable b2 from the
+  receiver's slot 3, but the receiver's called card was an Orange 1 with the
+  orange stack on 0 — chucking it scored, so the reaction was never a double
+  discard and no negative was ever owed.
 
 - **Not shared**: how a card's **inferred** set may shrink. Once an
   interpretation has built it, reactor0 narrows it only through `card_elim` --
@@ -439,12 +430,12 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
   (`play_pool`, `:83-92`; the include-CTP'd rule is a deliberate reactor
   divergence). For each target leftmost-first: compute the react slot, vet it
   (`vet_react_slot`, below), then stamp — the reacter urgent CTP (blind play)
-  and the receiver target CTP (`stamp_receiver_play`, `:245-280`).
+  and the receiver target is left for reaction time (§1d).
   **Inverted-suit swap:** when the receiver's target is on an inverted suit the
   reacter is stamped **CTD** instead (`:338-341`), so that the receiver's
   standard even-parity reading ("the reacter discarded → I discard my target")
-  lands on the chuck that advances the orange stack; `stamp_receiver_play`
-  stamps the target CTD to match.
+  lands on the chuck that advances the orange stack. The receiver's own stamp
+  is made at reaction time (§1d), so the swap only decides selection here.
 - **Phase B — finesse** (`:357-420`). Walked by **target**, leftmost one-away
   first (reactor walks react slots in a fixed order instead). The reacter
   must hold the connector — direction-aware, so `next()` on a reversed suit
@@ -666,6 +657,116 @@ all* when no non-critical id survives — which in Dark Orange is always — and
 the whole clue then reads as a `MISTAKE`. This is the same rule as the vet
 above, one layer down, and the same stamp the stable orange ladder uses
 (`interpret_clue.cpp:266`).
+
+
+**The receiver is stamped only AFTER the reacter acts.** Until v8.0.0 two of
+the five reactive paths — rank Phase A and colour mode 1 — stamped the
+receiver's target at CLUE time, via `stamp_receiver_play`. The other three
+(Phase B, Phase C, colour mode 2) already waited. All five now wait, and the
+clue-time function that remains, `receiver_call_is_viable`
+(`interpret_reactive.cpp`), is a **target-selection veto only**: it says whether
+a pairing is worth choosing and writes nothing.
+
+The reason is that the early stamp had to be rebuilt later anyway, and the
+rebuild was not a narrowing. Replay 1967558: will-bot67's slot 1 was stamped at
+clue time and narrowed to `{r1,y1,b1,p1,w1}`; the reacter then played a `p1`, and
+`target_i_play` re-derived from the live `playable_set` to give
+`{r1,y1,b1,p2,w1}` — `p1` correctly left, but **`p2` was added**. Building the
+set once, when the reaction has actually happened, removes the whole class.
+
+**The receiver's set is read against TWO states.** A play has to land on the
+stacks the reacter LEAVES BEHIND; what the receiver can afford to throw away was
+settled when the clue was given. So, with OLD as of the clue and NEW as of after
+the reaction (`receiver_ctp_set` / `receiver_ctd_set`, `interpret_clue.cpp`):
+
+```
+receiver-CTP = {plain ∧ playable(NEW)} ∪ {inverted ∧ ¬playable(OLD) ∧ ¬critical(OLD)}
+receiver-CTD = {plain ∧ ¬playable(OLD) ∧ ¬critical(OLD)} ∪ {inverted ∧ playable(NEW)}
+```
+
+intersected with the card's own empathy. Passing the same state twice recovers
+`pitch_candidates` / `chuck_candidates`, so the stable side and call-invariant
+rules 3-4 are literally the same function. Clue-time selection evaluates the
+identical reading via `state_after_reacter` (`decision.cpp`), which `read_clue`
+also uses — so prediction and resolution cannot disagree about what "after the
+reaction" means.
+
+reactor0 owns this stamp rather than wrapping reactor's `target_i_play` /
+`target_i_discard`. Wrapping would itself be an illegal widen: `target_i_discard`
+narrows to the NON-critical ids and the inverted arm of a CTD is frequently
+critical, and `target_i_play` pins `info_lock` to a set built the wrong way — an
+`info_lock` survives every reset, so a wrapper could not undo it.
+
+**The parity row is the BUTTON, never the outcome.** What matters is whether the
+reacter pitched or chucked, independently of whether an inverted card happened to
+reach its stack: a chuck that strikes was still a chuck. The engine already
+applies the inversion (`Game::on_discard` advances the stack for a physical
+discard of an inverted card), so **the hook IS the button** and no suit test is
+needed — `react_play` means Play was pressed, `react_discard` means Discard was.
+The one ambiguity is a misplay, which arrives as a failed discard whichever
+button produced it; there the suit decides, since a plain card can only strike
+via Play and an inverted one only via Discard
+(`reacter_button_pressed`, `interpret_reaction.cpp`).
+
+This closes TODO 24. It could not be read off the stamp: from the RECEIVER's own
+seat `interpret_reactive` returns before any phase runs, so the reacter carries
+no status and `wc.react_order` is `-1`. For the same reason the dupe-bluff below
+reads the order the engine hook was given, not `wc.react_order`.
+
+### §1d.1 Bluff and dupe bluff
+
+If the receiver-CTP set comes out **empty** and the reaction advanced a
+**non-inverted** stack, the reacter did not play what the pairing predicted.
+Two accounts remain, in order:
+
+- **Bluff.** Unwind to the OLD stacks and take every identity exactly one away
+  from playable on a non-inverted suit, intersected with the card's empathy.
+  Example (`r1` on the stacks, No Variant): Alice clues 3 to Cathy touching all
+  five, Bob plays a `b1` from slot 1, and `calc_slot(3,1,5) = 2` names her slot
+  2. No 3 is playable after the `b1`, so unwinding gives one-aways
+  `{r3,y2,g2,b2,p2}`, and only the `r3` is a 3.
+- **Dupe bluff.** If not even that survives, the receiver holds the other copy
+  of the card the reacter just played. Example (stacks `1 1 1 3 1`): Alice clues
+  4 to Cathy naming a lone 4 on slot 3 and Bob blind-plays `b4`. No 4 is
+  playable, and the old one-aways `{r3,y3,g3,b5,p3}` contain no 4 — so the card
+  is the other `b4`.
+
+In **both** the CALL IS DROPPED and only the inference is kept: neither card is
+playable now, so pressing the button would strike or throw a card away. The
+ordinary machinery collects each later — the bluff target when its connector
+lands, the dupe via the chuck list. The withdrawal is noted with
+`NoteMark::RESET`, because the receiver was never stamped and so there is no
+CTP → NONE transition for `notes.cpp` to catch on its own.
+
+Plays only. An empty receiver-CTD set has no such account and goes straight to
+§1i's ladder.
+
+### §1d.2 The negative inference waits for the receiver
+
+A reaction's negatives say "the slots the walk passed over were not playable".
+Which slots, and which set, depend on what the receiver does with their target,
+so the whole inference is captured at reaction time
+(`Game::PendingReactionElim`) and fired when the receiver actions that card
+(`Game::fire_reaction_elim`). What they put on the table decides between three
+readings:
+
+| the receiver | reading | eliminates |
+|---|---|---|
+| advanced a stack, NOT the reacter's | ordinary double play | direct playables, on the passed-over slots only |
+| advanced the SAME stack the reacter did | **finesse** | direct playables across the whole hand, **and** one-away identities on the passed-over slots |
+| advanced no stack | they discarded | direct playables across the whole hand |
+
+An inverted CHUCK advances a stack exactly as a plain play does and a PITCH
+stacks nothing exactly as a plain discard does, so the stacks answer this
+without any button or suit test. Everything is read as of the REACTION —
+"playable" and "one away" describe the position the clue was given into, not
+whatever the stacks look like when the receiver gets round to acting. A card
+carrying its own call is left alone; that call speaks for it.
+
+This replaces the four `elim_*` matrices and the knowledge-triggered
+`PendingDcElim` hold, which released as soon as anyone could prove the called
+card was or was not a playable inverted. That answered a narrower question and
+could not tell a finesse from an ordinary double play at all.
 
 ## §1e The reactive lock and `allow_reactive_locks`
 
@@ -892,21 +993,56 @@ interpretation at the engine seam (`src/basics/decide.cpp:63`, `:285`,
    be basic trash (`meta.trash`) are not calls and are untouched — they
    outrank the chop for discard purposes without occupying the CTD slot.
 
-## §1i Contradicted inferences reset immediately (engine-wide)
+## §1i The static inferred set, and the escalation ladder
 
-When a card's `inferred` empties, its inference chain has been contradicted.
-The engine resets that card to its **global empathy** at the moment it
-happens, in `Game::on_clue` (`src/basics/game.cpp:196-215` touched,
-`:236-244` untouched) — **before any convention interprets the clue**, and
-for both touched and untouched cards. Because `possible` is already
-clue-narrowed at that point, this is exactly "reset to global empathy, then
-apply this clue's empathy". The call resting on the contradicted chain is
-voided with it (`clear_contradicted_call`, `:163-168`), matching the meta half
-of `elim`'s long-standing step-1 reset.
+**Once a card's inferred set has been created it may only ever be NARROWED.**
+It is never reset by a re-derivation, by a dropped call, or by a strike. This is
+what makes the inferred set — rather than the CTP/CTD stamp — the thing reactor0
+reasons with: a stamp is a *signal*, which can come and go, while an inference is
+*permanent*.
 
-This is **convention-agnostic** and applies to reactor too. Its consequence
-here: no interpretation layer is ever handed a card with an empty `inferred`,
-so target selection and target narrowing cannot disagree about their baseline.
+The one exception is a **genuine contradiction** — a narrowing that would leave
+nothing — and it escalates (`Game::narrow_thought`, `src/basics/game.cpp`):
+
+1. Narrow. If something survives, done.
+2. If not, reset that card to its **global empathy** and re-derive. Because
+   `possible` is already clue-narrowed, this is exactly "reset to global
+   empathy, then apply what we know".
+3. If *that* is still empty, hard-reset, drop the call, and mark **`[?]`** in
+   the notes. Nothing explains the card; the caller refuses to interpret rather
+   than invent a reading.
+
+Step 2 is the long-standing engine behaviour, in `Game::on_clue`
+(`src/basics/game.cpp` touched and untouched branches, before any convention
+interprets the clue) and in `elim`'s step-1 sweep. Those remain
+convention-agnostic and apply to reactor too. What v8.0.0 adds is the rule that
+nothing *else* may widen, and step 3.
+
+**What this forbids, concretely.** `erase_call`
+(`reactor0/call_invariants.cpp`) used to revert `inferred` to `old_inferred`,
+and `check_missed` (`src/basics/game.cpp`) still does under reactor.
+`narrow_to_stamped_button` rebuilt from `possible`, which despite its name could
+push a card back UP to `possible ∩ allowed`. All three are now narrowing-only
+under reactor0. The strike exemption (`src/basics/decide.cpp`) is one case of
+the same rule, not a special case.
+
+Replay 1967558 is what it costs to get this wrong. yagami_black's slot 4 was
+stamped `CALLED_TO_PLAY` and narrowed to `{p1}`; will-bot69 then played the
+other `p1`, so rule 3 erased the dead call — and took `{p1}` with it, restoring
+all five purples. yagami_black no longer knew the card was trash, so
+`has_no_safe_action` was true, §3 fired, and will-bot67 spent a clue on Bob's
+chop instead of playing its own reactive-CTP.
+
+**One intermediate write is exempt, deliberately.** Rule 1 constrains the NET
+effect of an interpretation, not every write inside it. reactor's shared
+`target_play` / `target_discard` narrow to the PLAIN-suit reading of their
+button, which `narrow_to_stamped_button` exists to correct — so it re-baselines
+on the inference as it stood *before* the stamp (`reset_thought_to`) and then
+narrows from there.
+
+Its consequence is unchanged, and stronger: no interpretation layer is ever
+handed a card with an empty `inferred`, so target selection and target narrowing
+cannot disagree about their baseline.
 
 ## §2 Decision making — moved
 

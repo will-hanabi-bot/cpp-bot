@@ -64,6 +64,79 @@ void Game::with_thought(int order,
   common = common.with_thought(order, f);
 }
 
+void Game::reset_thought_to_empathy(int order) {
+  // Deliberately writes through `common` rather than `Game::with_thought`. The
+  // reactor0 clamp lives in the latter, and this is the one operation that must
+  // be able to widen -- saying so here is the point.
+  common = common.with_thought(order, [](const Thought& t) {
+    Thought out = t;
+    IdentitySet base =
+        t.info_lock ? t.possible.intersect(*t.info_lock) : t.possible;
+    out.inferred = base.non_empty() ? base : t.possible;
+    out.old_inferred = std::nullopt;
+    out.info_lock = std::nullopt;
+    return out;
+  });
+}
+
+void Game::reset_thought_to(int order, IdentitySet set) {
+  // Deliberately writes through `common` rather than `Game::with_thought`: this
+  // is allowed to widen, and saying so explicitly is the point.
+  common = common.with_thought(order, [set](const Thought& t) {
+    Thought out = t;
+    out.inferred = set;
+    return out;
+  });
+}
+
+bool Game::narrow_thought(int order, IdentitySet keep) {
+  auto assign = [this, order](IdentitySet next) {
+    with_thought(order, [next](const Thought& t) {
+      Thought out = t;
+      out.inferred = next;
+      return out;
+    });
+  };
+
+  if (convention != Convention::REACTOR0) {
+    // Shared callers keep their existing semantics exactly.
+    assign(keep);
+    return true;
+  }
+
+  // (1) The ordinary case: narrow what is already there. `possible` is the
+  // baseline only when no inference exists yet, which is what "once the set has
+  // been CREATED" means -- before that there is nothing to preserve.
+  const Thought& t = common.thoughts[order];
+  IdentitySet base = t.inferred.non_empty() ? t.inferred : t.possible;
+  IdentitySet next = base.intersect(keep);
+  if (next.non_empty()) {
+    assign(next);
+    return true;
+  }
+
+  // (2) The inference and the new evidence cannot both be true. Re-baseline to
+  // global empathy and try again. `possible` is already clue-narrowed, so this
+  // is "reset to global empathy, then apply what we know" -- §1i's wording.
+  reset_thought_to_empathy(order);
+  next = common.thoughts[order].possible.intersect(keep);
+  if (next.non_empty()) {
+    assign(next);
+    return true;
+  }
+
+  // (3) Not even raw empathy admits it. The card is left at global empathy --
+  // never empty, because `possibilities()` reads an empty `inferred` as "no
+  // information" and would hide the problem -- and marked for diagnosis.
+  int turn = state.turn_count;
+  with_meta(order, [turn](ConvData& m) {
+    m = m.cleared();
+    m.note_mark = NoteMark::UNEXPLAINED;
+    m.note_mark_turn = turn;
+  });
+  return false;
+}
+
 void Game::with_id(int order, Identity id) {
   state.deck[order].suit_index = id.suit_index;
   state.deck[order].rank = id.rank;
@@ -102,18 +175,33 @@ void Game::check_missed(int player_index, int action_order) {
   }
   if (!urgent_order) return;
   int uo = *urgent_order;
-  with_thought(uo, [](const Thought& t) {
-    if (!t.old_inferred) {
-      throw std::runtime_error("check_missed: no old_inferred on urgent card");
-    }
-    Thought out = t;
-    out.inferred = *t.old_inferred;
-    out.old_inferred = std::nullopt;
-    out.info_lock = std::nullopt;
-    return out;
-  });
+  // reactor0 withdraws the SIGNAL and keeps the INFERENCE. An urgent call that
+  // went unactioned is a call that is no longer standing; it is not evidence
+  // that what the team inferred was wrong. Reverting `inferred` here would undo
+  // a promise nothing contradicted -- the static-inferred rule (CONVENTION.md
+  // §1i). reactor keeps the revert: there a missed call means the chain that
+  // produced it was misread.
+  if (convention != Convention::REACTOR0) {
+    with_thought(uo, [](const Thought& t) {
+      if (!t.old_inferred) {
+        throw std::runtime_error("check_missed: no old_inferred on urgent card");
+      }
+      Thought out = t;
+      out.inferred = *t.old_inferred;
+      out.old_inferred = std::nullopt;
+      out.info_lock = std::nullopt;
+      return out;
+    });
+  }
   int turn = state.turn_count;
-  with_meta(uo, [turn](ConvData& m) { m = m.cleared().reason(turn); });
+  const bool r0 = convention == Convention::REACTOR0;
+  with_meta(uo, [turn, r0](ConvData& m) {
+    m = m.cleared().reason(turn);
+    if (r0) {
+      m.note_mark = NoteMark::RESET;
+      m.note_mark_turn = turn;
+    }
+  });
 }
 
 // --- Status predicates -----------------------------------------------------

@@ -48,6 +48,16 @@ std::optional<int> leftmost_could_be_playable(
 //   * a plain-suit card that is currently PLAYABLE, or
 //   * an inverted card that is NOT playable and is not critical -- i.e. one the
 //     team can afford to lose.
+// The receiver's call sets, read against TWO states: the plain-suit arm asks
+// what a play would land on, so it uses the stacks the reacter LEAVES BEHIND
+// (`new_s`); the inverted arm asks what we can afford to throw away, which is
+// settled when the clue is given (`old_s`). The CTD pair is the mirror.
+//
+// Passing the same state twice recovers the stable-side readings below, so
+// `pitch_candidates` / `chuck_candidates` are these with `old_s == new_s`.
+IdentitySet receiver_ctp_set(const State& old_s, const State& new_s);
+IdentitySet receiver_ctd_set(const State& old_s, const State& new_s);
+
 IdentitySet pitch_candidates(const State& state);
 
 // CHUCK (press Discard). On a plain suit Discard discards; on an inverted suit

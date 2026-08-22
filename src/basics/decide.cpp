@@ -42,9 +42,84 @@ namespace hanabi {
 // orange") can arrive from any of them, and the receiver is under no obligation
 // to chuck the card for it to become known.
 void Game::resolve_deferred_elims() {
-  if (convention != Convention::REACTOR0) return;
-  hanabi::reactor::resolve_pending_dc_elim(*this);
+  // The knowledge-triggered hold this used to run is gone: since v8.0.0 the
+  // reactive negative inference waits for the RECEIVER to act, not for their
+  // card's identity to settle. See `Game::fire_reaction_elim`.
 }
+
+void Game::fire_reaction_elim(const Game& prev, int player_index, int order) {
+  if (convention != Convention::REACTOR0) return;
+  PendingReactionElim& p = pending_reaction_elim;
+  if (!p.active) return;
+  if (player_index != p.receiver || order != p.target_order) return;
+
+  // What the receiver's own action put on the table decides which reading of
+  // the reaction was true. An inverted CHUCK advances a stack just as a plain
+  // play does, and a PITCH stacks nothing just as a plain discard does, so the
+  // stacks answer this without any button or suit test.
+  const int recv_suit = [&]() {
+    const int n = static_cast<int>(state.play_stacks.size());
+    for (int si = 0; si < n; ++si) {
+      if (si >= static_cast<int>(prev.state.play_stacks.size())) continue;
+      if (state.play_stacks[si] > prev.state.play_stacks[si]) return si;
+    }
+    return -1;
+  }();
+
+  bool whole_hand;      // else: only the slots the walk passed over
+  bool one_away_left;   // the finesse's extra negative on those slots
+  if (recv_suit < 0) {
+    // The receiver discarded. They would have been called to play a playable,
+    // so they had none at all.
+    whole_hand = true;
+    one_away_left = false;
+  } else if (recv_suit == p.reacter_suit) {
+    // A FINESSE: the receiver's card completed the very stack the reacter had
+    // just advanced, so it was one away, not directly playable. Nothing in the
+    // hand was directly playable, and the passed-over slots were not one away
+    // either -- or one of them would have been the target instead.
+    whole_hand = true;
+    one_away_left = true;
+  } else {
+    // An ordinary double play. Only the passed-over slots are spoken for.
+    whole_hand = false;
+    one_away_left = false;
+  }
+
+  const auto& hand = state.hands[p.receiver];
+  auto still_held = [&](int o) {
+    return std::find(hand.begin(), hand.end(), o) != hand.end();
+  };
+  const int passed_over = p.target_slot - 1;
+  const int limit =
+      whole_hand ? static_cast<int>(p.receiver_hand.size()) : passed_over;
+
+  for (int i = 0; i < limit && i < static_cast<int>(p.receiver_hand.size()); ++i) {
+    const int o = p.receiver_hand[i];
+    if (!still_held(o)) continue;
+    // A card carrying its own call is spoken for by that call, not by this
+    // inference.
+    const CardStatus st = meta[o].status;
+    if (st == CardStatus::CALLED_TO_PLAY || st == CardStatus::CALLED_TO_DISCARD) {
+      continue;
+    }
+    narrow_thought(o, common.thoughts[o].possible.difference(p.playable));
+  }
+  if (one_away_left) {
+    for (int i = 0; i < passed_over && i < static_cast<int>(p.receiver_hand.size());
+         ++i) {
+      const int o = p.receiver_hand[i];
+      if (!still_held(o)) continue;
+      const CardStatus st = meta[o].status;
+      if (st == CardStatus::CALLED_TO_PLAY || st == CardStatus::CALLED_TO_DISCARD) {
+        continue;
+      }
+      narrow_thought(o, common.thoughts[o].possible.difference(p.one_away));
+    }
+  }
+  p = PendingReactionElim{};
+}
+
 
 void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   using namespace hanabi::reactor;
@@ -370,6 +445,9 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
     with_move(DiscardInterp::NONE);
   }
 
+  // The receiver may just have actioned a reactive target; that is what the
+  // held negative inference has been waiting for.
+  fire_reaction_elim(prev, action.player_index_v, action.order);
   elim();
   resolve_deferred_elims();
   if (prev.state.can_clue()) reset_zcs();
@@ -396,6 +474,9 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
     }
   }
   with_move(PlayInterp::NONE, /*overwrite=*/true);
+  // The receiver may just have actioned a reactive target; that is what the
+  // held negative inference has been waiting for.
+  fire_reaction_elim(prev, action.player_index_v, action.order);
   elim();
   resolve_deferred_elims();
   if (prev.state.can_clue()) reset_zcs();

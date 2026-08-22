@@ -16,6 +16,7 @@
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "hanabi/conventions/reactor0/reactive_assignment.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/predicates.h"
@@ -272,43 +273,46 @@ ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
   return ReactVet::OK;
 }
 
-bool stamp_receiver_play(const Game& prev, Game& game, const ClueAction& action,
-                         int target) {
+// Is `target` a viable receiver call? A VETO ONLY -- nothing is stamped and
+// nothing is written to `inferred`.
+//
+// Until v8.0.0 this function also did the stamping, which is why the receiver
+// carried a call and a narrowed set from the moment the clue landed, a turn
+// before the reacter had moved. The set it built was then thrown away and
+// rebuilt at resolution against the live stacks, which is how an inference
+// gained members it never had (replay 1967558: `{r1,y1,b1,p1,w1}` became
+// `{r1,y1,b1,p2,w1}`). The call is made when the reacter acts (§1d); all this
+// does now is tell target selection whether the pairing is worth choosing.
+//
+// The two-stack reading is used here as well as at resolution, and from the
+// same helper, so clue-time selection and reaction-time stamping cannot
+// disagree about what "after the reaction" means.
+bool receiver_call_is_viable(const Game& prev, const Game& game,
+                             const ClueAction& action, int target,
+                             int react_order, CardStatus reacter_button) {
   const State& state = game.state;
   int holder = state.holder_of(target);
   auto receiver_conns = delayed_plays(game, action.giver, holder, /*stable=*/false);
-  IdentitySet ps = prev.state.playable_set;
+  const State after = state_after_reacter(prev.state, react_order, reacter_button);
+  const CardStatus button = variants::target_is_inverted(state, target)
+                                ? CardStatus::CALLED_TO_DISCARD
+                                : CardStatus::CALLED_TO_PLAY;
+  IdentitySet allowed = button == CardStatus::CALLED_TO_DISCARD
+                            ? receiver_ctd_set(prev.state, after)
+                            : receiver_ctp_set(prev.state, after);
   const Thought& target_thought = game.common.thoughts[target];
   IdentitySet base = target_thought.inferred.non_empty()
                          ? target_thought.inferred
                          : target_thought.possible;
-  IdentitySet narrowed = base.filter([&](Identity i) {
-    if (ps.contains(i)) return true;
+  return base.exists([&](Identity i) {
+    if (allowed.contains(i)) return true;
+    // A delayed play is still a play: it lands once the connector ahead of it
+    // does, which is exactly what a finesse promises.
     for (const auto& [_, c] : receiver_conns) {
       if (c == i) return true;
     }
     return false;
   });
-  if (narrowed.is_empty()) return false;
-  game.with_thought(target, [&narrowed](const Thought& t) {
-    Thought out = t;
-    out.old_inferred = t.inferred;
-    out.inferred = narrowed;
-    return out;
-  });
-  int turn = state.turn_count;
-  int giver = action.giver;
-  CardStatus target_status = variants::target_is_inverted(state, target)
-                                 ? CardStatus::CALLED_TO_DISCARD
-                                 : CardStatus::CALLED_TO_PLAY;
-  game.with_meta(target, [turn, giver, target_status](ConvData& m) {
-    m.status = target_status;
-    m.by = giver;
-    m = m.reason(turn).signal(turn);
-  });
-  // The receiver's inference must match the button they were just handed.
-  narrow_to_stamped_button(game, target);
-  return true;
 }
 
 // --- rank: even plays -----------------------------------------------------
@@ -389,7 +393,11 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     // Build the reacter's inference to match whichever button was stamped.
     if (interp) narrow_to_stamped_button(game, react_order);
     if (!interp) continue;
-    if (!stamp_receiver_play(prev, game, action, target)) continue;
+    // Selection only. The receiver is stamped when the reacter acts (§1d).
+    if (!receiver_call_is_viable(prev, game, action, target, react_order,
+                                 game.meta[react_order].status)) {
+      continue;
+    }
     auto target_id = state.deck[target].id();
     if (target_id) {
       Identity ti = *target_id;
@@ -601,7 +609,11 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
       // the narrowing the reacter-CTD kept a trash o1 and lost the playable o5.
       if (interp) narrow_to_stamped_button(game, react_order);
       if (!interp) continue;
-      if (!stamp_receiver_play(prev, game, action, target)) continue;
+      // Selection only. The receiver is stamped when the reacter acts (§1d).
+      if (!receiver_call_is_viable(prev, game, action, target, react_order,
+                                   game.meta[react_order].status)) {
+        continue;
+      }
       if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
       return ClueInterp::REACTIVE;
     }

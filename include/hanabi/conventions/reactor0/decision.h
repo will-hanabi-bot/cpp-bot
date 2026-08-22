@@ -70,6 +70,21 @@ struct ClueReading {
 // visibility. `s` must be the state the holder will act in.
 Outcome outcome_of(const State& s, int order, CardStatus button);
 
+// Which button the receiver is handed, given the parity bucket and the button
+// the reacter was handed. Keyed on the PARITY, not the clue kind: Odds and Evens
+// swaps the two families and `/set` can move an individual clue, so reading
+// `ClueKind` here would invert every reactive clue's shape in those variants.
+CardStatus receiver_button(bool even_parity, CardStatus reacter_button);
+
+// The state the reacter leaves behind: `s` advanced by the reacter's card when
+// pressing `reacter_button` on it is a PLAY, and `s` unchanged otherwise (a
+// discard, a pitch, a strike, or a card this seat cannot see).
+//
+// Shared by clue-time prediction and reaction-time stamping so the two cannot
+// disagree about what "after the reaction" means.
+State state_after_reacter(const State& s, int react_order,
+                          CardStatus reacter_button);
+
 // Read a simulated candidate clue. `hypo` is `game.simulate(action)`.
 //
 // Reactive designations come from the waiting connection, NOT from a walk over

@@ -17,22 +17,32 @@ int stamped_at(const Game& game, int order) {
   return st ? *st : -1;
 }
 
-// Drop a card's call: revert the narrowing the call installed (the
-// `check_missed` idiom, src/basics/game.cpp:105-116) and clear the status,
-// urgency and signal turn. Tolerant of a missing `old_inferred` — not every
-// path that stamps a call records one.
+// Drop a card's call: clear the status, urgency and signal turn -- and NOTHING
+// else. The inference the call installed stays on the card.
+//
+// Until v8.0.0 this reverted `inferred` to `old_inferred`, the `check_missed`
+// idiom. Under the static-inferred rule that is exactly backwards: a call is a
+// SIGNAL, which can come and go, while an inference is PERMANENT. Withdrawing
+// the signal must not withdraw what the team learned.
+//
+// Replay 1967558 is the cost of the old behaviour. yagami_black's slot 4 was
+// stamped CALLED_TO_PLAY and narrowed to {p1}; will-bot69 then played the other
+// p1, so rule 3 erased the dead call -- and took `{p1}` with it, restoring all
+// five purples. yagami_black no longer knew the card was trash, so
+// `has_no_safe_action` was true, priority 3 fired, and will-bot67 spent a clue
+// on Bob's chop instead of playing its own CTP.
+//
+// `NoteMark::RESET` carries the withdrawal to the notes. The `[reset]` segment
+// is driven by the CTP/CTD -> NONE status transition, which still happens here,
+// but marking it explicitly keeps the two paths that drop a call (this one and
+// the reactive bluff, which never stamped at all) saying the same thing.
 void erase_call(Game& game, int order) {
-  game.with_thought(order, [](const Thought& t) {
-    Thought out = t;
-    if (t.old_inferred) {
-      out.inferred = *t.old_inferred;
-      out.old_inferred = std::nullopt;
-    }
-    out.info_lock = std::nullopt;
-    return out;
-  });
   int turn = game.state.turn_count;
-  game.with_meta(order, [turn](ConvData& m) { m = m.cleared().reason(turn); });
+  game.with_meta(order, [turn](ConvData& m) {
+    m = m.cleared().reason(turn);
+    m.note_mark = NoteMark::RESET;
+    m.note_mark_turn = turn;
+  });
 }
 
 // Rule 1: CTP cards run newest slot -> oldest in play order.

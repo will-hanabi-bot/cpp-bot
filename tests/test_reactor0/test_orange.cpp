@@ -408,16 +408,18 @@ TEST(Reactor0Orange, DarkOrangeChuckCallSurvivesReactionResolution) {
 
   g = clue_colour(std::move(g), TestPlayer::ALICE, TestPlayer::CATHY, dark_orange);
   ASSERT_EQ(last_clue_interp(g), ClueInterp::REACTIVE);
-  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::CALLED_TO_DISCARD)
-      << "an inverted play target is stamped CTD — Discard is the button that "
-         "advances its stack";
+  // Since v8.0.0 the receiver's call is made when the reacter acts (§1d), so
+  // nothing is on the target yet.
+  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::NONE);
 
-  // The reacter acts: this is the resolution that used to destroy the call.
+  // The reacter acts: this is the resolution that used to destroy the call,
+  // and is now also where the call is made.
   g = take_turn(std::move(g), "Bob plays r1 (slot 3)", "y2");
 
   const int target = order_at(g, TestPlayer::CATHY, 2);
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::CALLED_TO_DISCARD)
-      << "the chuck call must survive the resolution";
+      << "an inverted play target is stamped CTD — Discard is the button that "
+         "advances its stack";
   EXPECT_FALSE(g.meta[target].trash)
       << "'every identity is critical' means the card is irreplaceable, not "
          "that it is trash";

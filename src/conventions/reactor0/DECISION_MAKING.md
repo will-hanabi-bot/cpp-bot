@@ -127,13 +127,23 @@ behind the O(1) reactive test, because it is the only costly term.
 
 ---
 
-## Inferred sets survive a strike
+## The static inferred set
 
 Once an inferred set is constructed it is only ever **narrowed**, and never
-reset. A strike does not reset it, and neither does a strike remove a CTP or CTD
-stamp from any card.
+reset — not by a strike, not by a re-derivation, and not by a dropped call. A
+CTP or CTD stamp is a *signal*, which can be withdrawn; the inference it
+installed is *permanent*. The full rule, including the escalation ladder for a
+genuine contradiction, is
+[CONVENTION.md §1i](CONVENTION.md).
 
-This is a reactor0-only rule (`decide.cpp:249-262`). Reactor resets on a bomb,
+The decision layer depends on this directly. `has_no_safe_action` reads
+`common.thinks_trash`, which reads `inferred`; if withdrawing a dead play call
+also withdrew its inference, the holder would stop knowing the card is trash and
+§3 would spend a clue rescuing a chop that needed no rescue. Replay 1967558 is
+that position.
+
+A strike in particular does not reset anything (`src/basics/decide.cpp`).
+Reactor resets on a bomb,
 because there a strike means a finesse or dupe chain was misread and the
 convention chain that produced the misplayed card is broken. Under reactor0 a
 strike is a **normal outcome of the convention**: the stamp is the instruction,
@@ -145,9 +155,11 @@ Replay 1966687: will-bot67 chucked an Orange 4 on T14, and the resulting strike
 wiped will-bot69's slot 1 from `{o2}` back to `{o1,o2,o3}` and dropped its CTD
 stamp with it.
 
-The narrowing rules themselves are unchanged: an inferred set is narrowed only
-by `card_elim` and by the reactive negative inferences, never by good-touch
-elimination.
+An inferred set is narrowed by `card_elim`, by the reactive negative inferences
+(now deferred until the receiver acts — CONVENTION.md §1d.2), and by a
+convention stamp; never by good-touch elimination. Link resolution
+(`elim_link`, `refresh_links` in `src/basics/player_elim.cpp`) also pins an
+identity outright, which is positive evidence of the same class as `card_elim`.
 
 ## Framework
 

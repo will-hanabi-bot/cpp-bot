@@ -44,6 +44,10 @@ std::string format_reset_segment(int turn) {
   return "turn " + std::to_string(turn) + ": [reset]";
 }
 
+std::string format_unknown_segment(int turn) {
+  return "turn " + std::to_string(turn) + ": [?]";
+}
+
 std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
                                                                   const Game& cur) {
   const State& state = cur.state;
@@ -58,6 +62,25 @@ std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
     CardStatus new_status = cur.meta[order].status;
     CardStatus prev_status =
         order < prev_meta_len ? prev.meta[order].status : CardStatus::NONE;
+
+    // An explicit mark outranks everything below, and the `continue` is
+    // load-bearing. Ladder step (b) also drops the status to NONE, which would
+    // otherwise emit the less informative `[reset]`, and the narrowing re-emit
+    // further down would print an `[f]`/`[d]` holding the card's FULL empathy --
+    // actively misleading about a card nothing explains.
+    const NoteMark mark = cur.meta[order].note_mark;
+    const NoteMark prev_mark =
+        order < prev_meta_len ? prev.meta[order].note_mark : NoteMark::NONE;
+    const int prev_mark_turn =
+        order < prev_meta_len ? prev.meta[order].note_mark_turn : -1;
+    if (mark != NoteMark::NONE &&
+        (mark != prev_mark ||
+         cur.meta[order].note_mark_turn != prev_mark_turn)) {
+      out.emplace_back(order, mark == NoteMark::UNEXPLAINED
+                                  ? format_unknown_segment(state.turn_count)
+                                  : format_reset_segment(state.turn_count));
+      continue;
+    }
 
     if (new_status != prev_status) {
       if (new_status == CardStatus::CALLED_TO_PLAY) {

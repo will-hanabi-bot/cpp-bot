@@ -30,6 +30,10 @@ TEST(Reactor0ReactiveColour, ReacterDiscardsReceiverPlays) {
   EXPECT_EQ(g.waiting.front().focus_slot, 1) << "red = 1";
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_DISCARD);
   EXPECT_TRUE(urgent_at(g, TestPlayer::BOB, 5));
+  // The receiver's call is made when the reacter acts (CONVENTION.md 1d).
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::NONE);
+
+  g = take_turn(std::move(g), "Bob discards y4 (slot 5)", "b5");
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::CALLED_TO_PLAY);
 }
 
@@ -53,6 +57,9 @@ TEST(Reactor0ReactiveColour, KnownCriticalReactSlotAdvancesTarget) {
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 5), CardStatus::NONE)
       << "the known-critical react slot is skipped";
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 3), CardStatus::CALLED_TO_DISCARD);
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::NONE);
+
+  g = take_turn(std::move(g), "Bob discards b3 (slot 3)", "b5");
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_PLAY);
 }
 

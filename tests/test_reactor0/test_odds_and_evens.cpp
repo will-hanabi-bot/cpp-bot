@@ -19,6 +19,8 @@
 #include "hanabi/basics/interp.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "test_harness.h"
+#include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
 using namespace hanabi;
@@ -100,9 +102,24 @@ int count_status(const Game& g, TestPlayer who, CardStatus st) {
 // the convention's own way of naming the two rulesets -- /settings calls them
 // "odd plays" and "even plays" -- and unlike any single stamp it does not
 // depend on WHICH seat the odd-parity family decided to give the play to.
+//
+// Since v8.0.0 the receiver is stamped only when the reacter acts (§1d), so at
+// clue time the stamps show one side of the pair. The PAIR is what names the
+// ruleset, so recover the receiver's half from the waiting connection the way
+// the decision layer does -- the information is settled, it just is not written
+// onto the card yet.
 int play_calls(const Game& g) {
-  return count_status(g, TestPlayer::BOB, CardStatus::CALLED_TO_PLAY) +
-         count_status(g, TestPlayer::CATHY, CardStatus::CALLED_TO_PLAY);
+  int n = count_status(g, TestPlayer::BOB, CardStatus::CALLED_TO_PLAY) +
+          count_status(g, TestPlayer::CATHY, CardStatus::CALLED_TO_PLAY);
+  if (g.waiting.empty()) return n;
+  const ReactorWC& wc = g.waiting.front();
+  if (wc.react_order < 0 || !wc.even_parity) return n;
+  if (!hanabi::reactor0::predicted_receiver_order(g)) return n;
+  if (hanabi::reactor0::predicts_reactive_lock(g)) return n;
+  const CardStatus rb = hanabi::reactor0::receiver_button(
+      *wc.even_parity, g.meta[wc.react_order].status);
+  if (rb == CardStatus::CALLED_TO_PLAY) ++n;
+  return n;
 }
 
 }  // namespace

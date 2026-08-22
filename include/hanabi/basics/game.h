@@ -113,46 +113,50 @@ class Game {
   bool in_progress = true;
   bool good_touch = false;
 
-  // Deferred reactive negative inference (reactor/interpret_reaction.cpp).
+  // The reactive negative inference, held until the RECEIVER acts (reactor0).
   //
-  // On a colour reactive the reacter plays and the receiver is called to
-  // DISCARD, and `elim_play_dc` then reasons "the slots before the target were
-  // passed over, so they are not playable". That is only sound if the target
-  // really was a discard. On an inverted suit a CTD is a CHUCK -- it puts the
-  // card on its stack -- so the walk did not pass over a playable at all, and
-  // the inference is unfounded.
+  // A reaction's negatives say "the slots the walk passed over were not
+  // playable". Which slots, and which set, depend on what the receiver does
+  // with their target -- and that is not settled when the reacter acts:
   //
-  // So the elimination is deferred until the receiver actually discards, and
-  // applied only if the card turned out to be trash, which is what proves
-  // nothing playable was skipped. Everything needed is captured at reaction
-  // time, because "playable" and "trash" must be read as of THEN.
+  //   * receiver advanced a stack, and NOT the one the reacter advanced
+  //       -> the passed-over slots (left of the target) held no playable;
+  //   * receiver advanced the SAME stack the reacter did -- a FINESSE
+  //       -> nothing in the hand was directly playable, and the passed-over
+  //          slots were not one-away either;
+  //   * receiver advanced no stack -- they discarded
+  //       -> nothing in the hand was directly playable.
+  //
+  // Reading the reacter's side alone cannot distinguish these, and on an
+  // inverted suit it cannot even tell a play from a discard: a CTD is a CHUCK,
+  // which puts the card on its stack. So the whole inference waits.
+  //
+  // Everything is captured as of the REACTION, because "playable" and
+  // "one away" have to be read as of then, not as of whenever the receiver
+  // gets round to acting.
   //
   // A pure function of action history, so `apply_snapshot` rebuilds it by
   // replay and it needs no serialisation.
-  struct PendingDcElim {
-    // Which elim is being held. The two differ in their SECOND half:
-    // `elim_play_dc` gates the trash-differencing on "the paired reacter card
-    // could have been playable", `elim_dc_dc` on "the paired reacter card is
-    // not all-critical". Their first halves are identical.
-    enum class Kind { PlayDc, DcDc };
-    Kind kind = Kind::PlayDc;
+  struct PendingReactionElim {
     bool active = false;
-    int target_order = -1;  // fires when this card is discarded
-    int hand_size = 5;
-    int focus_slot = 0;
+    int receiver = -1;
+    int target_order = -1;  // fires when the receiver actions THIS card
     int target_slot = 0;
     std::vector<int> receiver_hand;
-    std::vector<int> reacter_hand;
-    std::vector<char> receiver_was_clued;  // parallel to receiver_hand
-    bool target_was_clued = false;
-    IdentitySet playable;  // prev_state.playable_set, as of the reaction
-    IdentitySet trash;     // prev_state.trash_set, likewise
-    IdentitySet critical;  // prev_state.critical_set, likewise (DcDc's gate)
+    // The suit the reacter advanced, or -1 if their action stacked nothing (a
+    // discard, or a pitch, or a strike). The finesse test compares against it.
+    int reacter_suit = -1;
+    IdentitySet playable;  // playable_set as of the reaction
+    IdentitySet one_away;  // exactly one away from playable, as of the reaction
   };
-  PendingDcElim pending_dc_elim;
+  PendingReactionElim pending_reaction_elim;
   // Decide any held receiver-chuck inference (reactor0 only). Called after every
   // interpretation -- the deciding fact can arrive from any of them.
   void resolve_deferred_elims();
+
+  // Run a held reactive negative inference, if the receiver has just actioned
+  // the card it was waiting on. `prev` is the game before that action.
+  void fire_reaction_elim(const Game& prev, int player_index, int order);
   // Reactor /allplays toggle. When true, every reactive clue (color or rank)
   // is interpreted as play+play; both the receiver and the reacter end up
   // CALLED_TO_PLAY. When false (default), color clues are play+dc and rank
@@ -236,6 +240,38 @@ class Game {
   void with_card(int order, const std::function<void(Card&)>& f);
   void with_thought(int order, const std::function<Thought(const Thought&)>& f);
   void with_id(int order, Identity id);
+
+  // Narrow `order`'s inference to `keep`, running reactor0's escalation ladder
+  // if that empties it (CONVENTION.md §1i).
+  //
+  // Under reactor0 an inferred set may only ever SHRINK: it is never reset by a
+  // re-derivation, by a dropped call, or by a strike. The one exception is a
+  // genuine contradiction -- a narrowing that leaves nothing -- and it
+  // escalates in three steps:
+  //
+  //   (1) `inferred ∩ keep` is non-empty  -> write it.
+  //   (2) empty -> reset this card to global empathy and re-derive against
+  //       `keep`. `possible` is itself already clue-narrowed, so this is
+  //       exactly "reset to global empathy, then apply what we know".
+  //   (3) still empty -> hard reset, drop the call, mark `[?]` and return
+  //       FALSE. Nothing explains this card; the caller must refuse to
+  //       interpret rather than invent a reading.
+  //
+  // Under any other convention this is a plain assignment, so shared callers
+  // keep their existing behaviour.
+  //
+  // Returns false only at step (3).
+  bool narrow_thought(int order, IdentitySet keep);
+
+  // Widen `order`'s inference deliberately, bypassing the reactor0 clamp in
+  // `with_thought`. The clamp exists so a widening cannot happen by accident;
+  // this is how the ladder's own hard reset, and any future path that genuinely
+  // must re-baseline a card, says so out loud.
+  void reset_thought_to_empathy(int order);
+
+  // Set `order`'s inference outright, bypassing the reactor0 no-widening rule.
+  // For undoing an intermediate write made inside a single interpretation.
+  void reset_thought_to(int order, IdentitySet set);
 
   // Append (or overwrite the latest) interpretation entry in move_history.
   // Port of game.py:274 with_move.

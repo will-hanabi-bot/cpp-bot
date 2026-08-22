@@ -230,6 +230,7 @@ Umbrella for the post-action inference pass: `card_elim`, optional
 The four functions that eliminate identities from the receiver's slots *left
 of* the resolved reactive target, one per (clue kind × reacter action)
 combination: `elim_play_play`, `elim_play_dc`, `elim_dc_play`, `elim_dc_dc`.
+Reactor only — reactor0 replaced all four in v8.0.0 (its `CONVENTION.md` §1d.2).
 `interpret_reaction.cpp:115-245`.
 
 ### empathy
@@ -391,9 +392,21 @@ touched slot-1 card is demoted, so the focus prefers an older touched card.
 
 ### notes
 Text the bot publishes back to hanab.live per card: `turn N: [f] <ids>` on a
-new CTP, `turn N: [d] <ids>` on a new CTD, `[reset]` when one clears. Both kinds
-write the inferred set out in full, and both re-emit whenever it narrows. Card
-order 0 carries the bot version. `src/net/notes.cpp:12-95`.
+new CTP, `turn N: [d] <ids>` on a new CTD, `[reset]` when one clears, and
+`[?]` when no reading explains the card at all. Both id-carrying kinds write the
+inferred set out in full, and both re-emit whenever it narrows. Card order 0
+carries the bot version. `src/net/notes.cpp`.
+
+`[reset]` and `[?]` are also set explicitly, via `ConvData::note_mark`. The
+status transition alone is not enough under reactor0: a call can be withdrawn
+from a card that was never stamped (the reactive bluff, its `CONVENTION.md`
+§1d.1), and `[?]` is ladder step (b) rather than any status change at all
+(§1i).
+
+**Known gap.** A card whose call has been withdrawn keeps its inference under
+reactor0, and can go on narrowing — but a later narrowing is not re-emitted,
+because `[f]` and `[d]` name buttons the card is no longer holding. The segment
+already on the note is a superset, so it is stale rather than wrong.
 
 A CTD used to note as a bare `[kt]` — "known trash". That was wrong twice over:
 a CTD is not necessarily trash (on an inverted suit it is how reactor0 asks for

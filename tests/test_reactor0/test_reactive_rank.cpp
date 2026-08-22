@@ -38,8 +38,13 @@ TEST(Reactor0ReactiveRank, DoublePlayLeftmostPlayable) {
   EXPECT_EQ(g.waiting.front().focus_slot, 2) << "anchor = clue value";
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
   EXPECT_TRUE(urgent_at(g, TestPlayer::BOB, 1));
-  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::CALLED_TO_PLAY);
   EXPECT_EQ(g.waiting.front().react_order, order_at(g, TestPlayer::BOB, 1));
+  // The receiver is NOT stamped yet: since v8.0.0 the call is made when the
+  // reacter acts (CONVENTION.md 1d), not when the clue lands.
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::NONE);
+
+  g = take_turn(std::move(g), "Bob plays g1 (slot 1)", "y5");
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::CALLED_TO_PLAY);
 }
 
 TEST(Reactor0ReactiveRank, AlreadyCtpTargetIsStillTheTarget) {
@@ -79,6 +84,9 @@ TEST(Reactor0ReactiveRank, VettingWalksToNextLeftmostPlayable) {
       << "the known-4 react slot is skipped by advancing the target";
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 4), CardStatus::CALLED_TO_PLAY);
   EXPECT_TRUE(urgent_at(g, TestPlayer::BOB, 4));
+  // The receiver's call is made when the reacter acts, not at clue time.
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::NONE);
+  g = take_turn(std::move(g), "Bob plays g1 (slot 4)", "y5");
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_PLAY);
 }
 

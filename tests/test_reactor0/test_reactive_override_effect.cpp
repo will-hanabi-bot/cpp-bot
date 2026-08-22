@@ -17,6 +17,8 @@
 #include "hanabi/basics/clue.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/interp.h"
+#include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/reactive_assignment.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
@@ -46,12 +48,25 @@ SetupOptions ov_opts() {
   return opts;
 }
 
+// Since v8.0.0 the receiver is stamped only when the reacter acts (§1d), so at
+// clue time the stamps show one side of the pair. The PAIR is what names the
+// ruleset, so recover the receiver's half from the waiting connection.
 int play_calls(const Game& g) {
   int n = 0;
   for (auto who : {TestPlayer::BOB, TestPlayer::CATHY}) {
     for (int o : g.state.hands[static_cast<int>(who)]) {
       if (g.meta[o].status == CardStatus::CALLED_TO_PLAY) ++n;
     }
+  }
+  if (g.waiting.empty()) return n;
+  const ReactorWC& wc = g.waiting.front();
+  if (wc.react_order < 0 || !wc.even_parity) return n;
+  if (!hanabi::reactor0::predicted_receiver_order(g)) return n;
+  if (hanabi::reactor0::predicts_reactive_lock(g)) return n;
+  if (hanabi::reactor0::receiver_button(*wc.even_parity,
+                                        g.meta[wc.react_order].status) ==
+      CardStatus::CALLED_TO_PLAY) {
+    ++n;
   }
   return n;
 }

@@ -109,6 +109,21 @@ struct Thought {
   bool operator==(const Thought&) const = default;
 };
 
+// A note marker that outlives the call it describes.
+//
+// Under reactor0 an inference is permanent and a CALL is not, so the two can no
+// longer share one signal. `src/net/notes.cpp` emits `[reset]` off the status
+// transition CTP/CTD -> NONE, which misses both of the cases this exists for:
+// a call that is dropped without ever having been stamped (the bluff branch
+// stamps nothing, so there is no transition to see), and a card the escalation
+// ladder could not explain at all.
+//
+//   RESET       -- the signal is withdrawn; the inference on the card stands.
+//   UNEXPLAINED -- ladder step (b): narrowing emptied the set, resetting to
+//                  global empathy and re-deriving emptied it again. Noted `[?]`
+//                  and left for diagnosis.
+enum class NoteMark : std::uint8_t { NONE, RESET, UNEXPLAINED };
+
 struct ConvData {
   int order = 0;
   bool focused = false;
@@ -120,6 +135,12 @@ struct ConvData {
   std::vector<int> reasoning;
   std::optional<int> signal_turn;
   std::optional<int> by;
+  // The mark and the turn it was set, as a PAIR: a repeat mark on a later turn
+  // has to re-emit, and a bare enum compares equal to itself and goes quiet.
+  // Both survive `cleared()` -- they describe what happened, not a live call,
+  // and ladder step (b) calls `cleared()` itself.
+  NoteMark note_mark = NoteMark::NONE;
+  int note_mark_turn = -1;
 
   bool cm() const { return status == CardStatus::CHOP_MOVED; }
 

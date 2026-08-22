@@ -15,8 +15,10 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor/state_eval.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/predicates.h"
@@ -171,17 +173,51 @@ bool has_playable_chop(const Game& game, int player) {
 NewPlayFacts new_play_facts(const Game& game, const Game& hypo) {
   const State& s = game.state;
   NewPlayFacts f;
+  auto credit = [&](int o) {
+    ++f.count;
+    auto id = s.deck[o].id();
+    if (!id) return;
+    if (s.is_critical(*id) && variants::is_first_or_second_rank(s, *id)) {
+      f.critical_low = true;
+    }
+    if (variants::is_clue_regain_rank(s, *id)) f.regain_rank = true;
+  };
+
   for (const auto& hand : s.hands) {
     for (int o : hand) {
       if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
       if (hypo.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
-      ++f.count;
-      auto id = s.deck[o].id();
-      if (!id) continue;
-      if (s.is_critical(*id) && variants::is_first_or_second_rank(s, *id)) {
-        f.critical_low = true;
-      }
-      if (variants::is_clue_regain_rank(s, *id)) f.regain_rank = true;
+      credit(o);
+    }
+  }
+
+  // The receiver of a reactive is not stamped at clue time -- the call is made
+  // when the reacter acts (§1d) -- so the stamp walk above cannot see it. Left
+  // uncounted, H3 ("two new plays") would be unreachable for every reactive and
+  // H2 would stop seeing the receiver's card, which quietly deflates the tier of
+  // the whole family. Recover it the way `read_clue` does.
+  if (!hypo.waiting.empty()) {
+    const ReactorWC& wc = hypo.waiting.front();
+    auto recv_order = predicted_receiver_order(hypo);
+    const CardStatus reacter_status =
+        wc.react_order >= 0 ? hypo.meta[wc.react_order].status : CardStatus::NONE;
+    const bool reacter_called = reacter_status == CardStatus::CALLED_TO_PLAY ||
+                                reacter_status == CardStatus::CALLED_TO_DISCARD;
+    // Skip a receiver the stamp walk already credited, so the two sources can
+    // never double-count while both exist.
+    if (recv_order && reacter_called && !predicts_reactive_lock(hypo) &&
+        !(game.meta[*recv_order].status != CardStatus::CALLED_TO_PLAY &&
+          hypo.meta[*recv_order].status == CardStatus::CALLED_TO_PLAY)) {
+      const CardStatus rb = receiver_button(
+          reactive_assignment(*s.variant, game.reactive_overrides, wc.clue.kind,
+                              wc.clue.value)
+              .even,
+          reacter_status);
+      // Judged against the stacks the reacter leaves behind, and via
+      // `outcome_of` rather than the button name -- so an inverted CTD, which
+      // is a CHUCK onto the stack, is correctly counted as a play.
+      const State after = state_after_reacter(s, wc.react_order, reacter_status);
+      if (outcome_of(after, *recv_order, rb) == Outcome::PLAY) credit(*recv_order);
     }
   }
   return f;
@@ -305,11 +341,28 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   if (predicts_reactive_lock(hypo)) return false;
   auto receive_order = predicted_receiver_order(hypo);
   if (!receive_order) return false;
-  if (hypo.meta[*receive_order].status != game.meta[*receive_order].status) {
-    return false;                                     // stamped: Phase A, not B
-  }
+  // Phase B's own two gates, verbatim from the phase that produces it
+  // (interpret_reactive.cpp:417, :427-428), rather than "is the receiver
+  // unstamped".
+  //
+  // That test used to mean "Phase A and colour mode 1 stamp the receiver at
+  // clue time, Phase B does not". Since v8.0.0 no reactive stamps the receiver
+  // at clue time (§1d), so it discriminates nothing. It was also never quite
+  // right: a Phase C dc-target that happens to sit one away from playable
+  // sailed past it, and read as a finesse.
+  //
+  // The reacter's button is the sharp edge -- Phase B calls a blind PLAY, Phase
+  // C a discard -- and the connector test is what makes it a finesse at all.
   auto id = s.deck[*receive_order].id();
-  return id && s.playable_away(*id) == 1;
+  if (!id || s.playable_away(*id) != 1) return false;
+  const ReactorWC& wc = hypo.waiting.front();
+  if (wc.react_order < 0) return false;
+  if (hypo.meta[wc.react_order].status != CardStatus::CALLED_TO_PLAY) return false;
+  // Direction-aware: on a reversed suit the connector is rank+1, not rank-1.
+  auto prev_id = variants::connector_of(s, *id);
+  if (!prev_id) return false;
+  return hanabi::reactor::effective_possible_for(hypo, wc.react_order)
+      .contains(*prev_id);
 }
 
 // H4, as a named predicate. `clue_tier` folds this into its HIGH disjunction,

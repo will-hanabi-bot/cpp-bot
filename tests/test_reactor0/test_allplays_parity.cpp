@@ -76,7 +76,8 @@ TEST(Reactor0AllPlaysParity, ColourReactiveResolvesToPlayWithAllPlaysOn) {
   ASSERT_EQ(last_clue_interp(g), ClueInterp::REACTIVE);
   ASSERT_EQ(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_DISCARD)
       << "clue-time selection must be unaffected by all_plays";
-  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::CALLED_TO_PLAY);
+  // Since v8.0.0 the receiver's call is made when the reacter acts (§1d).
+  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::NONE);
 
   // Bob performs the discard the clue called for.
   g = take_turn(std::move(g), "Bob discards y4 (slot 5)", "r3");
@@ -114,8 +115,10 @@ TEST(Reactor0AllPlaysParity, ReacterDiscardUnderAllPlaysIsAKnownMistake) {
   g = take_turn(std::move(g), "Alice clues red to Cathy");
   ASSERT_EQ(last_clue_interp(g), ClueInterp::REACTIVE);
   ASSERT_FALSE(g.waiting.empty());
+  // Nothing is on the receiver yet -- since v8.0.0 the call is made when the
+  // reacter acts, and here the reacter never legitimately acts at all.
   CardStatus target_before = status_at(g, TestPlayer::CATHY, 1);
-  ASSERT_EQ(target_before, CardStatus::CALLED_TO_PLAY);
+  ASSERT_EQ(target_before, CardStatus::NONE);
 
   // Force the inherited-WC case: a live reactor0 reactive whose WC says
   // play+play. Bob discarding now contradicts the agreement outright.
@@ -127,8 +130,8 @@ TEST(Reactor0AllPlaysParity, ReacterDiscardUnderAllPlaysIsAKnownMistake) {
       << "under /allplays the reacter has no discard available by agreement, "
          "so a discard is a known mistake rather than a parity signal";
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 1), target_before)
-      << "a known mistake teaches the receiver nothing -- her target keeps "
-         "the status the clue gave it and is not re-stamped";
+      << "a known mistake teaches the receiver nothing -- her target is never "
+         "stamped at all";
   EXPECT_FALSE(any_status(g, TestPlayer::CATHY, CardStatus::CHOP_MOVED))
       << "and must not fall through to the lock reading";
 }

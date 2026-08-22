@@ -23,6 +23,24 @@ namespace hanabi::reactor0 {
 
 namespace variants = hanabi::reactor::variants;
 
+State state_after_reacter(const State& s, int react_order,
+                          CardStatus reacter_button) {
+  // Bob acts FIRST, so anything judged about the receiver has to be judged
+  // against the stacks Bob leaves behind. Without this a finesse reads as a
+  // strike -- its whole point is that the receiver's card is one away until the
+  // blind play lands -- and a chained double play (r1 then r2) reads as
+  // play-then-strike.
+  //
+  // Shared with the reaction-resolution layer on purpose: clue-time prediction
+  // and reaction-time stamping must not be able to disagree about what "after
+  // the reaction" means, which is the class of bug this whole change exists to
+  // remove.
+  if (outcome_of(s, react_order, reacter_button) != Outcome::PLAY) return s;
+  auto id = s.deck[react_order].id();
+  if (!id) return s;
+  return s.with_play(*id);
+}
+
 namespace {
 bool contains(const std::vector<int>& v, int x) {
   return std::find(v.begin(), v.end(), x) != v.end();
@@ -65,8 +83,6 @@ Outcome outcome_of(const State& s, int order, CardStatus button) {
   }
 }
 
-namespace {
-
 // The receiver's button, given the clue kind and the button the reacter was
 // told to press. Fixed by the resolution parity table in react_play /
 // react_discard (reactor0/interpret_reaction.cpp:82, :88-91, :131, :136-139).
@@ -87,6 +103,9 @@ CardStatus receiver_button(bool even_parity, CardStatus reacter_button) {
   return reacter_plays ? CardStatus::CALLED_TO_DISCARD
                        : CardStatus::CALLED_TO_PLAY;
 }
+
+
+namespace {
 
 ClueShape shape_of(Outcome reacter, Outcome receiver) {
   const bool a = reacter == Outcome::PLAY;
@@ -201,14 +220,7 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   r.reacter_side = {wc.react_order, reacter_status,
                     outcome_of(s, wc.react_order, reacter_status)};
 
-  // Bob acts FIRST, so the receiver's card is judged against the stacks Bob
-  // leaves behind. Without this a finesse reads as a strike - its whole point is
-  // that the receiver's card is one away until the blind play lands - and a
-  // chained double play (r1 then r2) reads as play-then-strike.
-  State after_bob = s;
-  if (r.reacter_side.outcome == Outcome::PLAY) {
-    if (auto id = s.deck[wc.react_order].id()) after_bob = s.with_play(*id);
-  }
+  const State after_bob = state_after_reacter(s, wc.react_order, reacter_status);
   const CardStatus rb = receiver_button(
       reactive_assignment(*s.variant, game.reactive_overrides, action.clue.kind,
                           action.clue.value)
@@ -469,13 +481,43 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
     return std::nullopt;
   };
 
+  // The reacter IS stamped at clue time on every reactive path, so the stamp is
+  // the right evidence there.
   auto react_call = called_to_play(wc.reacter);
-  auto recv_call = called_to_play(wc.receiver);
-  if (!react_call || !recv_call) return false;
-  if (react_call->first != recv_call->first) return false;
+  if (!react_call) return false;
+
+  // The receiver is NOT. Its call is made when the reacter acts (§1d), so
+  // recover it the way `read_clue` does -- from the waiting connection plus the
+  // parity table. That covers all five reactive paths; reading the stamp only
+  // ever covered the two that stamped early, which is to say this filter used
+  // to be blind to Phase B, Phase C and colour mode 2 entirely.
+  auto recv_order = predicted_receiver_order(hypo);
+  if (!recv_order) return false;
+  const CardStatus reacter_status = hypo.meta[wc.react_order].status;
+  if (reacter_status != CardStatus::CALLED_TO_PLAY &&
+      reacter_status != CardStatus::CALLED_TO_DISCARD) {
+    return false;
+  }
+  const CardStatus rb = receiver_button(
+      reactive_assignment(*s.variant, game.reactive_overrides, wc.clue.kind,
+                          wc.clue.value)
+          .even,
+      reacter_status);
+  auto recv_id = s.deck[*recv_order].id();
+  if (!recv_id) return false;
+  // Judged against the stacks as they are NOW, deliberately: the question is
+  // whether the clue calls this card as a play, and the whole hazard is that the
+  // reacter's copy kills it before the receiver gets there.
+  const bool recv_plays =
+      rb == CardStatus::CALLED_TO_DISCARD
+          ? variants::discard_advances_stack(s, recv_id)
+          : (rb == CardStatus::CALLED_TO_PLAY &&
+             !variants::is_inverted_id(s, *recv_id) && s.is_playable(*recv_id));
+  if (!recv_plays) return false;
+  if (react_call->first != *recv_id) return false;
   // Unless the receiver already knows exactly what they hold -- then they
   // cannot be fooled into pressing the button on a copy that has just died.
-  return game.common.thoughts[recv_call->second].possibilities().length() != 1;
+  return game.common.thoughts[*recv_order].possibilities().length() != 1;
 }
 
 std::vector<ClueCandidate> analyse_clues(

@@ -200,30 +200,41 @@ std::vector<int> orange_touched(const Game& game, const ClueAction& action) {
 
 }  // namespace
 
-IdentitySet pitch_candidates(const State& state) {
+IdentitySet receiver_ctp_set(const State& old_s, const State& new_s) {
   // Bound the walk to the variant's own identities. `create` defaults to every
   // possible ordinal, which would invent cards on suits this variant does not
   // have.
-  const int n = static_cast<int>(state.variant->suits.size()) * 5;
-  return IdentitySet::create([&state](Identity i) {
-    if (variants::is_inverted_id(state, i)) {
+  const int n = static_cast<int>(new_s.variant->suits.size()) * 5;
+  return IdentitySet::create([&old_s, &new_s](Identity i) {
+    if (variants::is_inverted_id(new_s, i)) {
       // Play throws it away: only worth calling on a card we can spare, and
-      // never on the one the stack is waiting for.
-      return !state.is_playable(i) && !state.is_critical(i);
+      // never on the one the stack is waiting for. Judged on the OLD stacks --
+      // what we can afford to lose is settled when the clue is given.
+      return !old_s.is_playable(i) && !old_s.is_critical(i);
     }
-    return state.is_playable(i);
+    // A play must land on the stacks the reacter LEAVES BEHIND.
+    return new_s.is_playable(i);
   }, n);
 }
 
-IdentitySet chuck_candidates(const State& state) {
-  const int n = static_cast<int>(state.variant->suits.size()) * 5;
-  return IdentitySet::create([&state](Identity i) {
-    if (variants::is_inverted_id(state, i)) {
-      // Discard puts it on the stack, so it has to be the next card.
-      return state.is_playable(i);
+IdentitySet receiver_ctd_set(const State& old_s, const State& new_s) {
+  const int n = static_cast<int>(new_s.variant->suits.size()) * 5;
+  return IdentitySet::create([&old_s, &new_s](Identity i) {
+    if (variants::is_inverted_id(new_s, i)) {
+      // Discard puts it on the stack, so it has to be the next card -- again
+      // against the stacks the reacter leaves behind.
+      return new_s.is_playable(i);
     }
-    return !state.is_playable(i) && !state.is_critical(i);
+    return !old_s.is_playable(i) && !old_s.is_critical(i);
   }, n);
+}
+
+IdentitySet pitch_candidates(const State& state) {
+  return receiver_ctp_set(state, state);
+}
+
+IdentitySet chuck_candidates(const State& state) {
+  return receiver_ctd_set(state, state);
 }
 
 void narrow_to_stamped_button(Game& game, int order) {
@@ -238,15 +249,24 @@ void narrow_to_stamped_button(Game& game, int order) {
     default:
       return;
   }
-  const Thought& t = game.common.thoughts[order];
-  IdentitySet next = t.possible.intersect(allowed);
-  if (next.is_empty()) return;  // would erase the reading; leave it alone
-  if (next == t.inferred) return;
-  game.with_thought(order, [&next](const Thought& th) {
-    Thought out = th;
-    out.inferred = next;
-    return out;
-  });
+  // Undo the shared stamp helper's narrowing before applying ours.
+  //
+  // `reactor::target_discard` narrows to the NON-critical ids and
+  // `target_play` to the playable set -- both the PLAIN-suit reading of their
+  // button, which is exactly what this function exists to correct. Rule 1
+  // constrains the NET effect of an interpretation, not the intermediate writes
+  // inside it, so the baseline is the inference as it stood BEFORE the stamp.
+  //
+  // This used to be `possible ∩ allowed`, which threw away any earlier
+  // inference along with the helper's -- a widening, and the one the static
+  // rule forbids.
+  const Thought& t0 = game.common.thoughts[order];
+  if (t0.old_inferred) {
+    IdentitySet before = *t0.old_inferred;
+    game.reset_thought_to(order, before);
+  }
+  // Then narrow to the button, escalating if nothing survives.
+  game.narrow_thought(order, allowed);
 }
 
 namespace {
