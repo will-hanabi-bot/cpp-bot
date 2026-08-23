@@ -41,6 +41,34 @@ std::string load_data_file(const std::string& filename) {
   return std::string{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
 }
 
+// Resolve a variant's DISPLAY suit name to its catalog entry.
+//
+// A reversed suit is named "<Base> Reversed" in `data/variants.json`, but the
+// catalog is keyed on the base suit -- the reversal is a variant-level modifier
+// (the newID for "Orange Reversed (4 Suits)" is "R+G+B+Or:R", i.e. the `Or` suit
+// with `:R` applied). Looking the display name up directly misses, and the stub
+// that results carries an EMPTY `clue_colors` -- which is a suit's entire link
+// to its colour clue. The colour then matches no identity at all, so every card
+// it touches is narrowed to nothing.
+//
+// Replay 1969696 is what that looks like from the table: an Orange clue in
+// "Orange Reversed (4 Suits)" emptied `possible` on all four cards it touched,
+// and the orange ladder -- which asks `id_touched` and reads `possible` -- could
+// not see the clue at either of its gates. 33 shipped variants across 12 such
+// names are affected, and in each the bot is blind to one whole colour.
+const Suit* find_catalog_suit(const std::unordered_map<std::string, Suit>& catalog,
+                              const std::string& name) {
+  auto it = catalog.find(name);
+  if (it != catalog.end()) return &it->second;
+  static constexpr std::string_view kReversed = " Reversed";
+  if (name.size() > kReversed.size() &&
+      std::string_view(name).substr(name.size() - kReversed.size()) == kReversed) {
+    it = catalog.find(name.substr(0, name.size() - kReversed.size()));
+    if (it != catalog.end()) return &it->second;
+  }
+  return nullptr;
+}
+
 // Pick a one-character short form, avoiding collisions. Port of _pick_short.
 char pick_short(const std::string& sname,
                 const std::unordered_map<std::string, Suit>& catalog,
@@ -49,6 +77,11 @@ char pick_short(const std::string& sname,
   if (sname == "Pink") return 'i';
   if (sname == "Brown") return 'n';
 
+  // Deliberately NOT resolved through `find_catalog_suit`. A short form is only
+  // a display/test convenience, and every recorded log and replay fixture that
+  // uses a "<Base> Reversed" variant already spells its cards with the letter
+  // this fallback picks -- "Black Reversed" is 'l', not Black's 'k'. Resolving
+  // the base here would be tidier and would break all of them for nothing.
   auto it = catalog.find(sname);
   char candidate = '\0';
   if (it != catalog.end() && it->second.abbreviation) {
@@ -94,10 +127,18 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
   for (size_t i = 0; i < suit_names.size(); ++i) {
     const auto& sname = suit_names[i];
     char short_c = pick_short(sname, catalog, v.short_forms);
-    auto it = catalog.find(sname);
+    const Suit* entry = find_catalog_suit(catalog, sname);
     Suit suit;
-    if (it != catalog.end()) {
-      suit = it->second;
+    if (entry && entry->name == sname) {
+      suit = *entry;
+    } else if (entry) {
+      // A "<Base> Reversed" name. Take the base's `clue_colors` -- and ONLY
+      // that. The display name, the short form and the name-derived SuitType
+      // all stay exactly as the old stub built them, so logs, snapshots and
+      // `suit_index_of` are untouched; `SuitType::of_name` already carries
+      // `reversed` alongside `inverted` / `dark` / `whitish` / `prism` for
+      // every one of these twelve names.
+      suit = Suit{sname, short_c, SuitType::of_name(sname), entry->clue_colors};
     } else {
       suit = Suit{sname, short_c, SuitType::of_name(sname), {}};
     }

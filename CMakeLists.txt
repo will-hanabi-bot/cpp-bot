@@ -109,6 +109,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_action.cpp
   tests/test_basics/test_odds_and_evens.cpp
   tests/test_basics/test_variants.cpp
+  tests/test_basics/test_variant_reversed.cpp
   tests/test_basics/test_state.cpp
   tests/test_basics/test_game.cpp
   tests/test_basics/test_chop.cpp
@@ -223,6 +224,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_chuck_dupes.cpp
   tests/test_reactor0/test_deferred_elim.cpp
   tests/test_reactor0/test_reactive_bluff.cpp
+  tests/test_reactor0/test_misc/test_replay_1969696_reversed_orange_clue_is_a_chuck.cpp
   tests/test_reactor0/test_misc/test_replay_1967558_dropped_call_keeps_its_inference.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp

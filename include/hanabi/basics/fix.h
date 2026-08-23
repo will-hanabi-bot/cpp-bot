@@ -22,6 +22,16 @@ struct ClueAction;
 struct FixResultNormal {
   std::vector<int> clued_resets;
   std::vector<int> duplicate_reveals;
+  // True when the ONLY thing this clue fixed is "a previously clued card is now
+  // known trash" -- no blind-play correction, no duplicate revealed.
+  //
+  // That is a trash reveal in all but name, and reactor0's stable COLOUR ladder
+  // ranks it below every play reading: a colour clue means "action the leftmost
+  // card you can", and only says "this one is dead" when nothing can be
+  // actioned. The other two arms keep their priority, because both are
+  // corrections that prevent a strike or a wasted duplicate rather than
+  // information the receiver can afford to act on later.
+  bool trash_reveal_only = false;
   bool operator==(const FixResultNormal&) const = default;
 };
 

@@ -13,6 +13,7 @@ FixResult check_fix(const Game& prev, const Game& game, const ClueAction& action
   const auto& list_ = action.list_;
   std::vector<int> clued_resets;
   std::vector<int> duplicate_reveals;
+  bool trash_only = true;
 
   for (auto it = list_.rbegin(); it != list_.rend(); ++it) {
     int order = *it;
@@ -34,24 +35,31 @@ FixResult check_fix(const Game& prev, const Game& game, const ClueAction& action
 
     if (prev.common.order_kt(game, order)) continue;
 
-    bool clued_reset_branch =
-        (prev.meta[order].status == CardStatus::CALLED_TO_PLAY &&
-         prev.is_blind_playing(order) &&
-         game.common.thoughts[order].info_lock &&
-         game.common.thoughts[order].info_lock->forall(
-             [&](Identity i) { return game.state.is_basic_trash(i); })) ||
-        (prev.state.deck[order].clued && !prev.common.thoughts[order].reset &&
-         game.common.order_kt(game, order));
+    // Arm 1: a blind play the clue proves is trash. A correction -- left
+    // unactioned it strikes.
+    const bool blind_play_correction =
+        prev.meta[order].status == CardStatus::CALLED_TO_PLAY &&
+        prev.is_blind_playing(order) &&
+        game.common.thoughts[order].info_lock &&
+        game.common.thoughts[order].info_lock->forall(
+            [&](Identity i) { return game.state.is_basic_trash(i); });
+    // Arm 2: an already-clued card is NOW known trash. Information, not a
+    // correction -- nothing goes wrong if the receiver acts on it later.
+    const bool trash_revealed =
+        prev.state.deck[order].clued && !prev.common.thoughts[order].reset &&
+        game.common.order_kt(game, order);
 
-    if (clued_reset_branch) {
+    if (blind_play_correction || trash_revealed) {
       clued_resets.insert(clued_resets.begin(), order);
+      if (blind_play_correction) trash_only = false;
     } else if (duplicated) {
       duplicate_reveals.insert(duplicate_reveals.begin(), order);
     }
   }
 
   if (!clued_resets.empty() || !duplicate_reveals.empty()) {
-    return FixResultNormal{std::move(clued_resets), std::move(duplicate_reveals)};
+    return FixResultNormal{std::move(clued_resets), std::move(duplicate_reveals),
+                           trash_only && duplicate_reveals.empty()};
   }
   return FixResultNone{};
 }

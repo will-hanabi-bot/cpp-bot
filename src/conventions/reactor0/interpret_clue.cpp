@@ -382,12 +382,32 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
       {{"giver", action.giver}, {"target", action.target}, {"stall", stall}});
   (void)stall;
 
-  // Fixes outrank everything — a colour clue that resets a wrong earlier
-  // inference must not be read as a fresh play promise.
+  // A fix that CORRECTS something outranks everything — a colour clue that
+  // resets a wrong earlier inference must not be read as a fresh play promise.
+  //
+  // A fix that merely REVEALS TRASH does not. "This clued card of yours is
+  // dead" is information the receiver can act on any time; "action the leftmost
+  // card you can" is the clue's primary meaning and is worth a turn now. So a
+  // trash-only fix is held back and returned in place of the STALL at the
+  // bottom of the ladder — i.e. only once playing has been ruled out.
+  //
+  // Replay 1969696 T34 is the case. An Orange clue in "Orange Reversed
+  // (4 Suits)" at pace 1 touched slots 1/3/4/5; slot 5 was a known-dead o5, so
+  // the whole clue read FIX and the ladder never ran — when slot 1 could be the
+  // o3 the reversed stack was waiting for and wanted chucking.
+  //
+  // The empathy half of a fix is applied by the engine either way; this only
+  // decides which reading the convention reports and what it stamps.
   FixResult fix_result = check_fix(prev, game, action);
-  if (std::holds_alternative<FixResultNormal>(fix_result)) {
-    return ClueInterp::FIX;
+  bool pending_trash_fix = false;
+  if (auto* normal = std::get_if<FixResultNormal>(&fix_result)) {
+    if (!normal->trash_reveal_only) return ClueInterp::FIX;
+    pending_trash_fix = true;
   }
+  // Every "nothing to play here" exit below routes through this.
+  const auto stall_or_fix = [&]() {
+    return pending_trash_fix ? ClueInterp::FIX : ClueInterp::STALL;
+  };
 
   const State& state = game.state;
 
@@ -482,7 +502,7 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
       }
       if (auto r = stamp_orange_chuck(game, action, o)) return r;
     }
-    return ClueInterp::STALL;
+    return stall_or_fix();
   }
 
   // 3. The leftmost touched card that could be playable is called to play.
@@ -511,7 +531,7 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
     //
     // Deliberately PER-SEAT (§1g): the holder of the b5 cannot see it, so they
     // alone still read a play here. The seat that ACTS has the right reading.
-    if (provably_trash(game, *target)) return ClueInterp::STALL;
+    if (provably_trash(game, *target)) return stall_or_fix();
     auto target_id = game.state.deck[*target].id();
     if (game.meta[*target].status == CardStatus::CALLED_TO_DISCARD &&
         !(target_id && game.state.is_playable(*target_id))) {
@@ -525,7 +545,7 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
   }
 
   // 4. The receiver knows none of the touched cards can be playable.
-  return ClueInterp::STALL;
+  return stall_or_fix();
 }
 
 // --- stable rank ----------------------------------------------------------

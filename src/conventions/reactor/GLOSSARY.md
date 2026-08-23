@@ -252,7 +252,21 @@ never set — see CONVENTION.md §1a.8.
 
 ### fix clue
 A clue that corrects a wrong earlier inference — a CTP'd card now provably
-trash, or a revealed duplicate. `ClueInterp::FIX`; `src/basics/fix.cpp:12-57`.
+trash, or a revealed duplicate. `ClueInterp::FIX`; `src/basics/fix.cpp`.
+
+`check_fix` distinguishes three arms, and `FixResultNormal::trash_reveal_only`
+reports when only the third fired:
+- a **blind-play correction** — a `CALLED_TO_PLAY` card whose `info_lock` is all
+  trash. Left unactioned it strikes.
+- a **duplicate reveal** — the clue proves two touched cards are the same.
+- a **clued reset** — an already-clued card is now known trash. This one is a
+  trash reveal in all but name: it is information, not a correction, and nothing
+  goes wrong if the receiver acts on it later.
+
+Reactor treats all three alike. **Reactor0's stable COLOUR ladder ranks the
+third below every play reading** (its `CONVENTION.md` §1b priority 1), because a
+colour clue means "action the leftmost card you can" and only says "this one is
+dead" when nothing can be actioned. The rank ladder and reactor are unchanged.
 
 ### focus
 See CONVENTION.md §1a.2 — **two distinct notions**:
@@ -661,3 +675,18 @@ Suit family matched by White, Gray, Light, Null. No colour clue touches them.
 The turn the team ran out of clue tokens. Cards drawn after it are excluded
 from the chop, so a player who drew during the stall isn't expected to discard
 them. `include/hanabi/basics/game.h:105-106`; `decide.cpp:424-427`.
+
+### suit name resolution
+`data/variants.json` names a suit by its DISPLAY name; `data/suits.json` is keyed
+on the BASE suit, because a reversal is a variant-level modifier (the newID for
+"Orange Reversed (4 Suits)" is `R+G+B+Or:R`). `find_catalog_suit`
+(`src/basics/variant.cpp`) therefore retries the lookup with a trailing
+`" Reversed"` stripped, and inherits the base's `clue_colors` — a suit's entire
+link to its colour clue. Everything else (display name, short form, `SuitType`)
+stays name-derived, so `reversed` sits alongside `inverted` / `dark` / `whitish`
+/ `prism` as usual.
+
+Without it the suit contributed no entry to `clue_colour_names`, that colour's
+clue value fell off the end of the list, `id_touched` answered "no" for every
+identity, and every card the clue touched was narrowed to nothing — 33 shipped
+variants across 12 such names, each blind to one whole colour (replay 1969696).

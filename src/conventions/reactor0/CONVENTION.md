@@ -113,7 +113,24 @@ clue_tokens == 8`, `:613-614`) is passed to the stable branches only as the
 `stable_colour` (`interpret_clue.cpp:227-344`). **There is no referential
 play in reactor0.** Priority:
 
-1. **Fix** — `check_fix` reports a reset/duplicate → `FIX` (`:237-240`).
+1. **Fix, but only the CORRECTING kind** — `check_fix` reports a blind-play
+   correction (a `CALLED_TO_PLAY` card the clue proves is trash) or a duplicate
+   reveal → `FIX` (`interpret_clue.cpp`, `src/basics/fix.cpp`). Both prevent a
+   strike or a wasted duplicate, so they outrank every play reading.
+
+   A fix whose *only* content is "a previously clued card is now known trash"
+   (`FixResultNormal::trash_reveal_only`) does **not**. That is a trash reveal
+   in all but name, and a colour clue's primary meaning is *action the leftmost
+   card you can*; being told a card is dead keeps. So it is held back and
+   returned in place of the `STALL` at the bottom of this ladder — priority 6
+   below, and the two earlier stall exits — i.e. only once playing has been
+   ruled out. The empathy half of a fix is applied by the engine either way;
+   this decides only which reading the convention reports and what it stamps.
+
+   Replay 1969696 T34: an Orange clue in "Orange Reversed (4 Suits)" at pace 1
+   touched slots 1/3/4/5, and slot 5 was a known-dead `o5`. The whole clue read
+   `FIX`, the ladder never ran, and slot 1 — which could be the `o3` the
+   reversed stack was waiting for — went unchucked.
 2. **Play reveal** — a previously-clued card the clue fills in as a new
    **actionable** playable/connectable → `REVEAL` (`find_play_reveal`), and the
    revealed card is stamped `CALLED_TO_PLAY`, entering the receiver-CTP queue.
