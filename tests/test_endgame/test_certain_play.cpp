@@ -25,6 +25,7 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity.h"
+#include "hanabi/endgame/forced_endgame.h"
 #include "hanabi/endgame/helper.h"
 #include "test_harness.h"
 
@@ -191,4 +192,55 @@ TEST(EndgameCertainPlay, CertainPlaysListsThemInHandOrder) {
   ASSERT_EQ(certain.size(), 2u);
   EXPECT_EQ(std::get<PerformPlay>(certain[0]).target, s1) << "hand order";
   EXPECT_EQ(std::get<PerformPlay>(certain[1]).target, s3);
+}
+
+// --- forced endgame: a certain play with the deck empty --------------------
+
+// Rule 0 of `forced_endgame_action`. The `cards_left == 0` gate is
+// LOAD-BEARING: with one card still in the deck a guaranteed point is sometimes
+// worth less than a stall, and the solver is trusted to see it -- replay
+// 1874799 must stall rather than play its null-5, 1875304's winning line is a
+// stall clue an urgent play must not shortcut, and 1885855 exists so the
+// 5-lockout blocks an r5 play. Making the rule unconditional breaks all three.
+TEST(EndgameCertainPlay, ForcedOnlyOnceTheDeckIsEmpty) {
+  SetupOptions opts = two_fives_position();
+  // Four points missing would leave the fork shut; two suits short of max keeps
+  // it open, matching a real endgame.
+  opts.play_stacks = {4, 5, 5, 4, 5};
+  Game g = setup(std::move(opts));
+  const int o = mine(g, 1);
+  g.with_thought(o, [](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet{}.add(Identity{0, 5}).add(Identity{3, 5});
+    return out;
+  });
+  g.players[0] = g.common;
+  ASSERT_FALSE(certain_plays(g).empty()) << "guard: slot 1 scores either way";
+
+  // With cards still in the deck the rule stands down and the later layers get
+  // their turn.
+  g.with_state([](State& s) { s.cards_left = 1; });
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value() &&
+               std::holds_alternative<PerformPlay>(
+                   *hanabi::endgame::forced_endgame_action(g)) &&
+               std::get<PerformPlay>(*hanabi::endgame::forced_endgame_action(g))
+                       .target == o)
+      << "at cards_left == 1 a stall may still be worth more than the point";
+
+  // Empty deck: nothing to draw, nothing to wait for, so it is forced.
+  g.with_state([](State& s) { s.cards_left = 0; });
+  auto forced = hanabi::endgame::forced_endgame_action(g);
+  ASSERT_TRUE(forced.has_value());
+  ASSERT_TRUE(std::holds_alternative<PerformPlay>(*forced));
+  EXPECT_EQ(std::get<PerformPlay>(*forced).target, o);
+}
+
+// And with nothing certain in hand it declines, leaving the later rules alone.
+TEST(EndgameCertainPlay, ForcedRuleDeclinesWithNoCertainPlay) {
+  SetupOptions opts = two_fives_position();
+  opts.play_stacks = {4, 5, 5, 4, 5};
+  Game g = setup(std::move(opts));
+  g.with_state([](State& s) { s.cards_left = 0; });
+  ASSERT_TRUE(certain_plays(g).empty()) << "guard: nothing is pinned";
+  EXPECT_FALSE(hanabi::endgame::forced_endgame_action(g).has_value());
 }

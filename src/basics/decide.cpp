@@ -808,6 +808,9 @@ PerformAction Game::take_action() const {
     }
   }
   std::optional<PerformAction> urgent_action;
+  // The subset of `urgent_action` that is a standing reacter CALL. One branch
+  // below also sets `urgent_action` to a clue; only the CTP/CTD scan sets this.
+  std::optional<PerformAction> urgent_call;
   if (urgent_order) {
     bool urgent_bob_save = s.can_clue() && !waiting.empty() &&
                             waiting.front().reacter == s.our_player_index &&
@@ -855,6 +858,10 @@ PerformAction Game::take_action() const {
       for (int o : s.our_hand()) {
         if (!meta[o].urgent) continue;
         CardStatus status = meta[o].status;
+        // Recorded separately from `urgent_action`, which one branch above also
+        // sets to a CLUE. Only this scan produces a reacter CALL, and the
+        // endgame fork needs to know the difference.
+        auto note_call = [&](PerformAction p) { urgent_call = p; };
         const Thought& thought = m.thoughts[o];
         if (status == CardStatus::CALLED_TO_PLAY) {
           // A CTP on an expendable INVERTED card is a PITCH, not a play call:
@@ -869,10 +876,12 @@ PerformAction Game::take_action() const {
             continue;  // known trash — try the next call
           }
           urgent_action = PerformPlay{o};
+          note_call(PerformPlay{o});
         } else if (status == CardStatus::CALLED_TO_DISCARD &&
                     !thought.possible.forall(
                         [&](Identity i) { return s.is_critical(i); })) {
           urgent_action = PerformDiscard{o};
+          note_call(PerformDiscard{o});
         }
         break;
       }
@@ -956,6 +965,39 @@ PerformAction Game::take_action() const {
     // (O(n × hand × suits)) to check before the solver kicks in.
     if (auto forced = hanabi::endgame::forced_endgame_action(*this); forced) {
       return prefer_certain_play(*forced);
+    }
+
+    // A standing reacter call outranks the endgame search.
+    //
+    // The receiver acts NEXT and decodes their target from WHICH slot we
+    // actioned (`calc_target_slot`), so deviating does not merely spend a
+    // different card -- it redirects them. The solver prices that at zero,
+    // because it never models the convention reading our own action; it assumes
+    // the other seats simply play what they know. Its standing-call preference
+    // in `possible_actions` is per-HYPO and collapses to a tie-break at the
+    // root, which is not enough (`solver.cpp`, "Urgent first").
+    //
+    // Replay 1969860 T55: will-bot67's slot 5 was an urgent CTD pairing with
+    // will-bot69's playable Null 4. The solver returned slot 2 instead, and
+    // `calc_slot(4, 2, 5) = 2` redirects will-bot69 to their Null 5 -- not
+    // playable, a strike, and the Null 5 lost.
+    //
+    // `urgent_call` already carries the actionability exemptions: a CTP the
+    // holder can see is trash is skipped unless it is a free pitch, and a CTD
+    // is taken only when not every reading is critical. A dead call therefore
+    // leaves the solver free, as before.
+    //
+    // Rule 0 of `forced_endgame_action` runs above this deliberately: with the
+    // deck empty, a card that certainly scores outranks the signal.
+    // Stands down when we hold a card that certainly scores: there the solver
+    // keeps the turn, because a guaranteed point is worth more than the signal
+    // and the solver is the thing that can sequence it. Replay 1957936 T41 is
+    // the case -- chucking a pinned Orange 2 starts the chain that wins 20/20,
+    // while an urgent CTD of plain trash sits alongside it.
+    if (convention == Convention::REACTOR0 && urgent_call &&
+        hanabi::endgame::certain_plays(*this).empty()) {
+      hanabi::logging::log_branch("endgame.honours_reacter_call", {});
+      return *urgent_call;
     }
     // 6 s is enough budget for the solver to find a near-optimal action in
     // the positions we've seen on hanab.live (the deeper search rarely

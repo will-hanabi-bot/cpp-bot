@@ -359,6 +359,10 @@ pinned singleton, so both miss a card read as `{a5, d5}` with both stacks on 4.
 (`src/endgame/helper.cpp`); the rule that uses them is DECISION_MAKING.md's
 Precedence step 0.
 
+It has two more consumers since v8.5.0: forced-endgame rule 0, which makes a
+certain play a FORCED action once the deck is empty, and the endgame's
+reacter-call rule, which stands down while one exists.
+
 The weaker sibling is **could advance**: the same suit/button pairing asked with
 `exists` instead of `forall`, over our STANDING CALLS only
 (`endgame::possible_call_actions`). It is tier 2 of the timeout pre-check —

@@ -7,6 +7,7 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/endgame/helper.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -334,6 +335,50 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
   hanabi::instr::ScopedTimer st("endgame.forced_endgame_action");
   hanabi::logging::LogScope ls("endgame.forced_endgame_action");
   const State& s = game.state;
+
+  // Rule 0: we hold a card that certainly scores.
+  //
+  // A guaranteed point is a FORCED action, and a forced action takes precedence
+  // over any conventional interpretation -- including a standing reacter call,
+  // which `decide.cpp` honours immediately below this function. No clue anyone
+  // gives can make a certain point worth less, and no search result can be
+  // worth more than a point already in hand.
+  //
+  // `certain_plays` is "known from empathy or inferences": every reading
+  // advances a stack, on the button that does so. That is wider than the
+  // `id(infer=true)` singleton the solver's own trivial-win shortcut needs,
+  // which is how replay 1969779 T68 came to gamble a trash card while holding
+  // one read {a5, d5} with both those stacks on 4.
+  //
+  // The `cards_left == 0` gate is LOAD-BEARING, not incidental. With one card
+  // still in the deck a guaranteed point is sometimes worth less than a stall,
+  // and the solver is trusted to see it: replay 1874799 must stall rather than
+  // play its null-5 or the team ends a point short, 1875304's winning line is a
+  // stall clue that an urgent play must not shortcut, and 1885855 exists so the
+  // 5-lockout BLOCKS an r5 play. Making this rule unconditional breaks all
+  // three. With the deck empty none of that applies -- there is no future turn
+  // the point could be traded for.
+  //
+  // It is nonetheless the only rule here not scoped to `cards_left == 1`, hence
+  // its position above that gate.
+  if (s.cards_left == 0) {
+    auto certain = certain_plays(game);
+    if (!certain.empty()) {
+      // Prefer one carrying a standing call, then hand order -- the same
+      // tie-break `prefer_certain_play` applies in `decide.cpp`.
+      for (const auto& c : certain) {
+        const int o = std::holds_alternative<PerformPlay>(c)
+                          ? std::get<PerformPlay>(c).target
+                          : std::get<PerformDiscard>(c).target;
+        const CardStatus st = game.meta[o].status;
+        if (st == CardStatus::CALLED_TO_PLAY || st == CardStatus::CALLED_TO_DISCARD) {
+          return c;
+        }
+      }
+      return certain.front();
+    }
+  }
+
   if (s.cards_left != 1) return std::nullopt;
 
   // Rule 2 takes precedence over Rule 1: when both fire (e.g., CP holds the

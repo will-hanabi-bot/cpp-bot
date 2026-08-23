@@ -243,6 +243,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_dispatch.cpp
   tests/test_reactor0/test_endgame/test_replay_1966675_sole_holder_of_both_red_fours.cpp
   tests/test_reactor0/test_endgame/test_replay_1969779_certain_play_beats_a_gamble.cpp
+  tests/test_reactor0/test_endgame/test_replay_1969860_endgame_honours_the_reacter_call.cpp
   tests/test_reactor0/test_endgame/test_replay_1966757_endgame_honours_reacter_call.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp

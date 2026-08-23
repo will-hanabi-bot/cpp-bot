@@ -189,6 +189,22 @@ is, and which neither `obvious_playables` (clue-derived) nor `Thought::id` (a
 pinned singleton) can recognise. Clues and ordinary discards are untouched: the
 solver is often right to stall or to throw.
 
+**A standing reacter call outranks the endgame search (step 0).** The receiver
+acts NEXT and decodes their target from WHICH slot we actioned, so deviating
+from the call does not merely spend a different card — it redirects them. The
+solver prices that at zero, because it never models the convention reading our
+own action; it assumes the other seats play what they know. Replay 1969860 T55:
+the solver returned slot 2 where slot 5 was called, and `calc_slot(4, 2, 5) = 2`
+redirected will-bot69 onto a Null 5 that was not playable.
+
+Two things sit above it. `forced_endgame_action` runs first — a forced action
+takes precedence over any conventional interpretation — and the rule **stands
+down whenever we hold a card that certainly scores**, because a guaranteed point
+is worth more than the signal and sequencing it is what the search is for
+(replay 1957936 T41: an urgent CTD of plain trash beside a pinned Orange 2 whose
+chuck wins 20/20). A call the holder can see is dead is skipped as always, so
+the solver keeps those turns too.
+
 **A timed-out search does not outrank an action we can see is good (step 0).**
 Roughly a third of endgame solves hit the 6 s deadline in practice, and a
 truncated search still answers — its result looks exactly like a completed one.
