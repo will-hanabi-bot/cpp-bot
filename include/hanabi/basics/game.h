@@ -173,6 +173,12 @@ class Game {
   // from the variant's starting required efficiency, or the /rlocks
   // override. Reactor ignores it.
   bool allow_reactive_locks = true;
+
+  // Seconds the endgame solver is given at the fork in `take_action`. A tuning
+  // knob, not game state -- it is not serialised, and only tests move it (to 0,
+  // to exercise the timeout pre-check without waiting six seconds for a real
+  // one).
+  double endgame_timeout = 6.0;
   // reactor0 only: manual `/set` reassignments of clue -> (bucket, reactive
   // value). Empty means "the variant decides", which is every game that has not
   // used the command -- so an empty list reproduces the built-in table exactly.

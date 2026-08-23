@@ -45,6 +45,28 @@ nothing more.
 
 ---
 
+## 3b. `[endgame]` A truncated search still speaks with a full voice
+
+**Today.** `SolveResult::timed_out` (v8.4.0) tells the caller THAT the search
+ran out of time, and `decide.cpp`'s fork uses it to prefer a certain play, then
+a standing call that could advance, before deferring to the result. That covers
+the turns where we hold something worth doing.
+
+**What it does not cover.** The flag is binary: it says nothing about HOW
+truncated the search was, so a run that explored 99% of the tree and one that
+explored none are indistinguishable. And when no playable action exists, a
+truncated clue or discard is still taken at face value — the pre-check has
+nothing to offer there and the ordinary `winrate >= 1%` test applies to a number
+that is only a lower bound.
+
+**Why it matters.** 451 of 1207 endgame solves in `logs/` (37%) hit the 6 s
+deadline; only 38% finished under 100 ms. The budget is doing real work.
+
+**Possible directions.** Report explored/total node counts alongside the flag so
+the fork can scale its trust; or spend the budget breadth-first so a truncated
+result is at least uniformly shallow rather than depth-biased toward whichever
+action was enumerated first.
+
 ## 2. `[reactor, reactor0]` Bluffs are never GIVEN (reactor0 now reads them)
 
 **Convention.** A rare reactive move in which the reacter *believes* they are

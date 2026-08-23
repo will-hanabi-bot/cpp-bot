@@ -38,6 +38,16 @@ struct SolveResult {
   PerformAction action;
   Fraction winrate;
   std::string error;
+  // The search ran out of time before it finished.
+  //
+  // A truncated search still answers, and its answer looks exactly like a
+  // complete one: `winnable` hands back its best-so-far with an empty error.
+  // What it is NOT is authoritative -- every deadline check in the tree makes
+  // the position look WORSE (`winnable_if` reports UNWINNABLE, `action_winrate`
+  // returns 0, `optimize_full` zero-fills the tail), so the reported winrate is
+  // a LOWER BOUND. A reported certainty is therefore still trustworthy; a
+  // reported preference between two imperfect actions is not.
+  bool timed_out = false;
   bool ok() const { return error.empty(); }
 };
 

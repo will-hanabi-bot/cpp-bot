@@ -50,6 +50,32 @@ bool certainly_advances(const Game& game, int order, const PerformAction& how) {
   });
 }
 
+std::vector<PerformAction> possible_call_actions(const Game& game) {
+  const State& state = game.state;
+  std::vector<PerformAction> out;
+  for (int order : state.our_hand()) {
+    const CardStatus st = game.meta[order].status;
+    const bool ctp = st == CardStatus::CALLED_TO_PLAY;
+    const bool ctd = st == CardStatus::CALLED_TO_DISCARD;
+    if (!ctp && !ctd) continue;
+    if (ctd && state.clue_tokens >= 8) continue;  // a discard is illegal here
+
+    const IdentitySet live = game.me().thoughts[order].possibilities();
+    if (live.is_empty()) continue;
+    const bool could = live.exists([&](Identity i) {
+      const bool inverted = state.variant->suits[i.suit_index].suit_type.inverted;
+      // Play advances a plain card, Discard an inverted one -- the same pairing
+      // `certainly_advances` uses, asked with `exists` instead of `forall`.
+      if (ctp == inverted) return false;
+      return state.is_playable(i);
+    });
+    if (!could) continue;
+    out.push_back(ctp ? PerformAction{PerformPlay{order}}
+                      : PerformAction{PerformDiscard{order}});
+  }
+  return out;
+}
+
 std::vector<PerformAction> certain_plays(const Game& game) {
   std::vector<PerformAction> out;
   for (int order : game.state.our_hand()) {

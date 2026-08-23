@@ -960,10 +960,53 @@ PerformAction Game::take_action() const {
     // 6 s is enough budget for the solver to find a near-optimal action in
     // the positions we've seen on hanab.live (the deeper search rarely
     // changes the picked action) while keeping per-turn compute well under
-    // the server's per-turn clock allowance. The solver gracefully returns
-    // its best-found result on timeout.
-    hanabi::endgame::EndgameSolver solver(/*mc=*/true, /*timeout=*/6.0);
+    // the server's per-turn clock allowance. On timeout the solver returns its
+    // best-found result -- which is a silent LOWER BOUND, not a verdict, since
+    // every deadline check in the tree scores the truncated branch as a loss.
+    hanabi::endgame::EndgameSolver solver(/*mc=*/true, endgame_timeout);
     auto result = solver.solve(*this);
+    // A TRUNCATED search does not outrank an action we can see is good.
+    //
+    // Roughly a third of endgame solves hit the deadline in practice, so this
+    // is the common case rather than an edge one. When it happens, take an
+    // action whose value we can establish ourselves before deferring to a
+    // search that never finished comparing its options:
+    //
+    //   1. a card every reading of which advances a stack;
+    //   2. a standing call whose button COULD advance one;
+    //   3. otherwise the ordinary handling below.
+    //
+    // Deliberately ABOVE the accept test, not inside it. The most degenerate
+    // timeouts do not come back with a usable result at all -- they error out
+    // ("timeout", "no hypotheses", "no winning actions") -- and those are
+    // exactly the turns where the search knows least. Running the pre-check
+    // only on an accepted result would skip them.
+    //
+    // The one exception is a reported certainty. Because a timeout only ever
+    // makes the position look WORSE, `winrate == 1` from a truncated search is
+    // still a genuine proven win, and overriding it could lose the game.
+    if (result.timed_out &&
+        !(result.ok() && result.winrate >= hanabi::endgame::Fraction(1))) {
+      auto order_of = [](const PerformAction& p) {
+        if (auto* pp = std::get_if<PerformPlay>(&p)) return pp->target;
+        if (auto* pd = std::get_if<PerformDiscard>(&p)) return pd->target;
+        return -1;
+      };
+      auto certain = hanabi::endgame::certain_plays(*this);
+      if (!certain.empty()) {
+        hanabi::logging::log_branch(
+            "endgame.timeout_precheck",
+            {{"tier", 1}, {"now", order_of(certain.front())}});
+        return certain.front();
+      }
+      auto calls = hanabi::endgame::possible_call_actions(*this);
+      if (!calls.empty()) {
+        hanabi::logging::log_branch(
+            "endgame.timeout_precheck",
+            {{"tier", 2}, {"now", order_of(calls.front())}});
+        return calls.front();
+      }
+    }
     if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
       return prefer_certain_play(result.action);
     }

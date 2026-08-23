@@ -358,3 +358,9 @@ pinned singleton, so both miss a card read as `{a5, d5}` with both stacks on 4.
 `endgame::certainly_advances` / `certain_plays`
 (`src/endgame/helper.cpp`); the rule that uses them is DECISION_MAKING.md's
 Precedence step 0.
+
+The weaker sibling is **could advance**: the same suit/button pairing asked with
+`exists` instead of `forall`, over our STANDING CALLS only
+(`endgame::possible_call_actions`). It is tier 2 of the timeout pre-check —
+when the solver has run out of time, actioning a call that might score beats
+taking a truncated search's preference.

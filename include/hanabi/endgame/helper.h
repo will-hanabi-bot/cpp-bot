@@ -56,6 +56,16 @@ bool certainly_advances(const Game& game, int order, const PerformAction& how);
 // Every action on our own cards that `certainly_advances`, in hand order.
 std::vector<PerformAction> certain_plays(const Game& game);
 
+// Our standing calls whose stamped button COULD advance a stack -- the `exists`
+// mirror of `certainly_advances`'s `forall`, in hand order.
+//
+// A CTP presses Play and a CTD presses Discard, so which readings count depends
+// on the suit exactly as it does there. Weaker than a certain play on purpose:
+// when the solver has run out of time, actioning a call that might score beats
+// taking a truncated search's guess. Skips a CTD at 8 tokens, where discarding
+// is illegal.
+std::vector<PerformAction> possible_call_actions(const Game& game);
+
 struct GameArr {
   Fraction prob;
   RemainingMap remaining;

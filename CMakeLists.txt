@@ -121,6 +121,7 @@ add_executable(hanabi_tests
   tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_certain_play.cpp
+  tests/test_endgame/test_timeout_precheck.cpp
   tests/test_endgame/test_orange_chuck.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_logging/test_game_logger_rename.cpp

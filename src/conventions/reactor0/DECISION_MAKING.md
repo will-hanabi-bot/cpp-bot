@@ -189,6 +189,24 @@ is, and which neither `obvious_playables` (clue-derived) nor `Thought::id` (a
 pinned singleton) can recognise. Clues and ordinary discards are untouched: the
 solver is often right to stall or to throw.
 
+**A timed-out search does not outrank an action we can see is good (step 0).**
+Roughly a third of endgame solves hit the 6 s deadline in practice, and a
+truncated search still answers — its result looks exactly like a completed one.
+When the solver reports `timed_out`, take an action whose value we can establish
+ourselves before deferring to a search that never finished comparing its
+options:
+
+1. a card every reading of which advances a stack (`certain_plays`);
+2. a standing CTP/CTD whose button COULD advance one (`possible_call_actions`);
+3. otherwise the ordinary handling.
+
+This runs ABOVE the fork's `winrate >= 1%` accept test, not inside it: the most
+degenerate timeouts do not come back with a usable result at all, and those are
+exactly the turns where the search knows least. The one exception is a reported
+certainty — a timeout only ever makes a position look WORSE (every deadline
+check scores its branch as a loss), so `winrate == 1` from a truncated search is
+a genuine proven win and is left alone.
+
 The guard sits at the fork rather than inside one routine because several of
 them resolve a choice by hand order and any can be the one that answers —
 `trivially_winnable` walks `obvious_playables` and takes `.front()`, and

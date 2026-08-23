@@ -675,6 +675,16 @@ SolveResult EndgameSolver::solve(const Game& game,
   double start = monotonic_seconds();
   double deadline = start + timeout;
 
+  // Stamp every exit below with whether the clock ran out. A wall-clock test
+  // here rather than a bit set at each truncation point: there are a dozen
+  // truncation sites across this file and winnable.cpp, and missing one would
+  // silently read as "not timed out". The two returns ABOVE this line -- the
+  // trivial one-play win -- run before the deadline exists and cannot time out.
+  auto done = [&](SolveResult r) {
+    r.timed_out = past_deadline_local(deadline);
+    return r;
+  };
+
   // Compute remaining_ids + own_ids.
   std::map<int, int> seen_ids;
   std::vector<std::pair<int, std::optional<Identity>>> own_ids;
@@ -702,7 +712,7 @@ SolveResult EndgameSolver::solve(const Game& game,
     if (state.is_useful(id) && v == state.card_count[id.to_ord()]) ++useful_unseen;
   }
   if (useful_unseen > 3) {
-    return SolveResult{PerformPlay{0}, Fraction(0), "too many missing useful identities"};
+    return done(SolveResult{PerformPlay{0}, Fraction(0), "too many missing useful identities"});
   }
 
   // Pre-populate assumed_game.
@@ -724,8 +734,8 @@ SolveResult EndgameSolver::solve(const Game& game,
   int total_unknown = state.cards_left + static_cast<int>(unknown_own.size());
   if (total_unknown == 0) {
     auto result = winnable(assumed_game, state.our_player_index, remaining_ids, deadline);
-    if (!result.ok()) return SolveResult{PerformPlay{0}, Fraction(0), "no winning strategy"};
-    return SolveResult{result.actions.front(), result.winrate, ""};
+    if (!result.ok()) return done(SolveResult{PerformPlay{0}, Fraction(0), "no winning strategy"});
+    return done(SolveResult{result.actions.front(), result.winrate, ""});
   }
 
   // --- Arrangement generation ---
@@ -809,7 +819,7 @@ SolveResult EndgameSolver::solve(const Game& game,
   }
 
   if (past_deadline_local(deadline)) {
-    return SolveResult{PerformPlay{0}, Fraction(0), "timeout"};
+    return done(SolveResult{PerformPlay{0}, Fraction(0), "timeout"});
   }
 
   // Monte Carlo grouping.
@@ -897,7 +907,7 @@ SolveResult EndgameSolver::solve(const Game& game,
                             action_winrate(h.game, arr_list, *match, state.our_player_index,
                                              deadline);
     }
-    return SolveResult{*only_action, winrate, ""};
+    return done(SolveResult{*only_action, winrate, ""});
   }
 
   std::vector<PerformAction> all_actions;
@@ -914,7 +924,7 @@ SolveResult EndgameSolver::solve(const Game& game,
     }
   }
 
-  if (hypos.empty()) return SolveResult{PerformPlay{0}, Fraction(0), "no hypotheses"};
+  if (hypos.empty()) return done(SolveResult{PerformPlay{0}, Fraction(0), "no hypotheses"});
   const auto& first = hypos.front();
   // With a single hypo, optimize_full can short-circuit once it sees a
   // winrate-1 action — the iterative cross-hypo refinement below is a no-op.
@@ -936,7 +946,7 @@ SolveResult EndgameSolver::solve(const Game& game,
   }
 
   if (initial.empty()) {
-    return SolveResult{PerformPlay{0}, Fraction(0), "no winning actions"};
+    return done(SolveResult{PerformPlay{0}, Fraction(0), "no winning actions"});
   }
 
   if (hypos.size() > 1) {
@@ -992,9 +1002,9 @@ SolveResult EndgameSolver::solve(const Game& game,
       if (better) best = {action, cur};
     }
     if (best.second == Fraction(0)) {
-      return SolveResult{best.first, Fraction(0), "no winning actions"};
+      return done(SolveResult{best.first, Fraction(0), "no winning actions"});
     }
-    return SolveResult{best.first, best.second, ""};
+    return done(SolveResult{best.first, best.second, ""});
   }
 
   // Single hypo: `initial` is already best-first, so only entries TIED with the
@@ -1007,7 +1017,7 @@ SolveResult EndgameSolver::solve(const Game& game,
                             });
   }
   auto [best_action, best_winrate] = initial.front();
-  return SolveResult{best_action, best_winrate, ""};
+  return done(SolveResult{best_action, best_winrate, ""});
 }
 
 }  // namespace hanabi::endgame
