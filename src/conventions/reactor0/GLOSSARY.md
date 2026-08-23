@@ -46,20 +46,31 @@ cards *outside* such a group rather than identifying one inside it.
 
 ### pace-clue tier gate
 Reactor0's replacement for reactor's low-clue-count gate, and the reason a
-clue has to earn its token. Two windows, both needing `pace() >= 1`:
+clue has to earn its token. Two windows, with **different pace thresholds**:
 
 * Alice already holds a card stamped `CALLED_TO_PLAY` (or, in a variant with
   an inverted suit, `CALLED_TO_DISCARD`) — she has something to do either way,
-  so the bar is **HIGH** at `clue_tokens < 8`;
-* otherwise the bar is **at least MEDIUM**, at `clue_tokens <= 3`.
+  so the bar is **HIGH** while `pace() >= 1 && clue_tokens < 8`;
+* otherwise the bar is **at least MEDIUM**, while `pace() >= 3 &&
+  clue_tokens <= 3`.
 
-Anything below its bar scores a flat `-1.0`. The `< 8` bound is the
-forced-clue exemption: at 8 tokens discarding is illegal, and flattening every
-clue to `-1.0` there would just hand the choice to an arbitrary tie-break. The
-MEDIUM window is one token wider than reactor's and, unlike reactor's, fires
-even when Alice holds no play — the gate keys on the *stamp*, not on what she
-knows. `src/conventions/reactor0/state_eval.cpp:487-505`; DECISION_MAKING.md,
-*Decision phase 1*.
+A candidate below its bar is dropped from the list outright, so no rung ever
+sees it. The `< 8` bound is the forced-clue exemption: at 8 tokens discarding
+is illegal, and rejecting every clue there would just hand the choice to an
+arbitrary tie-break; an unoccupied Alice who is LOCKED is exempt for the same
+reason. The MEDIUM window is one token wider than reactor's and, unlike
+reactor's, fires even when Alice holds no play — the gate keys on the *stamp*,
+not on what she knows.
+
+**Why the pace thresholds differ.** An occupied Alice has her call to fall back
+on at any pace, so a LOW clue is never the better use of the turn — replay
+1966119 T5, where she sat at pace 2 and a LOW reactive discard was admitted
+ahead of the pending call. An unoccupied Alice at low pace has nothing to fall
+back on: holding her to the MEDIUM bar with the deck nearly out just sends her
+to the discard pile. Pace 0 is exempt in both, since there every remaining turn
+must produce a play or the game cannot finish.
+`src/conventions/reactor0/decision.cpp`, `clue_is_admissible`;
+DECISION_MAKING.md, *Decision phase 1*.
 
 ### blind play (react slot)
 The reacter playing the computed react slot without knowing its identity.

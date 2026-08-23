@@ -10,6 +10,7 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity.h"
+#include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/logging/state_snapshot.h"
 #include "replay_helpers.h"
 #include "test_harness.h"
@@ -893,12 +894,35 @@ TEST(MiscReplay1966687, ChucksKnownDupeNotUnknownChop) {
   // unknown slot-1 chop, order 20. That card was an Orange 4, and orange is
   // inverted here, so pressing Discard on it was a play attempt that struck.
   //
-  // The leftmost copy of a known same-hand dupe is expendable, so it belongs
-  // on the chuck list: order 7, not order 20.
+  // The leftmost copy of a known same-hand dupe is expendable, so it belongs on
+  // the chuck list: order 7, not order 20. That is what this test pins, and it
+  // is asserted on the LIST rather than on the chosen action.
+  //
+  // Until v8.2.0 the two were the same thing: the position sits at pace 2 with
+  // 3 clue tokens, so §2a's MEDIUM bar rejected every LOW clue and phase 2 ran.
+  // §2a now stands down below pace 3, a LOW reactive becomes admissible, and
+  // the bot clues instead. The chuck-list ruling is untouched by that -- it says
+  // WHICH card to throw when throwing, not whether to throw at all -- so the
+  // assertion moved to the list and the action assertion went with the rule
+  // that changed.
+  const int us = game.state.our_player_index;
+  auto lists = hanabi::reactor0::action_lists(game, us);
+  bool has_dupe = false;
+  bool has_unknown_chop = false;
+  for (int o : lists.chuck) {
+    if (o == 7) has_dupe = true;
+    if (o == 20) has_unknown_chop = true;
+  }
+  EXPECT_TRUE(has_dupe)
+      << "the leftmost known b4 duplicate is expendable and belongs on the "
+         "chuck list";
+  EXPECT_FALSE(has_unknown_chop)
+      << "the unknown chop was an Orange 4; chucking it is a play attempt that "
+         "strikes";
+
+  // And if the bot does throw something here, it throws that dupe.
   hanabi::PerformAction action = game.take_action();
-  ASSERT_TRUE(std::holds_alternative<hanabi::PerformDiscard>(action));
-  const int target = std::get<hanabi::PerformDiscard>(action).target;
-  EXPECT_EQ(target, 7) << "must chuck the leftmost known b4 duplicate";
-  EXPECT_NE(target, 20) << "the unknown chop was an Orange 4 and chucking it "
-                            "took a strike";
+  if (auto* d = std::get_if<hanabi::PerformDiscard>(&action)) {
+    EXPECT_EQ(d->target, 7) << "must chuck the leftmost known b4 duplicate";
+  }
 }

@@ -581,12 +581,6 @@ std::vector<ClueCandidate> analyse_clues(
 bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   const State& s = game.state;
   if (c.action.giver != s.our_player_index) return true;  // fails open
-  // The gate runs at any pace above zero. It was `pace() >= 3` through v7.3.0,
-  // inherited from reactor's low-clue-count gate, and that left a hole: at
-  // replay 1966119 T5 will-bot69 was occupied by a receiver-CTP, pace was 2, so
-  // the gate stood down and a LOW reactive discard was admissible. Low pace is
-  // if anything a worse time to spend a token on a LOW clue, not a better one.
-  if (s.pace() < 1) return true;
   const bool occupied = requires_high_tier(game);
   // 2a carries an extra condition 1a does not: an UNOCCUPIED Alice is exempt
   // while LOCKED. She has no chop to discard, so cluing is the only thing she
@@ -602,7 +596,27 @@ bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   if (!occupied && game.common.thinks_locked(game, s.our_player_index)) {
     return true;
   }
-  const bool in_window = occupied ? s.clue_tokens < 8 : s.clue_tokens <= 3;
+  // The two rules take DIFFERENT pace thresholds, and the difference is the
+  // whole point.
+  //
+  // 1a (occupied) runs at any pace above zero. It was `pace() >= 3` through
+  // v7.3.0, inherited from reactor's low-clue-count gate, and that left a hole:
+  // at replay 1966119 T5 will-bot69 was occupied by a receiver-CTP, pace was 2,
+  // the gate stood down, and a LOW reactive discard became admissible ahead of
+  // the pending call. An occupied Alice always has something better to do than
+  // spend a token on a LOW clue, whatever the pace.
+  //
+  // 2a (unoccupied) needs `pace() >= 3`. An unoccupied Alice held to the MEDIUM
+  // bar at low pace has nothing to fall back on -- the deck is nearly out, the
+  // turns left are few, and refusing every LOW clue just sends her to the
+  // discard pile. Nothing about 1966119 argues for this window; that replay was
+  // the occupied rule.
+  //
+  // Pace 0 stays exempt in both: there every remaining turn must produce a play
+  // or the game cannot finish, so hoarding a token for a better clue is
+  // pointless.
+  const bool in_window = occupied ? (s.pace() >= 1 && s.clue_tokens < 8)
+                                  : (s.pace() >= 3 && s.clue_tokens <= 3);
   if (!in_window) return true;
   return c.tier >= (occupied ? ClueTier::HIGH : ClueTier::MEDIUM);
 }
@@ -930,7 +944,17 @@ bool priority_3_applies(const Game& g) {
   if (!at_risk_chop(g, alice_of(g), bob) && !has_playable_chop(g, bob)) {
     return false;
   }
-  return has_no_safe_action(g, bob);
+  // Normally §3 is for a Bob who is STUCK -- his chop is worth something and he
+  // has nothing else to do. At low pace it fires even when he does have a safe
+  // action: with the deck nearly out there are few turns left to collect that
+  // chop in, and spending one of them on a discard he could have made anyway is
+  // how a playable card ends up buried.
+  //
+  // Only the safe-action requirement is waived. A locked Bob and a chop that is
+  // neither endangered nor playable both still skip §3 -- the guards above are
+  // about whether the clue is worth giving at all, which low pace does not
+  // change.
+  return has_no_safe_action(g, bob) || g.state.pace() <= 2;
 }
 
 namespace {
@@ -946,7 +970,12 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   // unwanted cards AND it redirects Cathy off a chop she could not afford to
   // lose. Without the chop condition that second job does not exist, which is
   // why the same clue sits again at 3.4, lower.
-  if (has_cathy(g) && !chop_is_expendable(g, cathy_of(g))) {
+  //
+  // Both double-discard rungs are off at low pace (3.4 likewise). A double
+  // discard spends a clue to clear two cards the team was going to be able to
+  // throw anyway; with the deck nearly out the turns it costs are worth more
+  // than the cards it saves.
+  if (g.state.pace() >= 3 && has_cathy(g) && !chop_is_expendable(g, cathy_of(g))) {
     if (auto* c = first_of(g, pool_double_discard(g, cs))) return c;
   }
   // 3.3 -- a stable discard or trash reveal to Bob, and only when Bob does not
@@ -956,7 +985,10 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
     if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;
   }
   // 3.4 -- the same double discard as 3.2, now unconditional on Cathy's chop.
-  if (auto* c = first_of(g, pool_double_discard(g, cs))) return c;
+  // Same low-pace gate, for the same reason.
+  if (g.state.pace() >= 3) {
+    if (auto* c = first_of(g, pool_double_discard(g, cs))) return c;
+  }
   // 3.5 -- a stable discard to Bob on a card Alice can see a copy of elsewhere.
   if (auto* c = first_of(g, pool_stable_ditch_dupe(g, cs))) return c;
   // 3.6 -- all of Bob's cards are critical

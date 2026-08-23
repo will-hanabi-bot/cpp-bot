@@ -135,11 +135,10 @@ TEST(Reactor0PaceClueGate, SilentAtFourClueTokens) {
       << "clue_tokens == 4 is outside the window; the gate must not fire.";
 }
 
-// Only at pace 0 is the gate silent. The threshold was `pace() >= 3` through
-// v7.3.0, inherited from reactor's low-clue-count gate; replay 1966119 T5 showed
-// the hole that left, so it is now `pace() >= 1`. Pace 0 is the true floor:
-// there, every remaining turn must produce a play or the game cannot finish, so
-// hoarding a token for a better clue is pointless.
+// Pace 0 is the floor for BOTH rules: there, every remaining turn must produce
+// a play or the game cannot finish, so hoarding a token for a better clue is
+// pointless. This fixture is unoccupied, so it is 2a -- which since v8.2.0 also
+// stands down at pace 1 and 2 (see the split below).
 TEST(Reactor0PaceClueGate, SilentAtPaceZero) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 2;
@@ -154,37 +153,111 @@ TEST(Reactor0PaceClueGate, SilentAtPaceZero) {
       << "pace == 0 is outside the window; the gate must not fire.";
 }
 
-// ...and fires at exactly pace 1, the new boundary.
-TEST(Reactor0PaceClueGate, FiresAtPaceOne) {
+// --- the split: 1a and 2a take DIFFERENT pace thresholds -------------------
+
+// Stamp a CTP in Alice's hand, which is what `requires_high_tier` keys on.
+void make_occupied(Game& g) {
+  g.meta[order_at(g, TestPlayer::ALICE, 1)].status = CardStatus::CALLED_TO_PLAY;
+}
+
+// 1a keeps `pace() >= 1`, and pace 1 is its boundary. This is the rule replay
+// 1966119 T5 was about: an OCCUPIED Alice at low pace has a call she can
+// action, so a LOW clue is never the better use of the turn.
+TEST(Reactor0PaceClueGate, OccupiedGateFiresAtPaceOne) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 2;
   opts.discarded = discards_for_pace(1);
   Game g = setup(std::move(opts));
+  make_occupied(g);
 
   ASSERT_EQ(g.state.pace(), 1) << "guard: fixture must sit on the boundary";
+  ASSERT_TRUE(hanabi::reactor0::requires_high_tier(g)) << "guard: rule 1a";
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
-  ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
+  ASSERT_LT(tier_of(g, clue), ClueTier::HIGH) << "guard: below 1a's bar";
 
   EXPECT_FALSE(admissible(g, clue))
-      << "pace == 1 is inside the window; a LOW clue must be rejected.";
+      << "pace == 1 is inside 1a's window; the clue must be rejected.";
 }
 
-// The pace that used to be the boundary is now well inside the window. Kept
-// because it is the position replay 1966119 T5 sat at (pace 2, occupied, a LOW
-// reactive discard admitted) and the whole point of the change is that it is
-// now refused.
-TEST(Reactor0PaceClueGate, FiresAtPaceTwoWhichUsedToBeOutsideTheWindow) {
+// The position replay 1966119 T5 actually sat at: occupied, pace 2, a LOW
+// reactive discard admitted ahead of the pending call. Still refused.
+TEST(Reactor0PaceClueGate, OccupiedGateFiresAtPaceTwo) {
   SetupOptions opts = inert_position();
   opts.clue_tokens = 2;
   opts.discarded = discards_for_pace(2);
   Game g = setup(std::move(opts));
+  make_occupied(g);
 
-  ASSERT_EQ(g.state.pace(), 2) << "guard: the old gate stood down here";
+  ASSERT_EQ(g.state.pace(), 2) << "guard: 1966119 T5's pace";
+  ASSERT_TRUE(hanabi::reactor0::requires_high_tier(g)) << "guard: rule 1a";
+  Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+  ASSERT_LT(tier_of(g, clue), ClueTier::HIGH) << "guard: below 1a's bar";
+
+  EXPECT_FALSE(admissible(g, clue))
+      << "pace == 2 is inside 1a's window; the clue must be rejected.";
+}
+
+// 2a is the other half, and since v8.2.0 it needs `pace() >= 3`. An UNOCCUPIED
+// Alice at low pace has no call to fall back on -- holding her to the MEDIUM
+// bar with the deck nearly out just sends her to the discard pile. So the same
+// LOW clue that 1a refuses above is admissible here.
+TEST(Reactor0PaceClueGate, UnoccupiedGateStandsDownBelowPaceThree) {
+  for (int pace : {1, 2}) {
+    SetupOptions opts = inert_position();
+    opts.clue_tokens = 2;
+    opts.discarded = discards_for_pace(pace);
+    Game g = setup(std::move(opts));
+
+    ASSERT_EQ(g.state.pace(), pace);
+    ASSERT_FALSE(hanabi::reactor0::requires_high_tier(g)) << "guard: rule 2a";
+    Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+    ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
+
+    EXPECT_TRUE(admissible(g, clue))
+        << "pace " << pace << " is below 2a's window; the bar does not apply.";
+  }
+}
+
+// ...and pace 3 is 2a's boundary, where it does.
+TEST(Reactor0PaceClueGate, UnoccupiedGateFiresAtPaceThree) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 2;
+  opts.discarded = discards_for_pace(3);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.state.pace(), 3) << "guard: fixture must sit on the boundary";
+  ASSERT_FALSE(hanabi::reactor0::requires_high_tier(g)) << "guard: rule 2a";
   Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
   ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
 
   EXPECT_FALSE(admissible(g, clue))
-      << "pace == 2 is inside the window now; a LOW clue must be rejected.";
+      << "pace == 3 is inside 2a's window; a LOW clue must be rejected.";
+}
+
+// The locked exemption's new home. Replay 1966653 sits at pace 1, so since
+// v8.2.0 the gate stands down there on PACE before the exemption is reached --
+// that test still pins its outcome, but no longer this rule. At pace 3 the
+// window is live, and a locked Alice is exempt from it.
+TEST(Reactor0PaceClueGate, LockedAliceIsExemptInsideTheWindow) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 2;
+  opts.discarded = discards_for_pace(3);
+  // Every card Alice holds is critical and clued, so she has no chop.
+  opts.hands[0] = {"y5", "g5", "b5", "p5", "r5"};
+  Game g = setup(std::move(opts));
+  for (int slot = 1; slot <= 5; ++slot) {
+    g = pre_clue(std::move(g), TestPlayer::ALICE, slot, {"5"});
+  }
+
+  ASSERT_EQ(g.state.pace(), 3) << "guard: inside 2a's window";
+  ASSERT_FALSE(hanabi::reactor0::requires_high_tier(g)) << "guard: rule 2a";
+  ASSERT_TRUE(g.common.thinks_locked(g, g.state.our_player_index))
+      << "guard: Alice is locked";
+  Action clue = make_clue(g, 0, 1, ClueKind::RANK, 4);
+  ASSERT_EQ(tier_of(g, clue), ClueTier::LOW) << "guard: same LOW clue";
+
+  EXPECT_TRUE(admissible(g, clue))
+      << "a locked Alice has no chop to discard, so cluing is all she has.";
 }
 
 // --- reactor is untouched ------------------------------------------------

@@ -231,7 +231,7 @@ Whether a clue should be given is then:
     - 1b. Otherwise, Alice gives the best clue from the General Clue Evaluation
       List below.
 2. **Alice is not occupied.**
-    - 2a. If `pace() >= 1 && clue_tokens < 4`, and Alice is not locked, Alice gives the best clue from the
+    - 2a. If `pace() >= 3 && clue_tokens < 4`, and Alice is not locked, Alice gives the best clue from the
       General Clue Evaluation List satisfying the **HIGH** or **MEDIUM** tier
       requirements.
     - 2b. Otherwise, Alice gives the best clue from the General Clue Evaluation
@@ -245,14 +245,26 @@ before §4 is reached, and §4 is exactly the branch that promises to return a
 clue when she is out of alternatives. Rule 1a carries no such clause: an
 occupied Alice holds a call she can action, so she is not out of alternatives.
 
-**On the pace condition.** It was `pace() >= 3` through v7.3.0, inherited from
-reactor's low-clue-count gate. That left a hole: at replay 1966119 T5 an occupied
-Alice sat at pace 2, the gate stood down, and a LOW-tier reactive discard became
-admissible — neither a HIGH clue nor the pending call. Low pace is if anything a
-worse time to spend a token on a LOW clue, not a better one, so the threshold is
-now `pace() >= 1`. Pace 0 remains exempt: there every remaining turn must produce
-a play or the game cannot finish, and hoarding a token for a better clue is
-pointless.
+**On the pace conditions.** The two rules take different thresholds, and the
+difference is the point.
+
+**1a is `pace() >= 1`.** It was `pace() >= 3` through v7.3.0, inherited from
+reactor's low-clue-count gate, and that left a hole: at replay 1966119 T5 an
+**occupied** Alice sat at pace 2, the gate stood down, and a LOW-tier reactive
+discard became admissible — neither a HIGH clue nor the pending call. An
+occupied Alice always has that call to fall back on, so a LOW clue is never the
+better use of the turn, whatever the pace.
+
+**2a is `pace() >= 3`.** An unoccupied Alice has no such fallback. Holding her
+to the MEDIUM bar with the deck nearly out does not buy a better clue later —
+there is no later — it just sends her to the discard pile. Nothing about 1966119
+argues for this window; that replay was the occupied rule. Note the consequence
+at replay 1966687 T14 (pace 2, 3 tokens): the bot now gives a LOW reactive where
+it used to fall through and chuck a known duplicate. That is the intended shape
+of the change.
+
+**Pace 0 is exempt in both**: there every remaining turn must produce a play or
+the game cannot finish, and hoarding a token for a better clue is pointless.
 
 If Alice does not have a clue available from the General Clue Evaluation List,
 Alice moves to the play/discard decision phase.
@@ -332,7 +344,14 @@ is judged from Alice's own inference, not common knowledge.
    discard can reach sits below rung 3.1.
 
 3. **Bob's chop is worth a clue** (so in particular he is not locked) **and he
-   has no safe play or discard.** Worth a clue means either of two things, and
+   has no safe play or discard — or `pace() <= 2`.** The pace arm waives only
+   the safe-action half: at low pace there are few turns left to collect that
+   chop in, and spending one on a discard Bob could have made anyway is how a
+   playable card ends up buried. A locked Bob, and a chop that is neither
+   endangered nor playable, still skip §3 — those ask whether the clue is worth
+   giving at all, which low pace does not change.
+
+   Worth a clue means either of two things, and
    "non-trash" — which is what this said until v7.22.0 — was too weak to
    separate them from the case with neither:
 
@@ -351,14 +370,18 @@ is judged from Alice's own inference, not common knowledge.
    the following:
     1. Give a stable play clue to Bob if there are `>= 2 clues**`. This includes
        direct rank or color play clues and play reveals given with either rank or color. 
-    2. If Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
+    2. If pace is >= 3 and Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.
     3. If Bob does not already have a safe discard that is common knowledge between Alice and Bob,
        give a stable discard clue or trash reveal clue to Bob that stamps CTD on a trash card
        or same-hand-dupe, or a CTP to a trash card in an inverted suit
-    4. Give a double discard clue that stamps CTD on two trash cards or same-hand-dupes,
-       or CTP to a trash or same-hand-dupe in an inverted suit.
+    4. If pace is `>= 3`, give a double discard clue that stamps CTD on two trash
+       cards or same-hand-dupes, or CTP to a trash or same-hand-dupe in an
+       inverted suit. Same pace condition as 3.2, for the same reason: a double
+       discard spends a clue to clear cards the team could have thrown anyway,
+       and when turns are the scarce resource it is not worth one. §4.8 carries
+       no such condition, because §4 must always return a clue.
     5. Give a stable discard clue to Bob that stamps CTD on a card for which a
        dupe exists in Cathy's hand (or Alice's hand, if known by Alice), or a CTP
        to a card in an inverted suit whose dupe is seen by Alice.

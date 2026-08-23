@@ -304,6 +304,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_replay_1966633_locked_alice_gives_the_play_reveal.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966653_locked_alice_is_exempt_from_the_tier_gate.cpp
   tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp
+  tests/test_reactor0/test_decision_making/test_low_pace_clues.cpp
   tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp

@@ -174,8 +174,10 @@ std::vector<ClueCandidate> analyse_clues(
 
 // The tier gate of DECISION_MAKING.md "Decision phase 1" items 1 and 2, lifted
 // verbatim from the deleted `eval_action` so its boundaries do not move:
-//   * Alice occupied  -> need HIGH   while pace() >= 3 && clue_tokens < 8
+//   * Alice occupied  -> need HIGH   while pace() >= 1 && clue_tokens < 8
 //   * otherwise       -> need MEDIUM while pace() >= 3 && clue_tokens <= 3
+// The two pace thresholds differ deliberately: an occupied Alice always has
+// her call to fall back on, an unoccupied one at low pace has nothing.
 // Outside either window, or when the giver is not the POV seat, there is no
 // gate. At 8 tokens neither window applies, which is what lets section 4 rank
 // clues the gate would otherwise flatten.
