@@ -24,6 +24,7 @@
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/calls.h"
+#include "hanabi/endgame/helper.h"
 #include "hanabi/logging/decide_trace.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
@@ -880,12 +881,81 @@ PerformAction Game::take_action() const {
 
   // --- Endgame solver fork ---
   if (s.rem_score() <= static_cast<int>(s.variant->suits.size()) + 1) {
+    // A CERTAIN play outranks a speculative one.
+    //
+    // The endgame's own choice stands whenever it is a clue, or an ordinary
+    // discard, or a play that certainly advances a stack. This refuses exactly
+    // one thing: gambling a card that might be trash while a card we KNOW will
+    // score sits in the same hand.
+    //
+    // It is a guard at the fork rather than a fix inside one routine because
+    // several of them resolve a choice by hand order, and any of them can be
+    // the one that answers: `trivially_winnable` walks `obvious_playables`
+    // (clue-derived only, so an inference-known playable is invisible to it)
+    // and takes `.front()`; `solve`'s "one play wins" shortcut needs a PINNED
+    // singleton; and equal-winrate plays fall to enumeration order in
+    // `optimize` / `optimize_full`.
+    //
+    // Replay 1969779 T68: on the final turn at 28/30, will-bot67 held slot 5
+    // reading {a5, d5} with both stacks on 4 -- it scores whichever it is --
+    // and played slot 4 instead, reading {a1, a5, b1, d5, e1}. It was the b1.
+    // A second strike, and the d5 never played.
+    auto prefer_certain_play = [&](PerformAction chosen) {
+      const int* target = nullptr;
+      bool is_play_button = false;
+      if (auto* p = std::get_if<PerformPlay>(&chosen)) {
+        target = &p->target;
+        is_play_button = true;
+      } else if (auto* d = std::get_if<PerformDiscard>(&chosen)) {
+        target = &d->target;
+      } else {
+        return chosen;  // a clue
+      }
+      if (s.holder_of(*target) != s.our_player_index) return chosen;
+
+      // Is this a PLAY at all? Pressing Play always is. Pressing Discard is
+      // only a play attempt on an inverted suit -- an ordinary discard is a
+      // deliberate choice this rule says nothing about.
+      if (!is_play_button) {
+        const IdentitySet live = me().thoughts[*target].possibilities();
+        const bool could_chuck = live.exists([&](Identity i) {
+          return s.variant->suits[i.suit_index].suit_type.inverted &&
+                 s.is_playable(i);
+        });
+        if (!could_chuck) return chosen;
+      }
+      if (hanabi::endgame::certainly_advances(*this, *target, chosen)) {
+        return chosen;
+      }
+      auto certain = hanabi::endgame::certain_plays(*this);
+      if (certain.empty()) return chosen;
+      // Among certain plays, honour a standing call first -- the same
+      // tie-break the solver applies (reactor0 §1b.5, replay 1966757) -- then
+      // hand order.
+      for (const auto& c : certain) {
+        const int* co = std::get_if<PerformPlay>(&c)
+                            ? &std::get<PerformPlay>(c).target
+                            : &std::get<PerformDiscard>(c).target;
+        if (meta[*co].status == CardStatus::CALLED_TO_PLAY ||
+            meta[*co].status == CardStatus::CALLED_TO_DISCARD) {
+          hanabi::logging::log_branch("endgame.prefer_certain_play",
+                                      {{"was", *target}, {"now", *co}});
+          return c;
+        }
+      }
+      const int* first = std::get_if<PerformPlay>(&certain.front())
+                             ? &std::get<PerformPlay>(certain.front()).target
+                             : &std::get<PerformDiscard>(certain.front()).target;
+      hanabi::logging::log_branch("endgame.prefer_certain_play",
+                                  {{"was", *target}, {"now", *first}});
+      return certain.front();
+    };
     // Forced-endgame layer: mechanical rules that override the search
     // when the correct action is hardcoded. See
     // `src/endgame/forced_endgame.cpp` for the rule list. Cheap enough
     // (O(n × hand × suits)) to check before the solver kicks in.
     if (auto forced = hanabi::endgame::forced_endgame_action(*this); forced) {
-      return *forced;
+      return prefer_certain_play(*forced);
     }
     // 6 s is enough budget for the solver to find a near-optimal action in
     // the positions we've seen on hanab.live (the deeper search rarely
@@ -895,7 +965,7 @@ PerformAction Game::take_action() const {
     hanabi::endgame::EndgameSolver solver(/*mc=*/true, /*timeout=*/6.0);
     auto result = solver.solve(*this);
     if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
-      return result.action;
+      return prefer_certain_play(result.action);
     }
     // Solver returned no winning action or winrate < 1%; fall through to heuristic.
   }

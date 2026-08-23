@@ -38,6 +38,24 @@ struct TriviallyResult {
 };
 TriviallyResult trivially_winnable(const Game& game, int player_turn);
 
+// Does pressing this action's button on this card advance a stack for EVERY
+// reading its holder still has?
+//
+// Inverted suits make the BUTTON part of the question: Play advances a plain
+// card and PITCHES an inverted one, Discard the reverse. A reading set spanning
+// both kinds is therefore never certain, even when every identity in it is
+// playable, because the two halves need opposite buttons.
+//
+// Deliberately built on `possibilities()` rather than on `obvious_playables`
+// (clue-derived only) or `Thought::id(infer=true)` (needs a pinned singleton).
+// A card read as {a5, d5} with both stacks on 4 scores whichever it is, and
+// neither of those two notions can see that -- which is exactly how replay
+// 1969779 T68 came to gamble a trash card on the final turn while holding one.
+bool certainly_advances(const Game& game, int order, const PerformAction& how);
+
+// Every action on our own cards that `certainly_advances`, in hand order.
+std::vector<PerformAction> certain_plays(const Game& game);
+
 struct GameArr {
   Fraction prob;
   RemainingMap remaining;

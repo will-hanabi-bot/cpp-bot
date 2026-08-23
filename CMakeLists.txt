@@ -120,6 +120,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_snapshot_roundtrip.cpp
   tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_helper.cpp
+  tests/test_endgame/test_certain_play.cpp
   tests/test_endgame/test_orange_chuck.cpp
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_logging/test_game_logger_rename.cpp
@@ -240,6 +241,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1967491_dark_orange_chuck_is_a_valid_reaction.cpp
   tests/test_reactor0/test_dispatch.cpp
   tests/test_reactor0/test_endgame/test_replay_1966675_sole_holder_of_both_red_fours.cpp
+  tests/test_reactor0/test_endgame/test_replay_1969779_certain_play_beats_a_gamble.cpp
   tests/test_reactor0/test_endgame/test_replay_1966757_endgame_honours_reacter_call.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp

@@ -30,6 +30,40 @@ int remaining_total(const RemainingMap& remaining) {
   return total;
 }
 
+bool certainly_advances(const Game& game, int order, const PerformAction& how) {
+  const State& state = game.state;
+  const bool want_play = std::holds_alternative<PerformPlay>(how);
+  if (!want_play && !std::holds_alternative<PerformDiscard>(how)) return false;
+  // Pressing Discard is only legal below 8 tokens, so a chuck that cannot be
+  // performed is not a certain play.
+  if (!want_play && state.clue_tokens >= 8) return false;
+
+  const IdentitySet live = game.me().thoughts[order].possibilities();
+  if (live.is_empty()) return false;
+  return live.forall([&](Identity i) {
+    const bool inverted = state.variant->suits[i.suit_index].suit_type.inverted;
+    // Play advances a plain card; Discard advances an inverted one. When the
+    // reading set spans both, one half fails here -- correctly, since no single
+    // button covers both.
+    if (want_play == inverted) return false;
+    return state.is_playable(i);
+  });
+}
+
+std::vector<PerformAction> certain_plays(const Game& game) {
+  std::vector<PerformAction> out;
+  for (int order : game.state.our_hand()) {
+    PerformAction play{PerformPlay{order}};
+    if (certainly_advances(game, order, play)) {
+      out.push_back(play);
+      continue;
+    }
+    PerformAction chuck{PerformDiscard{order}};
+    if (certainly_advances(game, order, chuck)) out.push_back(chuck);
+  }
+  return out;
+}
+
 std::vector<Identity> find_must_plays(const State& state, const std::vector<int>& hand) {
   std::vector<std::optional<Identity>> ids;
   ids.reserve(hand.size());

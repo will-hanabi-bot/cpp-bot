@@ -1237,8 +1237,8 @@ by `take_action`'s main path. It simulates each clue and:
 ## 2.9 Endgame
 
 **Triggers.** `take_action` forks to the endgame when
-`rem_score() <= num_suits + 1` (`:665`). Separately, `in_endgame()`
-(`:398-402`) is `pace() < num_players - 1` — deliberately one turn earlier
+`rem_score() <= num_suits + 1`. Separately, `Game::in_endgame()`
+is `pace() < num_players - 1` — deliberately one turn earlier
 than the base-game definition — and is what switches the various eval
 constants to their endgame values.
 

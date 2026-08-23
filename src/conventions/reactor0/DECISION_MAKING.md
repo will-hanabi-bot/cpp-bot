@@ -174,9 +174,28 @@ The priority of evaluation on a given player (Alice)'s turn is:
 Two things outrank the phases below, and one thing sits between them:
 
 ```
-0.  Endgame.  The forced-endgame rules and the exact solver run first and are
-    convention-neutral (`decide.cpp:739-758`).  They are unchanged by this spec.
+0.  Endgame.  The forced-endgame rules and the exact solver run first
+    (`decide.cpp`, the `rem_score() <= num_suits + 1` fork).  They are
+    unchanged by this spec, with one guard on top: a CERTAIN play outranks a
+    speculative one — see below.
 
+
+**A certain play outranks a speculative one (step 0).** When the endgame's
+answer is a play, and we hold a card that certainly advances a stack, the answer
+must be one of those. "Certainly advances" asks the question of the BUTTON and
+of every reading the holder still has (`endgame::certainly_advances`), so it
+sees a card read as `{a5, d5}` with both stacks on 4 — which scores whichever it
+is, and which neither `obvious_playables` (clue-derived) nor `Thought::id` (a
+pinned singleton) can recognise. Clues and ordinary discards are untouched: the
+solver is often right to stall or to throw.
+
+The guard sits at the fork rather than inside one routine because several of
+them resolve a choice by hand order and any can be the one that answers —
+`trivially_winnable` walks `obvious_playables` and takes `.front()`, and
+equal-winrate plays fall to enumeration order in the solver's `optimize`.
+Replay 1969779 T68: on the final turn at 28/30, will-bot67 held that `{a5, d5}`
+card and played a different one reading `{a1, a5, b1, d5, e1}`. It was the b1 —
+a second strike, and the d5 never played.
 1.  An H4 clue, if one is available.
 
 2.  A pending REACTION.  If Alice holds a reacter-CTP (or, in a variant with an

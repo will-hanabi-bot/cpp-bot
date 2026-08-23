@@ -203,7 +203,7 @@ std::vector<EndgameSolver::ActionEntry> EndgameSolver::possible_actions(
     // never a candidate at all — replay 1942723 T42, where a known Orange 4
     // with the Orange stack at 3 won 20/20 and the bot discarded slot 1.
     //
-    // Mirrors the heuristic path's routing at src/basics/decide.cpp:885-894.
+    // Mirrors the heuristic path's play/discard routing in src/basics/decide.cpp.
     // Only ever emitted for a card whose identity is known AND currently
     // playable: a chuck of a non-playable orange is a misplay, which
     // `perform_to_action` now models via the `failed` flag.

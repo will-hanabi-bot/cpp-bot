@@ -345,3 +345,16 @@ The one exception is a genuine contradiction, which escalates through
 The note segment for ladder step (b): a narrowing emptied the set, resetting to
 global empathy and re-deriving emptied it again, so no reading explains the
 card. Left for diagnosis. `ConvData::note_mark`, `src/net/notes.cpp`.
+
+### certain play
+A card that advances a stack for EVERY reading its holder still has, pressed
+with the button that does so — Play on a plain suit, Discard (a chuck) on an
+inverted one. Readings spanning both kinds are never certain, since the two
+halves need opposite buttons.
+
+Deliberately wider than the two notions the endgame used before it:
+`obvious_playables` is clue-derived, and `Thought::id(infer=true)` needs a
+pinned singleton, so both miss a card read as `{a5, d5}` with both stacks on 4.
+`endgame::certainly_advances` / `certain_plays`
+(`src/endgame/helper.cpp`); the rule that uses them is DECISION_MAKING.md's
+Precedence step 0.
