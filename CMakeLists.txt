@@ -121,6 +121,7 @@ add_executable(hanabi_tests
   tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_certain_play.cpp
+  tests/test_endgame/test_required_play.cpp
   tests/test_endgame/test_timeout_precheck.cpp
   tests/test_endgame/test_orange_chuck.cpp
   tests/test_endgame/test_solver_smoke.cpp
@@ -246,6 +247,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_endgame/test_replay_1969779_certain_play_beats_a_gamble.cpp
   tests/test_reactor0/test_endgame/test_replay_1969860_endgame_honours_the_reacter_call.cpp
   tests/test_reactor0/test_endgame/test_replay_1966757_endgame_honours_reacter_call.cpp
+  tests/test_reactor0/test_endgame/test_replay_1970943_required_play_with_none_certain.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp

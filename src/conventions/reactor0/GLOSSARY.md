@@ -361,7 +361,28 @@ Precedence step 0.
 
 It has two more consumers since v8.5.0: forced-endgame rule 0, which makes a
 certain play a FORCED action once the deck is empty, and the endgame's
-reacter-call rule, which stands down while one exists.
+reacter-call rule, which stands down while one exists. Since v8.7.0 its ABSENCE
+is a precondition too — see *required play*.
+
+### required play
+An identity the team cannot score unless we lay it ourselves, this turn.
+
+With the deck empty every other hand is visible, so this is computable rather
+than searched: `endgame::best_reachable_plays` (`src/endgame/helper.cpp`) counts
+the most cards the remaining seats can still stack, optimistically — each seat
+either does nothing or lays a card whose true identity is playable, whether or
+not that seat could name it. Price the round as-is, then again with a given
+playable identity already laid; if the second is higher, that identity is
+**required**.
+
+Forced-endgame **rule 0b** gambles on it when we hold no *certain play*: among
+our cards whose reading contains a required identity, the **leftmost clued**
+one, else the leftmost of any, on the button the card's suit calls for. Replay
+1970943 T24. Confined to `cards_left == 0`, and it carries no strike guard.
+
+Distinct from a certain play in exactly the way the names suggest: a certain
+play scores on every reading, a required play merely *might* be the card — the
+justification is that nothing else on the turn is worth more.
 
 The weaker sibling is **could advance**: the same suit/button pairing asked with
 `exists` instead of `forall`, over our STANDING CALLS only

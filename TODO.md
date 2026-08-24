@@ -643,3 +643,59 @@ convention question and not a code tidy.
 - `react_play` / `react_discard` (`reactor0/interpret_reaction.cpp`), which take
   `waiting.front()` rather than searching for the connection whose `reacter`
   matches the acting player.
+
+---
+
+## 26. `[endgame]` The search prunes a winning gamble it can see, because partners' unclued plays are invisible
+
+Replay 1970943 T24 (stacks `[3,5,5]`, deck empty, three turns left). The solver
+**did** generate the winning `PerformPlay{12}` — one of its three hypotheses
+assigns order 12 = r4 at probability 1/2 — and then dropped it at
+`solver.cpp:168`, because the forward walk decided the line was unwinnable.
+
+The reason is an asymmetry inside one predicate. `Player::thinks_playables`
+subtracts known trash only from cards that are **touched**:
+
+```cpp
+bool et = exclude_trash && game.is_touched(o);   // src/basics/player_game.cpp:186
+```
+
+* our order 12 is **clued**, so the subtraction applies and
+  `{r2,r4,o1,o2,o3,o4}` collapses to `{r4}` → offered as a play;
+* p1's r5 is **unclued**, so the subtraction is switched off, `{r1..r5}` never
+  collapses to `{r5}`, and `player_known_plays`
+  (`src/endgame/winnable.cpp:265-303`) reports p1 has no play at all.
+
+So the search can imagine our gamble but not the partner cashing it. p1 in the
+actual game blind-played the r5; it failed only because the r4 was never laid.
+
+v8.7.0's forced-endgame rule 0b answers the position without a search. Fixing
+the predicate would let the solver find it unaided, but it makes the whole
+search optimistic about blind plays, which changes every endgame winrate it
+reports — and §9 already documents how fragile that ranking is. The narrower
+shape worth trying first: at `cards_left == 0` only, credit a seat that holds
+the unique remaining copy of a `find_must_plays` identity
+(`src/endgame/helper.cpp:93-112` already computes exactly that set).
+
+---
+
+## 27. `[reactor0]` The ladder's pitch list uses a weaker playability notion than the solver's
+
+Same asymmetry as §26, one layer up. `action_lists`
+(`src/conventions/reactor0/calls.cpp:249`) calls
+
+```cpp
+game.players[player].thinks_playables(game, player)
+```
+
+with **no `exclude_trash` argument**, so `et` is false and no trash subtraction
+happens. `EndgameSolver::possible_actions` (`src/endgame/solver.cpp:186-192`)
+passes `exclude_trash=true` for the same question.
+
+At 1970943 T24 that is why order 12 never reached `lists.pitch` and rung **8
+`leftmost_unpinned`** — which would have played it — never fired; the turn fell
+through to rung **11 `chuck_leftmost`** and threw a known-trash b1.
+
+Passing `exclude_trash=true` there would align the two, but it widens the pitch
+list on every turn of every game, not just endgames, so it needs its own
+corpus run rather than being folded into a bug fix.

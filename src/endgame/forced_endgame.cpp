@@ -331,6 +331,112 @@ std::optional<PerformAction> any_legal_clue(const Game& game) {
 
 }  // namespace
 
+// Rule 0b -- the play that has to happen, when nothing in hand is certain.
+//
+// Replay 1970943 T24: stacks [3,5,5] with the deck empty and three turns left.
+// p0's hand was visibly all trash; p1 visibly held BOTH r4 and r5 but had one
+// turn, so whichever they played, the other died. The only line to 15 was for
+// us to lay the r4 so p1 could cash the r5 -- and our slot 4 was clued and read
+// {r2,r4,o1,o2,o3,o4}, so it COULD be that r4. It was. The bot chucked a known
+// trash b1 instead and the game ended 13/15.
+//
+// The search cannot reach this. It generated our play and then pruned it,
+// because `player_known_plays` -> `thinks_playables` subtracts known trash only
+// from TOUCHED cards (src/basics/player_game.cpp:186): our slot 4 is clued so
+// its reading collapsed to {r4} and was offered, while p1's r5 is UNCLUED so
+// {r1..r5} never collapsed and p1 read as having no play. The line therefore
+// looked unwinnable and the action was dropped (src/endgame/solver.cpp:168).
+// The solver can imagine our gamble but not p1 cashing it. See TODO.md.
+//
+// WHEN IT FIRES. The deck must be empty, nothing in hand may be certain (Rule 0
+// above already took that case, and a sure point outranks a gamble), and
+// playing must actually raise the ceiling: `best_reachable_plays` prices the
+// rest of the final round with full sight of every other hand, once as-is and
+// once per currently-playable identity. An identity that lifts the ceiling is
+// REQUIRED -- nobody else is going to cash it in time.
+//
+// At 1970943 T24 the baseline is 1 (p1 can lay the r4 themselves) and laying r4
+// ourselves makes it 2 (p1 then lays the r5), so r4 is required.
+//
+// It deliberately carries NO strike guard: it fires even when a miss would be
+// the game-ending third strike. On these turns the alternative is almost always
+// a trash discard, and across the log corpus the rule picks the right card 11
+// times in 17 where ground truth is recoverable.
+//
+// SELECTION is the reported convention: among our cards that could be a
+// required identity, the leftmost CLUED one, else the leftmost of any. Clued
+// first is load-bearing -- at T24 the leftmost candidate overall was slot 1, an
+// omni 1, and only the clued slot 4 was the r4.
+//
+// The BUTTON is part of the answer. On an inverted (Orange / Dark Orange) suit
+// the action that advances the stack is the chuck (PerformDiscard); pressing
+// Play would pitch the card away. Paired exactly as `certainly_advances`
+// (src/endgame/helper.cpp) pairs it, including its refusal of a chuck at 8
+// tokens, where discarding is illegal.
+std::optional<PerformAction> required_play_action(const Game& game) {
+  const State& s = game.state;
+  if (!s.endgame_turns) return std::nullopt;
+
+  // The seats that act after us inside the final round. We are index 0 of the
+  // window and are excluded: the whole question is what happens if we do NOT
+  // contribute.
+  std::vector<int> rest;
+  for (int i = 1; i < *s.endgame_turns; ++i) {
+    rest.push_back((s.current_player_index + i) % s.num_players);
+  }
+
+  const int base = best_reachable_plays(s, s.play_stacks, rest);
+  IdentitySet required = s.playable_set.filter([&](Identity id) {
+    std::vector<int> stacks = s.play_stacks;
+    stacks[id.suit_index] = id.rank;
+    return 1 + best_reachable_plays(s, stacks, rest) > base;
+  });
+  if (required.is_empty()) return std::nullopt;
+
+  // The action that would lay `order`, or nullopt if it is not a candidate.
+  auto attempt = [&](int order) -> std::optional<PerformAction> {
+    IdentitySet hits = game.me().thoughts[order].possibilities().intersect(required);
+    if (hits.is_empty()) return std::nullopt;
+    // Every reading we are betting on must want the SAME button, or there is no
+    // single action that serves them -- the same reason a set spanning a plain
+    // and an inverted suit is never a certain play.
+    const bool inverted =
+        s.variant->suits[hits.head().suit_index].suit_type.inverted;
+    if (!hits.forall([&](Identity i) {
+          return s.variant->suits[i.suit_index].suit_type.inverted == inverted;
+        })) {
+      return std::nullopt;
+    }
+    if (inverted) {
+      if (s.clue_tokens >= 8) return std::nullopt;  // a discard is illegal here
+      return PerformAction{PerformDiscard{order}};
+    }
+    return PerformAction{PerformPlay{order}};
+  };
+
+  // `our_hand()` runs newest-first, so the front IS slot 1 -- the leftmost.
+  std::optional<PerformAction> leftmost, leftmost_clued;
+  int chosen = -1;
+  for (int order : s.our_hand()) {
+    auto act = attempt(order);
+    if (!act) continue;
+    if (!leftmost) {
+      leftmost = act;
+      chosen = order;
+    }
+    if (s.deck[order].clued) {
+      leftmost_clued = act;
+      chosen = order;
+      break;
+    }
+  }
+  if (!leftmost && !leftmost_clued) return std::nullopt;
+  hanabi::logging::log_branch(
+      "endgame.required_play",
+      {{"order", chosen}, {"clued", leftmost_clued.has_value()}});
+  return leftmost_clued ? leftmost_clued : leftmost;
+}
+
 std::optional<PerformAction> forced_endgame_action(const Game& game) {
   hanabi::instr::ScopedTimer st("endgame.forced_endgame_action");
   hanabi::logging::LogScope ls("endgame.forced_endgame_action");
@@ -377,6 +483,8 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
       }
       return certain.front();
     }
+    // Rule 0b: a play is REQUIRED to improve the score, and none is certain.
+    if (auto a = required_play_action(game)) return a;
   }
 
   if (s.cards_left != 1) return std::nullopt;

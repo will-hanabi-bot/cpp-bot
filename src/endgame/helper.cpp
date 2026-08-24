@@ -90,6 +90,51 @@ std::vector<PerformAction> certain_plays(const Game& game) {
   return out;
 }
 
+namespace {
+
+// `state.playable_away(id) == 0` against a HYPOTHETICAL stack vector rather
+// than the live one. Mirrors `State::playable_away`
+// (include/hanabi/basics/state.h:116-123): a reversed suit counts DOWN from the
+// 6 sentinel, so its next card is `stack - 1`, not `stack + 1`. `max_ranks`
+// bounds the still-achievable end of the suit in the same direction.
+bool playable_against(const State& state, const std::vector<int>& stacks,
+                      Identity id) {
+  const auto& st = state.variant->suits[id.suit_index].suit_type;
+  if (st.reversed) {
+    return id.rank == stacks[id.suit_index] - 1 &&
+           id.rank >= state.max_ranks[id.suit_index];
+  }
+  return id.rank == stacks[id.suit_index] + 1 &&
+         id.rank <= state.max_ranks[id.suit_index];
+}
+
+int reachable_from(const State& state, std::vector<int>& stacks,
+                   const std::vector<int>& seats, size_t idx) {
+  if (idx == seats.size()) return 0;
+  // This seat contributes nothing -- a clue, or a discard, or a card it cannot
+  // identify. Always available, so it is the floor.
+  int best = reachable_from(state, stacks, seats, idx + 1);
+  for (int order : state.hands[seats[idx]]) {
+    // Hidden to us (our own hand). Such a card cannot be credited: we do not
+    // know what it is, and this helper's whole job is to price what we DO see.
+    auto id = state.deck[order].id();
+    if (!id) continue;
+    if (!playable_against(state, stacks, *id)) continue;
+    const int was = stacks[id->suit_index];
+    stacks[id->suit_index] = id->rank;
+    best = std::max(best, 1 + reachable_from(state, stacks, seats, idx + 1));
+    stacks[id->suit_index] = was;
+  }
+  return best;
+}
+
+}  // namespace
+
+int best_reachable_plays(const State& state, std::vector<int> stacks,
+                         const std::vector<int>& seats) {
+  return reachable_from(state, stacks, seats, 0);
+}
+
 std::vector<Identity> find_must_plays(const State& state, const std::vector<int>& hand) {
   std::vector<std::optional<Identity>> ids;
   ids.reserve(hand.size());

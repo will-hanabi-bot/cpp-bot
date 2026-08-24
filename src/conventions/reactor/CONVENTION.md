@@ -1259,9 +1259,15 @@ Separately, `Game::in_endgame()` is `pace() < num_players - 1` — deliberately
 one turn earlier than the base-game definition — and is what switches the
 various eval constants to their endgame values.
 
-**Forced-endgame rules** (`src/endgame/forced_endgame.cpp:333-370`), only when
-`cards_left == 1` (`:337`). Both **short-circuit the solver** — whatever they
-return is `take_action`'s answer — so a rule that fires wrongly is expensive.
+**Forced-endgame rules** (`src/endgame/forced_endgame.cpp`). They all
+**short-circuit the solver** — whatever they return is `take_action`'s answer —
+so a rule that fires wrongly is expensive. Two are `cards_left == 0` only and
+sit above the `cards_left == 1` gate: **Rule 0**, a card that certainly
+advances a stack on every reading, and **Rule 0b**, a *required* play when none
+is certain — one whose identity would raise the best score the rest of the
+final round can reach (`best_reachable_plays`), gambled on the leftmost clued
+card that could be it, else the leftmost of any. The rest fire only when
+`cards_left == 1`.
 
 - **Rule 2 — two-critical play** (`:154-219`), checked first. Fires when
   `clue_tokens < num_players` and the current player holds ≥ 2

@@ -29,6 +29,23 @@ std::vector<Identity> find_must_plays(const State& state, const std::vector<int>
 
 bool unwinnable_state(const State& state, int player_turn, int depth = 0);
 
+// The most cards `seats` can still stack, playing in the order given, if each
+// seat either does nothing or plays a card whose TRUE identity is playable at
+// that moment. Counts PLAYS, not score, so reversed suits need no special
+// arithmetic at the call site -- every play is worth exactly one point.
+//
+// OPTIMISTIC by design: a seat is credited with a card it may not be able to
+// identify. That is the right model for "is this point still obtainable", which
+// is the only question asked of it. It is only sound with the deck EMPTY, since
+// it reads `state.deck[o].id()` and a hidden card contributes nothing -- with
+// cards still to draw it would silently under-count.
+//
+// `stacks` is a play_stacks vector, taken by value so a caller can hand it a
+// hypothetical. Depth is bounded by `seats.size()` (at most `num_players`) and
+// branching by hand size, so this is cheap next to any search.
+int best_reachable_plays(const State& state, std::vector<int> stacks,
+                         const std::vector<int>& seats);
+
 // One winning line for the trivial case. Empty/"" returned via empty vector +
 // false bool.
 struct TriviallyResult {

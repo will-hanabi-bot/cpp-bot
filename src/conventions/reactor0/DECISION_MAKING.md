@@ -190,6 +190,28 @@ because pace already does — at 3 seats it is exactly `pace() <= 3`. The
 forced-endgame rules sit ABOVE it and keep running on the points condition
 alone; a closed gate falls through to the phases below.
 
+**A required play, when none is certain (step 0).** With the deck EMPTY and
+nothing in hand certain, the bot will gamble on a card that *could* be the one
+the team needs. `best_reachable_plays` (`src/endgame/helper.cpp`) prices the
+rest of the final round with full sight of every other hand — once as-is, once
+per currently-playable identity. An identity that raises the ceiling is
+REQUIRED: nobody else is going to cash it in time. Among our cards whose
+reading contains one, the rule takes the **leftmost CLUED** card, else the
+leftmost of any, on the button that suits the card (Discard on an inverted
+suit). Rule 0 above still wins when a card certainly scores — a sure point
+outranks a gamble — and the whole rule is confined to `cards_left == 0`.
+
+Replay 1970943 T24: stacks `[3,5,5]`, deck empty, three turns left. The next
+seat's hand was all trash and the seat after held BOTH r4 and r5 with one turn
+to spend, so only our laying the r4 let the r5 score. Our slot 4 was clued and
+read `{r2,r4,o1,o2,o3,o4}` — it was the r4. The bot chucked trash and the game
+ended 13/15. Note the clued-first priority did the work: slots 1 and 2 could
+also have been the r4 and sit further left, and slot 1 was an Omni 1.
+
+It deliberately carries **no strike guard** — it fires even when a miss would
+be the game-ending third strike. On these turns the alternative is nearly
+always a trash discard.
+
 **A certain play outranks a speculative one (step 0).** When the endgame's
 answer is a play, and we hold a card that certainly advances a stack, the answer
 must be one of those. "Certainly advances" asks the question of the BUTTON and
