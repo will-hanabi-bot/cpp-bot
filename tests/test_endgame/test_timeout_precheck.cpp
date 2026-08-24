@@ -158,19 +158,14 @@ TEST(EndgameTimeout, AChuckIsSkippedAtEightTokens) {
       << "Discard only advances a stack on an inverted suit";
 }
 
-// --- the pre-check, end to end --------------------------------------------
+namespace {
 
-// With the solver given no time at all, the fork must action the standing call
-// that could advance rather than whatever the truncated search preferred.
-//
-// `Game::endgame_timeout` exists for exactly this: waiting six seconds for a
-// real timeout would make the test slow and its outcome machine-dependent.
-TEST(EndgameTimeout, PreCheckActionsACallTheTruncatedSearchDidNotPick) {
+// Red on 4 and yellow on 4: two points missing, so the points half of the fork
+// is open and the trivial-win shortcut cannot fire.
+SetupOptions precheck_position() {
   SetupOptions opts;
   opts.variant_name = "No Variant";
   opts.starting = TestPlayer::ALICE;
-  // Red on 4 and yellow on 4: two points missing, so the fork is open
-  // (`rem_score() <= suits + 1`) and the trivial-win shortcut cannot fire.
   opts.play_stacks = {4, 4, 5, 5, 5};
   opts.clue_tokens = 2;
   opts.hands = {
@@ -178,13 +173,13 @@ TEST(EndgameTimeout, PreCheckActionsACallTheTruncatedSearchDidNotPick) {
       {"y5", "g1", "b1", "p1", "g2"},
       {"g3", "b3", "p3", "g4", "b4"},
   };
-  Game g = setup(std::move(opts));
-  ASSERT_LE(g.state.rem_score(), static_cast<int>(g.state.variant->suits.size()) + 1)
-      << "guard: the endgame fork is open here";
+  return opts;
+}
 
-  // Our slot 3 carries a CTP reading {r5, r1}: r5 scores, r1 is long gone. Not
-  // certain, so tier 1 declines and tier 2 is what must fire. Slot 3 rather
-  // than slot 1 so a positional fallback would not pick it by accident.
+// Slot 3 carries a CTP reading {r5, r1}: r5 scores, r1 is long gone. Not
+// certain, so tier 1 declines and tier 2 is the layer under test. Slot 3 rather
+// than slot 1 so a positional fallback cannot pick it by accident.
+int stamp_precheck_call(Game& g) {
   const int called = g.state.hands[0][2];
   g.with_thought(called, [](const Thought& t) {
     Thought out = t;
@@ -193,6 +188,72 @@ TEST(EndgameTimeout, PreCheckActionsACallTheTruncatedSearchDidNotPick) {
   });
   g.with_meta(called, [](ConvData& m) { m.status = CardStatus::CALLED_TO_PLAY; });
   g.players[0] = g.common;
+  return called;
+}
+
+}  // namespace
+
+// --- the pace gate --------------------------------------------------------
+
+// The fork has two halves and the solver needs BOTH.
+//
+// `rem_score() <= num_suits + 1` asks how many points are missing, not how
+// close the deck is to empty, so on a 6-suit variant it opens around the
+// halfway mark and stays open. Across the log corpus 303 turns sat inside the
+// points half with `pace() > num_players`, each one paying for a full search of
+// a deck with 8-16 cards still in it.
+//
+// The threshold is `num_players` rather than a literal 3 because pace already
+// carries the seat count: `pace() == cards_left + num_players - rem_score()`,
+// so a fixed 3 would mean `rem_score() >= num_players - 2` at one card left --
+// free at 3 seats, but at 5 it would exclude exactly the near-max endgames the
+// solver is best at. At 3 seats the two forms are the same.
+//
+// This is the same fixture as the pre-check test below, minus its `cards_left`
+// correction: the harness derives `cards_left` as `total - score - discarded`
+// and never subtracts the dealt cards, which leaves this position at pace 28.
+TEST(EndgameTimeout, ThePaceGateKeepsTheSolverOutOfMidGame) {
+  Game g = setup(precheck_position());
+  const int called = stamp_precheck_call(g);
+
+  ASSERT_LE(g.state.rem_score(),
+            static_cast<int>(g.state.variant->suits.size()) + 1)
+      << "guard: the points half of the fork is open";
+  ASSERT_GT(g.state.pace(), g.state.num_players)
+      << "guard: but the pace half is not, which is the whole test";
+
+  g.endgame_timeout = 0.0;  // if the solver ran, tier 2 would take the call
+  hanabi::PerformAction action = g.take_action();
+
+  const bool took_the_call = std::holds_alternative<PerformPlay>(action) &&
+                             std::get<PerformPlay>(action).target == called;
+  EXPECT_FALSE(took_the_call)
+      << "the solver and its timeout pre-check must not run this far from the "
+         "end of the deck; the ordinary ladder owns this turn";
+}
+
+// --- the pre-check, end to end --------------------------------------------
+
+// With the solver given no time at all, the fork must action the standing call
+// that could advance rather than whatever the truncated search preferred.
+//
+// `Game::endgame_timeout` exists for exactly this: waiting six seconds for a
+// real timeout would make the test slow and its outcome machine-dependent.
+TEST(EndgameTimeout, PreCheckActionsACallTheTruncatedSearchDidNotPick) {
+  Game g = setup(precheck_position());
+  // The harness derives `cards_left` as `total - score - discarded` and never
+  // subtracts the 15 dealt cards, so a synthetic fixture lands ~15 too high --
+  // which puts this position at pace 28. Two cards left is the real count here
+  // (50 - 23 on stacks - 15 in hands - 10 discarded) and is what the fork's
+  // pace half is about.
+  g.with_state([](State& s) { s.cards_left = 2; });
+  ASSERT_LE(g.state.rem_score(), static_cast<int>(g.state.variant->suits.size()) + 1)
+      << "guard: the endgame fork is open here (points half)";
+  ASSERT_LE(g.state.pace(), g.state.num_players)
+      << "guard: and its pace half, or the solver never runs and the pre-check "
+         "this test is about cannot fire";
+
+  const int called = stamp_precheck_call(g);
 
   ASSERT_TRUE(hanabi::endgame::certain_plays(g).empty())
       << "guard: nothing here is a CERTAIN play, so tier 1 stands down";

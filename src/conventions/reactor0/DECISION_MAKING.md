@@ -175,10 +175,20 @@ Two things outrank the phases below, and one thing sits between them:
 
 ```
 0.  Endgame.  The forced-endgame rules and the exact solver run first
-    (`decide.cpp`, the `rem_score() <= num_suits + 1` fork).  They are
-    unchanged by this spec, with one guard on top: a CERTAIN play outranks a
-    speculative one — see below.
+    (`decide.cpp:892`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
+    additionally needs `pace() <= num_players` (`:990`); the forced rules do
+    not.  They are unchanged by this spec, with one guard on top: a CERTAIN
+    play outranks a speculative one — see below.
 
+
+**The solver needs the deck to be running out (step 0).** `rem_score() <=
+num_suits + 1` counts the points still missing, not how close the deck is to
+empty, so on a 6-suit variant it opens around the halfway mark and stays open;
+303 turns in the log corpus sat inside it with 8–16 cards left. The second gate
+is `pace() <= num_players` (`decide.cpp:990`), which scales with the seat count
+because pace already does — at 3 seats it is exactly `pace() <= 3`. The
+forced-endgame rules sit ABOVE it and keep running on the points condition
+alone; a closed gate falls through to the phases below.
 
 **A certain play outranks a speculative one (step 0).** When the endgame's
 answer is a play, and we hold a card that certainly advances a stack, the answer

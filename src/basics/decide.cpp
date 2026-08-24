@@ -967,92 +967,114 @@ PerformAction Game::take_action() const {
       return prefer_certain_play(*forced);
     }
 
-    // A standing reacter call outranks the endgame search.
+    // The deck must actually be running out.
     //
-    // The receiver acts NEXT and decodes their target from WHICH slot we
-    // actioned (`calc_target_slot`), so deviating does not merely spend a
-    // different card -- it redirects them. The solver prices that at zero,
-    // because it never models the convention reading our own action; it assumes
-    // the other seats simply play what they know. Its standing-call preference
-    // in `possible_actions` is per-HYPO and collapses to a tie-break at the
-    // root, which is not enough (`solver.cpp`, "Urgent first").
+    // `rem_score() <= num_suits + 1` asks how many points are MISSING, not how
+    // close the deck is to empty, so the fork also opens mid-game once
+    // discarded criticals have pulled `max_score()` down. 24% of fork-open
+    // turns in the log corpus sat above this threshold, searching a deep deck
+    // for nothing.
     //
-    // Replay 1969860 T55: will-bot67's slot 5 was an urgent CTD pairing with
-    // will-bot69's playable Null 4. The solver returned slot 2 instead, and
-    // `calc_slot(4, 2, 5) = 2` redirects will-bot69 to their Null 5 -- not
-    // playable, a strike, and the Null 5 lost.
+    // The threshold scales with the seat count because pace already does:
+    // `pace() == cards_left + num_players - rem_score()`, so a fixed `<= 3`
+    // would mean `rem_score() >= num_players - 2` at one card left -- free at
+    // 3 seats, but at 5 it would run ONLY when 3+ points are still missing,
+    // which is precisely the easy near-max endgames. At 3 seats the two forms
+    // are identical, which is every game in the corpus.
     //
-    // `urgent_call` already carries the actionability exemptions: a CTP the
-    // holder can see is trash is skipped unless it is a free pitch, and a CTD
-    // is taken only when not every reading is critical. A dead call therefore
-    // leaves the solver free, as before.
-    //
-    // Rule 0 of `forced_endgame_action` runs above this deliberately: with the
-    // deck empty, a card that certainly scores outranks the signal.
-    // Stands down when we hold a card that certainly scores: there the solver
-    // keeps the turn, because a guaranteed point is worth more than the signal
-    // and the solver is the thing that can sequence it. Replay 1957936 T41 is
-    // the case -- chucking a pinned Orange 2 starts the chain that wins 20/20,
-    // while an urgent CTD of plain trash sits alongside it.
-    if (convention == Convention::REACTOR0 && urgent_call &&
-        hanabi::endgame::certain_plays(*this).empty()) {
-      hanabi::logging::log_branch("endgame.honours_reacter_call", {});
-      return *urgent_call;
-    }
-    // 6 s is enough budget for the solver to find a near-optimal action in
-    // the positions we've seen on hanab.live (the deeper search rarely
-    // changes the picked action) while keeping per-turn compute well under
-    // the server's per-turn clock allowance. On timeout the solver returns its
-    // best-found result -- which is a silent LOWER BOUND, not a verdict, since
-    // every deadline check in the tree scores the truncated branch as a loss.
-    hanabi::endgame::EndgameSolver solver(/*mc=*/true, endgame_timeout);
-    auto result = solver.solve(*this);
-    // A TRUNCATED search does not outrank an action we can see is good.
-    //
-    // Roughly a third of endgame solves hit the deadline in practice, so this
-    // is the common case rather than an edge one. When it happens, take an
-    // action whose value we can establish ourselves before deferring to a
-    // search that never finished comparing its options:
-    //
-    //   1. a card every reading of which advances a stack;
-    //   2. a standing call whose button COULD advance one;
-    //   3. otherwise the ordinary handling below.
-    //
-    // Deliberately ABOVE the accept test, not inside it. The most degenerate
-    // timeouts do not come back with a usable result at all -- they error out
-    // ("timeout", "no hypotheses", "no winning actions") -- and those are
-    // exactly the turns where the search knows least. Running the pre-check
-    // only on an accepted result would skip them.
-    //
-    // The one exception is a reported certainty. Because a timeout only ever
-    // makes the position look WORSE, `winrate == 1` from a truncated search is
-    // still a genuine proven win, and overriding it could lose the game.
-    if (result.timed_out &&
-        !(result.ok() && result.winrate >= hanabi::endgame::Fraction(1))) {
-      auto order_of = [](const PerformAction& p) {
-        if (auto* pp = std::get_if<PerformPlay>(&p)) return pp->target;
-        if (auto* pd = std::get_if<PerformDiscard>(&p)) return pd->target;
-        return -1;
-      };
-      auto certain = hanabi::endgame::certain_plays(*this);
-      if (!certain.empty()) {
-        hanabi::logging::log_branch(
-            "endgame.timeout_precheck",
-            {{"tier", 1}, {"now", order_of(certain.front())}});
-        return certain.front();
+    // `forced_endgame_action` above is deliberately OUTSIDE this gate: its own
+    // rules are already gated on `cards_left <= 1`, and it overrides the search
+    // rather than feeding it. Everything below is the search or a correction to
+    // it -- the reacter-call guard and the timeout pre-check both exist only to
+    // rank actions against a result the solver produced.
+    if (s.pace() <= s.num_players) {
+      // A standing reacter call outranks the endgame search.
+      //
+      // The receiver acts NEXT and decodes their target from WHICH slot we
+      // actioned (`calc_target_slot`), so deviating does not merely spend a
+      // different card -- it redirects them. The solver prices that at zero,
+      // because it never models the convention reading our own action; it assumes
+      // the other seats simply play what they know. Its standing-call preference
+      // in `possible_actions` is per-HYPO and collapses to a tie-break at the
+      // root, which is not enough (`solver.cpp`, "Urgent first").
+      //
+      // Replay 1969860 T55: will-bot67's slot 5 was an urgent CTD pairing with
+      // will-bot69's playable Null 4. The solver returned slot 2 instead, and
+      // `calc_slot(4, 2, 5) = 2` redirects will-bot69 to their Null 5 -- not
+      // playable, a strike, and the Null 5 lost.
+      //
+      // `urgent_call` already carries the actionability exemptions: a CTP the
+      // holder can see is trash is skipped unless it is a free pitch, and a CTD
+      // is taken only when not every reading is critical. A dead call therefore
+      // leaves the solver free, as before.
+      //
+      // Rule 0 of `forced_endgame_action` runs above this deliberately: with the
+      // deck empty, a card that certainly scores outranks the signal.
+      // Stands down when we hold a card that certainly scores: there the solver
+      // keeps the turn, because a guaranteed point is worth more than the signal
+      // and the solver is the thing that can sequence it. Replay 1957936 T41 is
+      // the case -- chucking a pinned Orange 2 starts the chain that wins 20/20,
+      // while an urgent CTD of plain trash sits alongside it.
+      if (convention == Convention::REACTOR0 && urgent_call &&
+          hanabi::endgame::certain_plays(*this).empty()) {
+        hanabi::logging::log_branch("endgame.honours_reacter_call", {});
+        return *urgent_call;
       }
-      auto calls = hanabi::endgame::possible_call_actions(*this);
-      if (!calls.empty()) {
-        hanabi::logging::log_branch(
-            "endgame.timeout_precheck",
-            {{"tier", 2}, {"now", order_of(calls.front())}});
-        return calls.front();
+      // 6 s is enough budget for the solver to find a near-optimal action in
+      // the positions we've seen on hanab.live (the deeper search rarely
+      // changes the picked action) while keeping per-turn compute well under
+      // the server's per-turn clock allowance. On timeout the solver returns its
+      // best-found result -- which is a silent LOWER BOUND, not a verdict, since
+      // every deadline check in the tree scores the truncated branch as a loss.
+      hanabi::endgame::EndgameSolver solver(/*mc=*/true, endgame_timeout);
+      auto result = solver.solve(*this);
+      // A TRUNCATED search does not outrank an action we can see is good.
+      //
+      // Roughly a third of endgame solves hit the deadline in practice, so this
+      // is the common case rather than an edge one. When it happens, take an
+      // action whose value we can establish ourselves before deferring to a
+      // search that never finished comparing its options:
+      //
+      //   1. a card every reading of which advances a stack;
+      //   2. a standing call whose button COULD advance one;
+      //   3. otherwise the ordinary handling below.
+      //
+      // Deliberately ABOVE the accept test, not inside it. The most degenerate
+      // timeouts do not come back with a usable result at all -- they error out
+      // ("timeout", "no hypotheses", "no winning actions") -- and those are
+      // exactly the turns where the search knows least. Running the pre-check
+      // only on an accepted result would skip them.
+      //
+      // The one exception is a reported certainty. Because a timeout only ever
+      // makes the position look WORSE, `winrate == 1` from a truncated search is
+      // still a genuine proven win, and overriding it could lose the game.
+      if (result.timed_out &&
+          !(result.ok() && result.winrate >= hanabi::endgame::Fraction(1))) {
+        auto order_of = [](const PerformAction& p) {
+          if (auto* pp = std::get_if<PerformPlay>(&p)) return pp->target;
+          if (auto* pd = std::get_if<PerformDiscard>(&p)) return pd->target;
+          return -1;
+        };
+        auto certain = hanabi::endgame::certain_plays(*this);
+        if (!certain.empty()) {
+          hanabi::logging::log_branch(
+              "endgame.timeout_precheck",
+              {{"tier", 1}, {"now", order_of(certain.front())}});
+          return certain.front();
+        }
+        auto calls = hanabi::endgame::possible_call_actions(*this);
+        if (!calls.empty()) {
+          hanabi::logging::log_branch(
+              "endgame.timeout_precheck",
+              {{"tier", 2}, {"now", order_of(calls.front())}});
+          return calls.front();
+        }
       }
+      if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
+        return prefer_certain_play(result.action);
+      }
+      // Solver returned no winning action or winrate < 1%; fall through to heuristic.
     }
-    if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
-      return prefer_certain_play(result.action);
-    }
-    // Solver returned no winning action or winrate < 1%; fall through to heuristic.
   }
 
   // --- Reactor0 decision phase 1 (DECISION_MAKING.md "Precedence") ---

@@ -889,7 +889,7 @@ reactor's to evaluate.
 |---|---|---|
 | 0 | **Compute** (not yet return) the urgent action: the first card in our hand with `meta.urgent`, converted to a Play or Discard. Guarded by empathy sanity checks — never play a card whose every possibility is basic trash, never discard one whose every possibility is critical. | `:658-736` |
 | 0b | **Urgent Bob-protection override.** If we can clue, a reactive is pending with us as reacter, the receiver isn't Bob, Bob is unloaded, and Bob's chop is *actually* critical from our full visibility → replace our urgent action with the best clue to Bob. | `:672-693` |
-| 1 | **Endgame fork**, when `rem_score() <= num_suits + 1`: first `forced_endgame_action`, then the endgame solver. | `:738-759` |
+| 1 | **Endgame fork**, when `rem_score() <= num_suits + 1`: first `forced_endgame_action`, then — only if `pace() <= num_players` as well — the endgame solver. | `decide.cpp:892`, `:990` |
 | 2 | **Return the urgent action.** Note the ordering: the endgame solver *outranks* the convention's urgent signal. | `:760` |
 | 3–5 | Build the candidate lists: plays, clues, discards. | `:762-1044` |
 | 6 | Discard gating. | `:931-1044` |
@@ -1237,10 +1237,27 @@ by `take_action`'s main path. It simulates each clue and:
 ## 2.9 Endgame
 
 **Triggers.** `take_action` forks to the endgame when
-`rem_score() <= num_suits + 1`. Separately, `Game::in_endgame()`
-is `pace() < num_players - 1` — deliberately one turn earlier
-than the base-game definition — and is what switches the various eval
-constants to their endgame values.
+`rem_score() <= num_suits + 1` (`decide.cpp:892`). Inside that fork the
+**solver has a second gate, `pace() <= num_players`** (`:990`); the
+forced-endgame rules sit above it and run on the points condition alone.
+
+The two conditions ask different questions. `rem_score()` counts the points
+still missing, which on a 6-suit variant is satisfied around the halfway mark
+and stays satisfied — 303 turns in the log corpus sat inside it with 8–16 cards
+still in the deck, each paying for a full search of a position that was not an
+endgame. `pace()` is what says the deck is running out. The threshold is
+`num_players` rather than a constant because pace already carries the seat
+count: `pace() == cards_left + num_players - rem_score()`, so a fixed 3 would
+mean `rem_score() >= num_players - 2` at one card left — free at 3 seats, but at
+5 it would exclude precisely the near-max endgames the solver is best at. At 3
+seats the two forms are identical.
+
+Everything below the fork is unaffected, so a closed fork simply falls through
+to the ordinary ladder.
+
+Separately, `Game::in_endgame()` is `pace() < num_players - 1` — deliberately
+one turn earlier than the base-game definition — and is what switches the
+various eval constants to their endgame values.
 
 **Forced-endgame rules** (`src/endgame/forced_endgame.cpp:333-370`), only when
 `cards_left == 1` (`:337`). Both **short-circuit the solver** — whatever they

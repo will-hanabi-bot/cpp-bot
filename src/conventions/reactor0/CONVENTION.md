@@ -413,6 +413,24 @@ The command retro-applies to running games, but a reaction already in flight
 keeps the meaning it was given with: the parity binds into `ReactorWC::even_parity`
 at clue time, the same insulation `wc.rlocks` provides.
 
+**The settings persist between games.** They are stored bot-wide on
+`BotClient::reactive_overrides_` and copied into every new `Game` by `on_init`
+(`src/net/commands.cpp:325`), so a value set in the lobby — or inside an open
+replay — holds for the games that follow, across game starts, reconnects and
+reattends. `/set` works from a PM or a table room, and inside a replay, which
+never appears in the lobby table list (`table_info`, `commands.cpp:824`, falls
+back to the game's own variant and seat count).
+
+**A change of variant resets them.** `ReactiveOverride::clue_value` is a raw
+index into `Variant::clue_colour_names`, so an entry authored against one
+variant would point at a different colour on another. `overrides_for`
+(`commands.cpp`, called from `on_init` and `chat_settings`) is the single
+applicability test: a game on another variant gets that variant's built-in
+table. It is non-destructive — the stored list survives, so opening a replay of
+a different variant does not cost the settings — but the first `/set` ON a new
+variant clears the list rather than merging into it, since the dedupe key is
+`(kind, clue_value)` and stale entries would collide by index.
+
 ### Colour values
 
 `colour_clue_value` (`src/conventions/reactor0/colour_value.cpp:89-95`), whose
@@ -1111,6 +1129,7 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_colour_value.cpp` | the colour-value table incl. the spec's worked example |
 | `tests/test_reactor0/test_reactive_assignment.cpp` | the two parity buckets, the `/settings` lines verbatim, and `/set` label parsing |
 | `tests/test_reactor0/test_reactive_override_effect.cpp` | a `/set` override changing the ruleset and anchor, and the in-flight insulation |
+| `tests/test_net/test_set_persistence.cpp` | `/set` surviving a game start, the variant reset, and `/set` inside a replay |
 | `tests/test_reactor0/test_reactive_inverted_vet.cpp` | §1d — the react-slot vet follows the inverted swap, each swapped case paired with its un-swapped control, plus the giver-only reject |
 | `tests/test_reactor0/test_bad_reactive_target/test_replay_1942777_orange_reactive_vet_follows_swap.cpp` | bug 4.1 end to end — the reacter discards slot 5, not the Phase C lock's slot 3 |
 | `tests/test_reactor0/test_bad_reactive_target/test_replay_1957942_trash_orange_pitch_is_a_valid_reaction.cpp` | bug_report_4_1_0.txt 4.1.0b end to end — the reacter pitches the trash orange instead of discarding a critical 5 |

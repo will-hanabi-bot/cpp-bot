@@ -79,8 +79,18 @@ class BotClient {
   // propagated into every active Game like all_plays.
   std::optional<bool> rlocks_mode_;
   // reactor0 `/set` reassignments, bot-wide. Copied into each new Game and
-  // retro-applied to running ones, like rlocks.
+  // retro-applied to running ones, like rlocks -- so they SURVIVE a game
+  // start, which is the point: a player sets them in the lobby or a replay and
+  // expects them to hold for the games that follow.
+  //
+  // They are keyed to a variant. `ReactiveOverride::clue_value` is a raw index
+  // into `Variant::clue_colour_names`, so the same override carried onto a
+  // different variant would silently re-point at another colour. Applicability
+  // is therefore never tested inline -- always through `overrides_for`.
   std::vector<ReactiveOverride> reactive_overrides_;
+  // The variant `reactive_overrides_` were authored against. Empty when there
+  // are none.
+  std::string overrides_variant_;
 
   // Dedicated compute thread for take_action. Without this, the long-running
   // endgame solver blocks the network io_context (held by BotTransport), the
@@ -155,6 +165,14 @@ class BotClient {
   // Helper: for commands that work from PM or a table room, pick the target table.
   std::optional<int> resolve_target_table(const std::string& room) const;
 
+  // The single applicability test for `/set` overrides: they apply to
+  // `variant` only if that is the variant they were authored against.
+  // Returns an empty list otherwise, which means "use the variant's built-in
+  // table" everywhere it is consumed. Non-destructive -- a game on another
+  // variant does not discard the stored list, so opening a replay of one does
+  // not cost the player their settings.
+  const std::vector<ReactiveOverride>& overrides_for(const Variant& variant) const;
+
  public:
   // Test seam: the convention-selection state a game was created with.
   // Games_ is private and Game is large; this exposes just the two mode
@@ -164,6 +182,7 @@ class BotClient {
     Convention convention;
     bool allow_reactive_locks;
     bool all_plays;
+    std::vector<ReactiveOverride> reactive_overrides;
   };
   std::optional<GameModes> debug_game_snapshot(int table_id) const;
 };

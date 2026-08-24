@@ -313,6 +313,16 @@ void BotClient::on_init(const json& data) {
   game->allow_reactive_locks =
       rlocks_mode_ ? *rlocks_mode_
                    : hanabi::reactor0::default_allow_reactive_locks(*variant, np);
+  // `/set` reassignments persist across game starts. `Game::create` leaves the
+  // field empty, so without this line every `init` -- a game starting, but also
+  // a reconnect or a reattend -- silently reverted the table to the variant's
+  // built-in meanings while `reactive_overrides_` still held the player's
+  // choices, so the next unrelated `/set` made them all reappear at once.
+  //
+  // `overrides_for` is what makes this safe on a variant change: a different
+  // variant gets the built-in table, because the stored `clue_value` is an
+  // index into the OLD variant's colour list.
+  game->reactive_overrides = overrides_for(*variant);
   games_[tid] = std::move(game);
   action_time_[tid] = false;
   everyone_connected_[tid] = false;
@@ -823,7 +833,23 @@ void BotClient::chat_leaveall(const std::string& room) {
 
 std::optional<BotClient::TableInfo> BotClient::table_info(int table_id) const {
   auto table_it = tables_.find(table_id);
-  if (table_it == tables_.end()) return std::nullopt;
+  if (table_it == tables_.end()) {
+    // `tables_` is the LOBBY view, fed by the server's `table` messages. A
+    // replay is opened straight through `on_init` and never appears there, so
+    // without this every command routed via `table_info` -- `/settings` and
+    // `/set` both -- was a silent no-op inside a replay. The game itself knows
+    // its variant and seat count, which is all a TableInfo carries.
+    auto game_it = games_.find(table_id);
+    if (game_it == games_.end() || !game_it->second) return std::nullopt;
+    TableInfo info;
+    info.variant = game_it->second->state.variant;
+    info.num_players = static_cast<int>(game_it->second->state.names.size());
+    if (info.num_players < 2 ||
+        info.num_players >= static_cast<int>(kHandSize.size())) {
+      return std::nullopt;
+    }
+    return info;
+  }
   const auto& table = table_it->second;
 
   std::string variant_name;
@@ -855,6 +881,12 @@ std::optional<BotClient::TableInfo> BotClient::table_info(int table_id) const {
   return info;
 }
 
+const std::vector<ReactiveOverride>& BotClient::overrides_for(
+    const Variant& variant) const {
+  static const std::vector<ReactiveOverride> kNone;
+  return overrides_variant_ == variant.name ? reactive_overrides_ : kNone;
+}
+
 void BotClient::chat_settings(const std::string& room) {
   auto tid = resolve_target_table(room);
   if (!tid) return;
@@ -871,7 +903,7 @@ void BotClient::chat_settings(const std::string& room) {
   Convention conv = convention_mode_;
   bool rlocks = rlocks_mode_.value_or(
       hanabi::reactor0::default_allow_reactive_locks(*variant, num_players));
-  std::vector<ReactiveOverride> overrides = reactive_overrides_;
+  std::vector<ReactiveOverride> overrides = overrides_for(*variant);
   auto game_it = games_.find(*tid);
   if (game_it != games_.end() && game_it->second) {
     all_plays = game_it->second->all_plays;
@@ -948,7 +980,7 @@ std::optional<BotClient::GameModes> BotClient::debug_game_snapshot(int table_id)
   auto it = games_.find(table_id);
   if (it == games_.end() || !it->second) return std::nullopt;
   return GameModes{it->second->convention, it->second->allow_reactive_locks,
-                   it->second->all_plays};
+                   it->second->all_plays, it->second->reactive_overrides};
 }
 
 void BotClient::chat_set(const std::vector<std::string>& args, const json& data,
@@ -1002,6 +1034,16 @@ void BotClient::chat_set(const std::vector<std::string>& args, const json& data,
   if (value < 1 || value > hand) {
     reply("reactive value must be 1-" + std::to_string(hand));
     return;
+  }
+
+  // A new variant starts from its own built-in table. The dedupe key below is
+  // `(kind, clue_value)` and `clue_value` is an index into
+  // `Variant::clue_colour_names`, so a list authored against another variant
+  // would not merely be stale -- its entries would collide with this one's by
+  // index and silently re-point at different colours.
+  if (overrides_variant_ != variant->name) {
+    reactive_overrides_.clear();
+    overrides_variant_ = variant->name;
   }
 
   ReactiveOverride ov{clue->first, clue->second, bucket == "even", value};
