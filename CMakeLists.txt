@@ -227,10 +227,13 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_call_invariants.cpp
   tests/test_reactor0/test_chuck_dupes.cpp
   tests/test_reactor0/test_deferred_elim.cpp
+  tests/test_reactor0/test_reaction_elim_filter.cpp
   tests/test_reactor0/test_reactive_bluff.cpp
   tests/test_reactor0/test_misc/test_replay_1969696_reversed_orange_clue_is_a_chuck.cpp
   tests/test_reactor0/test_misc/test_replay_1967558_dropped_call_keeps_its_inference.cpp
   tests/test_reactor0/test_misc/test_replay_1971788_chuck_needs_possible_not_inferred.cpp
+  tests/test_reactor0/test_misc/test_replay_1971882_finesse_elim_needs_the_connector.cpp
+  tests/test_reactor0/test_misc/test_replay_1970589_elim_needs_the_alternative.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp
   tests/test_reactor0/test_misc/test_replay_1966696_mixed_rank_direct_play_stamps_ctp.cpp

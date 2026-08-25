@@ -12,6 +12,8 @@
 #include "hanabi/basics/clue.h"
 #include "hanabi/basics/interp.h"
 #include "hanabi/conventions/reactor/interpret_reaction.h"
+#include "hanabi/conventions/reactor/interpret_reactive.h"
+#include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -106,18 +108,126 @@ int advanced_suit(const State& before, const State& after) {
   return -1;
 }
 
-// Every identity exactly one rank away from playable.
-IdentitySet one_away_set(const State& s) {
+// Declared here, defined below with the resolution machinery it belongs to:
+// the parity this WC was GIVEN under, which decides whether the reacter presses
+// the same button as the receiver or the opposite one.
+bool wc_even_parity(const Game& prev, const ReactorWC& wc);
+
+// --- could the reacter have supplied the reading? -------------------------
+//
+// Every reaction negative argues "if that slot had been an X, the clue would
+// have named it instead". The argument only holds if the clue COULD have named
+// it: `react_slot + target_slot = anchor (mod hand size)`, so naming receiver
+// slot S would have required the reacter to action HIS slot
+// `calc_slot(V, S, H)` -- and to press the button that reading needs, on a card
+// that could bear it. When his paired slot could not, the alternative never
+// existed and the negative is unfounded.
+//
+// The candidate set is `effective_possible_for`: the reacter's own empathy as
+// every seat reconstructs it -- common knowledge minus the copies visible
+// outside his hand. Using it rather than what one seat can SEE is what keeps
+// this POV-invariant, so Alice, Bob and Cathy all draw the same negatives and
+// nobody's model of the receiver's hand drifts. It is the same set
+// `vet_react_slot` asks its version of this question of.
+
+// Could the reacter press PLAY on this slot -- a real play, or a pitch he can
+// spare?
+bool slot_is_pitchable(const State& s, const IdentitySet& cand) {
+  return cand.exists([&s](Identity i) {
+    if (variants::is_inverted_id(s, i)) return !s.is_critical(i);
+    return s.is_playable(i);
+  });
+}
+
+// Could the reacter press DISCARD on this slot -- an ordinary throw he can
+// spare, or a chuck that stacks the card?
+bool slot_is_chuckable(const State& s, const IdentitySet& cand) {
+  return cand.exists([&s](Identity i) {
+    if (variants::is_inverted_id(s, i)) return s.is_playable(i);
+    return !s.is_critical(i);
+  });
+}
+
+// The reacter's paired slot for receiver slot `target_slot`, or nullopt when
+// the arithmetic lands outside his hand.
+std::optional<int> paired_reacter_order(const Game& prev, const ReactorWC& wc,
+                                        int slot) {
+  const int hand_size = kHandSize[prev.state.num_players];
+  const int react_slot = hanabi::reactor::calc_slot(wc.focus_slot, slot, hand_size);
+  const auto& hand = prev.state.hands[wc.reacter];
+  if (react_slot - 1 < 0 || react_slot - 1 >= static_cast<int>(hand.size())) {
+    return std::nullopt;
+  }
+  return hand[react_slot - 1];
+}
+
+// The three per-slot sets. `even` is the clue's parity: even means the reacter
+// presses the SAME button as the receiver (double play or double discard), odd
+// the opposite (exactly one play).
+struct SlotElims {
+  IdentitySet direct;
+  IdentitySet finesse;
+  IdentitySet trash;
+};
+
+SlotElims slot_elims(const Game& prev, const ReactorWC& wc, int slot,
+                     bool even) {
+  SlotElims out;
+  auto order = paired_reacter_order(prev, wc, slot);
+  if (!order) return out;  // no such slot: no alternative, so no negative
+
+  const State& s = prev.state;
+  const IdentitySet cand = hanabi::reactor::effective_possible_for(prev, *order);
+  if (cand.is_empty()) return out;
+
+  const bool pitchable = slot_is_pitchable(s, cand);
+  const bool chuckable = slot_is_chuckable(s, cand);
   const int n = static_cast<int>(s.variant->suits.size()) * 5;
-  return IdentitySet::create(
-      [&s](Identity i) { return s.playable_away(i) == 1; }, n);
+
+  // 1. A directly playable card. The receiver advances a stack with it by
+  //    pressing Play on a plain suit and Discard on an inverted one; even
+  //    parity means the reacter matches that button, odd means he opposes it.
+  out.direct = IdentitySet::create(
+      [&](Identity i) {
+        if (!s.is_playable(i)) return false;
+        const bool reacter_pitches = variants::is_inverted_id(s, i) != even;
+        return reacter_pitches ? pitchable : chuckable;
+      },
+      n);
+
+  // 2. A finesse. Only ever available in the even bucket -- it is a double
+  //    play -- and it needs the reacter's paired slot to hold the exact
+  //    connector, direction-aware for reversed suits.
+  if (even) {
+    out.finesse = IdentitySet::create(
+        [&](Identity i) {
+          if (s.playable_away(i) != 1) return false;
+          auto conn = hanabi::reactor::variants::connector_of(s, i);
+          return conn && cand.contains(*conn);
+        },
+        n);
+  }
+
+  // 3. Trash. The mirror of 1: the receiver sheds trash with the OTHER button,
+  //    so the parity test flips.
+  out.trash = IdentitySet::create(
+      [&](Identity i) {
+        if (!s.is_basic_trash(i)) return false;
+        const bool reacter_pitches = variants::is_inverted_id(s, i) == even;
+        return reacter_pitches ? pitchable : chuckable;
+      },
+      n);
+  return out;
 }
 
 // Hold the reaction's negative inference until the receiver actions the target.
 //
-// Everything is read as of the REACTION: "playable" and "one away" describe the
-// position the clue was given into, not whatever the stacks look like by the
-// time the receiver gets round to acting.
+// Everything is read as of the REACTION: "playable", "one away" and "trash"
+// describe the position the clue was given into, not whatever the stacks look
+// like by the time the receiver gets round to acting. The per-slot filtering
+// above happens HERE for the same reason it has to happen at all -- by the time
+// the receiver acts, the reacter's hand has moved on and the question "could he
+// have supplied this?" is no longer answerable.
 void arm_reaction_elim(const Game& prev, Game& game, const ReactorWC& wc,
                        int target_slot) {
   if (target_slot - 1 < 0 ||
@@ -130,9 +240,19 @@ void arm_reaction_elim(const Game& prev, Game& game, const ReactorWC& wc,
   p.target_order = wc.receiver_hand[target_slot - 1];
   p.target_slot = target_slot;
   p.receiver_hand = wc.receiver_hand;
-  p.playable = prev.state.playable_set;
-  p.one_away = one_away_set(prev.state);
   p.reacter_suit = advanced_suit(prev.state, game.state);
+
+  const bool even = wc_even_parity(prev, wc);
+  const int slots = static_cast<int>(wc.receiver_hand.size());
+  p.direct_elim.resize(slots);
+  p.finesse_elim.resize(slots);
+  p.trash_elim.resize(slots);
+  for (int i = 0; i < slots; ++i) {
+    SlotElims e = slot_elims(prev, wc, i + 1, even);
+    p.direct_elim[i] = e.direct;
+    p.finesse_elim[i] = e.finesse;
+    p.trash_elim[i] = e.trash;
+  }
   game.pending_reaction_elim = std::move(p);
 }
 

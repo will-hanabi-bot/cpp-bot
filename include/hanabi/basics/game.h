@@ -135,6 +135,23 @@ class Game {
   // "one away" have to be read as of then, not as of whenever the receiver
   // gets round to acting.
   //
+  // AND BECAUSE THE ALTERNATIVE HAS TO HAVE EXISTED. Every one of these
+  // negatives is an argument of the form "if that slot had been an X, the clue
+  // would have named it instead" -- which only holds if the clue COULD have
+  // named it. The pairing `react_slot + target_slot = anchor` means naming
+  // receiver slot S would have required the reacter to action his slot
+  // `calc_slot(V, S, H)`, so if that slot of his could not have carried the
+  // card the reading needs, the alternative never existed and the negative is
+  // unfounded. Replay 1971882: an r4 was struck off will-bot67's slot 4 as
+  // "not one away", but naming it would have needed will-bot69 to blind-play an
+  // r3 from a slot whose empathy was {g1,g3,g5,d3}. Sixteen turns later the bot
+  // could not see the red finesse that would have won.
+  //
+  // So the eliminable identities are worked out PER SLOT at capture time, when
+  // the reacter's hand and the anchor are still in reach, and stored here
+  // already filtered. The fire step only has to decide which of the three sets
+  // each slot gets.
+  //
   // A pure function of action history, so `apply_snapshot` rebuilds it by
   // replay and it needs no serialisation.
   struct PendingReactionElim {
@@ -146,8 +163,14 @@ class Game {
     // The suit the reacter advanced, or -1 if their action stacked nothing (a
     // discard, or a pitch, or a strike). The finesse test compares against it.
     int reacter_suit = -1;
-    IdentitySet playable;  // playable_set as of the reaction
-    IdentitySet one_away;  // exactly one away from playable, as of the reaction
+    // Indexed by receiver slot - 1. What that slot may lose, already filtered
+    // by whether the reacter's paired slot could have supplied the reading.
+    // `finesse_elim` is empty under odd parity by construction -- a finesse is
+    // a double play, so it needs the even bucket -- which is why the fire step
+    // never has to re-test the parity.
+    std::vector<IdentitySet> direct_elim;   // directly playable at clue time
+    std::vector<IdentitySet> finesse_elim;  // exactly one away at clue time
+    std::vector<IdentitySet> trash_elim;    // trash at clue time
   };
   PendingReactionElim pending_reaction_elim;
   // Decide any held receiver-chuck inference (reactor0 only). Called after every

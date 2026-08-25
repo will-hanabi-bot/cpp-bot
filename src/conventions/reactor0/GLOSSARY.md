@@ -127,6 +127,21 @@ and a hand holds **at most one** `CALLED_TO_DISCARD` at a time. Revealed
 trash (`meta.trash`) is not a call. See CONVENTION.md §1h;
 `include/hanabi/conventions/reactor0/call_invariants.h`.
 
+### deferred reaction negative
+The inference a reaction makes about the receiver's OTHER slots — "the slots the
+walk passed over were not playable". Captured when the reacter acts
+(`Game::PendingReactionElim`) and fired when the receiver actions their target
+(`Game::fire_reaction_elim`), because which slots and which set depend on what
+the receiver does: a different stack means the passed-over slots only, the SAME
+stack is a *finesse*, and no stack at all means they discarded. §1d.2.
+
+Each negative is earned only if the **alternative existed** — the clue could
+only have named receiver slot `S` by sending the reacter to his slot
+`calc_slot(V, S, H)`, so if that slot of his could not have carried the reading,
+the negative is unfounded and is not drawn. The test runs against
+`effective_possible_for` — the reacter's empathy as every seat reconstructs it —
+so all three seats draw the same negatives. Replays 1971882 and 1970589.
+
 ### connector
 The card that must play immediately **before** another — the prerequisite of
 a finesse target. Direction-aware: rank−1 on a normal suit, rank**+1** on a

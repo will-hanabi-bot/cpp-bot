@@ -67,57 +67,71 @@ void Game::fire_reaction_elim(const Game& prev, int player_index, int order) {
     return -1;
   }();
 
-  bool whole_hand;      // else: only the slots the walk passed over
-  bool one_away_left;   // the finesse's extra negative on those slots
+  // Which of the three sets each slot gets. The sets themselves were filtered
+  // at capture time by whether the reacter's paired slot could have supplied
+  // the reading -- see `PendingReactionElim` -- so everything here is about
+  // WHICH slots and WHICH kind of negative, never about whether it was earned.
+  // Scope of a set: not applied at all, only the slots the walk passed over
+  // (those left of the target), or every clue-time slot but the target.
+  enum class Scope { kNone, kPassedOver, kWholeHand };
+  Scope direct_scope;
+  Scope finesse_scope;
+  Scope trash_scope;
   if (recv_suit < 0) {
     // The receiver discarded. They would have been called to play a playable,
-    // so they had none at all.
-    whole_hand = true;
-    one_away_left = false;
+    // so they had none at all -- and under the even bucket, where a finesse was
+    // on the table, no one-away either. `finesse_elim` is empty under odd
+    // parity by construction, so this needs no parity test of its own.
+    direct_scope = Scope::kWholeHand;
+    finesse_scope = Scope::kWholeHand;
+    trash_scope = Scope::kPassedOver;
   } else if (recv_suit == p.reacter_suit) {
     // A FINESSE: the receiver's card completed the very stack the reacter had
     // just advanced, so it was one away, not directly playable. Nothing in the
     // hand was directly playable, and the passed-over slots were not one away
     // either -- or one of them would have been the target instead.
-    whole_hand = true;
-    one_away_left = true;
+    direct_scope = Scope::kWholeHand;
+    finesse_scope = Scope::kPassedOver;
+    trash_scope = Scope::kNone;
   } else {
-    // An ordinary double play. Only the passed-over slots are spoken for.
-    whole_hand = false;
-    one_away_left = false;
+    // An ordinary double play. Only the passed-over slots are spoken for, and
+    // only about being directly playable: the receiver's card was playable in
+    // its own right, so the clue never had a one-away reading to prefer.
+    direct_scope = Scope::kPassedOver;
+    finesse_scope = Scope::kNone;
+    trash_scope = Scope::kNone;
   }
 
   const auto& hand = state.hands[p.receiver];
   auto still_held = [&](int o) {
     return std::find(hand.begin(), hand.end(), o) != hand.end();
   };
+  const int slots = static_cast<int>(p.receiver_hand.size());
   const int passed_over = p.target_slot - 1;
-  const int limit =
-      whole_hand ? static_cast<int>(p.receiver_hand.size()) : passed_over;
 
-  for (int i = 0; i < limit && i < static_cast<int>(p.receiver_hand.size()); ++i) {
-    const int o = p.receiver_hand[i];
-    if (!still_held(o)) continue;
-    // A card carrying its own call is spoken for by that call, not by this
-    // inference.
-    const CardStatus st = meta[o].status;
-    if (st == CardStatus::CALLED_TO_PLAY || st == CardStatus::CALLED_TO_DISCARD) {
-      continue;
-    }
-    narrow_thought(o, common.thoughts[o].possible.difference(p.playable));
-  }
-  if (one_away_left) {
-    for (int i = 0; i < passed_over && i < static_cast<int>(p.receiver_hand.size());
-         ++i) {
+  auto apply = [&](const std::vector<IdentitySet>& sets, Scope scope) {
+    if (scope == Scope::kNone) return;
+    if (static_cast<int>(sets.size()) < slots) return;
+    const int limit = scope == Scope::kWholeHand ? slots : passed_over;
+    for (int i = 0; i < limit && i < slots; ++i) {
+      if (i == passed_over) continue;  // the target speaks for itself
       const int o = p.receiver_hand[i];
       if (!still_held(o)) continue;
+      // A card carrying its own call is spoken for by that call, not by this
+      // inference.
       const CardStatus st = meta[o].status;
       if (st == CardStatus::CALLED_TO_PLAY || st == CardStatus::CALLED_TO_DISCARD) {
         continue;
       }
-      narrow_thought(o, common.thoughts[o].possible.difference(p.one_away));
+      if (sets[i].is_empty()) continue;
+      narrow_thought(o, common.thoughts[o].possible.difference(sets[i]));
     }
-  }
+  };
+
+  apply(p.direct_elim, direct_scope);
+  apply(p.finesse_elim, finesse_scope);
+  apply(p.trash_elim, trash_scope);
+
   p = PendingReactionElim{};
 }
 

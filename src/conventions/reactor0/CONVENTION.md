@@ -30,7 +30,8 @@ giver, Bob the next player, Cathy the one after.
   Making); the interpretation primitives `target_play`,
   `target_discard`, `ref_discard`, `check_fix`, `delayed_plays`,
   `effective_possible_for`; the reaction-resolution machinery (`calc_slot`,
-  `calc_target_slot`, `target_i_play/discard`, the four `elim_*` matrices);
+  `calc_target_slot`, `target_i_play/discard`). Reactor0 does **not** use the
+  four `elim_*` matrices — see §0 and §1d.2 for what replaced them;
   and most variant layers (pink promise, brownish trash reveal, the inverted
   pitch/chuck compensation on the **reactive** side, reversed suits).
   **Exception as of v4.0.0**: the *stable* side of the inverted (orange)
@@ -818,6 +819,40 @@ without any button or suit test. Everything is read as of the REACTION —
 whatever the stacks look like when the receiver gets round to acting. A card
 carrying its own call is left alone; that call speaks for it.
 
+**And the alternative has to have existed.** Every one of these negatives is an
+argument of the form *"if that slot had been an X, the clue would have named it
+instead"* — which only holds if the clue COULD have named it. The pairing
+`react_slot + target_slot ≡ anchor` means naming receiver slot `S` would have
+required the REACTER to action his slot `calc_slot(V, S, H)`, pressing the
+button that reading needs, on a card that could bear it. When his paired slot
+could not, no such clue was ever available and the negative is unfounded.
+
+So each slot's eliminable identities are worked out at capture time and stored
+already filtered:
+
+| the negative | earned only if the reacter's paired slot could |
+|---|---|
+| **directly playable** `N` | press the button the parity pairs with the receiver's. The receiver advances a stack with `N` by pressing Play on a plain suit and Discard on an inverted one; **even** parity means the reacter matches that button, **odd** that he opposes it. "Could press Play" means some candidate is a plain playable or an expendable inverted card; "could press Discard" means some candidate is a non-critical plain card or a playable inverted one. |
+| **one away** `N` (finesse) | hold the exact connector — `variants::connector_of`, so reversed suits follow their own direction. Only ever in the **even** bucket: a finesse is a double play. |
+| **trash** `N` | the mirror of the first row: the receiver sheds trash with the *other* button, so the parity test flips. |
+
+The candidate set is `reactor::effective_possible_for` — the reacter's own
+empathy as every seat reconstructs it, common knowledge minus the copies
+visible outside his hand. Using that rather than what one seat can SEE is what
+keeps this POV-invariant: Alice, Bob and Cathy draw the same negatives, so
+nobody's model of the receiver's hand drifts from the receiver's own. The
+asymmetry cannot be resolved perfectly — Alice and Bob know things about Cathy's
+hand that Cathy does not — but this is the sharpest test all three can agree on.
+
+Replay 1971882 is the case. An r4 was struck off the receiver's slot 4 as "not
+one away", but the anchor was 3, so naming that slot would have needed the
+reacter to blind-play an r3 from his slot `calc_slot(3, 4, 5) = 4` — whose
+empathy was `{g1, g3, g5, d3}`. Twenty-three turns later the bot could not see
+the red finesse that would have won the game. Replay 1970589 is the same defect
+costing a Dark Orange 4: the receiver's p3 was written off, so with no playable
+in sight the bot chucked its urgent CTD, and on an inverted suit a chuck is a
+play attempt.
+
 This replaces the four `elim_*` matrices and the knowledge-triggered
 `PendingDcElim` hold, which released as soon as anyone could prove the called
 card was or was not a playable inverted. That answered a narrower question and
@@ -826,13 +861,17 @@ could not tell a finesse from an ordinary double play at all.
 ## §1e The reactive lock and `allow_reactive_locks`
 
 **Resolution** (`src/conventions/reactor0/interpret_reaction.cpp`): when the
-reacter acts, `calc_target_slot` maps their slot to the receiver's target;
-the standard table applies — reacter play + RANK ⇒ receiver plays
-(`elim_play_play`); play + COLOUR ⇒ receiver discards (`elim_play_dc`);
-discard + COLOUR ⇒ receiver plays (`elim_dc_play`); discard + RANK ⇒
-receiver discards (`elim_dc_dc`). The two **receiver-chuck** rows —
-`elim_play_dc` and `elim_dc_dc` — are captured rather than applied; see
-"WHEN the reactive negative inference runs" above. Parity keys on `wc.clue.kind` **alone** (`:80`, `:129`);
+reacter acts, `calc_target_slot` maps their slot to the receiver's target, and
+`receiver_button` decides which button the receiver is handed — **even** parity
+means they press the same one the reacter did (double play or double discard),
+**odd** means the opposite (exactly one play). Reactor0 calls none of reactor's
+four `elim_*` matrices; the whole negative inference is captured and deferred,
+see §1d.2.
+
+Parity keys on **`wc.even_parity`**, snapshotted at clue time
+(`wc_even_parity`), not on `wc.clue.kind` — that is what lets Odds and Evens
+swap the two kinds and what insulates an in-flight reaction from a mid-game
+`/set`. It is otherwise `variants::uses_even_parity` on the clue kind;
 `wc.all_plays` is deliberately not consulted, because reading it let
 resolution contradict the reading every seat agreed on at clue time. Should a
 waiting connection carry the flag anyway (a replayed snapshot, or a reactor WC

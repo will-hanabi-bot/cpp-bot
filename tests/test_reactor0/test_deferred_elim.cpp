@@ -64,7 +64,17 @@ SetupOptions elim_opts() {
 
 // The capture `arm_reaction_elim` makes at reaction time, with the reacter's
 // advanced suit as the only knob.
-void arm(Game& g, int reacter_suit) {
+//
+// The per-slot sets are filled in UNFILTERED -- every slot gets the whole
+// playable set and the whole one-away set, as though the reacter's paired slot
+// could have supplied any reading. That is deliberate: these tests are about
+// the FIRING half, which decides which slots get which of the three sets. The
+// filtering half -- "could that alternative have existed at all" -- is what
+// `test_reaction_elim_filter.cpp` covers, against `arm_reaction_elim` itself.
+//
+// `even` decides whether a finesse was on the table at all; `arm_reaction_elim`
+// leaves `finesse_elim` empty under odd parity, so the fixture does too.
+void arm(Game& g, int reacter_suit, bool even = true) {
   Game::PendingReactionElim p;
   p.active = true;
   p.receiver = static_cast<int>(TestPlayer::CATHY);
@@ -72,10 +82,18 @@ void arm(Game& g, int reacter_suit) {
   p.receiver_hand = g.state.hands[static_cast<int>(TestPlayer::CATHY)];
   p.target_order = p.receiver_hand[2];
   p.reacter_suit = reacter_suit;
-  p.playable = g.state.playable_set;
+
   const int n = static_cast<int>(g.state.variant->suits.size()) * 5;
-  p.one_away = IdentitySet::create(
+  const IdentitySet playable = g.state.playable_set;
+  const IdentitySet one_away = IdentitySet::create(
       [&g](Identity i) { return g.state.playable_away(i) == 1; }, n);
+  const IdentitySet trash = IdentitySet::create(
+      [&g](Identity i) { return g.state.is_basic_trash(i); }, n);
+
+  const int slots = static_cast<int>(p.receiver_hand.size());
+  p.direct_elim.assign(slots, playable);
+  p.finesse_elim.assign(slots, even ? one_away : IdentitySet::empty());
+  p.trash_elim.assign(slots, trash);
   g.pending_reaction_elim = std::move(p);
 }
 
@@ -157,18 +175,39 @@ TEST(Reactor0ReactionElim, SameStackIsAFinesseAndClearsTheWholeHand) {
 
 // The receiver stacked nothing: they discarded. They would have been called to
 // play a playable, so they had none anywhere.
-TEST(Reactor0ReactionElim, NoStackMeansTheHandHeldNoPlayable) {
+//
+// What it says about ONE-AWAY cards depends on the parity, because that is what
+// decides whether a finesse was ever on the table. The even bucket is the
+// double play, so a finesse was available and the receiver not being given one
+// means nothing in the hand was one away either. The odd bucket is "exactly one
+// play" -- no finesse to prefer -- so a one-away card is not spoken for.
+TEST(Reactor0ReactionElim, NoStackAtEvenParityAlsoRulesOutOneAways) {
   Game g = setup(elim_opts());
   const auto o = cathy_orders(g);
-  arm(g, /*reacter_suit=*/3);
+  arm(g, /*reacter_suit=*/3, /*even=*/true);
 
   g = take_turn(std::move(g), "Cathy discards g2 (slot 3)", "y1");
 
   EXPECT_FALSE(admits(g, o[0], kR2));
   EXPECT_FALSE(admits(g, o[3], kB1))
       << "a discard speaks for the whole hand";
+  EXPECT_FALSE(admits(g, o[0], kR3))
+      << "a finesse was available in the even bucket and was not taken";
+  EXPECT_FALSE(admits(g, o[3], kB2))
+      << "and that reaches the whole hand too, not just the passed-over slots";
+}
+
+TEST(Reactor0ReactionElim, NoStackAtOddParitySaysNothingAboutOneAways) {
+  Game g = setup(elim_opts());
+  const auto o = cathy_orders(g);
+  arm(g, /*reacter_suit=*/3, /*even=*/false);
+
+  g = take_turn(std::move(g), "Cathy discards g2 (slot 3)", "y1");
+
+  EXPECT_FALSE(admits(g, o[0], kR2))
+      << "the direct-playable negative does not depend on parity";
   EXPECT_TRUE(admits(g, o[0], kR3))
-      << "but says nothing about one-away cards";
+      << "the odd bucket is exactly one play -- there was no finesse to prefer";
 }
 
 // --- scope ----------------------------------------------------------------
