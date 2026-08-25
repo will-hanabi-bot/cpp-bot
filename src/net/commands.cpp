@@ -191,6 +191,12 @@ void BotClient::on_chat(const json& data) {
     chat_version(data, room);
     return;
   }
+  // Shared block deliberately: `/help` is worth answering from a table room,
+  // which is where somebody who does not know the commands is sitting.
+  if (cmd == "help") {
+    chat_help(data, room);
+    return;
+  }
 
   // Remaining commands are PM-only (matches Python).
   if (!in_pm) return;
@@ -230,11 +236,25 @@ void BotClient::on_chat(const json& data) {
 
 void BotClient::on_table(const json& data) {
   int tid = data.value("id", -1);
-  if (tid != -1) tables_[tid] = data;
+  if (tid == -1) return;
+  // There is no "I joined" message from the server -- `table` is a snapshot
+  // that simply overwrites what we had. So the edge has to be read by diffing
+  // the stored `joined` flag BEFORE the overwrite.
+  bool was_joined = false;
+  auto it = tables_.find(tid);
+  if (it != tables_.end()) was_joined = it->second.value("joined", false);
+  const bool now_joined = data.value("joined", false);
+  tables_[tid] = data;
+  if (now_joined && !was_joined) announce_join(tid);
 }
 
 void BotClient::on_table_list(const json& data) {
   // Server snapshot - can be a JSON array or {list: [...]}.
+  //
+  // Deliberately does NOT announce, even for tables it marks joined. This is
+  // the bulk "here is the world" message sent on connect, so treating it as a
+  // join edge would have the bot greet every table it was already sitting at
+  // every time the socket reconnects. `on_table` is the per-table change.
   json entries;
   if (data.is_array()) {
     entries = data;
@@ -252,7 +272,10 @@ void BotClient::on_table_list(const json& data) {
 
 void BotClient::on_table_gone(const json& data) {
   int tid = data.value("tableID", -1);
-  if (tid != -1) tables_.erase(tid);
+  if (tid == -1) return;
+  tables_.erase(tid);
+  // Leaving and rejoining the same id is a real join, so let it announce again.
+  announced_tables_.erase(tid);
 }
 
 void BotClient::on_table_start(const json& data) {
@@ -976,6 +999,10 @@ void BotClient::chat_allplays(const std::vector<std::string>& args, const json& 
   reply(text);
 }
 
+bool BotClient::debug_announced_table(int table_id) const {
+  return announced_tables_.count(table_id) > 0;
+}
+
 std::optional<BotClient::GameModes> BotClient::debug_game_snapshot(int table_id) const {
   auto it = games_.find(table_id);
   if (it == games_.end() || !it->second) return std::nullopt;
@@ -1140,6 +1167,61 @@ void BotClient::chat_rlocks(const std::vector<std::string>& args, const json& da
     (void)tid;
   }
   reply(username_ + ": rlocks is now " + (turning_on ? "on" : "off"));
+}
+
+std::vector<std::string> help_lines(std::string_view username) {
+  const std::string who(username);
+  // Grouped by purpose rather than alphabetically: what you can read, what you
+  // can switch, the one command with real grammar, and the table controls that
+  // only work in a PM. KEEP IN STEP WITH README.md's "Chat commands" table.
+  return {
+      who + " | /help  /settings (reactive tables)  /getversion  /leaveall",
+      who +
+          " | /setall reactor|reactor0 (next game)  /rlocks [on|off] (reactor0 "
+          "locks)  /allplays [on|off] (reactor play+play)",
+      who +
+          " | /set <clue> odd|even <value> - move a clue's reactive bucket, "
+          "e.g. /set Yellow even 4",
+      who +
+          " | PM only: /join [user]  /create  /start  /setvariant <name>  "
+          "/terminate [id]",
+  };
+}
+
+std::string join_announcement(std::string_view username, Convention convention,
+                              std::string_view version) {
+  return std::string(username) + ": " +
+         std::string(convention_name(convention)) + ", " + std::string(version);
+}
+
+void BotClient::chat_help(const json& data, const std::string& room) {
+  const std::string sender = data.value("who", "");
+  const bool in_pm = data.value("recipient", "") == username_;
+  for (const std::string& line : help_lines(username_)) {
+    if (in_pm) {
+      chat_reply(line, sender);
+    } else {
+      transport_.queue_send(
+          "chat", json{{"msg", line}, {"recipient", ""}, {"room", room}});
+    }
+  }
+}
+
+// Say who we are when we sit down at a table, so the humans about to play with
+// us know which convention and which build without having to ask.
+//
+// The convention announced is `convention_mode_` -- the bot-wide DEFAULT. The
+// resolved one is not knowable here: the table is still filling and reactor0
+// needs exactly three players. A table that ends up with 4+ runs reactor
+// instead, and we deliberately do not come back to correct ourselves, nor when
+// somebody switches us with `/setall`.
+void BotClient::announce_join(int table_id) {
+  if (!announced_tables_.insert(table_id).second) return;  // already said it
+  transport_.queue_send(
+      "chat",
+      json{{"msg", join_announcement(username_, convention_mode_, kBotVersion)},
+           {"recipient", ""},
+           {"room", "table" + std::to_string(table_id)}});
 }
 
 void BotClient::chat_version(const json& data, const std::string& room) {

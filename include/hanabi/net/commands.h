@@ -11,12 +11,14 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "hanabi/basics/clue.h"
+#include "hanabi/basics/convention.h"
 
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
@@ -28,6 +30,25 @@
 #include "hanabi/settings.h"
 
 namespace hanabi::net {
+
+// `/help`'s output, one line per send: a chat message is a single line, so
+// twelve commands cannot be one message. Grouped by purpose and prefixed with
+// `username` because several bots answer at once and the lines have to stay
+// attributable -- the same reason `/getversion` and `/rlocks` prefix theirs.
+//
+// KEEP IN STEP WITH README.md's "Chat commands" table. A pure function so a
+// test can pin the text: outbound messages are unobservable (`queue_send` is
+// non-virtual and drops when not connected), and this is how
+// `reactor0::format_settings` is pinned too.
+std::vector<std::string> help_lines(std::string_view username);
+
+// What the bot says in a table's chat when it sits down. `convention` is the
+// bot-wide DEFAULT, not a resolved per-game value: at join time the table is
+// still filling and reactor0 needs exactly three players, so the resolved
+// convention is not knowable yet. A table that ends up with 4+ players runs
+// reactor regardless, and the bot does not correct itself.
+std::string join_announcement(std::string_view username, Convention convention,
+                              std::string_view version);
 
 class BotClient {
  public:
@@ -41,6 +62,11 @@ class BotClient {
   BotTransport& transport_;
   const BotConfig& config_;
   std::string username_;
+
+  // Tables whose join announcement has already gone out. Guards against a
+  // resent `table` message double-posting; cleared by `on_table_gone` so
+  // leaving and rejoining the same id announces again.
+  std::unordered_set<int> announced_tables_;
 
   // Tables visible in the lobby (id -> table info from `table` / `tableList`).
   std::unordered_map<int, nlohmann::json> tables_;
@@ -161,6 +187,11 @@ class BotClient {
   void chat_setall(const std::vector<std::string>& args, const nlohmann::json& data,
                      const std::string& room);
   void chat_version(const nlohmann::json& data, const std::string& room);
+  void chat_help(const nlohmann::json& data, const std::string& room);
+
+  // Say who we are in a table's own chat, once per join. See
+  // `join_announcement` for what and `on_table` for when.
+  void announce_join(int table_id);
 
   // Helper: for commands that work from PM or a table room, pick the target table.
   std::optional<int> resolve_target_table(const std::string& room) const;
@@ -185,6 +216,12 @@ class BotClient {
     std::vector<ReactiveOverride> reactive_overrides;
   };
   std::optional<GameModes> debug_game_snapshot(int table_id) const;
+
+  // Test seam: has this table already had its join announcement? The text
+  // itself is pinned through `join_announcement`; this is the only way to see
+  // that the edge fired once and only once, since nothing the bot SENDS is
+  // observable from a test.
+  bool debug_announced_table(int table_id) const;
 };
 
 }  // namespace hanabi::net

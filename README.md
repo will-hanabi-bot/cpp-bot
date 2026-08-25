@@ -432,11 +432,17 @@ exponential backoff, up to 5 attempts.
 
 ### Chat commands
 
-The bot answers these on hanab.live (`src/net/commands.cpp:140-195`). Some are
-available anywhere; the rest only in a private message.
+The bot answers these on hanab.live (`src/net/commands.cpp`, `on_chat`). Some
+are available anywhere; the rest only in a private message.
+
+**This table and `/help`'s output must agree.** `help_lines`
+(`src/net/commands.cpp`) is what the bot says in chat, and
+`tests/test_net/test_help_and_announce.cpp` fails if a command listed here is
+missing from it.
 
 | Command | Where | Effect |
 |---|---|---|
+| `/help` | anywhere | List the commands, four grouped lines. Username-prefixed, like `/getversion`, so several bots answering at once stay attributable |
 | `/settings` | anywhere | Print the active convention's reactive tables (reactor: slot tables; reactor0: the two parity buckets + rlocks) |
 | `/setall reactor\|reactor0` | anywhere | Switch which convention **new** games use, for every bot in the room. Running games keep theirs. Unrecognised values are ignored silently — other bot families answer `/setall` too |
 | `/set <clue> odd\|even <value>` | anywhere | reactor0: move one clue into the odd or even reactive bucket with the given reactive value, e.g. `/set Yellow even 4`. `<clue>` is a colour name or a rank (`Odd`/`Even` under Odds and Evens), matched case-insensitively. Retro-applies to running games; reactions already in flight keep the meaning they were given with |
@@ -449,6 +455,15 @@ available anywhere; the rest only in a private message.
 | `/start` | PM only | Start the game |
 | `/setvariant <name>` | PM only | Set the variant. `_` becomes a space, `+` becomes ` & ` |
 | `/terminate [table_id]` | PM only | Terminate a game |
+
+**On join** the bot writes one line into the table's own chat — its convention
+and build, e.g. `will-bot67: reactor0, v9.1.0`. The convention named is the
+bot-wide **default** (`/setall`'s setting), not a resolved per-game value: at
+join time the table is still filling and reactor0 needs exactly three players,
+so a table that ends up with 4+ runs reactor instead. The bot does not come back
+to correct itself, nor when somebody switches it with `/setall`. It fires on the
+joined edge of a `table` message, once per table id, and not from the bulk
+`tableList` snapshot — which would otherwise greet every table on reconnect.
 
 At the start of every game the bot writes its version **and the convention
 that game resolved to** as a note on card order 0 (e.g. `bot v2.0.0

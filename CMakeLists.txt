@@ -132,6 +132,7 @@ add_executable(hanabi_tests
   tests/test_net/test_commands.cpp
   tests/test_net/test_finish_ongoing_game.cpp
   tests/test_net/test_setall.cpp
+  tests/test_net/test_help_and_announce.cpp
   tests/test_net/test_set_persistence.cpp
 )
 target_include_directories(hanabi_tests PRIVATE tests)
