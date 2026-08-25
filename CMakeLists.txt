@@ -254,6 +254,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_endgame/test_replay_1966757_endgame_honours_reacter_call.cpp
   tests/test_reactor0/test_endgame/test_replay_1970943_required_play_with_none_certain.cpp
   tests/test_reactor0/test_endgame/test_replay_1971808_stall_clue_priority.cpp
+  tests/test_reactor0/test_endgame/test_replay_1972670_required_play_with_one_card_left.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp

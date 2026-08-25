@@ -373,16 +373,35 @@ std::optional<PerformAction> any_legal_clue(const Game& game) {
 // Play would pitch the card away. Paired exactly as `certainly_advances`
 // (src/endgame/helper.cpp) pairs it, including its refusal of a chuck at 8
 // tokens, where discarding is illegal.
-std::optional<PerformAction> required_play_action(const Game& game) {
+//
+// `narrow` is rule 0c: the same question asked one card earlier, where the
+// answer is weaker and the candidate test has to be stronger. See the call
+// sites.
+std::optional<PerformAction> required_play_action(const Game& game, bool narrow) {
   const State& s = game.state;
-  if (!s.endgame_turns) return std::nullopt;
 
-  // The seats that act after us inside the final round. We are index 0 of the
-  // window and are excluded: the whole question is what happens if we do NOT
-  // contribute.
+  // The seats that act after us. With the deck already empty that is the rest
+  // of the final round, and we are index 0 of the window and excluded -- the
+  // whole question is what happens if we do NOT contribute.
+  //
+  // With ONE card left the round has not started: our play draws the last card,
+  // which sets `endgame_turns = num_players` (src/basics/game.cpp:416), so the
+  // window is the next `num_players` seats. Our own seat comes round again
+  // inside it and is left in deliberately -- `best_reachable_plays` reads
+  // `state.deck[o].id()` and our cards are hidden, so it contributes nothing.
+  // That under-counts what the team can still reach, which is the safe
+  // direction: it makes the ceiling harder to raise, not easier.
   std::vector<int> rest;
-  for (int i = 1; i < *s.endgame_turns; ++i) {
-    rest.push_back((s.current_player_index + i) % s.num_players);
+  if (s.endgame_turns) {
+    for (int i = 1; i < *s.endgame_turns; ++i) {
+      rest.push_back((s.current_player_index + i) % s.num_players);
+    }
+  } else if (s.cards_left == 1) {
+    for (int i = 1; i <= s.num_players; ++i) {
+      rest.push_back((s.current_player_index + i) % s.num_players);
+    }
+  } else {
+    return std::nullopt;
   }
 
   const int base = best_reachable_plays(s, s.play_stacks, rest);
@@ -395,8 +414,22 @@ std::optional<PerformAction> required_play_action(const Game& game) {
 
   // The action that would lay `order`, or nullopt if it is not a candidate.
   auto attempt = [&](int order) -> std::optional<PerformAction> {
-    IdentitySet hits = game.me().thoughts[order].possibilities().intersect(required);
+    const IdentitySet live = game.me().thoughts[order].possibilities();
+    IdentitySet hits = live.intersect(required);
     if (hits.is_empty()) return std::nullopt;
+    // Rule 0c only bets on a card it can very nearly name. With a card still in
+    // the deck the ceiling test is a much weaker signal -- there is an extra
+    // turn and an unseen draw -- so the candidate has to carry the confidence
+    // instead: it must be CLUED, and everything it could be that is not already
+    // trash must be the one required identity. Replay 1972670 T25's slot 4
+    // reads {r2,r4,ra2,ra4} and the stacks kill all but the r4.
+    if (narrow) {
+      if (!s.deck[order].clued) return std::nullopt;
+      const IdentitySet useful =
+          live.filter([&s](Identity i) { return !s.is_basic_trash(i); });
+      if (useful.length() != 1) return std::nullopt;
+      if (!required.contains(useful.head())) return std::nullopt;
+    }
     // Every reading we are betting on must want the SAME button, or there is no
     // single action that serves them -- the same reason a set spanning a plain
     // and an inverted suit is never a certain play.
@@ -484,7 +517,27 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
       return certain.front();
     }
     // Rule 0b: a play is REQUIRED to improve the score, and none is certain.
-    if (auto a = required_play_action(game)) return a;
+    if (auto a = required_play_action(game, /*narrow=*/false)) return a;
+  }
+
+  // Rule 0c: the same required-play question with ONE card still in the deck.
+  //
+  // Replay 1972670 T25. Stacks [3,5,4] at 12 of 15, no clues, one card left.
+  // will-bot69 held BOTH remaining playables -- the other r4 and the critical
+  // ra5 -- but gets a single turn, and with zero clues there is no way to stall
+  // round for a second one, so their r4 was dead whatever they did. Our slot 4
+  // was the only copy that could be played, and playing it drew the last card,
+  // let them cash the ra5, and left us a final turn for the r5: 15/15. The bot
+  // discarded trash and the game ended at 12.
+  //
+  // Deliberately ABOVE the `cards_left == 1` gate below rather than inside it:
+  // this is a play that must happen now, and the rules below can answer with a
+  // stall clue. The narrow candidate test is what makes that safe to assert --
+  // see `attempt`.
+  if (s.cards_left == 1) {
+    if (certain_plays(game).empty()) {
+      if (auto a = required_play_action(game, /*narrow=*/true)) return a;
+    }
   }
 
   if (s.cards_left != 1) return std::nullopt;

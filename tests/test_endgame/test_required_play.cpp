@@ -212,7 +212,17 @@ TEST(EndgameRequiredPlay, StandsDownWhenNoCardCouldBeTheRequiredOne) {
 // Rule 0 and which this rule shares: with a card still in the deck there is a
 // future turn the gamble could be traded for, and the solver is trusted to see
 // it.
-TEST(EndgameRequiredPlay, StandsDownWhileTheDeckStillHasACard) {
+// v8.7.0 asserted the opposite here -- that the gamble stands down with a card
+// still in the deck. v9.2.0's rule 0c deliberately reverses it for the ONE-card
+// case: replay 1972670 T25 showed a position where the other copy of the needed
+// card was held by a seat who could not cash it, so ours was the only one that
+// could be played, and waiting scored nothing.
+//
+// What makes it safe to assert one card early is the narrower candidate test:
+// the card must be CLUED and everything it could be that is not already trash
+// must be the single required identity. Here {r4, y1} loses the y1 to the
+// stacks, leaving exactly {r4}.
+TEST(EndgameRequiredPlay, FiresWithOneCardLeftOnACardWeCanNearlyName) {
   Game g = setup(blocked_red_position());
   blank_hand(g);
   read_as(g, mine(g, 1), IdentitySet{}.add(kR4).add(kY1), /*clued=*/true);
@@ -221,8 +231,61 @@ TEST(EndgameRequiredPlay, StandsDownWhileTheDeckStillHasACard) {
     s.endgame_turns = std::nullopt;
   });
 
-  // Other rules in this function may still answer for their own reasons -- the
-  // point is that the GAMBLE is not what comes back.
+  auto forced = forced_endgame_action(g);
+  ASSERT_TRUE(forced.has_value());
+  ASSERT_TRUE(std::holds_alternative<PerformPlay>(*forced));
+  EXPECT_EQ(std::get<PerformPlay>(*forced).target, mine(g, 1));
+}
+
+// The narrow test is the whole guard, so the unclued form of the same card must
+// still stand down -- that is 1972670's slot 1, which had an identical reading
+// to the slot that was played and was not a candidate.
+TEST(EndgameRequiredPlay, OneCardLeftDeclinesOnAnUncluedCard) {
+  Game g = setup(blocked_red_position());
+  blank_hand(g);
+  read_as(g, mine(g, 1), IdentitySet{}.add(kR4).add(kY1), /*clued=*/false);
+  g.with_state([](State& s) {
+    s.cards_left = 1;
+    s.endgame_turns = std::nullopt;
+  });
+
+  auto forced = forced_endgame_action(g);
+  const bool gambled = forced && std::holds_alternative<PerformPlay>(*forced) &&
+                       std::get<PerformPlay>(*forced).target == mine(g, 1);
+  EXPECT_FALSE(gambled) << "rule 0c only bets on a card it can nearly name";
+}
+
+// Two live readings is not "nearly named" either. With red on 3 the only
+// non-trash identities in this position are r4 and r5, so a card reading
+// {r4, r5} keeps both -- and rule 0c declines, because playing it might be the
+// r5, which does nothing yet.
+TEST(EndgameRequiredPlay, OneCardLeftDeclinesOnTwoLiveReadings) {
+  Game g = setup(blocked_red_position());
+  blank_hand(g);
+  read_as(g, mine(g, 1), IdentitySet{}.add(kR4).add(kR5), /*clued=*/true);
+  g.with_state([](State& s) {
+    s.cards_left = 1;
+    s.endgame_turns = std::nullopt;
+  });
+
+  auto forced = forced_endgame_action(g);
+  const bool gambled = forced && std::holds_alternative<PerformPlay>(*forced) &&
+                       std::get<PerformPlay>(*forced).target == mine(g, 1);
+  EXPECT_FALSE(gambled);
+}
+
+// And the gate still holds further out: with two cards left the round has not
+// been triggered by anything we can do this turn, so there is no window to
+// price and the rule says nothing.
+TEST(EndgameRequiredPlay, StandsDownWithTwoCardsLeft) {
+  Game g = setup(blocked_red_position());
+  blank_hand(g);
+  read_as(g, mine(g, 1), IdentitySet{}.add(kR4).add(kY1), /*clued=*/true);
+  g.with_state([](State& s) {
+    s.cards_left = 2;
+    s.endgame_turns = std::nullopt;
+  });
+
   auto forced = forced_endgame_action(g);
   const bool gambled = forced && std::holds_alternative<PerformPlay>(*forced) &&
                        std::get<PerformPlay>(*forced).target == mine(g, 1);

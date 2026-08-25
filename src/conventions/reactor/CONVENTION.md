@@ -1266,8 +1266,10 @@ sit above the `cards_left == 1` gate: **Rule 0**, a card that certainly
 advances a stack on every reading, and **Rule 0b**, a *required* play when none
 is certain — one whose identity would raise the best score the rest of the
 final round can reach (`best_reachable_plays`), gambled on the leftmost clued
-card that could be it, else the leftmost of any. The rest fire only when
-`cards_left == 1`.
+card that could be it, else the leftmost of any. **Rule 0c** asks the same
+question at `cards_left == 1`, where the ceiling is a weaker signal, so the
+candidate must be clued AND have exactly one non-trash reading, which must be
+the required identity. The rest fire only when `cards_left == 1`.
 
 - **Rule 2 — two-critical play** (`:154-219`), checked first. Fires when
   `clue_tokens < num_players` and the current player holds ≥ 2

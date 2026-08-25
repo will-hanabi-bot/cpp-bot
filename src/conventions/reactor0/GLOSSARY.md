@@ -424,6 +424,12 @@ Distinct from a certain play in exactly the way the names suggest: a certain
 play scores on every reading, a required play merely *might* be the card — the
 justification is that nothing else on the turn is worth more.
 
+**Rule 0c** asks it one card early, at `cards_left == 1`, where our play is what
+draws the last card and opens the round. The ceiling is a weaker signal there —
+an extra turn and an unseen draw — so the candidate must be **clued** with
+exactly one non-trash reading, and that reading must be the required identity.
+Replay 1972670 T25.
+
 The weaker sibling is **could advance**: the same suit/button pairing asked with
 `exists` instead of `forall`, over our STANDING CALLS only
 (`endgame::possible_call_actions`). It is tier 2 of the timeout pre-check —

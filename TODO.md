@@ -738,3 +738,37 @@ the stamp should be narrowed to that set by `narrow_to_stamped_button` (`:69-75`
 when the reaction resolves. Guarding the obey path instead would have the bot
 refuse a partner's explicit instruction, which is the convention's core loop and
 would desync the signal.
+
+---
+
+## 29. `[endgame]` At one card left the search only sees PINNED playables
+
+`EndgameSolver::possible_actions` picks its play candidates like this
+(`src/endgame/solver.cpp:186-192`):
+
+```cpp
+if (infer || game.good_touch || state.endgame_turns) {
+  playables = players[p].thinks_playables(game, p, /*exclude_trash=*/true);
+} else {
+  playables = players[p].obvious_playables(game, p);
+}
+```
+
+At `cards_left == 1` **all three disjuncts are false** — `endgame_turns` is only
+set when a draw empties the deck (`src/basics/game.cpp:511`) — so the root uses
+`obvious_playables`, which does no trash subtraction at all
+(`src/basics/player_game.cpp:174-180`, `exclude_trash` defaults false). A card
+that is clued and whose non-trash readings collapse to a single playable is
+therefore **invisible to the search's first pass**. It reappears only through
+the `infer=true` retry at `solver.cpp:879-882`, which runs *only when the first
+pass came back empty* — i.e. contingent on every discard candidate being pruned.
+
+Replay 1972670 T25 is the case: our slot 4 read `{r2,r4}` from our own view with
+red on 3, so the r4 was one trash-subtraction away from being a candidate, and
+the winning line needed it. v9.2.0's rule 0c works around this from the forced
+layer; the search itself still cannot see it.
+
+Same family as §26 (`thinks_playables` hiding a partner's blind play) and the
+v8.9.0 finding about the clue model. A fix here would cover all three rather
+than adding forced rules one position at a time. `tests/test_reactor/test_endgame/
+test_replay_1885467.cpp:129` already pins a `winrate == 0` that has this shape.

@@ -214,6 +214,23 @@ It deliberately carries **no strike guard** — it fires even when a miss would
 be the game-ending third strike. On these turns the alternative is nearly
 always a trash discard.
 
+**A required play one card early (step 0).** The same rule, asked with ONE card
+still in the deck. Our play draws the last card and opens the final round, so
+the window is the next `num_players` seats — every seat once, and our own twice,
+though our hidden cards count for nothing in the ceiling.
+
+With a card still to come the ceiling test is a much weaker signal, so the
+CANDIDATE carries the confidence instead: it must be **clued**, and everything
+it could be that is not already trash must be the **single** required identity.
+Replay 1972670 T25 — slot 4 read `{r2,r4,ra2,ra4}` and the stacks killed all but
+the r4, while slot 1 had the identical reading but was unclued and so was not a
+candidate.
+
+It fires on 16 turns across the log corpus, of which 8 score and 8 strike. That
+is a deliberate trade: when it fires the alternative could not reach that score
+either. It carries no strike guard, so on rare occasions it is the action that
+ends a game.
+
 **A certain play outranks a speculative one (step 0).** When the endgame's
 answer is a play, and we hold a card that certainly advances a stack, the answer
 must be one of those. "Certainly advances" asks the question of the BUTTON and
