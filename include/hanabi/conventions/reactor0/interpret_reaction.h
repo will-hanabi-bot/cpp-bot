@@ -42,7 +42,7 @@ bool is_lock_target(const ReactorWC& wc, int target_slot);
 // `handle_action` runs the interpretation (`game.cpp:690-696`), and that stamps
 // `turn_count = num + 1` (`game.cpp:486`). So the WC is created one turn ahead
 // of the caller's `game.state.turn_count`. An exact compare therefore never
-// matches and silently disables whatever it guards — which is precisely how H4
+// matches and silently disables whatever it guards — which is precisely how VH1
 // shipped dead in v7.0.0 step 2. A genuinely stale connection is strictly older,
 // so `>=` still rejects it.
 //

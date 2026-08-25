@@ -32,7 +32,14 @@ namespace hanabi::reactor0 {
 
 // How worthwhile a candidate clue is. Ordered, so the gate can compare
 // against a required minimum.
-enum class ClueTier { LOW = 0, MEDIUM = 1, HIGH = 2 };
+// Ordered, and compared with `>=` by `clue_is_admissible`, so a new rung slots
+// in simply by sitting above the one below it.
+//
+// VERY_HIGH is the tier that out-ranks a PENDING REACTION (DECISION_MAKING.md
+// Precedence step 1). It is deliberately narrow: everything at HIGH is worth a
+// clue token, but only these two are worth abandoning a call the receiver is
+// already decoding against.
+enum class ClueTier { LOW = 0, MEDIUM = 1, HIGH = 2, VERY_HIGH = 3 };
 
 // Classify a candidate clue. `hypo` must be `game.simulate(action)` — the
 // tier depends on what the clue achieves, which is read off the CTP stamps

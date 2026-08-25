@@ -349,13 +349,13 @@ TEST(Reactor0CluePriority, ChosenClueNeverPredictsAStrikeBelowEightTokens) {
   }
 }
 
-// --- H4 and Precedence ----------------------------------------------------
+// --- VERY HIGH and Precedence ---------------------------------------------
 
-// `choose_h4_clue` is Precedence step 1, and it must NOT apply section 4's
-// floor: an H4 clue outranks a pending reaction, an arbitrary one does not.
-// Here there is no finesse available at all, so it must decline even at 8
+// `choose_very_high_clue` is Precedence step 1, and it must NOT apply section
+// 4's floor: a VERY HIGH clue outranks a pending reaction, an arbitrary one does
+// not. There is no finesse available here at all, so it must decline even at 8
 // tokens, where `choose_clue` would happily return the floor's pick.
-TEST(Reactor0CluePriority, H4DeclinesWithoutAFinesseEvenAtEightTokens) {
+TEST(Reactor0CluePriority, VeryHighDeclinesWithoutOneEvenAtEightTokens) {
   SetupOptions opts;
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
@@ -371,13 +371,17 @@ TEST(Reactor0CluePriority, H4DeclinesWithoutAFinesseEvenAtEightTokens) {
   auto cands = analysed(g);
   EXPECT_TRUE(hanabi::reactor0::choose_clue(g, cands).has_value())
       << "guard: the floor does fire here";
-  EXPECT_FALSE(hanabi::reactor0::choose_h4_clue(g, cands).has_value())
-      << "no finesse is available, so nothing may outrank a pending reaction";
+  for (const auto& c : cands) {
+    ASSERT_NE(c.tier, hanabi::reactor0::ClueTier::VERY_HIGH)
+        << "guard: the fixture must offer no VERY HIGH clue at all";
+  }
+  EXPECT_FALSE(hanabi::reactor0::choose_very_high_clue(g, cands).has_value())
+      << "nothing here is VERY HIGH, so nothing may outrank a pending reaction";
 }
 
 // And the positive case: the Phase B finesse fixture from test_clue_tier.cpp,
-// which `clue_is_h4` marks and `choose_h4_clue` therefore offers.
-TEST(Reactor0CluePriority, H4OffersTheFinesse) {
+// which VH1 marks VERY HIGH and `choose_very_high_clue` therefore offers.
+TEST(Reactor0CluePriority, VeryHighOffersTheFinesse) {
   SetupOptions opts;
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
@@ -390,12 +394,15 @@ TEST(Reactor0CluePriority, H4OffersTheFinesse) {
   Game g = setup(std::move(opts));
 
   auto cands = analysed(g);
-  bool any_h4 = false;
-  for (const auto& c : cands) any_h4 = any_h4 || c.is_h4;
-  ASSERT_TRUE(any_h4) << "guard: the fixture must offer a finesse";
+  bool any_vh = false;
+  for (const auto& c : cands) {
+    any_vh = any_vh || c.tier == hanabi::reactor0::ClueTier::VERY_HIGH;
+  }
+  ASSERT_TRUE(any_vh) << "guard: the fixture must offer a finesse";
 
-  auto pick = hanabi::reactor0::choose_h4_clue(g, cands);
-  ASSERT_TRUE(pick.has_value()) << "an available H4 clue is Precedence step 1";
+  auto pick = hanabi::reactor0::choose_very_high_clue(g, cands);
+  ASSERT_TRUE(pick.has_value())
+      << "an available VERY HIGH clue is Precedence step 1";
   EXPECT_TRUE(is_rank_to(pick, 5, 2))
       << "rank 5 to Cathy is the finesse; got " << describe(pick);
 }

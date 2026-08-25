@@ -663,11 +663,23 @@ until it is ACTIONED, and the holder remains *occupied* — so the HIGH-tier gat
 applies to any clue they do offer, and the urgent return chucks or pitches the
 called slot as soon as nothing outranks it.
 
+**But it stops being URGENT once its target is gone.** The reaction interrupts
+the turn because the RECEIVER decodes it — he learns which of his own slots the
+clue named from which of ours we action — so once that paired card has left his
+hand there is nobody left to inform. The call and its reading survive; only the
+urgency lapses, and the turn falls through to the ordinary clue and play phases.
+Because a deferral clears `Game::waiting`, the pairing is recorded on the card
+itself when the call is stamped (`ConvData::react_target_order`, written by
+`record_react_target` in `interpret_reactive.cpp`, read by the urgent scan in
+`basics/decide.cpp`). Replay 1972716 T5: will-bot69 deferred at T2, the receiver
+played the paired card at T3, and at T5 the spent call still pre-empted the
+stable play clue Bob's chop was owed — costing a playable g3 and a playable y1.
+
 This is a reactor0-only rule (`basics/decide.cpp`, the `convention !=
 REACTOR0` guard on the giver-side `check_missed`). Reactor cancels: there a clue
 instead of a reaction means the chain broke, and `check_missed`
 (`basics/game.cpp:95-118`) clears the stamp and reverts `inferred` to
-`old_inferred`. Reactor0 cannot do that, because its Precedence puts an **H4
+`old_inferred`. Reactor0 cannot do that, because its Precedence puts a **VERY HIGH
 clue above the urgent return** — a clue is exactly what a legitimate deferral
 looks like, so cancelling on one punishes the convention's own rule.
 
@@ -1211,13 +1223,14 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
+| `tests/test_reactor0/test_misc/test_replay_1972716_spent_reaction_is_not_urgent.cpp` | A deferred call whose target the receiver has since played no longer pre-empts the turn — the pairing is read off `react_target_order`, and the clue Bob's chop is owed is given instead |
 | `tests/test_reactor0/test_efficiency.cpp` | efficiency formula + rlocks defaults |
 | `tests/test_reactor0/test_giver_filters.cpp` | MISTAKE clues never offered |
 | `tests/test_basics/test_snapshot_convention.cpp` | convention/rlocks snapshot round-trip + reactor back-compat |
-| `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | Clue tiers (DECISION_MAKING.md) — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim |
+| `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | Clue tiers (DECISION_MAKING.md) — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim; VH1 reading VERY HIGH; and H4, which reads HIGH and not VERY HIGH so that a pending reaction still outranks it |
 | `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | The two gate windows (DECISION_MAKING.md, *Decision phase 1*) — both token boundaries incl. `clue_tokens == 3`, the HIGH row reaching past 3, the 8-token exemption, the no-stamp negative that pins the split, and the two pace boundaries (occupied `>= 1`, unoccupied `>= 3`, both silent at pace 0), plus the locked exemption inside the unoccupied window — plus required tier, and that reactor's own gate is unchanged |
 | `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | Which reactives priority 2 refuses to propose — all three arms of `discard_is_affordable` and its negative, plus the shape facts the rungs select on (a clue to Bob is never reactive; a colour reactive is never a double discard; a playless clue to Bob is not a stable play) |
 | `tests/test_reactor0/test_decision_making/test_clue_shape.cpp` | Clue-shape classification — result-orientation on inverted suits, and the receiver judged against the stacks the reacter leaves behind |
-| `tests/test_reactor0/test_decision_making/test_clue_priority.cpp` | The General Clue Evaluation List itself — the default tiebreak, all three gate windows, `discard_is_affordable`, `missing_connectors` against the spec's worked example, rung 1 outranking the lower rungs, the §4 floor and its empty-set counterpart, and `choose_h4_clue` as Precedence step 1 |
+| `tests/test_reactor0/test_decision_making/test_clue_priority.cpp` | The General Clue Evaluation List itself — the default tiebreak, all three gate windows, `discard_is_affordable`, `missing_connectors` against the spec's worked example, rung 1 outranking the lower rungs, the §4 floor and its empty-set counterpart, and `choose_very_high_clue` as Precedence step 1 |
 | `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | Prefers a stable play over a double discard, end to end on the replay that motivated it, plus both shapes read off a real Phase C |
 | `tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp` | N5 end to end — a playable non-duped chop on Bob lifts every clue, so a direct play clue beats the lock the flattened gate used to pick |

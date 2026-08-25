@@ -16,7 +16,7 @@
 
 // Variant: Rainbow-Ones & Orange (4 Suits). 3 players, our_player_index=0.
 
-TEST(DecisionMaking1966091, T10ReactiveLockIsNotAnH4Clue) {
+TEST(DecisionMaking1966091, T10ReactiveLockIsNotAFinesseClue) {
   // Reconstruct exactly the Game the live bot saw at turn 10.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
@@ -794,7 +794,7 @@ TEST(DecisionMaking1966091, T10ReactiveLockIsNotAnH4Clue) {
 
   // The root cause, asserted directly. will-bot67 is the REACTER of a standing
   // waiting connection and holds the reacter-CTD it installed, so Precedence
-  // step 2 says she actions it. Only an H4 clue may outrank that.
+  // step 2 says she actions it. Only a VERY HIGH clue may outrank that.
   const int us = s.our_player_index;
   ASSERT_FALSE(game.waiting.empty()) << "guard: a reaction is pending";
   EXPECT_EQ(game.waiting.front().reacter, us)
@@ -807,7 +807,8 @@ TEST(DecisionMaking1966091, T10ReactiveLockIsNotAnH4Clue) {
   // CHOP_MOVED only a turn later. At clue time the receiver's predicted slot
   // therefore carries no status, which sailed past `clue_gets_finesse`'s
   // "stamped: Phase A, not B" test; the slot happened to hold a one-away card,
-  // so the lock was classified H4. Because H4 outranks a pending reaction, the
+  // so the lock was classified as a finesse. Because VH1 is VERY HIGH and VERY
+  // HIGH outranks a pending reaction, the
   // bot abandoned its reaction to give it, and the game took a strike.
   {
     hanabi::ClueAction lock_clue{
@@ -817,8 +818,8 @@ TEST(DecisionMaking1966091, T10ReactiveLockIsNotAnH4Clue) {
     EXPECT_EQ(hanabi::reactor0::read_clue(game, hypo, lock_clue).shape,
               hanabi::reactor0::ClueShape::REACTIVE_LOCK)
         << "guard: this candidate really is a lock, not a finesse";
-    EXPECT_FALSE(hanabi::reactor0::clue_is_h4(game, hypo, lock_clue))
-        << "a reactive lock is not a finesse, so it is not H4 and must not "
+    EXPECT_FALSE(hanabi::reactor0::clue_is_vh1(game, hypo, lock_clue))
+        << "a reactive lock is not a finesse, so it is not VH1 and must not "
            "outrank the pending reaction";
   }
 

@@ -30,35 +30,66 @@ We will mostly borrow the existing implementations of high/medium/low tier clues
 Note the change to H1 to also require that Cathy's chop be either playable or
 critical.
 
-A clue tier (`clue_tier`, `state_eval.cpp:312-373`) is HIGH iff **any** of:
+A clue tier (`clue_tier`, `state_eval.cpp:424-520`) is VERY HIGH iff:
+
+1. **VH1** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
+   finesse**. A finesse is reactive Phase B, which belongs to the **even-parity
+   ruleset** rather than to a clue kind: normally that is the rank clue, but
+   Odds and Evens makes it the colour clue and `/set` can move an individual
+   one, so the test reads `reactive_assignment(...).even`. Testing the kind
+   instead made VH1 unreachable in those variants (replay 1967416 T1). A reactive **lock** is explicitly not a finesse, however its
+   predicted slot looks at clue time (`clue_is_vh1`, `:411-422`, applied at `:458`;
+   the finesse detector itself is `clue_gets_finesse`, `:317-366`).
+
+VERY HIGH is the tier that out-ranks a **pending reaction** (Precedence step 1),
+and VH1 is deliberately its only member.
+
+**A note on the name.** Through v9.2.0 this rule was itself called **H4**, and
+Precedence step 1 singled it out by name. v9.3.0 named the tier instead, which
+freed "H4" for the unrelated rule now listed fourth under HIGH below. An "H4" in
+an older commit, log or comment means the finesse; an "H4" here does not.
+
+Otherwise, a clue tier is HIGH iff **any** of:
 
 1. **H1** — ALL of H1a, H1b, and H1c.
     - **H1a — Bob's chop is endangered.** Bob is not locked, and has no safe
       action (no obvious play, no known trash, no CTD — all three are covered by
       `thinks_trash`, `player_game.cpp:115-132`), and his chop is *endangered*
-      (below). `:327-331`.
+      (below). `:469-478`. The "no safe action" half is shared with H4a
+      verbatim (`bob_stuck`, `:441-443`); H1a and H4a differ only in how bad the
+      chop is.
     - **H1b** — Cathy's chop is not playable or critical, **judged from Alice's
       full visibility** (the same viewpoint as *endangered chop* below, not
       common knowledge). If Cathy has no chop, this condition is vacuously true.
     - **H1c** — Cathy's chop is either a trash or a same-hand-dupe, *or* Bob does
       not have a colour stable clue to give to Cathy.
 2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed suit,
-   via `variants::is_first_or_second_rank`). `:346`.
+   via `variants::is_first_or_second_rank`). `:481`.
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank
-   (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:348`.
-4. **H4** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
-   finesse**. A finesse is reactive Phase B, which belongs to the **even-parity
-   ruleset** rather than to a clue kind: normally that is the rank clue, but
-   Odds and Evens makes it the colour clue and `/set` can move an individual
-   one, so the test reads `reactive_assignment(...).even`. Testing the kind
-   instead made H4 unreachable in those variants (replay 1967416 T1). A reactive **lock** is explicitly not a finesse, however its
-   predicted slot looks at clue time (`clue_is_h4`, `:301-310`; the finesse detector itself is
-   `clue_gets_finesse`, `:280-299`).
+   (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:483`.
+4. **H4** — BOTH of the following must hold (`:495-498`, with `cathy_can_wait`
+   at `:447-448`):
+    - **H4a — Bob's chop is critical.** Bob is not locked, and has no safe
+      action (no obvious play, no known trash, and no CTD). Same predicate as
+      H1a's first half; H4a asks for a strictly worse chop.
+    - **H4b** — Cathy's chop is not playable or critical, **judged from Alice's
+      full visibility** (the same viewpoint as *endangered chop* below, not
+      common knowledge). If Cathy has no chop, this condition is vacuously true.
 
-NOT-LOW iff any of H1a, H2, H3, H4, or:
+   **H4 is HIGH and not VERY HIGH, deliberately — a pending reaction still
+   outranks it.** Like H1 and N5 this is a property of the **position**, not of
+   the candidate clue, so it lifts *every* legal clue that turn. At VERY HIGH it
+   would therefore fire Precedence step 1 unconditionally and out-rank the
+   pending reaction, phase 1 and phase 2 together: measured over the corpus turns
+   that action a reaction, that moved **171 of 3332**, and **137 of those gave up
+   a known play** — including replay 1970589 T42, where the seat's own urgent p3
+   was replaced by a rank clue. At HIGH it only widens what `clue_is_admissible`
+   will pass, which is the intent.
+
+NOT-LOW iff any of VH1, H2, H3, H4, or:
 
 5. **N5 — Bob's chop is playable** and is not duplicated in his own hand
-   (`has_playable_chop`, `:151-159`; applied at `:354-358`). Like H1 this is a
+   (`has_playable_chop`, `:160-168`; applied at `:505`). Like H1 this is a
    property of the **position, not of the candidate clue**, so it lifts every
    clue that turn to at least MEDIUM. Deliberately weaker than `at_risk_chop`: it
    asks only "playable, and Bob cannot just pitch a spare copy", and does *not*
@@ -69,29 +100,36 @@ NOT-LOW iff any of H1a, H2, H3, H4, or:
    §3's precondition takes this same predicate as its second arm, for the same
    reason. Tier and priority agree: a safe-but-playable chop is worth a clue.
 
-…or, when **Cathy's** chop is endangered (`:360-370`):
+…or, when **Cathy's** chop is endangered (`:507-518`):
 
-6. **N3** — the clue gets two new plays. `:361-362`.
+6. **N3** — the clue gets two new plays. `:509`.
 7. **N2** — the clue is **reactive** and Bob has no colour stable play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
-   since dispatch is positional (§1a, `interpret_clue.cpp:620-631`). `:363-369`.
+   since dispatch is positional (§1a, `interpret_clue.cpp:620-631`). `:514-517`.
+
+**H1a is NOT on that list, though the spec has always said it should be.**
+`clue_tier` has never had an `if (h1a) return MEDIUM` arm: a position where Bob
+is stuck on an endangered chop but H1c fails reads **LOW**, not MEDIUM. See
+`TODO.md` §30 — the note is here rather than a quiet correction because the rule
+as specified is the one a reader should expect.
 
 MEDIUM is NOT-LOW and not HIGH; LOW is everything else. "New plays" are counted as
 CTP-status transitions between the real game and the clue's hypo
-(`new_play_facts`, `:170-187`) — the same walk reactor's `is_high_value_clue`
+(`new_play_facts`, `:173-224`) — the same walk reactor's `is_high_value_clue`
 uses.
 
-**"Gets a finesse"** (H4) means the clue's interpretation is reactive rank
-**Phase B**, and *only* Phase B. A reactive lock has to be excluded explicitly
-(`predicts_reactive_lock`): it stamps CHOP_MOVED a turn later, so at clue time
-the receiver's predicted slot carries no status and looks exactly like an
-un-stamped Phase B target. Since H4 is the one thing that outranks a pending
-reaction, a lock misread as a finesse lets Alice abandon a reaction to give it —
-replay 1966091 T10, which cost a strike — the blind-play phase that walks one-away targets and calls the
-reacter onto the prerequisite (`interpret_reactive.cpp:383-447`). Phase A (double
-play, `:307-382`) and Phase C (double discard, `:448-482`) are not finesses.
+**"Gets a finesse"** (VH1) means the clue's interpretation is reactive rank
+**Phase B**, and *only* Phase B — the blind-play phase that walks one-away
+targets and calls the reacter onto the prerequisite
+(`interpret_reactive.cpp:383-447`). Phase A (double play, `:307-382`) and Phase C
+(double discard, `:448-482`) are not finesses. A reactive lock has to be excluded
+explicitly (`predicts_reactive_lock`): it stamps CHOP_MOVED a turn later, so at
+clue time the receiver's predicted slot carries no status and looks exactly like
+an un-stamped Phase B target. Since VERY HIGH is the one thing that outranks a
+pending reaction, a lock misread as a finesse lets Alice abandon a reaction to
+give it — replay 1966091 T10, which cost a strike.
 
-**Endangered chop** (`at_risk_chop`, `:121-143`), judged from Alice's full
+**Endangered chop** (`at_risk_chop`, `:130-152`), judged from Alice's full
 visibility. All of the following must hold:
 
 1. the identity is known to Alice and not basic trash;
@@ -103,7 +141,7 @@ The first of those is stricter than reactor's `chop_is_nontrash`
 (`reactor/state_eval.cpp:45-50`), which tests only `is_basic_trash` — a chop the
 holder can safely pitch because they hold the other copy is not in danger.
 
-**"Alice provably holds a copy"** (`alice_provably_holds`, `:60-101`) extends
+**"Alice provably holds a copy"** (`alice_provably_holds`, `:69-110`) extends
 reactor's singleton test (`reactor/state_eval.cpp:99-102`) to **group ("sudoku")
 elim**. For any subset S of Alice's hand, let `u` be the union of what those |S|
 cards could be; if fewer than |S| copies of `u \ {id}` are still unaccounted for,
@@ -116,7 +154,7 @@ holds it" would kill a save clue, so the bound deliberately over-counts. A
 `cross_elim` (`src/basics/player_elim.cpp:165-226`) solves the dual problem (it
 strips locked ids from cards *outside* the group) and cannot answer this.
 
-**Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:194-212`) is a
+**Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:231-249`) is a
 structural check, not a simulation: for each colour clue Bob could give Cathy it
 replays `stable_colour`'s target choice (§1b step 5,
 `interpret_clue.cpp:327`) plus its three guards (`:340-345`), then asks whether
@@ -173,7 +211,6 @@ The priority of evaluation on a given player (Alice)'s turn is:
 
 Two things outrank the phases below, and one thing sits between them:
 
-```
 0.  Endgame.  The forced-endgame rules and the exact solver run first
     (`decide.cpp:892`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
     additionally needs `pace() <= num_players` (`:990`); the forced rules do
@@ -181,6 +218,22 @@ Two things outrank the phases below, and one thing sits between them:
     play outranks a speculative one — see below.  The endgame decides
     WHETHER to clue; when its answer IS a clue, the endgame stall list below
     decides which one.
+
+1.  **A VERY HIGH tier clue**, if one is available.
+
+2.  **A pending REACTION.**  If Alice holds a reacter-CTP — or, in a variant
+    with an inverted suit, a reacter-CTD — she actions it.  Only a VERY HIGH
+    tier clue outranks this.
+      - no inverted suit in the variant: only a reacter-CTP is urgent;
+      - inverted suit present:  reacter-CTP and reacter-CTD are equally urgent.
+
+    A reaction stops being urgent once its **target has left the receiver's
+    hand** (`ConvData::react_target_order`, applied in `decide.cpp`'s urgent
+    scan).  The call and its inference stand; only the urgency lapses.
+
+3.  **Decision phase 1** — giving a clue.
+
+4.  **Decision phase 2** — deciding what to play or discard.
 
 
 **The solver needs the deck to be running out (step 0).** `rem_score() <=
@@ -281,32 +334,52 @@ equal-winrate plays fall to enumeration order in the solver's `optimize`.
 Replay 1969779 T68: on the final turn at 28/30, will-bot67 held that `{a5, d5}`
 card and played a different one reading `{a1, a5, b1, d5, e1}`. It was the b1 —
 a second strike, and the d5 never played.
-1.  An H4 clue, if one is available.
-
-2.  A pending REACTION.  If Alice holds a reacter-CTP (or, in a variant with an
-    inverted suit, a reacter-CTD), she actions it.  Only H4 clues outrank this.
-      - no inverted suit in the variant: reacter-CTP is the urgent one;
-      - inverted suit present:  reacter-CTP and reacter-CTD are equally urgent.
-
-3.  Decision phase 1 — giving a clue.
-
-4.  Decision phase 2 — deciding what to play or discard.
-```
 
 Step 2 is **reacter-only**. A pending reaction is urgent because the receiver is
-decoding against it, so it interrupts everything below it and only an H4 clue
-outranks it.
+decoding against it — he learns which of *his* slots the clue named from which of
+*ours* we action — so it interrupts everything below it, and only a VERY HIGH
+clue outranks it.
 
-Step 1 is implemented as `choose_h4_clue` (`decision.cpp`), spliced into
+That justification is also its expiry date. **Once the paired card has left the
+receiver's hand there is nobody left to inform**, and the call stops being urgent:
+the urgent scan skips it exactly as it skips a call the holder can now see is
+trash. The reading on the card stands; only the urgency lapses. The paired
+receiver order is recorded on the reacter's card when the call is stamped
+(`ConvData::react_target_order`, `card.h`; written by `record_react_target` in
+`interpret_reactive.cpp`) rather than read back off `Game::waiting`, because a
+**deferral clears the waiting connection while deliberately keeping the call**.
+
+In practice this only bites after a deferral, since the reacter normally acts
+before the receiver ever gets another turn. Replay 1972716 T5: will-bot69 was
+called to discard slot 1, deferred at T2, the receiver played the paired card at
+T3 — and at T5 the spent call still pre-empted the clue that had to be given to
+save Bob's chop. Two playables were lost.
+
+**A spent call is not a dropped one.** The stamp, the narrowed `inferred` and the
+status all stand, and a `CALLED_TO_PLAY` card is an *obvious playable* whatever
+its urgent flag (`player_game.cpp:147-153`), so phase 2 still actions it on a
+turn with nothing better to do. What lapses is only its claim on steps 3 and 4.
+Measured against the build before the rule, over all 1885 corpus turns whose
+trace contains `precedence.urgent_reaction`, it moves **15** — 0.8%.
+
+**Reactor0 only**, although the test itself sits in shared code. Only reactor0's
+`interpret_reactive` records `react_target_order`; reactor leaves it at -1, where
+the check reads as "no pairing recorded" and stands down. Reactor cancels a call
+on a deferral outright (`check_missed`), so it never reaches the position this
+rule is about.
+
+Step 1 is implemented as `choose_very_high_clue` (`decision.cpp`), spliced into
 `Game::take_action` **above** the urgent return that actions the reaction. It
 deliberately does not apply §4's floor: the floor exists so §4 always returns
 something at 8 tokens, and applying it here would let an arbitrary clue outrank
 a reaction. The candidate set is built and analysed once per turn and shared
-with step 3, so the pre-check costs no extra simulation.
+with step 3, so the pre-check costs no extra simulation. It reads
+`ClueCandidate::tier`, so **both** ways into VERY HIGH pre-empt the reaction;
+through v9.2.0 it was `choose_h4_clue` and only the finesse could.
 
 A **receiver**-side call carries no such urgency. It makes Alice *occupied*, which
 is what phase 1 rule 1a keys on — so Alice may give **any HIGH-tier clue** while
-holding one, not only an H4. The call itself is actioned in phase 2.
+holding one, not only a VERY HIGH one. The call itself is actioned in phase 2.
 
 ---
 
@@ -321,22 +394,27 @@ knows is **not** the next card on that inverted suit's stack. This knowledge nee
 not be global: it is Alice's own inference that counts. Note *occupied* is not the
 same as *loaded*.
 
-Concretely, a `CALLED_TO_DISCARD` card counts toward *occupied* when **no**
-identity it could still be is both on an inverted suit and currently playable —
-i.e. actioning it cannot advance a stack, so it is a discard rather than a
-deferred play. This is the predicate
-`variants::possible_chuck_advances_stack` (`variants/inverted.cpp:96-102`), negated.
+Concretely, `requires_high_tier` (`state_eval.cpp:253-265`) reads the stamp
+literally and counts a `CALLED_TO_DISCARD` **only in a variant that contains an
+inverted suit** — there, pressing Discard is how an inverted card is played, so
+the call is a deferred play. In a plain variant a reacter-CTD does not occupy
+Alice at all.
+
+It does not itself consult `variants::possible_chuck_advances_stack`
+(`variants/inverted.cpp:96-102`). A chuck call that can no longer advance a stack
+stops occupying Alice because **call invariant 4 erases the call**, not because
+this predicate is tested here.
 
 Whether a clue should be given is then:
 
 1. **Alice is occupied.**
     - 1a. If `pace() >= 1 && clue_tokens < 8`, Alice gives the best clue from the
-      General Clue Evaluation List satisfying the **HIGH** tier requirements.
+      General Clue Evaluation List satisfying at least the **HIGH** tier requirements.
     - 1b. Otherwise, Alice gives the best clue from the General Clue Evaluation
       List below.
 2. **Alice is not occupied.**
     - 2a. If `pace() >= 3 && clue_tokens < 4`, and Alice is not locked, Alice gives the best clue from the
-      General Clue Evaluation List satisfying the **HIGH** or **MEDIUM** tier
+      General Clue Evaluation List satisfying at least the **MEDIUM** tier
       requirements.
     - 2b. Otherwise, Alice gives the best clue from the General Clue Evaluation
       List below.
@@ -782,8 +860,9 @@ If Alice has no sufficiently good clues to give, Alice evaluates the following
 list by priority:
 
 1. If Alice has a reacter-CTP or a reacter-CTD card, she must immediately action
-   the most recent one. (Per the Precedence section, only an H4 clue outranks
-   this.)
+   the most recent one. (Per the Precedence section, only a VERY HIGH clue
+   outranks this — and the call is no longer urgent at all once its target has
+   left the receiver's hand.)
 2. Alice pitches a card in the pitch list that is known to connect with a card in
    either Bob's or Cathy's hand.
 3. Alice chucks a known inverted suit in the chuck list that is known to connect
@@ -841,7 +920,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | one analysed candidate | `ClueCandidate` |
 | the per-turn simulation pass | `analyse_clues` |
 | the tier gate (phase 1 items 1 and 2) | `clue_is_admissible` |
-| Precedence step 1 | `choose_h4_clue` |
+| Precedence step 1 | `choose_very_high_clue` |
 | Precedence step 3 — the walk | `choose_clue` |
 | shape classification | `read_clue` / `outcome_of` |
 | priority 2's admissibility | `discard_is_affordable` |
@@ -857,8 +936,8 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | Rule | Existing machinery | Where |
 |---|---|---|
 | reactive vs stable | positional compare `action.target != bob` | `interpret_clue.cpp:620-631` |
-| two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:170-187` |
-| finesse (H4) | reactive rank Phase B | `interpret_reactive.cpp:383-447` |
+| two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:173-229` |
+| finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:383-447` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:448-482` |
 | a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |
 | reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:307-382`; `:503-560`, `:561-626` |

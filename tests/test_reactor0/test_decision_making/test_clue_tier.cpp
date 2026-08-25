@@ -3,11 +3,15 @@
 // going through `eval_action`, so each condition is pinned in isolation from
 // the pace/clue-count window (that is test_pace_clue_gate.cpp's job).
 //
+//   VERY HIGH iff:
+//     VH1 Cathy's chop is worth keeping and the clue gets a finesse.
 //   HIGH iff any of:
 //     H1  Bob is unlocked, has no safe action, and his chop is endangered.
 //     H2  the clue gets a critical 1 or 2 played (5 or 4 reversed).
 //     H3  the clue gets 2 new plays, one at the clue-regain rank.
-//   NOT LOW iff any of: H1..H3, or
+//     H4  Bob is unlocked, has no safe action, his chop is CRITICAL, and
+//         Cathy's chop is not playable or critical.
+//   NOT LOW iff any of: VH1, H1..H4, or
 //     N2  Cathy's chop is endangered, the clue is reactive, and Bob has no
 //         colour stable play clue he could give Cathy.
 //     N3  Cathy's chop is endangered and the clue gets 2 new plays.
@@ -28,6 +32,7 @@
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
+#include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
@@ -53,6 +58,7 @@ ClueTier tier_of(const Game& g, const Action& clue) {
 
 const char* name_of(ClueTier t) {
   switch (t) {
+    case ClueTier::VERY_HIGH: return "VERY HIGH";
     case ClueTier::HIGH: return "HIGH";
     case ClueTier::MEDIUM: return "MEDIUM";
     default: return "LOW";
@@ -301,11 +307,11 @@ TEST(Reactor0ClueTier, BobUnplayableChopDoesNotLift) {
       << name_of(t);
 }
 
-// --- H4: the clue gets a finesse -----------------------------------------
+// --- VH1: the clue gets a finesse ----------------------------------------
 
-// H4 is the only *widening* term step 2 added, and the only one that depends on
+// VH1 is the only *widening* term step 2 added, and the only one that depends on
 // the clue rather than the position, so the fixture is built to make MEDIUM the
-// answer if H4 does not fire — that is what makes this test a discriminator
+// answer if VH1 does not fire — that is what makes this test a discriminator
 // rather than a tautology.
 //
 // Alice clues rank 5 to Cathy. Cathy holds no playable, so reactive rank Phase A
@@ -316,11 +322,12 @@ TEST(Reactor0ClueTier, BobUnplayableChopDoesNotLift) {
 //   H1a  Bob's chop y4 is duplicated in his own hand → not endangered.
 //   H2   r1 is not critical (3 copies, none discarded).
 //   H3   Phase B stamps only the reacter, so the play count is 1.
+//   H4   needs Bob STUCK on a CRITICAL chop; his chop is the in-hand-duped y4.
 //
 // while N2 is alive (Cathy's y5 chop is critical → endangered, the clue is
 // reactive, and Bob has no colour play clue for a hand with no playable). So a
-// working H4 reads HIGH and a dead one reads MEDIUM.
-TEST(Reactor0ClueTier, FinesseIsHigh) {
+// working VH1 reads VERY HIGH and a dead one reads MEDIUM.
+TEST(Reactor0ClueTier, FinesseIsVeryHigh) {
   SetupOptions opts;
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
@@ -338,9 +345,108 @@ TEST(Reactor0ClueTier, FinesseIsHigh) {
       << "guard: the fixture must actually produce a Phase B finesse";
 
   ClueTier t = tier_of(g, clue);
+  EXPECT_EQ(t, ClueTier::VERY_HIGH)
+      << "a finesse with a non-expendable Cathy chop is VH1 → VERY HIGH. Got "
+      << name_of(t) << " (MEDIUM means VH1 never fired).";
+}
+
+// --- H4: Bob is stuck on a CRITICAL chop ---------------------------------
+
+// H4 only ever ADDS to H1, and the fixtures below are built so that the added
+// part is the only thing that can explain the answer.
+//
+// A critical card is by definition the last copy in the game, so it can have no
+// same-hand dupe, no copy in Cathy's hand, and no copy Alice can prove she holds
+// — every disqualifier `at_risk_chop` tests. **Critical therefore implies
+// endangered**, and H4 = H1a-with-a-critical-chop AND H1b. The one place the two
+// come apart is H1c: H4 does not have it. So the discriminating position is a
+// critical Bob chop where Bob could have been handled by Cathy instead — H1
+// declines, and only H4 is left to answer.
+//
+// Alice `y1 b1 p1 y2 b2`, Bob `r5 y4 g4 b4 p4`, Cathy `y3 g1 p3 b3 r3`, empty
+// stacks. Bob's chop r5 is the last red 5 in the game. Cathy's chop y3 is
+// useful, unduplicated and not playable, so H1b holds and `chop_is_expendable`
+// is false; Cathy's g1 is playable, so Bob *does* have a colour stable play clue
+// for her and H1c fails. Without H4 the tier here is LOW: N5 wants a playable
+// Bob chop and r5 is not one, and the inert clue is aimed AT Bob, so N2's
+// `action.target != bob` is false and N3 wants two new plays.
+TEST(Reactor0ClueTier, BobCriticalChopIsHighEvenWhenH1cFails) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "b1", "p1", "y2", "b2"},
+      {"r5", "y4", "g4", "b4", "p4"},  // chop (slot 1) = the last red 5
+      {"y3", "g1", "p3", "b3", "r3"},  // chop y3 useful; g1 is playable
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(1), order_at(g, TestPlayer::BOB, 1)) << "guard: Bob's chop";
+  ASSERT_TRUE(g.state.is_critical(Identity{0, 5})) << "guard: r5 is critical";
+  // The discriminator: H1 is dead, so a HIGH answer can only be H4.
+  ASSERT_FALSE(hanabi::reactor0::chop_is_expendable(g, 2))
+      << "guard: H1c's first arm is false — Cathy's chop is worth keeping";
+  ASSERT_TRUE(hanabi::reactor0::has_colour_play_clue_for(g, 1, 2))
+      << "guard: H1c's second arm is false — Bob could colour-clue Cathy's g1";
+
+  ClueTier t = tier_of(g, inert_clue(g));
   EXPECT_EQ(t, ClueTier::HIGH)
-      << "a finesse with a non-expendable Cathy chop is H4 → HIGH. Got "
-      << name_of(t) << " (MEDIUM means H4 never fired).";
+      << "Bob is stuck on the last red 5, so every clue this turn is worth a "
+         "token. Got " << name_of(t) << " (LOW means H4 never fired).";
+  EXPECT_NE(t, ClueTier::VERY_HIGH)
+      << "H4 must NOT out-rank a pending reaction: it is a property of the "
+         "POSITION, so at VERY HIGH it would fire Precedence step 1 on every "
+         "clue and pre-empt the urgent return and phase 2 as well (171 of 3332 "
+         "corpus turns, 137 of them giving up a known play).";
+}
+
+// The same position with a merely PLAYABLE chop. H4a wants critical, so it must
+// stand down — N5 answers instead, which is exactly the weaker claim H4 is not
+// allowed to collapse into.
+TEST(Reactor0ClueTier, BobPlayableButNotCriticalChopIsNotH4) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "b1", "p1", "y2", "b2"},
+      {"r1", "y4", "g4", "b4", "p4"},  // chop r1: playable, 3 copies, not crit
+      {"y3", "g1", "p3", "b3", "r3"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_FALSE(g.state.is_critical(Identity{0, 1})) << "guard: r1 is not critical";
+  ASSERT_TRUE(hanabi::reactor0::has_colour_play_clue_for(g, 1, 2))
+      << "guard: H1c still fails, so H1 is still dead";
+
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_EQ(t, ClueTier::MEDIUM)
+      << "N5 lifts a playable chop to MEDIUM; HIGH would mean H4 fired on a "
+         "chop that is not critical. Got " << name_of(t);
+}
+
+// H4b is the Cathy half, and it is the same clause as H1b. Bob's chop is still
+// the last red 5, but Cathy is about to lose a play of her own, so the clue is
+// not owed to Bob and H4 stands down.
+TEST(Reactor0ClueTier, CriticalBobChopStandsDownWhenCathysChopIsPlayable) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "b1", "p1", "y2", "b2"},
+      {"r5", "y4", "g4", "b4", "p4"},
+      {"g1", "y3", "p3", "b3", "r3"},  // chop (slot 1) g1 is PLAYABLE
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(2), order_at(g, TestPlayer::CATHY, 1)) << "guard: Cathy's chop";
+
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_NE(t, ClueTier::HIGH)
+      << "Cathy's chop is playable, so H4b fails and H4 must not fire. Got "
+      << name_of(t);
 }
 
 // --- H1b / H1c: the Cathy conditions on H1 -------------------------------

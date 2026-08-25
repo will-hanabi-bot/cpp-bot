@@ -1,10 +1,10 @@
-// H4 keys on the PARITY BUCKET, not on the clue kind.
+// The finesse rule keys on the PARITY BUCKET, not on the clue kind.
 //
 // A finesse is reactive Phase B, which lives in `reactive_rank` -- the
 // EVEN-parity ruleset. Normally that is the rank clue, so "Phase B is rank-only"
 // looked true and `clue_gets_finesse` was written that way. Odds and Evens makes
 // the COLOUR clue the even bucket, and `/set` can move an individual clue, so
-// the kind test made H4 unreachable in those variants: a finesse became
+// the kind test made VH1 unreachable in those variants: a finesse became
 // invisible to the pre-check that outranks everything else.
 //
 // Replay 1967416 T1 is the case -- Cathy held y2 on slot 1, Bob held y1 on slot
@@ -24,6 +24,7 @@
 #include "hanabi/basics/clue.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/facts.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
@@ -54,21 +55,26 @@ std::vector<std::pair<PerformAction, Action>> all_candidate_clues(const Game& g)
   return out;
 }
 
-// Is any H4 candidate a clue of this KIND, aimed at Cathy?
-bool has_h4_of_kind(const Game& g, ClueKind kind) {
+// Is any VH1 candidate a clue of this KIND, aimed at Cathy?
+//
+// `clue_is_vh1` is asked directly rather than read off `ClueCandidate::tier`, so
+// that a rule promoted into VERY HIGH later cannot make these tests pass for a
+// reason that has nothing to do with parity.
+bool has_vh1_of_kind(const Game& g, ClueKind kind) {
   for (const auto& c : hanabi::reactor0::analyse_clues(g, all_candidate_clues(g))) {
-    if (!c.is_h4) continue;
-    if (c.action.clue.kind == kind &&
-        c.action.target == static_cast<int>(TestPlayer::CATHY)) {
-      return true;
+    if (c.action.clue.kind != kind ||
+        c.action.target != static_cast<int>(TestPlayer::CATHY)) {
+      continue;
     }
+    const Game hypo = g.simulate(Action{c.action});
+    if (hanabi::reactor0::clue_is_vh1(g, hypo, c.action)) return true;
   }
   return false;
 }
 
 // Cathy holds a one-away y2 on slot 1 and Bob the y1 that unblocks it -- the
 // finesse shape from replay 1967416. Cathy's chop must not be trash or a
-// same-hand dupe, which H4 also requires.
+// same-hand dupe, which VH1 also requires.
 SetupOptions finesse_opts(std::string variant_name) {
   SetupOptions opts;
   opts.variant_name = std::move(variant_name);
@@ -87,29 +93,29 @@ SetupOptions finesse_opts(std::string variant_name) {
 
 // In a plain variant the even bucket is RANK, so the finesse is a rank clue and
 // never a colour one.
-TEST(Reactor0H4Parity, PlainVariantFinesseIsARankClue) {
+TEST(Reactor0FinesseParity, PlainVariantFinesseIsARankClue) {
   Game g = setup(finesse_opts("No Variant"));
-  EXPECT_TRUE(has_h4_of_kind(g, ClueKind::RANK))
+  EXPECT_TRUE(has_vh1_of_kind(g, ClueKind::RANK))
       << "rank is the even-parity family here, so it carries Phase B";
-  EXPECT_FALSE(has_h4_of_kind(g, ClueKind::COLOUR))
+  EXPECT_FALSE(has_vh1_of_kind(g, ClueKind::COLOUR))
       << "colour is the odd-parity family and has no Phase B";
 }
 
 // Odds and Evens swaps them, so the very same shape is a COLOUR finesse. Before
 // v7.28.0 `clue_gets_finesse` returned false for every colour clue and this
 // found nothing at all.
-TEST(Reactor0H4Parity, OddsAndEvensFinesseIsAColourClue) {
+TEST(Reactor0FinesseParity, OddsAndEvensFinesseIsAColourClue) {
   Game g = setup(finesse_opts("Odds and Evens (5 Suits)"));
-  EXPECT_TRUE(has_h4_of_kind(g, ClueKind::COLOUR))
+  EXPECT_TRUE(has_vh1_of_kind(g, ClueKind::COLOUR))
       << "colour is the even-parity family under Odds and Evens";
-  EXPECT_FALSE(has_h4_of_kind(g, ClueKind::RANK))
+  EXPECT_FALSE(has_vh1_of_kind(g, ClueKind::RANK))
       << "and rank is the odd one, which has no Phase B";
 }
 
 // The shape classifier moves with the same rule. A reactive clue's SHAPE feeds
 // rungs 1 and 2 of the General Clue Evaluation List, so an inverted reading
 // there mis-ranks every reactive clue in the variant.
-TEST(Reactor0H4Parity, ReactiveShapeFollowsTheParityToo) {
+TEST(Reactor0FinesseParity, ReactiveShapeFollowsTheParityToo) {
   auto shapes_for = [](const Game& g, ClueKind kind) {
     std::vector<ClueShape> out;
     for (const auto& c :

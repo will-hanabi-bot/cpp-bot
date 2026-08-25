@@ -687,6 +687,38 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
   return std::nullopt;
 }
 
+// Record, on the reacter's called card, which RECEIVER order its slot is
+// paired with.
+//
+// Every reactive branch below ends by writing `react_order` onto the waiting
+// connection, so this runs once at the top level instead of at all six stamp
+// sites. The pairing is symmetric -- `calc_slot(anchor, react_slot, h)` is the
+// target slot exactly as `calc_slot(anchor, target_slot, h)` was the react slot
+// -- so the branch's own arithmetic is reproduced here rather than plumbed out
+// of it.
+//
+// Why persist it at all: `decide.cpp`'s urgent scan needs to know whether the
+// receiver is still decoding against our slot choice, and a DEFERRAL clears
+// `Game::waiting` while keeping the call, so the connection is not there to ask
+// by the time the question matters. See `ConvData::react_target_order`.
+void record_react_target(Game& game) {
+  if (game.waiting.empty()) return;
+  const ReactorWC& wc = game.waiting.front();
+  const int react_order = wc.react_order;
+  if (react_order < 0) return;  // no reacter slot was computed
+  const auto& reacter_hand = game.state.hands[wc.reacter];
+  auto it = std::find(reacter_hand.begin(), reacter_hand.end(), react_order);
+  if (it == reacter_hand.end()) return;
+  const int react_slot = static_cast<int>(it - reacter_hand.begin()) + 1;
+  const int target_slot =
+      calc_slot(wc.focus_slot, react_slot, kHandSize[game.state.num_players]);
+  if (target_slot < 1 ||
+      target_slot > static_cast<int>(wc.receiver_hand.size())) {
+    return;
+  }
+  game.meta[react_order].react_target_order = wc.receiver_hand[target_slot - 1];
+}
+
 }  // namespace
 
 // --- top level ------------------------------------------------------------
@@ -737,10 +769,11 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // the odd one (exactly one play). Odds and Evens swaps which kind carries
   // which, and `/set` can move a single clue, so the bucket is read off the
   // assignment rather than from the kind.
-  if (!assign.even) {
-    return reactive_colour(prev, game, action, anchor, reacter);
-  }
-  return reactive_rank(prev, game, action, anchor, reacter);
+  auto interp = !assign.even
+                    ? reactive_colour(prev, game, action, anchor, reacter)
+                    : reactive_rank(prev, game, action, anchor, reacter);
+  record_react_target(game);
+  return interp;
 }
 
 }  // namespace hanabi::reactor0

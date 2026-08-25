@@ -29,11 +29,32 @@ copy (see *group elim*). Input to H1 and N2/N3 (DECISION_MAKING.md).
 tests basic trash only.
 
 ### clue tier
-How worthwhile it is to spend a token on a candidate clue: `LOW`, `MEDIUM` or
-`HIGH`. Consumed by the *pace-clue tier gate*. **Not** the "clue value" of
-*anchor (value)* / *colour value* — those are what a clue *means*, this is
-what giving it is *worth*. `include/hanabi/conventions/reactor0/state_eval.h`;
-definitions in DECISION_MAKING.md, *Clue Tier Definitions*.
+How worthwhile it is to spend a token on a candidate clue: `LOW`, `MEDIUM`,
+`HIGH` or `VERY_HIGH`. Consumed by the *pace-clue tier gate*, which compares
+with `>=`. **Not** the "clue value" of *anchor (value)* / *colour value* — those
+are what a clue *means*, this is what giving it is *worth*.
+`include/hanabi/conventions/reactor0/state_eval.h`; definitions in
+DECISION_MAKING.md, *Clue Tier Definitions*.
+
+**VERY HIGH** is the only tier that out-ranks a *pending reaction*
+(DECISION_MAKING.md Precedence step 1, `choose_very_high_clue`), and VH1 — the
+finesse rule — is its only member. Through v9.2.0 that rule was itself called
+**H4**; v9.3.0 named the tier instead and reused "H4" for the unrelated
+critical-chop rule at HIGH, so an "H4" in an older commit or log means the
+finesse and an "H4" today does not.
+
+### spent reaction
+A pending reaction whose *target* — the receiver order the reacter's called slot
+pairs with — has left the receiver's hand. A reaction is urgent because the
+receiver decodes it from which slot the reacter actions; once the paired card is
+gone there is nobody left to inform, so the call stops pre-empting the turn while
+its reading stands. Only reachable after a deferral, since the reacter normally
+acts first. The pairing is recorded at stamp time on
+`ConvData::react_target_order` (`include/hanabi/basics/card.h`), written by
+`record_react_target` (`src/conventions/reactor0/interpret_reactive.cpp`) and read
+by the urgent scan in `src/basics/decide.cpp`; it is stored on the card rather
+than on `Game::waiting` because a deferral clears the waiting connection while
+deliberately keeping the call. Replay 1972716 T5.
 
 ### group elim (sudoku elim)
 Proving Alice holds a copy of an identity without any of her cards being a
@@ -50,9 +71,11 @@ clue has to earn its token. Two windows, with **different pace thresholds**:
 
 * Alice already holds a card stamped `CALLED_TO_PLAY` (or, in a variant with
   an inverted suit, `CALLED_TO_DISCARD`) — she has something to do either way,
-  so the bar is **HIGH** while `pace() >= 1 && clue_tokens < 8`;
+  so the bar is **at least HIGH** while `pace() >= 1 && clue_tokens < 8`;
 * otherwise the bar is **at least MEDIUM**, while `pace() >= 3 &&
   clue_tokens <= 3`.
+
+Both compare with `>=`, so VERY HIGH clears either bar.
 
 A candidate below its bar is dropped from the list outright, so no rung ever
 sees it. The `< 8` bound is the forced-clue exemption: at 8 tokens discarding

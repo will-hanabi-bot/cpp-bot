@@ -61,14 +61,17 @@ NewPlayFacts new_play_facts(const Game& game, const Game& hypo);
 // the caller.
 bool chop_is_expendable(const Game& game, int player);
 
-// Is this candidate an H4 clue — a finesse worth the tempo? True when the
+// Is this candidate a VH1 clue — a finesse worth the tempo? True when the
 // interpretation is reactive rank Phase B (`interpret_reactive.cpp:383-447`) and
-// Cathy's chop is not trash or a same-hand-dupe. `clue_tier` returns HIGH for
-// several reasons; the Precedence rule in DECISION_MAKING.md is about this one
-// specifically, so the decision layer needs to ask for it by name.
+// Cathy's chop is not trash or a same-hand-dupe.
+//
+// The sole member of `ClueTier::VERY_HIGH`, the tier Precedence step 1 admits.
+// Through v9.2.0 the rule was called **H4**; v9.3.0 named the tier instead and
+// reused "H4" for the unrelated critical-chop rule, so the old name in a commit
+// message or an archived log means this predicate, not that one.
 //
 // `hypo` must be `game.simulate(Action{action})`.
-bool clue_is_h4(const Game& game, const Game& hypo, const ClueAction& action);
+bool clue_is_vh1(const Game& game, const Game& hypo, const ClueAction& action);
 
 // Could `giver` give `receiver` a colour clue that names a genuinely playable
 // card? A structural replay of `stable_colour`'s target choice and its three

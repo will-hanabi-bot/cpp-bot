@@ -7,7 +7,7 @@
 // means the chain broke.
 //
 // Reactor0 is exempt, because there a reacter is ALLOWED to defer. Its
-// Precedence puts an H4 clue above the urgent return, so a clue is exactly what
+// Precedence puts a VERY HIGH clue above the urgent return, so a clue is exactly what
 // a legitimate deferral looks like, and the call has to survive it and be
 // actioned on a later turn.
 //
@@ -137,7 +137,7 @@ TEST(Reactor0DeferralKeepsCall, TheSurvivingCallIsActionedOnTheNextTurn) {
   ASSERT_EQ(g.state.current_player_index, static_cast<int>(TestPlayer::ALICE))
       << "guard: it is the deferring reacter's turn again";
   ASSERT_TRUE(g.meta[called].urgent) << "guard: the call is still standing";
-  // Zero tokens, so no clue can be offered at all. The Precedence puts an H4
+  // Zero tokens, so no clue can be offered at all. The Precedence puts a VERY HIGH
   // clue ABOVE the urgent return, so a second deferral would be legitimate and
   // would say nothing about the call; this isolates the question being asked,
   // which is whether the surviving call gets actioned.

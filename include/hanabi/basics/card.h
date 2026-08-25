@@ -141,6 +141,19 @@ struct ConvData {
   // and ladder step (b) calls `cleared()` itself.
   NoteMark note_mark = NoteMark::NONE;
   int note_mark_turn = -1;
+  // For an URGENT reactive call only: the receiver order this card's slot is
+  // paired with -- `receiver_hand[calc_slot(anchor, react_slot, hand_size)-1]`,
+  // the same arithmetic `calc_target_slot` runs in the other direction. -1 when
+  // the card carries no such call.
+  //
+  // The pairing is WHY a reaction is urgent: the receiver reads which slot we
+  // action to learn which of his own slots the clue named. Once that card has
+  // left his hand nobody is decoding against us any more, and the call stops
+  // pre-empting the turn (DECISION_MAKING.md Precedence step 2). Recorded here
+  // rather than derived from `Game::waiting` because a DEFERRAL clears the
+  // waiting connection while deliberately keeping the call -- which is exactly
+  // the position replay 1972716 T5 was in.
+  int react_target_order = -1;
 
   bool cm() const { return status == CardStatus::CHOP_MOVED; }
 

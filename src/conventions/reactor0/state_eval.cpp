@@ -264,7 +264,7 @@ bool requires_high_tier(const Game& game) {
   return false;
 }
 
-// --- Cathy-chop facts, and the finesse detector (DECISION_MAKING.md H1b/H1c/H4)
+// --- Cathy-chop facts, and the finesse detector (DECISION_MAKING.md H1b/H1c/VH1)
 
 // `player`'s chop identity from ALICE's full visibility. Nullopt when the hand
 // is locked (no chop) or the card is Alice's own.
@@ -285,7 +285,7 @@ bool chop_is_playable_or_critical(const Game& game, int player) {
 }
 
 // "Cathy's chop is either a trash or a same-hand-dupe" — the expendable-chop
-// half of H1c, and the negated guard of H4.
+// half of H1c, and the negated guard of VH1.
 bool chop_is_expendable(const Game& game, int player) {
   auto chop = game.chop(player);
   if (!chop) return false;
@@ -295,7 +295,7 @@ bool chop_is_expendable(const Game& game, int player) {
          has_same_hand_dupe(game.state, player, *chop, *id);
 }
 
-// H4's "the clue gets a finesse": the interpretation is reactive rank Phase B
+// VH1's "the clue gets a finesse": the interpretation is reactive rank Phase B
 // (`interpret_reactive.cpp:383-447`), the blind-play phase that calls the
 // reacter onto a prerequisite for a one-away card in the receiver's hand.
 //
@@ -312,7 +312,7 @@ bool chop_is_expendable(const Game& game, int player) {
 // stale connection from an earlier turn can survive into a candidate's hypo.
 // It is `wc_is_fresh` (reactor0/interpret_reaction.h), shared with the decision
 // layer's classifier — this detector originally inlined the same check with an
-// EXACT turn compare, which never matches and left H4 dead from the commit that
+// EXACT turn compare, which never matches and left the rule dead from the commit that
 // introduced it. See that helper's comment for why the compare is `>=`.
 bool clue_gets_finesse(const Game& game, const Game& hypo,
                        const ClueAction& action) {
@@ -323,7 +323,7 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   // Phase B is not RANK-only -- it belongs to a RULESET, not a clue kind. It
   // lives in `reactive_rank`, which is the EVEN-parity family; Odds and Evens
   // makes that the colour clue, and `/set` can move an individual clue. Reading
-  // the kind here made H4 unreachable in those variants, so a finesse was
+  // the kind here made VH1 unreachable in those variants, so a finesse was
   // invisible to the pre-check that outranks everything else (replay 1967416
   // T1: yellow to Cathy was the finesse, and the bot clued yellow to Bob).
   if (!reactive_assignment(*s.variant, game.reactive_overrides, action.clue.kind,
@@ -336,7 +336,7 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   // in `reactive_lock`, so at clue time the receiver's predicted slot carries
   // no status at all -- which sails straight past the "stamped: Phase A, not B"
   // test below. If that slot happens to hold a one-away card, a lock then reads
-  // as a finesse and, because H4 outranks a pending reaction, it lets Alice
+  // as a finesse and, because VERY HIGH outranks a pending reaction, it lets Alice
   // abandon a reaction to give it. That is replay 1966091 T10.
   if (predicts_reactive_lock(hypo)) return false;
   auto receive_order = predicted_receiver_order(hypo);
@@ -365,10 +365,17 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
       .contains(*prev_id);
 }
 
-// H4, as a named predicate. `clue_tier` folds this into its HIGH disjunction,
-// but DECISION_MAKING.md's Precedence rule singles out an H4 clue specifically —
-// it is the one clue that outranks a pending reaction — so the decision layer
-// has to be able to ask for it apart from the other HIGH terms.
+// VH1, as a named predicate: the sole member of `ClueTier::VERY_HIGH`, the tier
+// that outranks a pending reaction.
+//
+// NOTE ON THE NAME. Through v9.2.0 this rule was called **H4** and sat inside
+// HIGH, with Precedence step 1 singling it out by name. v9.3.0 gave the tier it
+// actually earns a name instead, and freed "H4" to denote a DIFFERENT rule --
+// the critical-chop rule in `clue_tier`. An "H4" in older commits, logs or
+// comments means the finesse; an "H4" today does not.
+//
+// Kept separate from `clue_tier` so a caller can ask about the finesse itself
+// rather than about the tier.
 IdentitySet sight_narrowed(const Game& game, int order) {
   const State& s = game.state;
   if (order < 0 || order >= static_cast<int>(game.common.thoughts.size())) {
@@ -403,7 +410,7 @@ bool provably_trash(const Game& game, int order) {
   return live.forall([&s](Identity i) { return s.is_basic_trash(i); });
 }
 
-bool clue_is_h4(const Game& game, const Game& hypo, const ClueAction& action) {
+bool clue_is_vh1(const Game& game, const Game& hypo, const ClueAction& action) {
   const State& s = game.state;
   const int alice = s.our_player_index;
   const int bob = s.next_player_index(alice);
@@ -427,33 +434,68 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   const int cathy_seat = s.next_player_index(bob);
   const bool has_cathy = cathy_seat != alice;
 
-  // H1a — Bob has nothing safe to do and a chop worth saving. Also feeds the
-  // NOT-LOW test below, where it stands alone without H1b/H1c.
-  bool h1a = false;
-  if (!game.common.thinks_locked(game, bob)) {
-    const bool bob_safe = !game.common.obvious_playables(game, bob).empty() ||
-                          !game.common.thinks_trash(game, bob).empty();
-    h1a = !bob_safe && at_risk_chop(game, alice, bob);
-  }
-  // H1 — H1a AND H1b AND H1c. H1b and H1c are about CATHY: rescuing Bob's chop
-  // is only HIGH when Cathy is not herself about to lose something, and when
-  // Bob could not have handled Cathy himself. Both are vacuous at two seats.
-  if (h1a) {
-    // H1b — Cathy's chop is not playable or critical.
-    const bool h1b = !has_cathy || !chop_is_playable_or_critical(game, cathy_seat);
+  // Bob has nothing safe to do: no obvious play, and no known trash (which
+  // covers the CTD case -- see `thinks_trash`, player_game.cpp:115-132). Shared
+  // by H1a and H4a, which differ only in how bad the chop they are protecting
+  // is: H1a wants it ENDANGERED, H4a wants it outright CRITICAL.
+  const bool bob_stuck = !game.common.thinks_locked(game, bob) &&
+                         game.common.obvious_playables(game, bob).empty() &&
+                         game.common.thinks_trash(game, bob).empty();
+  // H1b, and H4b -- the same clause under two names. Rescuing Bob is only
+  // worth a token when Cathy is not herself about to lose something. Vacuous at
+  // two seats.
+  const bool cathy_can_wait =
+      !has_cathy || !chop_is_playable_or_critical(game, cathy_seat);
+
+  // --- very high --------------------------------------------------------
+  //
+  // The one clue that out-ranks a PENDING REACTION. Tested before HIGH because
+  // the ladder returns on the first match, so a VERY HIGH clue that also
+  // satisfies H1 must not be reported as merely HIGH.
+
+  // VH1 — a finesse, when Cathy's chop is worth keeping. A blind play is worth
+  // the tempo only if it is not being bought at the cost of Cathy's chop.
+  if (clue_is_vh1(game, hypo, action)) return ClueTier::VERY_HIGH;
+
+  // --- high -------------------------------------------------------------
+
+  // H1a — Bob is stuck on an ENDANGERED chop.
+  //
+  // DECISION_MAKING.md lists H1a as a NOT-LOW condition in its own right, so
+  // this position should read at least MEDIUM even when H1b/H1c fail. There is
+  // no such arm below and there never has been: `h1a` is read once, on the next
+  // line. TODO.md 30 -- left as-is here because widening the gate is a change
+  // that wants its own measurement.
+  const bool h1a = bob_stuck && at_risk_chop(game, alice, bob);
+  // H1 — H1a AND H1b AND H1c. H1c is about CATHY too: rescuing Bob's chop is
+  // only HIGH when Bob could not have handled Cathy himself. Vacuous at two
+  // seats.
+  if (h1a && cathy_can_wait) {
     // H1c — Cathy's chop is expendable, or Bob has no colour stable play clue
     // for her. Evaluated last: `has_colour_play_clue_for` is the costly term.
     const bool h1c = !has_cathy || chop_is_expendable(game, cathy_seat) ||
                      !has_colour_play_clue_for(game, bob, cathy_seat);
-    if (h1b && h1c) return ClueTier::HIGH;
+    if (h1c) return ClueTier::HIGH;
   }
   // H2 — a critical low card gets played.
   if (f.critical_low) return ClueTier::HIGH;
   // H3 — two new plays, at least one regaining a clue token.
   if (f.count >= 2 && f.regain_rank) return ClueTier::HIGH;
-  // H4 — a finesse, when Cathy's chop is worth keeping. A blind play is worth
-  // the tempo only if it is not being bought at the cost of Cathy's chop.
-  if (clue_is_h4(game, hypo, action)) return ClueTier::HIGH;
+  // H4 — Bob is stuck on a CRITICAL chop and Cathy can wait. A critical card
+  // discarded is gone for the rest of the game, so every clue this turn is worth
+  // at least a token.
+  //
+  // HIGH and not VERY HIGH, deliberately. Like H1 and N5 this is a property of
+  // the POSITION rather than of the candidate, so it lifts every legal clue that
+  // turn; at VERY HIGH it would therefore fire Precedence step 1 unconditionally
+  // and out-rank the pending reaction, phase 1 and phase 2 together. Measured
+  // over the corpus turns that action a reaction, that moved 171 of 3332 -- 137
+  // of them giving up a known play, including replay 1970589 T42's p3. At HIGH
+  // it only widens what `clue_is_admissible` will pass, which is the intent.
+  if (bob_stuck && cathy_can_wait) {
+    auto bob_chop = chop_id_of(game, bob);
+    if (bob_chop && s.is_critical(*bob_chop)) return ClueTier::HIGH;
+  }
 
   // --- not low ----------------------------------------------------------
   // N5 — Bob has a playable chop he cannot just pitch a duplicate of. Any

@@ -16,7 +16,7 @@
 
 // Variant: Odds and Evens & Dark Orange (5 Suits). 3 players, our_player_index=0.
 
-TEST(MiscReplay1967416, H4FinesseIsParityNotClueKind) {
+TEST(MiscReplay1967416, FinesseIsParityNotClueKind) {
   // Reconstruct exactly the Game the live bot saw at turn 1.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
@@ -488,7 +488,7 @@ TEST(MiscReplay1967416, H4FinesseIsParityNotClueKind) {
   //
   // `clue_gets_finesse` guarded on `clue.kind != RANK` with the comment "Phase
   // B is rank-only". Phase B is not rank-only: it lives in reactive_rank, the
-  // EVEN-parity ruleset, which Odds and Evens makes the COLOUR clue. So H4
+  // EVEN-parity ruleset, which Odds and Evens makes the COLOUR clue. So VH1
   // could never fire here and the finesse was invisible to the pre-check that
   // outranks everything else -- the bot gave yellow to Bob, a stable single
   // play, instead.

@@ -92,6 +92,8 @@ ConvData ConvData::cleared() const {
   out.status = (status == CardStatus::CHOP_MOVED) ? CardStatus::CHOP_MOVED : CardStatus::NONE;
   out.signal_turn = std::nullopt;
   out.by = std::nullopt;
+  // Paired with `urgent`, cleared above: it describes a live call, not history.
+  out.react_target_order = -1;
   return out;
 }
 

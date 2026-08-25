@@ -3,6 +3,14 @@
 **Status: COMPLETE. Phase 1 shipped in v7.0.0, phase 2 in v7.1.0, and the two
 deferred §4 stall rungs in v7.2.0.**
 
+> **Historical.** This file records the v7.0.0/v7.1.0 staging as it was decided,
+> and its wording has not been rewritten since. Two things below have moved on,
+> both in **v9.3.0**: what this document calls **H4** is now **VH1**, one of two
+> ways into the new `ClueTier::VERY_HIGH`, and Precedence step 1 admits any VERY
+> HIGH clue rather than only a finesse; and a pending reaction stops being urgent
+> once its target has left the receiver's hand. `DECISION_MAKING.md` is the ruling
+> reference for both.
+
 Everything below describes the work as it landed. All of
 `DECISION_MAKING.md` is now implemented. `src/conventions/reactor0/DECISION_MAKING.md` is the
 ruling reference; this file is the plan of record for how the change was staged.

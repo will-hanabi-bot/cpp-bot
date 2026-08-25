@@ -340,7 +340,7 @@ hole**: it returned the solver's clue without ever building reactor0's candidate
 pool, so the veto never ran there. Replay 1971808 T59 lost a point to exactly
 that, and `prefer_stall_clue` (`src/basics/decide.cpp`) closes it.
 
-Three exceptions remain by design: §4's floor and `choose_h4_clue`'s
+Three exceptions remain by design: §4's floor and `choose_very_high_clue`'s
 default-tiebreak fallback do not filter, and rung 4.7 allows a strike
 deliberately.
 
@@ -772,3 +772,30 @@ Same family as §26 (`thinks_playables` hiding a partner's blind play) and the
 v8.9.0 finding about the clue model. A fix here would cover all three rather
 than adding forced rules one position at a time. `tests/test_reactor/test_endgame/
 test_replay_1885467.cpp:129` already pins a `winrate == 0` that has this shape.
+
+---
+
+## 30. `[reactor0]` H1a alone has never lifted a clue out of LOW
+
+`DECISION_MAKING.md`'s *Clue Tier Definitions* lists **H1a** among the NOT-LOW
+conditions: Bob is unlocked, has no safe action, and his chop is *endangered*,
+and that alone should be worth MEDIUM even when the Cathy conditions H1b/H1c
+fail. `clue_tier` (`src/conventions/reactor0/state_eval.cpp:425-515`) has never
+implemented it. `h1a` is computed at `:464` and read once, inside the H1
+conjunction at `:468`; the NOT-LOW block below starts at N5 (`:485`) and never
+consults it.
+
+So a position where Bob is stuck on an endangered chop, but Bob could have
+colour-clued Cathy himself (H1c false), reads **LOW** — and at 3 or fewer tokens
+inside the unoccupied gate window that suppresses every clue on the turn.
+
+Found while adding H4 in v9.3.0, whose fixture is exactly this shape: with H4
+disabled, `Reactor0ClueTier.BobCriticalChopIsHighEvenWhenH1cFails` reads LOW
+despite H1a holding. H4 now answers the *critical* case; the *endangered* case
+the spec describes is still unhandled.
+
+Not fixed in v9.3.0 because it widens what the gate admits on a class of turns
+the change was not measured against, and the corpus A/B for that is a separate
+piece of work. Either the arm is added or the spec line goes — they should not
+keep disagreeing.
+

@@ -235,6 +235,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1971788_chuck_needs_possible_not_inferred.cpp
   tests/test_reactor0/test_misc/test_replay_1971882_finesse_elim_needs_the_connector.cpp
   tests/test_reactor0/test_misc/test_replay_1970589_elim_needs_the_alternative.cpp
+  tests/test_reactor0/test_misc/test_replay_1972716_spent_reaction_is_not_urgent.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp
   tests/test_reactor0/test_misc/test_replay_1966696_mixed_rank_direct_play_stamps_ctp.cpp
@@ -244,7 +245,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1967287_dead_chuck_call_is_erased.cpp
   tests/test_reactor0/test_misc/test_replay_1967363_no_duplicate_play_clue.cpp
   tests/test_reactor0/test_misc/test_replay_1967376_reacter_ctd_narrows_to_chuckable.cpp
-  tests/test_reactor0/test_misc/test_replay_1967416_h4_finesse_is_parity_not_kind.cpp
+  tests/test_reactor0/test_misc/test_replay_1967416_finesse_is_parity_not_kind.cpp
   tests/test_reactor0/test_misc/test_replay_1967478_no_ctp_on_provably_trash_focus.cpp
   tests/test_reactor0/test_misc/test_replay_1967491_dark_orange_chuck_is_a_valid_reaction.cpp
   tests/test_reactor0/test_dispatch.cpp
@@ -258,7 +259,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp
-  tests/test_reactor0/test_h4_parity.cpp
+  tests/test_reactor0/test_finesse_parity.cpp
   tests/test_reactor0/test_pov_reject.cpp
   tests/test_reactor0/test_provably_trash_focus.cpp
   tests/test_reactor0/test_reactive_assignment.cpp
@@ -312,7 +313,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_clue_shape.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
-  tests/test_reactor0/test_decision_making/test_replay_1966091_h4_lock_must_not_outrank_reaction.cpp
+  tests/test_reactor0/test_decision_making/test_replay_1966091_lock_must_not_outrank_reaction.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966119_occupied_low_pace_actions_its_call.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966286_call_inference_not_renarrowed_by_stacks.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966633_locked_alice_gives_the_play_reveal.cpp

@@ -143,9 +143,9 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   // stamp, reverting `inferred` to `old_inferred` (basics/game.cpp:95).
   //
   // Reactor0 is exempt. There a reacter is ALLOWED to defer: its Precedence puts
-  // an H4 clue above the urgent return, so a clue is exactly what a legitimate
-  // deferral looks like. The call has to survive it and be actioned on a later
-  // turn. Replay 1966745: will-bot69 held an urgent CTD on an Orange 1 with the
+  // a VERY HIGH clue above the urgent return, so a clue is exactly what a
+  // legitimate deferral looks like. The call has to survive it and be actioned
+  // on a later turn. Replay 1966745: will-bot69 held an urgent CTD on an Orange 1 with the
   // orange stack on 0, deferred at T2 to give a finesse, and lost the call --
   // so at T5 `requires_high_tier` said it was unoccupied, a non-HIGH clue was
   // admitted instead of the chuck, and the team struck on that card at T16.
@@ -871,6 +871,24 @@ PerformAction Game::take_action() const {
       // Any other unactionable call still stops the scan, as before.
       for (int o : s.our_hand()) {
         if (!meta[o].urgent) continue;
+        // A reaction is urgent because the RECEIVER is decoding against it: he
+        // learns which of HIS slots the clue named from which of OURS we
+        // action. Once his paired card has left his hand there is no longer
+        // anyone to inform, so the call stops out-ranking the rest of the turn
+        // and is skipped exactly like a call the holder can see is trash. The
+        // reading on our card stands -- only the urgency lapses.
+        //
+        // In practice this only bites after a DEFERRAL, since the reacter
+        // normally acts before the receiver ever gets a turn. Replay 1972716
+        // T5: we deferred at T2, the receiver played the paired card at T3, and
+        // at T5 the spent call still pre-empted a clue that had to be given to
+        // save Bob's chop. See `ConvData::react_target_order` and
+        // DECISION_MAKING.md Precedence step 2.
+        const int paired = meta[o].react_target_order;
+        if (paired >= 0 && paired < static_cast<int>(s.holders.size()) &&
+            !contains_v(s.hands[s.holder_of(paired)], paired)) {
+          continue;
+        }
         CardStatus status = meta[o].status;
         // Recorded separately from `urgent_action`, which one branch above also
         // sets to a CLUE. Only this scan produces a reacter CALL, and the
@@ -1156,14 +1174,15 @@ PerformAction Game::take_action() const {
   // where the play/discard candidates are gathered. Two reasons, in order of
   // importance:
   //
-  //   1. Precedence step 1 is "an H4 clue, if one is available", and it
+  //   1. Precedence step 1 is "a VERY HIGH clue, if one is available", and it
   //      outranks step 2, "a pending REACTION". `urgent_action` below IS that
-  //      pending reaction, so an H4 check has to run before it or it can never
-  //      win. This is the one thing that outranks a reaction; everything else
-  //      about phase 1 sits below.
-  //   2. Building it once and analysing it once means the H4 pre-check and the
-  //      full walk further down share a single `Game::simulate` per candidate,
-  //      instead of paying for the candidate set twice on every urgent turn.
+  //      pending reaction, so the tier check has to run before it or it can
+  //      never win. This is the one thing that outranks a reaction; everything
+  //      else about phase 1 sits below.
+  //   2. Building it once and analysing it once means the VERY HIGH pre-check
+  //      and the full walk further down share a single `Game::simulate` per
+  //      candidate, instead of paying for the candidate set twice on every
+  //      urgent turn.
   //
   std::vector<std::pair<PerformAction, Action>> all_clues =
       enumerate_clue_candidates();
@@ -1172,8 +1191,8 @@ PerformAction Game::take_action() const {
   std::vector<hanabi::reactor0::ClueCandidate> r0_clues;
   if (convention == Convention::REACTOR0 && !all_clues.empty()) {
     r0_clues = hanabi::reactor0::analyse_clues(*this, all_clues);
-    if (auto h4 = hanabi::reactor0::choose_h4_clue(*this, r0_clues)) {
-      return *h4;
+    if (auto vh = hanabi::reactor0::choose_very_high_clue(*this, r0_clues)) {
+      return *vh;
     }
   }
 

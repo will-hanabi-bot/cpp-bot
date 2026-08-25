@@ -150,7 +150,6 @@ struct ClueCandidate {
   ClueAction action;
   ClueReading reading;
   ClueTier tier = ClueTier::LOW;
-  bool is_h4 = false;
   // 1.99 * (# new useful cards touched) - (# new trash cards touched), the
   // spec's default tiebreak. "New" is `!prev.state.deck[o].clued`; trash is
   // basic trash from Alice's full visibility. The 1.99 is deliberate: two
@@ -188,14 +187,20 @@ std::vector<ClueCandidate> analyse_clues(
 // clues the gate would otherwise flatten.
 bool clue_is_admissible(const Game& game, const ClueCandidate& c);
 
-// Precedence step 1 — the best H4 clue, or nullopt.
+// Precedence step 1 — the best VERY HIGH clue, or nullopt.
 //
 // Deliberately does NOT apply section 4's floor. The floor exists so the section
 // 4 branch always returns something at 8 tokens; applying it here would make an
 // arbitrary clue outrank a pending reaction, which is the opposite of what the
 // Precedence rule says.
-std::optional<PerformAction> choose_h4_clue(const Game& game,
-                                            const std::vector<ClueCandidate>& cands);
+//
+// Reads `ClueCandidate::tier` rather than a per-candidate bool. VH1, the finesse
+// rule, is currently the tier's only member, so this selects exactly what
+// `choose_h4_clue` selected through v9.2.0 — the difference is that a rule
+// promoted into VERY HIGH later would pre-empt the reaction without touching
+// this function.
+std::optional<PerformAction> choose_very_high_clue(
+    const Game& game, const std::vector<ClueCandidate>& cands);
 
 // Precedence step 3 — walk the General Clue Evaluation List and return the clue
 // reactor0 wants to give, or nullopt to fall through to the play/discard phase.

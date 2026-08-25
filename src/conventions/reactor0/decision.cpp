@@ -538,7 +538,7 @@ std::vector<ClueCandidate> analyse_clues(
     }
     if (calls_two_copies_to_play(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
-                    clue_tier(game, hypo, ca), clue_is_h4(game, hypo, ca), 0.0};
+                    clue_tier(game, hypo, ca), 0.0};
     int useful = 0, trash = 0;
     for (int o : ca.list_) {
       if (s.deck[o].clued) continue;  // not a NEW touch
@@ -1200,55 +1200,55 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
 
 }  // namespace
 
-std::optional<PerformAction> choose_h4_clue(
+std::optional<PerformAction> choose_very_high_clue(
     const Game& game, const std::vector<ClueCandidate>& cands) {
-  std::vector<ClueCandidate> h4;
-  int h4_seen = 0;
+  std::vector<ClueCandidate> vh;
+  int vh_seen = 0;
   for (const ClueCandidate& c : cands) {
-    if (!c.is_h4) continue;
-    ++h4_seen;
-    if (clue_is_admissible(game, c)) h4.push_back(c);
+    if (c.tier != ClueTier::VERY_HIGH) continue;
+    ++vh_seen;
+    if (clue_is_admissible(game, c)) vh.push_back(c);
   }
-  if (h4.empty()) {
-    // Logged even when it declines: this is Precedence step 1, so "no H4 clue"
-    // is exactly why a pending reaction was allowed to proceed, and that is
-    // worth being able to read off a trace.
-    hanabi::logging::log_branch("reactor0.choose_h4_clue",
+  if (vh.empty()) {
+    // Logged even when it declines: this is Precedence step 1, so "no VERY HIGH
+    // clue" is exactly why a pending reaction was allowed to proceed, and that
+    // is worth being able to read off a trace.
+    hanabi::logging::log_branch("reactor0.choose_very_high_clue",
                                 {{"fired", false},
-                                 {"h4_candidates", h4_seen},
+                                 {"very_high_candidates", vh_seen},
                                  {"candidates", cands.size()}});
     return std::nullopt;
   }
-  // Rank the H4 clues against each other with the ordinary list, minus the
-  // section 4 floor -- an H4 clue outranks a pending reaction, an arbitrary one
-  // does not.
+  // Rank the VERY HIGH clues against each other with the ordinary list, minus
+  // the section 4 floor -- a VERY HIGH clue outranks a pending reaction, an
+  // arbitrary one does not.
   const ClueCandidate* pick = nullptr;
   const char* rung = "";
-  if ((pick = rung_1(game, h4))) {
+  if ((pick = rung_1(game, vh))) {
     rung = "1.reactive_play";
-  } else if ((pick = rung_2(game, h4))) {
+  } else if ((pick = rung_2(game, vh))) {
     rung = "2.reactive_discard";
-  } else if ((pick = rung_3(game, h4))) {
+  } else if ((pick = rung_3(game, vh))) {
     rung = "3.bob_chop";
   } else {
     Pool all;
-    for (const ClueCandidate& c : h4) all.push_back(&c);
+    for (const ClueCandidate& c : vh) all.push_back(&c);
     pick = first_of(game, std::move(all));
     rung = "default_tiebreak";
   }
   if (!pick) return std::nullopt;
-  // An H4 clue OUTRANKS a pending reaction (DECISION_MAKING.md Precedence step
-  // 1), so when this fires it is the reason the urgent path never ran. Record
-  // enough to tell that from a trace without a debugger.
+  // A VERY HIGH clue OUTRANKS a pending reaction (DECISION_MAKING.md Precedence
+  // step 1), so when this fires it is the reason the urgent path never ran.
+  // Record enough to tell that from a trace without a debugger.
   hanabi::logging::log_branch(
-      "reactor0.choose_h4_clue",
+      "reactor0.choose_very_high_clue",
       {{"fired", true},
        {"rung", rung},
        {"shape", shape_name(pick->reading.shape)},
        {"target", pick->action.target},
        {"kind", pick->action.clue.kind == ClueKind::COLOUR ? "colour" : "rank"},
        {"value", pick->action.clue.value},
-       {"h4_candidates", h4_seen},
+       {"very_high_candidates", vh_seen},
        {"outranked_a_reaction", !game.waiting.empty()}});
   return pick->perform;
 }
