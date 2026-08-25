@@ -162,6 +162,11 @@ struct ClueCandidate {
   // target's own point of view. A "fill-in" tells Bob more about a card he
   // cannot use yet, which at 8 tokens is a way to spend one without lying.
   std::vector<int> fill_ins;
+  // Endgame rung 3's subject: this clue makes some card in the TARGET's hand
+  // read as entirely useful when it did not before, judged from the target's
+  // own view. NEGATIVE information counts -- a colour clue that strips the last
+  // trash candidates off a card it did NOT touch says as much as one that did.
+  bool newly_useful = false;
 };
 
 // One `Game::simulate` per candidate — the same cost the deleted `eval_action`
@@ -199,6 +204,27 @@ std::optional<PerformAction> choose_h4_clue(const Game& game,
 // when Alice cannot legally clue at all (0 tokens, or she is the pending
 // receiver -- decide.cpp's `can_clue_now`). The floor is a guarantee about
 // ranking, not a promise to conjure a clue that does not exist.
+// The endgame stall list. When the endgame fork has decided the turn is a CLUE,
+// this decides WHICH -- a different ordering from `choose_clue`, whose rungs are
+// tuned for ordinary play (it puts a reactive discard above a stable play; here
+// a legal stable play outranks it).
+//
+//   1. a double reactive clue that gets two cards to play
+//   2. a legal stable colour or rank play clue to Bob
+//   3. any clue to Bob that singles out a useful card in his hand by empathy
+//   4. a valid reactive discard clue to Cathy
+//   5. any other legal stall clue to Bob that cannot be misread as a play clue
+//   6. any other legal clue to Cathy
+//   floor. any remaining candidate that does not predict a strike
+//
+// Every pool goes through the same `select` the ordinary rungs use, so
+// `predicts_a_strike` vetoes apply at every level. Unlike `choose_clue` this
+// does NOT consult the tier gate: Alice is already committed to cluing, so a
+// tier threshold has nothing left to decide. Returns nullopt only when every
+// candidate predicts a strike, in which case the endgame's own answer stands.
+std::optional<PerformAction> choose_endgame_clue(
+    const Game& game, const std::vector<ClueCandidate>& cands);
+
 std::optional<PerformAction> choose_clue(const Game& game,
                                          const std::vector<ClueCandidate>& cands);
 

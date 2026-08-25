@@ -178,7 +178,9 @@ Two things outrank the phases below, and one thing sits between them:
     (`decide.cpp:892`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
     additionally needs `pace() <= num_players` (`:990`); the forced rules do
     not.  They are unchanged by this spec, with one guard on top: a CERTAIN
-    play outranks a speculative one — see below.
+    play outranks a speculative one — see below.  The endgame decides
+    WHETHER to clue; when its answer IS a clue, the endgame stall list below
+    decides which one.
 
 
 **The solver needs the deck to be running out (step 0).** `rem_score() <=
@@ -536,6 +538,63 @@ is judged from Alice's own inference, not common knowledge.
 
 ---
 
+## The endgame stall list
+
+**Shipped in v8.9.0** (`reactor0::choose_endgame_clue`,
+`src/conventions/reactor0/decision.cpp`). Used when the endgame fork has already
+decided the turn is a clue — `prefer_stall_clue` in `src/basics/decide.cpp`
+applies it to the forced layer's answer and to the solver's.
+
+Neither of those layers has a model of clue quality. `find_all_clues` ranks with
+**reactor's** `get_result` even in a reactor0 game, `clueless_winnable` prices
+every clue as a dummy token burn, `possible_actions` may keep only
+`all_clues.front()`, and a partner whose call would strike is modelled as free
+to ignore it — so a clue that makes him bomb costs the search nothing. The
+five-lockout rule is franker still: it asks for `any_legal_clue`.
+
+reactor0 already knew better and was simply never asked. Its candidate pool is
+not built until phase 1, far below the fork, so `analyse_clues` never ran on
+these turns at all.
+
+The order is **not** the General Clue Evaluation List's. Those rungs are tuned
+for a game still being played and put a reactive discard at rung 2, above any
+stable play, because keeping the discard engine turning is worth more than one
+extra card down. In a forced endgame there is no long run left to feed:
+
+1. A double reactive clue that gets two cards to play (`REACTIVE_PLAY`).
+2. A legal stable colour or rank play clue to Bob (`STABLE_PLAY`). "Legal" means
+   the card the clue NAMES is the one that is actually playable. Contextual
+   eliminations are handled for free, because the reading comes from a full
+   simulation of what Bob will know after the clue — so a colour clue whose
+   leftmost touched card has been eliminated as unplayable becomes legal exactly
+   when it should.
+3. Any clue to Bob that singles out a useful card in his hand by empathy —
+   `ClueCandidate::newly_useful`: some card of his reads as entirely useful when
+   it did not before. **Negative information counts**: a colour clue that strips
+   the last trash candidates off a card it did *not* touch qualifies.
+4. A valid reactive discard clue to Cathy (`REACTIVE_DISCARD`, affordable).
+5. Any other legal stall clue to Bob that cannot be misread as a play clue —
+   the `rung_safe_stall` test, narrowed to Bob.
+6. Any other legal clue to Cathy.
+7. **Floor** — anything left that does not predict a strike.
+
+Every pool goes through the same `select` the ordinary rungs use, so
+`predicts_a_strike` vetoes apply at **every** level. Unlike `choose_clue` the
+stall list does not consult the tier gate: Alice is already committed to
+cluing, so a tier threshold has nothing left to decide. It declines only when
+every candidate predicts a strike, in which case the endgame's own answer
+stands.
+
+**Replay 1971808 T59** is why it exists. Stacks `[4,5,4,5,5,5]`, 28 of 30, one
+card left, and both missing cards visible: r5 in Bob's slot 4, g5 in Cathy's
+slot 1. Purple to Cathy is a reactive colour clue — the EVEN parity under Odds
+and Evens, so a double play — and the pairing `react_slot + target_slot ≡ anchor
+(mod 5)` with Purple's value of 5 gives `4 + 1`. Both lay; 30. The solver
+returned red to Bob instead, which names his leftmost touched card that could be
+playable — an r1 — and the game ended 29 on the strike.
+
+---
+
 ## Decision phase 2 — deciding what to play or discard
 
 **Shipped in v7.1.0** (`reactor0/calls.{h,cpp}`). The four tracking structures
@@ -798,6 +857,6 @@ lives in `src/conventions/reactor0/decision.cpp`:
 
 ## Not yet implemented
 
-Nothing. Every rule above is in the build as of v7.2.0. `TODO.md` carries the
+Nothing. Every rule above is in the build as of v8.9.0. `TODO.md` carries the
 gaps that remain, which are about how the engine executes a decision rather than
 about which decision reactor0 makes.

@@ -888,6 +888,32 @@ PerformAction Game::take_action() const {
     }
   }
 
+  // Every clue Alice could legally give, paired with the ClueAction that
+  // describes it. Pure -- it reads `s` and allocates -- so it can be called
+  // from either the endgame fork or phase 1 below without ordering concerns.
+  // Both need it, and the endgame fork runs first, so it is defined here.
+  auto enumerate_clue_candidates = [&]() {
+    std::vector<std::pair<PerformAction, Action>> out;
+    const bool can_clue_now =
+        s.can_clue() &&
+        (waiting.empty() || waiting.front().receiver != s.our_player_index);
+    if (!can_clue_now) return out;
+    for (int target = 0; target < s.num_players; ++target) {
+      if (target == s.our_player_index) continue;
+      for (const Clue& clue : s.all_valid_clues(target)) {
+        PerformAction perform =
+            clue.kind == ClueKind::COLOUR
+                ? PerformAction{PerformColour{clue.target, clue.value}}
+                : PerformAction{PerformRank{clue.target, clue.value}};
+        ClueAction act{s.our_player_index, clue.target,
+                       s.clue_touched(s.hands[target], clue.kind, clue.value),
+                       clue.base()};
+        out.emplace_back(perform, Action{act});
+      }
+    }
+    return out;
+  };
+
   // --- Endgame solver fork ---
   if (s.rem_score() <= static_cast<int>(s.variant->suits.size()) + 1) {
     // A CERTAIN play outranks a speculative one.
@@ -959,12 +985,45 @@ PerformAction Game::take_action() const {
                                   {{"was", *target}, {"now", *first}});
       return certain.front();
     };
+    // The endgame decides WHETHER to clue; reactor0's stall list decides WHICH.
+    //
+    // Neither the forced layer nor the solver has any model of clue quality.
+    // `find_all_clues` ranks with REACTOR's `get_result` even in a reactor0 game
+    // (`:725`); `clueless_winnable` prices every clue as a dummy token burn;
+    // `possible_actions` may keep only `all_clues.front()`; and a partner whose
+    // call would strike is modelled as free to ignore it, so a clue that makes
+    // him bomb costs the search nothing. The five-lockout rule is franker still
+    // -- it asks for `any_legal_clue`.
+    //
+    // reactor0 already knows better and was simply never asked: its candidate
+    // pool is not built until far below, so `analyse_clues` never ran on these
+    // turns. `predicts_a_strike` would have vetoed the bad clue and
+    // `REACTIVE_PLAY` would have taken the good one.
+    //
+    // Replay 1971808 T59: r5 sat in Bob's slot 4 and g5 in Cathy's slot 1, both
+    // visible. Purple to Cathy is a double play under Odds and Evens and wins
+    // 30. The solver returned red to Bob, which names his leftmost touched card
+    // that could be playable -- an r1 -- and the game ended 29 on the strike.
+    auto prefer_stall_clue = [&](PerformAction chosen) {
+      if (convention != Convention::REACTOR0) return chosen;
+      if (!hanabi::is_clue(chosen)) return chosen;
+      auto all_clues = enumerate_clue_candidates();
+      if (all_clues.empty()) return chosen;
+      auto cands = hanabi::reactor0::analyse_clues(*this, all_clues);
+      auto better = hanabi::reactor0::choose_endgame_clue(*this, cands);
+      if (!better) return chosen;
+      if (*better != chosen) {
+        hanabi::logging::log_branch("endgame.prefer_stall_clue", {});
+      }
+      return *better;
+    };
+
     // Forced-endgame layer: mechanical rules that override the search
     // when the correct action is hardcoded. See
     // `src/endgame/forced_endgame.cpp` for the rule list. Cheap enough
     // (O(n × hand × suits)) to check before the solver kicks in.
     if (auto forced = hanabi::endgame::forced_endgame_action(*this); forced) {
-      return prefer_certain_play(*forced);
+      return prefer_stall_clue(prefer_certain_play(*forced));
     }
 
     // The deck must actually be running out.
@@ -1071,7 +1130,7 @@ PerformAction Game::take_action() const {
         }
       }
       if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
-        return prefer_certain_play(result.action);
+        return prefer_stall_clue(prefer_certain_play(result.action));
       }
       // Solver returned no winning action or winrate < 1%; fall through to heuristic.
     }
@@ -1092,26 +1151,8 @@ PerformAction Game::take_action() const {
   //      full walk further down share a single `Game::simulate` per candidate,
   //      instead of paying for the candidate set twice on every urgent turn.
   //
-  // The enumeration itself is pure -- it reads `s` and allocates -- so hoisting
-  // it changes nothing for the paths between here and its old home.
-  bool can_clue_now = s.can_clue() &&
-                       (waiting.empty() || waiting.front().receiver != s.our_player_index);
-
-  std::vector<std::pair<PerformAction, Action>> all_clues;
-  if (can_clue_now) {
-    for (int target = 0; target < s.num_players; ++target) {
-      if (target == s.our_player_index) continue;
-      for (const Clue& clue : s.all_valid_clues(target)) {
-        PerformAction perform = clue.kind == ClueKind::COLOUR
-                                     ? PerformAction{PerformColour{clue.target, clue.value}}
-                                     : PerformAction{PerformRank{clue.target, clue.value}};
-        ClueAction act{s.our_player_index, clue.target,
-                        s.clue_touched(s.hands[target], clue.kind, clue.value),
-                        clue.base()};
-        all_clues.emplace_back(perform, Action{act});
-      }
-    }
-  }
+  std::vector<std::pair<PerformAction, Action>> all_clues =
+      enumerate_clue_candidates();
 
 
   std::vector<hanabi::reactor0::ClueCandidate> r0_clues;

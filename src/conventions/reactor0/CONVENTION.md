@@ -939,6 +939,19 @@ and never reaches a reactor0 game at all (§0).
 
 ## §1g POV invariance — shared knowledge retargets, giver-only knowledge rejects
 
+**A clue whose reading predicts a strike is not legal to give.** The rules
+below are written per-site, but the general form is enforced once, in the
+decision layer: `predicts_a_strike` (`src/conventions/reactor0/decision.cpp`)
+asks whether the reading stamps a call on a card that is not actually playable,
+and `select` drops any such candidate from every rung of both clue choosers.
+"Actually playable" is judged from the giver's full sight of the target's hand,
+which is what makes it a legality test rather than a score.
+
+Until v8.9.0 the endgame fork was a hole in this: it returned the solver's clue
+without ever building reactor0's candidate pool, so the veto never ran on those
+turns. Replay 1971808 T59 lost a point to exactly that. `choose_endgame_clue`
+closes it — see DECISION_MAKING.md "The endgame stall list".
+
 **One reading is deliberately PER-SEAT: a direct play whose focus the holder can
 prove is trash.** §1b priority 5 and §1c priority 1 both decline when
 `provably_trash` (`reactor0/facts.h`) says every identity still open for the

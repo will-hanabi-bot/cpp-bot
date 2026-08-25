@@ -573,6 +573,25 @@ std::vector<ClueCandidate> analyse_clues(
       const int after = set_size(hypo.players[ca.target].thoughts[o]);
       if (after < before) c.fill_ins.push_back(o);
     }
+
+    // Endgame rung 3. Same "judged from the target's own view" rule as the
+    // fill-ins above, and the same reason negative information counts -- but
+    // asking a different question: not "does he know MORE about this card" but
+    // "does he now know it is worth keeping". A card every reading of which is
+    // useful is one he will not throw away, which is the whole value of the
+    // clue when nothing better is available.
+    auto all_useful = [&s](const Thought& t) {
+      const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+      if (set.is_empty()) return false;
+      return set.forall([&s](Identity i) { return !s.is_basic_trash(i); });
+    };
+    for (int o : s.hands[ca.target]) {
+      if (all_useful(hypo.players[ca.target].thoughts[o]) &&
+          !all_useful(game.players[ca.target].thoughts[o])) {
+        c.newly_useful = true;
+        break;
+      }
+    }
     out.push_back(std::move(c));
   }
   return out;
@@ -1231,6 +1250,127 @@ std::optional<PerformAction> choose_h4_clue(
        {"value", pick->action.clue.value},
        {"h4_candidates", h4_seen},
        {"outranked_a_reaction", !game.waiting.empty()}});
+  return pick->perform;
+}
+
+namespace {
+
+// --- the endgame stall list ----------------------------------------------
+//
+// A DIFFERENT ordering from `choose_clue`, deliberately. The ordinary rungs are
+// tuned for a game still being played: they put a reactive discard at rung 2,
+// above any stable play, because keeping the discard engine turning is worth
+// more than one extra card down. Once the endgame has decided this turn is a
+// clue, that trade is gone -- there is no long run left to feed -- so a legal
+// stable play outranks it.
+//
+// Replay 1971808 T59 is why this exists. Two cards were missing and both were
+// visible: r5 in Bob's slot 4, g5 in Cathy's slot 1. Purple to Cathy is a
+// reactive colour clue, which under Odds and Evens is the EVEN parity -- a
+// double play -- and the pairing `react_slot + target_slot = anchor (mod 5)`
+// with Purple's value of 5 gives 4 + 1: Bob lays the r5, Cathy the g5, 28 to 30.
+// The bot gave red to Bob instead, which names his LEFTMOST touched card that
+// could be playable -- an r1 -- and the game ended 29 on the strike.
+//
+// Both halves of the right answer were already here and already wired:
+// `read_clue` classifies purple-to-Cathy as REACTIVE_PLAY, and
+// `predicts_a_strike` rejects red-to-Bob. Neither ran, because the endgame fork
+// returns before `analyse_clues` is ever built (src/basics/decide.cpp).
+
+// 2. A legal stable colour or rank play clue to Bob. `select` has already
+// dropped anything predicting a strike, which is what "legal" means here: the
+// card the clue NAMES has to be the one that is actually playable. Contextual
+// eliminations are handled for free, since the reading comes from a full
+// simulation of what Bob will know after the clue.
+const ClueCandidate* e_rung_stable_play(const Game& g,
+                                        const std::vector<ClueCandidate>& cs) {
+  return settle(g, pool_stable_play(g, cs), {});
+}
+
+// 3. Any clue to Bob that singles out a useful card in his hand by empathy.
+const ClueCandidate* e_rung_newly_useful(const Game& g,
+                                         const std::vector<ClueCandidate>& cs) {
+  Pool p = select(cs, [&g](const ClueCandidate& c) {
+    return is_stable_to_bob(g, c) && c.newly_useful;
+  });
+  return settle(g, std::move(p), {});
+}
+
+// 5. Any other legal stall clue to Bob that cannot be misread as a stable play
+// clue -- the ordinary safe-stall test, narrowed to Bob.
+const ClueCandidate* e_rung_safe_stall_bob(const Game& g,
+                                           const std::vector<ClueCandidate>& cs) {
+  Pool p = select(cs, [&g](const ClueCandidate& c) {
+    if (!is_stable_to_bob(g, c)) return false;
+    if (c.reading.shape != ClueShape::OTHER) return false;
+    return c.reading.reacter_side.order < 0 &&
+           c.reading.receiver_side.order < 0 && c.reading.stable_subject < 0;
+  });
+  return settle(g, std::move(p), {});
+}
+
+// 6. Any other legal clue to Cathy -- the rare case where nothing can be said to
+// Bob without it reading as an instruction he cannot safely follow.
+const ClueCandidate* e_rung_any_to_cathy(const Game& g,
+                                         const std::vector<ClueCandidate>& cs) {
+  if (!has_cathy(g)) return nullptr;
+  const int cathy = cathy_of(g);
+  Pool p = select(cs, [cathy](const ClueCandidate& c) {
+    return c.action.target == cathy;
+  });
+  return settle(g, std::move(p), {});
+}
+
+// Floor. Anything left that does not predict a strike. The list above is
+// exhaustive over the shapes the spec names, but a stable lock or a stable
+// discard to Bob falls through all six, and giving one of those is still better
+// than handing back a clue nobody vetted.
+const ClueCandidate* e_floor(const Game& g, const std::vector<ClueCandidate>& cs) {
+  return settle(g, select(cs, [](const ClueCandidate&) { return true; }), {});
+}
+
+}  // namespace
+
+std::optional<PerformAction> choose_endgame_clue(
+    const Game& game, const std::vector<ClueCandidate>& cands) {
+  hanabi::instr::ScopedTimer st("reactor0.choose_endgame_clue");
+  if (cands.empty()) return std::nullopt;
+
+  const ClueCandidate* pick = nullptr;
+  const char* rung = "";
+  if ((pick = rung_1(game, cands))) {
+    rung = "1.reactive_play";
+  } else if ((pick = e_rung_stable_play(game, cands))) {
+    rung = "2.stable_play";
+  } else if ((pick = e_rung_newly_useful(game, cands))) {
+    rung = "3.singles_out_useful";
+  } else if ((pick = rung_2(game, cands))) {
+    rung = "4.reactive_discard";
+  } else if ((pick = e_rung_safe_stall_bob(game, cands))) {
+    rung = "5.safe_stall_bob";
+  } else if ((pick = e_rung_any_to_cathy(game, cands))) {
+    rung = "6.any_to_cathy";
+  } else if ((pick = e_floor(game, cands))) {
+    rung = "floor.no_strike";
+  }
+  if (!pick) {
+    // Every candidate predicts a strike. Nothing here is an improvement, so the
+    // endgame's own answer stands.
+    hanabi::logging::log_branch("reactor0.choose_endgame_clue",
+                                {{"picked", false},
+                                 {"reason", "every_candidate_strikes"},
+                                 {"candidates", cands.size()}});
+    return std::nullopt;
+  }
+  hanabi::logging::log_branch("reactor0.choose_endgame_clue",
+                              {{"rung", rung},
+                               {"shape", shape_name(pick->reading.shape)},
+                               {"target", pick->action.target},
+                               {"kind", pick->action.clue.kind == ClueKind::COLOUR
+                                            ? "colour"
+                                            : "rank"},
+                               {"value", pick->action.clue.value},
+                               {"candidates", cands.size()}});
   return pick->perform;
 }
 

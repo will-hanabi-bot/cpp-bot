@@ -329,7 +329,25 @@ Left alone deliberately: fixing it is a second cross-version behaviour change
 and puts reactor's 120-test corpus at risk. reactor0's `vet_react_slot`
 (`reactor0/interpret_reactive.cpp:186-244`) is the shape to copy.
 
-## 14. `[engine]` Nothing vetoes a clue whose reading predicts a strike
+## 14. `[engine]` Nothing vetoes a clue whose reading predicts a strike — CLOSED for reactor0
+
+**Closed for reactor0 in v7.x (`predicts_a_strike`) and fully closed in v8.9.0.**
+`predicts_a_strike` (`src/conventions/reactor0/decision.cpp`) is the veto this
+entry asked for: `select` drops any candidate whose reading stamps a call on a
+card that is not actually playable, at every rung of `choose_clue` — and, since
+v8.9.0, of `choose_endgame_clue` too. The **endgame fork was the remaining
+hole**: it returned the solver's clue without ever building reactor0's candidate
+pool, so the veto never ran there. Replay 1971808 T59 lost a point to exactly
+that, and `prefer_stall_clue` (`src/basics/decide.cpp`) closes it.
+
+Three exceptions remain by design: §4's floor and `choose_h4_clue`'s
+default-tiebreak fallback do not filter, and rung 4.7 allows a strike
+deliberately.
+
+**Still open for reactor**, whose scorer prices a predicted misplay rather than
+rejecting it. The original analysis follows; note its `find_all_clues` bullet
+now cites a stale line number — `take_action` builds its pool through
+`enumerate_clue_candidates`, not at `:851-864`.
 
 A predicted misplay is only ever *priced*, never rejected, anywhere in the
 candidate pipeline:
@@ -352,12 +370,12 @@ What actually stops the bad clue today is the *interpretation* layer's §1g
 rejects, one per site. A single strike-predicting veto over the candidate pool
 would be the general answer.
 
-**v7.0.0 makes this newly tractable for reactor0.** An ordered priority list is
-the first structure in the codebase where a candidate can be *rejected* rather
-than merely priced — the pool is walked, not summed — so the veto has somewhere
-natural to live. Note the second bullet above stays true either way: the §2b
-early-return in inverted variants was kept machinery, not part of the deleted
-scorer.
+**v7.0.0 made this tractable for reactor0**, and it shipped: an ordered priority
+list is the first structure in the codebase where a candidate can be *rejected*
+rather than merely priced — the pool is walked, not summed — so the veto had
+somewhere natural to live. Note the second bullet above stays true either way:
+the §2b early-return in inverted variants was kept machinery, not part of the
+deleted scorer.
 
 ## 15. `[engine]` `advance` models every voluntary discard as a chuck
 

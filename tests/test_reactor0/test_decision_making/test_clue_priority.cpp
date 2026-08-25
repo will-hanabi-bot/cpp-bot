@@ -723,3 +723,221 @@ TEST(Reactor0CluePriority, PriorityThreeAppliesToASafeButPlayableChop) {
   EXPECT_TRUE(hanabi::reactor0::priority_3_applies(g))
       << "a play the team should collect is a reason of its own";
 }
+
+// --- the endgame stall list -----------------------------------------------
+//
+// `choose_endgame_clue` is a DIFFERENT ordering from `choose_clue`, used when
+// the endgame fork has already decided the turn is a clue. The ordinary rungs
+// are tuned for a game still being played and put a reactive discard at rung 2,
+// above any stable play; once there is no long run left to feed, a legal stable
+// play is worth more. Replay 1971808 T59 is the case that forced the split.
+namespace {
+
+std::optional<PerformAction> endgame_chosen(const Game& g) {
+  return hanabi::reactor0::choose_endgame_clue(g, analysed(g));
+}
+
+bool is_colour_to(const std::optional<PerformAction>& a, int value, int target) {
+  auto* c = a ? std::get_if<PerformColour>(&*a) : nullptr;
+  return c && c->value == value && c->target == target;
+}
+
+// The analysed candidate a chooser returned, matched by its rendered form --
+// the same trick `ChosenClueNeverPredictsAStrikeBelowEightTokens` uses.
+const ClueCandidate* candidate_for(const std::vector<ClueCandidate>& cs,
+                                   const std::optional<PerformAction>& pick) {
+  if (!pick) return nullptr;
+  for (const auto& c : cs) {
+    if (describe(std::optional<PerformAction>{c.perform}) == describe(pick)) {
+      return &c;
+    }
+  }
+  return nullptr;
+}
+
+bool reading_strikes(const hanabi::reactor0::ClueReading& r) {
+  return r.reacter_side.outcome == hanabi::reactor0::Outcome::STRIKE ||
+         r.receiver_side.outcome == hanabi::reactor0::Outcome::STRIKE ||
+         r.stable_outcome == hanabi::reactor0::Outcome::STRIKE;
+}
+
+}  // namespace
+
+// Rung 1 is shared with `choose_clue`: two cards down beats everything.
+TEST(Reactor0CluePriority, EndgameTakesTheDoubleReactiveFirst) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"g1", "y4", "b4", "p4", "y3"},
+      {"y3", "r1", "g3", "b3", "p4"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  auto cands = analysed(g);
+  ASSERT_TRUE(has_shape(cands, ClueShape::REACTIVE_PLAY)) << "guard";
+  EXPECT_TRUE(is_rank_to(endgame_chosen(g), 3, 2))
+      << "got " << describe(endgame_chosen(g));
+}
+
+// The ordering that DIFFERS from `choose_clue`: a legal stable play to Bob
+// outranks a reactive discard. `choose_clue` would take the reactive discard at
+// its rung 2.
+TEST(Reactor0CluePriority, EndgameStablePlayOutranksReactiveDiscard) {
+  SetupOptions opts;
+  // Green to Bob names his playable g1 -- a legal stable play. Green to Cathy
+  // is the ODD parity in a plain variant ("exactly one play"), and the pairing
+  // `react_slot + target_slot = anchor` with Green's value of 3 sends Bob to
+  // his slot 1 (the g1) and Cathy to her slot 2, a trash p1 she throws.
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"g1", "y4", "b4", "p4", "y3"},
+      {"y3", "p1", "g3", "b3", "y4"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 1};  // p1 played, so Cathy's slot 2 is trash
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  auto cands = analysed(g);
+  ASSERT_TRUE(has_shape(cands, ClueShape::STABLE_PLAY))
+      << "guard: the fixture must offer a legal stable play to Bob";
+  ASSERT_TRUE(has_shape(cands, ClueShape::REACTIVE_DISCARD))
+      << "guard: and a reactive discard, or there is no ordering to test -- "
+         "`choose_clue` would take the reactive discard at ITS rung 2";
+
+  auto pick = endgame_chosen(g);
+  ASSERT_TRUE(pick.has_value());
+  const ClueCandidate* won = candidate_for(cands, pick);
+  ASSERT_NE(won, nullptr);
+  EXPECT_EQ(won->reading.shape, ClueShape::STABLE_PLAY)
+      << "the stall list puts a legal stable play above a reactive discard; got "
+      << describe(pick);
+  EXPECT_EQ(won->action.target, 1) << "...and a stable clue goes to Bob";
+}
+
+// The veto, end to end. `select` drops anything predicting a strike at every
+// rung, so a stable clue whose named card is NOT the playable one can never
+// come back -- which is exactly what red-to-Bob was at 1971808 T59.
+TEST(Reactor0CluePriority, EndgameNeverReturnsAStrikePredictingClue) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r1", "y4", "g4", "b4", "r5"},   // Bob: leftmost red is the trash r1
+      {"y3", "g3", "b3", "p3", "y4"},
+  };
+  opts.play_stacks = {4, 0, 0, 0, 0};   // red on 4, so r1 is trash and r5 plays
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  auto cands = analysed(g);
+  int strikers = 0;
+  for (const auto& c : cands) {
+    if (reading_strikes(c.reading)) ++strikers;
+  }
+  ASSERT_GT(strikers, 0)
+      << "guard: the fixture must offer at least one clue whose reading makes "
+         "someone bomb, or this proves nothing";
+
+  auto pick = endgame_chosen(g);
+  ASSERT_TRUE(pick.has_value());
+  const ClueCandidate* won = candidate_for(cands, pick);
+  ASSERT_NE(won, nullptr);
+  EXPECT_FALSE(reading_strikes(won->reading))
+      << "a clue that makes a partner bomb must never be the answer; got "
+      << describe(pick);
+}
+
+// Rung 3 counts NEGATIVE information: a colour clue can make a card Bob's
+// empathy reads as entirely useful without touching it at all.
+TEST(Reactor0CluePriority, EndgameRungThreeCountsNegativeInformation) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y4", "g4", "b4", "p4", "y3"},
+      {"g3", "b3", "p3", "y2", "p2"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  auto cands = analysed(g);
+
+  // The load-bearing claim is the DEFINITION: `newly_useful` may only be set
+  // when the target's own view actually changed. That is what makes negative
+  // information count -- the test does not care whether the clue touched the
+  // card, only that the target learned something about it.
+  for (const auto& c : cands) {
+    if (!c.newly_useful) continue;
+    const Game hypo = g.simulate(Action{c.action});
+    bool differs = false;
+    for (int o : g.state.hands[c.action.target]) {
+      const Thought& a = g.players[c.action.target].thoughts[o];
+      const Thought& b = hypo.players[c.action.target].thoughts[o];
+      if (!(a.possible == b.possible && a.inferred == b.inferred)) differs = true;
+    }
+    EXPECT_TRUE(differs)
+        << "newly_useful claims the target learned something, so his view must "
+           "have changed: " << describe(c.perform);
+  }
+}
+
+// The chooser is a floor as well as a ladder: while any candidate avoids a
+// strike, it returns one. Declining would hand the turn back to a clue nobody
+// vetted.
+TEST(Reactor0CluePriority, EndgameAlwaysAnswersWhenSomethingIsSafe) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y4", "g4", "b4", "p4", "y3"},
+      {"g3", "b3", "p3", "y2", "p2"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.clue_tokens = 1;
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  auto cands = analysed(g);
+  ASSERT_FALSE(cands.empty()) << "guard: there are legal clues here";
+  EXPECT_TRUE(endgame_chosen(g).has_value())
+      << "the stall list must not decline while a safe clue exists";
+}
+
+// The 1971808 counterfactual: with the reactive double play removed, rung 2
+// takes over. This is the case that depends on v8.8.0's rightmost rule --
+// under Odds and Evens a rank clue names a parity class, and the direct-play
+// focus is the RIGHTMOST newly touched card that could be playable. Here that
+// is the r5; the leftmost is a trash y3, which is what made the equivalent
+// COLOUR clue illegal in the replay.
+TEST(Reactor0CluePriority, EndgameOddRankToBobWhenNoReactiveExists) {
+  SetupOptions opts;
+  opts.variant_name = "Odds and Evens (5 Suits)";
+  opts.play_stacks = {4, 5, 4, 5, 5};   // r5 and g5 are the only cards left
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y3", "r1", "g2", "r5", "p4"},   // Bob: odd touches y3, r1, r5
+      {"y1", "b2", "p2", "y2", "b4"},   // Cathy: nothing that pairs into a play
+  };
+  opts.clue_tokens = 3;
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  auto cands = analysed(g);
+  ASSERT_FALSE(has_shape(cands, ClueShape::REACTIVE_PLAY))
+      << "guard: rung 1 must be empty, or it wins and this proves nothing";
+
+  auto pick = endgame_chosen(g);
+  ASSERT_TRUE(pick.has_value());
+  const ClueCandidate* won = candidate_for(cands, pick);
+  ASSERT_NE(won, nullptr);
+  EXPECT_FALSE(reading_strikes(won->reading));
+  EXPECT_TRUE(is_rank_to(pick, 1, 1))
+      << "an ODD rank clue to Bob names his rightmost touched card that could "
+         "be playable -- the r5. Got " << describe(pick);
+}
