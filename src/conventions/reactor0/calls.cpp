@@ -119,6 +119,45 @@ bool is_chuckable(const Game& game, int player, int order) {
     if (!s.is_basic_trash(i) || inverted) all_plain_trash = false;
     if (!inverted || !s.is_playable(i)) all_inverted_playable = false;
   }
+
+  // Throwing away a card the team INVESTED in needs more than an inference.
+  //
+  // `set` above prefers `inferred`, which is a convention DEDUCTION and can be
+  // wrong. For an untouched card that costs nothing -- nothing narrowed it, so
+  // `inferred` and `possible` agree. For a clued or stamped card the two can
+  // come apart badly, and the discard is irreversible.
+  //
+  // Replay 1971788 T29, "Odds and Evens & Dark Omni": a lock's rank promise
+  // narrowed slot 5 to {r1,y1,g1,b1,p1} -- all trash -- while `possible` still
+  // held d3, d4 and d5, each a single copy. It was the d5. It was the only
+  // chuckable card, so rung 11 threw it and the max score fell 30 to 29, while
+  // an actual chop sat unclued in slot 1.
+  //
+  // So the first arm now needs `possible` to agree, for a card that is clued or
+  // carries a stamp. `sight_narrowed` is applied to it as well: that is sound
+  // elimination (copies we can SEE elsewhere), not a convention reading, so it
+  // may narrow the safety test. `CALLED_TO_DISCARD` cards never reach here --
+  // they join the chuck list through their own arm in `action_lists`, because
+  // refusing a partner's explicit instruction would break the signal.
+  //
+  // The inverted arm is deliberately untouched: chucking a playable inverted
+  // card is a PLAY, not a throw, and its risk is a strike rather than a
+  // permanent loss.
+  if (all_plain_trash && (s.deck[order].clued ||
+                          game.meta[order].status != CardStatus::NONE)) {
+    IdentitySet safe = t.possible;
+    if (player == s.our_player_index) {
+      const IdentitySet seen = sight_narrowed(game, order);
+      if (!seen.is_empty()) {
+        const IdentitySet narrowed = safe.intersect(seen);
+        if (!narrowed.is_empty()) safe = narrowed;
+      }
+    }
+    if (safe.is_empty() ||
+        !safe.forall([&s](Identity i) { return s.is_basic_trash(i); })) {
+      all_plain_trash = false;
+    }
+  }
   return all_plain_trash || all_inverted_playable;
 }
 

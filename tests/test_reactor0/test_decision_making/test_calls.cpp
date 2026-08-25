@@ -507,3 +507,88 @@ TEST(Reactor0Calls, ACallStopsBeingActionableOnceItsButtonWouldStrike) {
             lists.chuck.end())
       << "so it leaves the chuck list rather than being offered as a chuck";
 }
+
+// --- an INVESTED card needs `possible`, not just `inferred` ----------------
+
+// Throwing away a card the team spent a clue on is irreversible, and `inferred`
+// is a convention deduction that can be wrong. Replay 1971788 T29, "Odds and
+// Evens & Dark Omni": a lock's rank promise narrowed slot 5 to {r1,y1,g1,b1,p1}
+// -- all trash -- while `possible` still held d3, d4 and d5, each a single
+// copy. It was the d5. It was the only chuckable card, so rung 11 threw it and
+// the max score fell 30 to 29 while an actual chop sat unclued in slot 1.
+//
+// So for a clued or stamped card the first arm of `is_chuckable` now needs
+// `possible` to agree. An untouched card is unaffected: nothing narrowed it, so
+// the two sets are the same.
+namespace {
+
+// Bob's slot 1, read as trash by inference while `possible` stays wider.
+// g5 is neither trash nor reachable here, so `possible` genuinely disagrees.
+int seed_divergent_reading(Game& g, bool clued) {
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  g.players[1].thoughts[o].inferred =
+      IdentitySet::from_iter({Identity{0, 1}, Identity{1, 1}});
+  g.players[1].thoughts[o].possible = IdentitySet::from_iter(
+      {Identity{0, 1}, Identity{1, 1}, Identity{3, 5}});  // b5 is critical
+  if (clued) g.state.deck[o].clued = true;
+  return o;
+}
+
+bool on_chuck_list(const ActionLists& l, int o) {
+  return std::find(l.chuck.begin(), l.chuck.end(), o) != l.chuck.end();
+}
+
+}  // namespace
+
+TEST(Reactor0Calls, ACluedCardIsNotChuckedOnInferenceAlone) {
+  SetupOptions opts = base();
+  opts.hands[1] = {"r1", "y3", "p5", "g5", "g2"};
+  opts.play_stacks = {1, 1, 0, 0, 0};  // r1 and y1 both played
+  Game g = setup(std::move(opts));
+  const int o = seed_divergent_reading(g, /*clued=*/true);
+
+  EXPECT_FALSE(on_chuck_list(hanabi::reactor0::action_lists(g, 1), o))
+      << "the reading says trash, but `possible` still admits a b5 -- a clue "
+         "was spent on this card and the throw is irreversible";
+}
+
+// Scoping: the guard is about INVESTED cards. An untouched card with the same
+// reading is still chuckable, because nothing narrowed it in the first place.
+TEST(Reactor0Calls, AnUncluedCardWithTheSameReadingIsStillChuckable) {
+  SetupOptions opts = base();
+  opts.hands[1] = {"r1", "y3", "p5", "g5", "g2"};
+  opts.play_stacks = {1, 1, 0, 0, 0};
+  Game g = setup(std::move(opts));
+  const int o = seed_divergent_reading(g, /*clued=*/false);
+
+  EXPECT_TRUE(on_chuck_list(hanabi::reactor0::action_lists(g, 1), o));
+}
+
+// A stamp counts as investment too -- 1971788's card was CHOP_MOVED, not clued.
+TEST(Reactor0Calls, AChopMovedCardIsNotChuckedOnInferenceAlone) {
+  SetupOptions opts = base();
+  opts.hands[1] = {"r1", "y3", "p5", "g5", "g2"};
+  opts.play_stacks = {1, 1, 0, 0, 0};
+  Game g = setup(std::move(opts));
+  const int o = seed_divergent_reading(g, /*clued=*/false);
+  g.meta[o].status = CardStatus::CHOP_MOVED;
+
+  EXPECT_FALSE(on_chuck_list(hanabi::reactor0::action_lists(g, 1), o));
+}
+
+// And when `possible` agrees, the clued card is chuckable as before -- the
+// guard asks for proof, not for the card to be untouched.
+TEST(Reactor0Calls, ACluedCardWhosePossibleIsAllTrashStaysChuckable) {
+  SetupOptions opts = base();
+  opts.hands[1] = {"r1", "y3", "p5", "g5", "g2"};
+  opts.play_stacks = {1, 1, 0, 0, 0};
+  Game g = setup(std::move(opts));
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  g.players[1].thoughts[o].inferred =
+      IdentitySet::from_iter({Identity{0, 1}, Identity{1, 1}});
+  g.players[1].thoughts[o].possible =
+      IdentitySet::from_iter({Identity{0, 1}, Identity{1, 1}});
+  g.state.deck[o].clued = true;
+
+  EXPECT_TRUE(on_chuck_list(hanabi::reactor0::action_lists(g, 1), o));
+}

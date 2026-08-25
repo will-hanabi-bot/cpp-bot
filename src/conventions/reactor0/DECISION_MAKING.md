@@ -639,6 +639,18 @@ the first elements of each list the **pitch list**. Take all of the cards
 currently stamped CTD, and add all chuckable cards (either trash non-inverted or
 playable inverted) to it to form the **chuck list**.
 
+**An INVESTED card needs proof, not an inference.** Chuckability is judged from
+`possibilities()`, which prefers `inferred` — a convention deduction that can be
+wrong. For an untouched card that costs nothing, since nothing narrowed it. For
+a card that is **clued or carries a stamp**, the trash arm additionally requires
+**`possible`** to be all trash (`is_chuckable`, `calls.cpp`), because the throw
+is irreversible. Replay 1971788 T29: a lock's rank promise had narrowed slot 5
+to `{r1,y1,g1,b1,p1}` — all trash — while `possible` still held `d3,d4,d5`, each
+a single copy. It was the `d5`; the max score fell 30 to 29 while an unclued
+chop sat in slot 1. A `CALLED_TO_DISCARD` card is exempt: it joins the list
+through its own arm, and refusing a partner's explicit instruction would break
+the signal they spent a clue on.
+
 **"Trash non-inverted" means non-inverted.** A card that is trash but *could* be
 on the inverted suit is not chuckable: pressing Discard on an inverted card is a
 play attempt, and a trash orange is by definition not playable, so the chuck

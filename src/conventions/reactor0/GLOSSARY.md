@@ -203,6 +203,31 @@ first). `interpret_reactive.cpp:111-122`.
 Starved — the hardness measure that picks the rlocks default.
 `src/conventions/reactor0/efficiency.cpp`.
 
+### chuckable
+A card safe to press Discard on: every reading is trash on a **plain** suit, or
+every reading is an immediately playable **inverted** one (the two arms of
+`is_chuckable`, `src/conventions/reactor0/calls.cpp`).
+
+Which readings count depends on what the team has spent on the card. For an
+untouched card, `possibilities()` — `inferred` when it is non-empty, else
+`possible`. For a card that is **clued or stamped**, the trash arm also demands
+that **`possible`** be all trash: `inferred` is a convention deduction and can
+be wrong, and a discard cannot be taken back. Replay 1971788 T29 is the case —
+a lock's rank promise read a Dark Omni 5 as one of the trash 1s. A
+`CALLED_TO_DISCARD` card is exempt, since it never passes through this test.
+
+Not to be confused with *provably trash*, which is the same "every reading is
+trash" question asked of `sight_narrowed` on the clue-interpretation side.
+
+### parity promise
+Under Odds and Evens a rank clue names a class, not a rank, so the promise it
+makes about a lock slot is that the card is **odd (1, 3, 5)** or **even (2, 4)**
+— `variants::rank_satisfies_promise`. The same clue value read literally
+narrowed replay 1971788's lock slot to rank 1 and condemned a Dark Omni 5 as
+trash. Parity binds an Omni card like any other, because it is a property of the
+rank; `Variant::id_touched` is *not* the right question, being true for every
+rank of a pinkish suit.
+
 ### trash reveal
 Reactor0's reading of an all-trash rank clue: the leftmost newly touched
 card is marked known trash and nothing else happens — it is **terminal**,

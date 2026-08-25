@@ -25,6 +25,16 @@ std::optional<int> leftmost_could_be_playable(
     const Game& game, const ClueAction& action,
     const std::vector<int>& candidates);
 
+// The same question asked from the other end: the RIGHTMOST (oldest) candidate
+// whose common empathy could still be playable. Odds and Evens focuses a direct
+// rank play clue this way -- one rank clue there names a whole parity class, so
+// an odd clue sweeps up 1s, 3s and 5s together and the promise is the rightmost
+// of them, not the leftmost. Shares its body with the left form so the two
+// cannot drift on what "could be playable" means.
+std::optional<int> rightmost_could_be_playable(
+    const Game& game, const ClueAction& action,
+    const std::vector<int>& candidates);
+
 // Stamp a PITCH on `order`: press Play, which on an inverted (Orange / Dark
 // Orange) suit sends the card to the discard pile and regains a clue.
 // `inferred` is narrowed to the inverted identities only — a pitched card is

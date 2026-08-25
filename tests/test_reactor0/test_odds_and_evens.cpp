@@ -20,6 +20,7 @@
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "test_harness.h"
 #include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
@@ -157,4 +158,164 @@ TEST(Reactor0OddsAndEvens, RankClueTakesTheOddParityRuleset) {
   ASSERT_EQ(last_clue_interp(plain), ClueInterp::REACTIVE);
   EXPECT_EQ(play_calls(plain) % 2, 0)
       << "plain rank is the even-parity family; got " << play_calls(plain);
+}
+
+// --- the lock-slot rank promise is a PARITY promise ------------------------
+
+// Replay 1971788 T13. yagami gave an odd rank clue to will-bot69; it touched
+// the lock slot, so the hand was correctly stamped CHOP_MOVED -- and then
+// `apply_rank_promise` narrowed the lock slot to *rank 1*, because it filtered
+// on `i.rank == clue.value`. Under Odds and Evens the value names a PARITY: an
+// odd clue promises 1, 3 OR 5.
+//
+// The card was a Dark Omni 5. Every rank-1 identity was already trash, so from
+// that turn on it read as known trash, and sixteen turns later it was thrown
+// and the max score fell 30 to 29.
+//
+// The promise only exists at all when the variant has a pinkish suit --
+// `ref_discard` gates `apply_rank_promise` on `includes_pinkish`
+// (src/conventions/reactor/interpret_clue.cpp:354) -- which is why these
+// fixtures use an Omni variant rather than plain Odds and Evens.
+namespace {
+
+// Bob's oldest card is the lock slot. Nothing is playable beyond the 1s, so
+// the direct-play arm cannot fire and the clue falls through to the lock.
+SetupOptions lock_opts(std::string variant_name) {
+  SetupOptions opts;
+  opts.variant_name = std::move(variant_name);
+  opts.starting = TestPlayer::ALICE;
+  opts.hands = {
+      {"r4", "y4", "g4", "b4", "p4"},   // Alice (giver, us)
+      {"r1", "y1", "g1", "b1", "p3"},   // Bob -- slot 5 (p3) is the lock slot
+      {"r2", "y2", "g2", "b2", "p2"},   // Cathy
+  };
+  use_reactor0(opts);
+  return opts;
+}
+
+}  // namespace
+
+TEST(Reactor0OddsAndEvens, AnOddLockPromisesOneThreeOrFive) {
+  Game g = setup(lock_opts("Odds and Evens & Omni (6 Suits)"));
+  const int lock_slot = order_at(g, TestPlayer::BOB, 5);
+  g = take_turn(std::move(g), "Alice clues 1 to Bob");
+
+  ASSERT_EQ(g.meta[lock_slot].status, CardStatus::CHOP_MOVED)
+      << "guard: the clue touched the lock slot, so this is a LOCK";
+
+  const IdentitySet inf = g.common.thoughts[lock_slot].inferred;
+  ASSERT_TRUE(inf.non_empty());
+  EXPECT_TRUE(inf.forall([](Identity i) { return i.rank % 2 == 1; }))
+      << "an odd clue promises an ODD rank";
+  EXPECT_TRUE(inf.exists([](Identity i) { return i.rank == 3; }))
+      << "3 is odd, so the promise must still admit it -- narrowing to rank 1 "
+         "is what condemned replay 1971788's Dark Omni 5 as trash";
+  EXPECT_TRUE(inf.exists([](Identity i) { return i.rank == 5; }));
+}
+
+TEST(Reactor0OddsAndEvens, AnEvenLockPromisesTwoOrFour) {
+  SetupOptions opts = lock_opts("Odds and Evens & Omni (6 Suits)");
+  opts.hands[1] = {"r1", "y1", "g1", "b1", "p2"};  // lock slot is even now
+  Game g = setup(std::move(opts));
+  const int lock_slot = order_at(g, TestPlayer::BOB, 5);
+  g = take_turn(std::move(g), "Alice clues 2 to Bob");
+
+  ASSERT_EQ(g.meta[lock_slot].status, CardStatus::CHOP_MOVED);
+  const IdentitySet inf = g.common.thoughts[lock_slot].inferred;
+  ASSERT_TRUE(inf.non_empty());
+  EXPECT_TRUE(inf.forall([](Identity i) { return i.rank % 2 == 0; }));
+  EXPECT_TRUE(inf.exists([](Identity i) { return i.rank == 4; }));
+}
+
+// The carve-out: outside Odds and Evens a rank clue still promises the literal
+// rank, so the pinkish path is unchanged.
+TEST(Reactor0OddsAndEvens, APlainOmniLockStillPromisesTheLiteralRank) {
+  Game g = setup(lock_opts("Omni (6 Suits)"));
+  const int lock_slot = order_at(g, TestPlayer::BOB, 5);
+  g = take_turn(std::move(g), "Alice clues 3 to Bob");
+
+  ASSERT_EQ(g.meta[lock_slot].status, CardStatus::CHOP_MOVED);
+  const IdentitySet inf = g.common.thoughts[lock_slot].inferred;
+  ASSERT_TRUE(inf.non_empty());
+  EXPECT_TRUE(inf.forall([](Identity i) { return i.rank == 3; }))
+      << "a rank-3 clue outside Odds and Evens promises exactly rank 3";
+}
+
+// --- a direct rank play clue focuses from the RIGHT ------------------------
+
+// One rank clue in Odds and Evens names a whole parity class, so an odd clue
+// sweeps up 1s, 3s and 5s at once. When every good remaining card of that
+// parity is playable the clue is a direct rank play clue, and it promises the
+// RIGHTMOST touched card rather than the leftmost.
+namespace {
+
+// Every stack on 4, so the only useful odd identities left are the 5s -- and
+// they are all playable, which is exactly the direct-play condition. An odd
+// clue then touches Bob's whole hand.
+SetupOptions right_focus_opts(std::string variant_name) {
+  SetupOptions opts;
+  opts.variant_name = std::move(variant_name);
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {4, 4, 4, 4, 4, 4};
+  opts.hands = {
+      {"r2", "y2", "g2", "b2", "p2"},   // Alice (giver, us)
+      {"r5", "y1", "g3", "b1", "p5"},   // Bob -- all odd, so all touched
+      {"r1", "y3", "g1", "b3", "p1"},   // Cathy
+  };
+  use_reactor0(opts);
+  return opts;
+}
+
+}  // namespace
+
+TEST(Reactor0OddsAndEvens, DirectRankPlayFocusesTheRightmostTouched) {
+  Game g = setup(right_focus_opts("Odds and Evens & Omni (6 Suits)"));
+  const int leftmost = order_at(g, TestPlayer::BOB, 1);
+  const int rightmost = order_at(g, TestPlayer::BOB, 5);
+  g = take_turn(std::move(g), "Alice clues 1 to Bob");
+
+  EXPECT_EQ(g.meta[rightmost].status, CardStatus::CALLED_TO_PLAY)
+      << "an odd clue names the rightmost touched card in Odds and Evens";
+  EXPECT_NE(g.meta[leftmost].status, CardStatus::CALLED_TO_PLAY)
+      << "the leftmost is what the rule used to name";
+}
+
+// The mirror: outside Odds and Evens a rank clue names one rank, and the focus
+// stays leftmost. Same fixture, same clue shape.
+TEST(Reactor0OddsAndEvens, PlainOmniDirectRankPlayStillFocusesLeftmost) {
+  SetupOptions opts = right_focus_opts("Omni (6 Suits)");
+  opts.hands[1] = {"r5", "y5", "g5", "b5", "p5"};  // a rank-5 clue touches all
+  Game g = setup(std::move(opts));
+  const int leftmost = order_at(g, TestPlayer::BOB, 1);
+  const int rightmost = order_at(g, TestPlayer::BOB, 5);
+  g = take_turn(std::move(g), "Alice clues 5 to Bob");
+
+  EXPECT_EQ(g.meta[leftmost].status, CardStatus::CALLED_TO_PLAY);
+  EXPECT_NE(g.meta[rightmost].status, CardStatus::CALLED_TO_PLAY);
+}
+
+// "Rightmost touched card whose empathy does not completely consist of
+// unplayable cards" -- a candidate that cannot be playable is skipped, not
+// taken and wasted.
+TEST(Reactor0OddsAndEvens, ADeadRightmostCandidateIsSkipped) {
+  using hanabi::reactor0::rightmost_could_be_playable;
+  Game g = setup(right_focus_opts("Odds and Evens & Omni (6 Suits)"));
+  const int rightmost = order_at(g, TestPlayer::BOB, 5);
+  const int fourth = order_at(g, TestPlayer::BOB, 4);
+
+  // Pin the rightmost to a rank-1: trash with every stack on 4, so no reading
+  // of it can be playable.
+  g.with_thought(rightmost, [](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::single(Identity{0, 1});
+    return out;
+  });
+
+  ClueAction action(/*giver=*/0, /*target=*/1, g.state.hands[1],
+                    BaseClue{ClueKind::RANK, 1});
+
+  auto got = rightmost_could_be_playable(g, action, action.list_);
+  ASSERT_TRUE(got.has_value());
+  EXPECT_NE(*got, rightmost) << "every reading of it is trash";
+  EXPECT_EQ(*got, fourth) << "so the promise moves one card left";
 }

@@ -699,3 +699,24 @@ through to rung **11 `chuck_leftmost`** and threw a known-trash b1.
 Passing `exclude_trash=true` there would align the two, but it widens the pitch
 list on every turn of every game, not just endgames, so it needs its own
 corpus run rather than being folded into a bug fix.
+
+---
+
+## 28. `[reactor0]` A chuck call is obeyed even when `possible` says the card may be critical
+
+v8.8.0 made `is_chuckable` require `possible` — not just `inferred` — to be all
+trash before throwing a card the team invested in. That guard does **not** cover
+`CALLED_TO_DISCARD` cards: they join the chuck list through their own arm
+(`src/conventions/reactor0/calls.cpp:289-290`) and never reach `is_chuckable`.
+
+Across the log corpus, **123 of the 154** discards whose `inferred` read as trash
+while `possible` disagreed came in through that arm, and two of them cost max
+score (1957932 T42, 1966558 T25).
+
+The fix belongs where the call is READ, not where it is obeyed. `chuck_candidates`
+(`include/hanabi/conventions/reactor0/interpret_clue.h:63-67`) already defines a
+chuck call as "a plain-suit card that is **not playable and not critical**", so
+the stamp should be narrowed to that set by `narrow_to_stamped_button` (`:69-75`)
+when the reaction resolves. Guarding the obey path instead would have the bot
+refuse a partner's explicit instruction, which is the convention's core loop and
+would desync the signal.

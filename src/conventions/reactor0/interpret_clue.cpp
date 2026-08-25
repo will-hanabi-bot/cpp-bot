@@ -350,26 +350,62 @@ std::optional<ClueInterp> stamp_orange_pitch(Game& game, const ClueAction& actio
 // "what would this stable colour clue name?" without simulating it —
 // src/conventions/reactor0/state_eval.cpp uses it for the NOT-LOW rule that
 // checks whether Bob already has a colour stable play clue for Cathy.
-std::optional<int> leftmost_could_be_playable(
-    const Game& game, const ClueAction& action,
-    const std::vector<int>& candidates) {
+namespace {
+
+// The shared body of `leftmost_could_be_playable` / `rightmost_could_be_playable`.
+// `state.hands` is newest-first, so walking forward finds the LEFTMOST match and
+// walking in reverse finds the RIGHTMOST. The two must agree on what "could be
+// playable" means -- including the delayed connections -- or a variant that
+// focuses from one end would disagree with one that focuses from the other
+// about which cards were even eligible.
+std::optional<int> could_be_playable_end(const Game& game,
+                                         const ClueAction& action,
+                                         const std::vector<int>& candidates,
+                                         bool from_right) {
   const State& state = game.state;
   auto conns = hanabi::reactor::delayed_plays(game, action.giver, action.target,
                                               /*stable=*/true);
-  for (int o : state.hands[action.target]) {
-    if (!contains(candidates, o)) continue;
+  const auto& hand = state.hands[action.target];
+  auto eligible = [&](int o) {
+    if (!contains(candidates, o)) return false;
     const Thought& t = game.common.thoughts[o];
     IdentitySet base = t.inferred.non_empty() ? t.inferred : t.possible;
-    bool could_play = base.exists([&](Identity i) {
+    return base.exists([&](Identity i) {
       if (state.playable_set.contains(i)) return true;
       for (const auto& [_, c] : conns) {
         if (c == i) return true;
       }
       return false;
     });
-    if (could_play) return o;
+  };
+  if (from_right) {
+    for (auto it = hand.rbegin(); it != hand.rend(); ++it) {
+      if (eligible(*it)) return *it;
+    }
+  } else {
+    for (int o : hand) {
+      if (eligible(o)) return o;
+    }
   }
   return std::nullopt;
+}
+
+}  // namespace
+
+std::optional<int> leftmost_could_be_playable(
+    const Game& game, const ClueAction& action,
+    const std::vector<int>& candidates) {
+  return could_be_playable_end(game, action, candidates, /*from_right=*/false);
+}
+
+// Odds and Evens focuses a direct rank play clue from the RIGHT. A rank clue
+// there names a parity class, so it sweeps up 1s, 3s and 5s at once; the
+// convention promises the rightmost of the newly touched cards that could
+// actually be playable, not the leftmost.
+std::optional<int> rightmost_could_be_playable(
+    const Game& game, const ClueAction& action,
+    const std::vector<int>& candidates) {
+  return could_be_playable_end(game, action, candidates, /*from_right=*/true);
 }
 
 // --- stable colour --------------------------------------------------------
@@ -687,7 +723,15 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   //    playable (assuming good touch).
   if (playable_rank && !all_trash && !defer_to_reveal) {
     std::optional<int> focus;
-    if (!newly_touched.empty()) {
+    // Odds and Evens focuses from the RIGHT. One rank clue there names a whole
+    // parity class -- an odd clue sweeps up 1s, 3s and 5s together -- so the
+    // promise is the rightmost newly touched card whose empathy is not entirely
+    // unplayable, rather than the leftmost. Every other variant, pinkish ones
+    // included, keeps the leftmost rule.
+    if (state.variant->odds_and_evens) {
+      focus = rightmost_could_be_playable(
+          game, action, newly_touched.empty() ? action.list_ : newly_touched);
+    } else if (!newly_touched.empty()) {
       if (variants::includes_pinkish(state)) {
         focus = variants::playable_rank_focus(prev, state, action, newly_touched);
       } else {

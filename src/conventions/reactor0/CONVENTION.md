@@ -294,6 +294,15 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    (`variants::playable_rank_focus`, `:470`; that helper returned the
    *rightmost* until v3.0.0); with no
    newly touched cards, the leftmost **touched** card that could be playable.
+
+   **Odds and Evens focuses from the RIGHT** (`rightmost_could_be_playable`).
+   One rank clue there names a whole parity class, so an odd clue sweeps up
+   1s, 3s and 5s together; the promise is the **rightmost newly touched card
+   whose empathy is not entirely unplayable**, and with none newly touched,
+   the rightmost touched one. Note the *condition* above already ranges over
+   the parity class — `touchable` is filtered through `Variant::id_touched`
+   (`:623-626`) — so only the focus differs. Every other variant, pinkish ones
+   included, keeps the leftmost rule.
    The focus is narrowed to its playable identities, `info_lock` set, and
    stamped **`CALLED_TO_PLAY` — a pitch — unless the classification said
    `orange_only`, in which case `variants::called_focus_status` supplies
@@ -347,6 +356,17 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    slot (oldest unclued) stamps the whole hand `CHOP_MOVED` → `LOCK`;
    otherwise the first unclued slot right of the focus is stamped
    `CALLED_TO_DISCARD` → `DISCARD`, pink promise included.
+
+   **Under Odds and Evens the rank promise is a PARITY promise**
+   (`variants::rank_satisfies_promise`, `src/conventions/variants/pinkish.cpp`).
+   The clue value names a class, not a rank: an odd clue promises the lock-slot
+   card is a **1, 3 or 5**, an even clue a **2 or 4**. Reading it as the literal
+   rank collapsed replay 1971788's lock slot onto `{r1,y1,g1,b1,p1}` — all
+   already trash — when the card was a Dark Omni 5, and sixteen turns later it
+   was thrown as known trash. Parity is a property of the rank, so it binds an
+   Omni card like any other; it is deliberately not routed through
+   `Variant::id_touched`, which is true for every rank of a pinkish suit and
+   would make the promise vacuous on exactly that suit.
 7. **Stall** (`:535`) — no new cards and nothing above fired.
 
 ## §1d Reactive — the clue value is the anchor
