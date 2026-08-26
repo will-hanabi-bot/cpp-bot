@@ -118,6 +118,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_snapshot_convention.cpp
   tests/test_basics/test_reactive.cpp
   tests/test_basics/test_stable_ref_discard.cpp
+  tests/test_basics/test_sarcastic_needs_a_known_identity.cpp
   tests/test_basics/test_strike_preserves_ctp.cpp
   tests/test_basics/test_snapshot_roundtrip.cpp
   tests/test_endgame/test_forced_endgame.cpp
@@ -245,6 +246,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1973974_playable_orange_chop_is_not_saved.cpp
   tests/test_reactor0/test_misc/test_replay_1974046_known_trash_is_chucked.cpp
   tests/test_reactor0/test_misc/test_replay_1974052_known_trash_after_colour_clue.cpp
+  tests/test_reactor0/test_misc/test_replay_1974218_sarcastic_needs_a_known_identity.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp
   tests/test_reactor0/test_misc/test_replay_1966696_mixed_rank_direct_play_stamps_ctp.cpp

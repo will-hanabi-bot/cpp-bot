@@ -1416,6 +1416,7 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp` | Replay 1973976 T12 end to end — the pitch needed BOTH the vet and the stamp; reverting either puts it back |
 | `tests/test_reactor0/test_misc/test_replay_1974046_known_trash_is_chucked.cpp` | Replay 1974046 T22 end to end — a card read {b2} with blue on 2 is chucked instead of the critical b5 chop |
 | `tests/test_reactor0/test_misc/test_replay_1974052_known_trash_after_colour_clue.cpp` | Replay 1974052 T6 — the same, reached by a colour clue narrowing a reactive inference to {y1} |
+| `tests/test_reactor0/test_misc/test_replay_1974218_sarcastic_needs_a_known_identity.cpp` | Replay 1974218 T25 end to end — a sarcastic discard invented from a merely-touched card had pinned a cardinal 2 to {i4}, hiding it from the reactive play clue that asked for it |
 | `tests/test_reactor0/test_misc/test_replay_1973974_playable_orange_chop_is_not_saved.cpp` | Replay 1973974 T10 end to end — a partner locked over a playable orange on his chop |
 | `tests/test_reactor0/test_misc/test_replay_1973971_reactive_receiver_is_not_the_target.cpp` | Replay 1973971 T15 end to end — a reactive discard clue to the reacter read as a MISTAKE because the branch walked his own hand |
 | `tests/test_basics/test_synesthesia.cpp` | The Synesthesia touch matrix — the rank rule and its off-by-one, brown answering only to brown, white and null untouched, rainbow unaffected, and no rank clues offered |

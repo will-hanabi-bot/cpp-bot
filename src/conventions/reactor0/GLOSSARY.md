@@ -271,6 +271,30 @@ the dc-target falls back to reactor's sacrifice ordering
 (`reactor::sacrifice_targets`: non-critical, deepest-away and highest rank
 first). `interpret_reactive.cpp:111-122`.
 
+### sarcastic discard / gentleman's discard
+Inherited from the shared engine, not from anything reactor0 defines: a player
+who throws a card the team can NAME is telling whoever holds the other copy that
+they hold it (`DiscardInterp::SARCASTIC`, or `GENTLEMANS_DISCARD` when the card
+is playable). `src/basics/sarcastic.cpp`, reached from `decide.cpp` — which is
+**not** gated on convention, so it runs here alongside reactor0's own discard
+vocabulary of CTD, chuck and pitch.
+
+**"Can name" is the precondition**, and it is the whole of it: `useful_dc`
+(`decide.cpp`) requires the card to have been pinned to one identity in `common`
+before it was discarded, and for that to be what it turned out to be. A card
+that was merely touched carries no signal.
+
+Replay 1974218 is why. At T8 a clued i4 was discarded whose empathy was all six
+4s; no i4 was visible in any hand because the second one was still in the DECK,
+so the reading fell back on "then it is in mine" and linked over our own hand.
+Fourteen turns later the link collapsed onto a **cardinal 2** and stamped it
+`SARCASTIC` with `inferred = {i4}`. At T24 that made a rank-3 reactive play clue
+unreadable — `target_play` narrows `inferred`, and `{i4}` has no playable
+member, so Phase A walked past the ca2 in silence and Phase B blind-played a
+dark 3 onto an empty dark stack. Note the two seats had disagreed ever since T8,
+the giver's `common` having no such link, which is what let it offer a clue the
+reacter could not read.
+
 ### starting required efficiency
 `max_score / (8 + starting_pace + num_suits)`, regains halved under Clue
 Starved — the hardness measure that picks the rlocks default.

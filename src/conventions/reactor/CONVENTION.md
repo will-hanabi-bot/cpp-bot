@@ -614,6 +614,8 @@ reaction triggers the response-inversion rewind.
 
   The contrast matters: `CardStatus::SARCASTIC` and `GENTLEMANS_DISCARD` **are**
   live (`decide.cpp:307-316`, `game.cpp:522-523`). They are not port leftovers.
+  Both are gated on the discarded card's identity having been **known** before
+  the throw (`useful_dc`, `decide.cpp`) — see GLOSSARY, *sarcastic discard*.
 - **Some conventional rules live outside the `interpret_*` files** — notably
   the critical-discard clue filter (`decide.cpp:538-567`), most-recent-CTD
   enforcement (`decide.cpp:932-956`), and the force-play override

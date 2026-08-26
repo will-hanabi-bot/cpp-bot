@@ -401,8 +401,33 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
     waiting.clear();
   }
 
+  // The team must have KNOWN what was thrown. A sarcastic discard -- and a
+  // gentleman's discard -- is a deliberate signal: "you hold the other copy of
+  // THIS card". A card that was merely TOUCHED has no identity to point at: a
+  // rank-4 clue in a six-suit variant leaves six readings, and reading a signal
+  // out of one invents a duplicate that need not exist anywhere.
+  //
+  // Replay 1974218 T8: yagami discarded a clued i4 whose empathy was all six
+  // 4s. `try_finding` (basics/sarcastic.cpp) saw no copy in any hand -- the
+  // second i4 was still in the DECK, and reached will-bot67 as order 19 one
+  // turn later -- so it fell back on "then it must be in MY hand" and linked
+  // over our own. That fallback is also POV-dependent while its result is
+  // written into `common`, so each seat linked over a different hand. Fourteen
+  // turns on, ours collapsed onto a cardinal 2 and pinned it to {i4}; at T24
+  // that made a reactive play clue unreadable, and the blind play the reacter
+  // fell back on was a dark 3. Strike, game over.
+  //
+  // Asked of `prev`: after the discard the card is revealed and the test would
+  // be vacuous. `id(infer, symmetric)` accepts either a pinned `possible` or a
+  // pinned `inferred`, and `symmetric` drops our own private note so every seat
+  // computes the same answer. Requiring it to MATCH what was revealed matters
+  // too -- if the team believed one thing and the card was another, the discard
+  // is a mistake, not a signal.
+  auto dc_known = prev.common.thoughts[action.order].id(/*infer=*/true,
+                                                        /*symmetric=*/true);
   bool useful_dc = !failed && prev.state.deck[action.order].clued && id.has_value() &&
                     state.is_useful(*id) &&
+                    dc_known && *dc_known == *id &&
                     prev.meta[action.order].status != CardStatus::CALLED_TO_DISCARD &&
                     !(prev.common.thinks_locked(prev, action.player_index_v) &&
                       prev.state.clue_tokens == 0);

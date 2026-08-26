@@ -579,6 +579,21 @@ dc-target pool. `interpret_reactive.cpp:438-452`.
 Discarding a card to tell a teammate they hold its duplicate.
 `DiscardInterp::SARCASTIC`; `src/basics/sarcastic.cpp`.
 
+**The identity must already be known** for this or a *gentleman's discard* to be
+read at all — `useful_dc` (`src/basics/decide.cpp`) requires the discarded card
+to have been pinned to one identity in `common` BEFORE it was thrown, and for
+that to be what it turned out to be. A card that was merely touched names no
+card, so there is no duplicate to point at.
+
+Without the precondition, `try_finding`'s last resort — no copy is visible in
+any hand, therefore it is in the one hand I cannot see, mine — invents a
+duplicate that may simply be in the DECK, and the link then narrows onto an
+innocent card and pins it to an identity it does not have. It is also
+POV-dependent while its result is written into `common`, so each seat links over
+a different hand and the seats stop agreeing. Replay 1974218 T8 lost a game that
+way: see reactor0's GLOSSARY entry and
+`tests/test_basics/test_sarcastic_needs_a_known_identity.cpp`.
+
 ### scarce ones
 Variant flag reducing the rank-1 count from 3 to 2.
 `src/basics/variant.cpp:184`.
