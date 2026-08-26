@@ -22,6 +22,7 @@
 // Blue=4, Purple=5, exactly as everywhere else.
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <vector>
@@ -30,7 +31,10 @@
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/basics/interp.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/facts.h"
+#include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/reactive_assignment.h"
 #include "hanabi/conventions/variants/predicates.h"
 #include "test_harness.h"
@@ -196,6 +200,136 @@ TEST(Reactor0TargetParity, APlainVariantStillTreatsAClueToBobAsStable) {
       << "outside a target-parity variant a clue to the next player is stable";
 }
 
+// --- the receiver is not the clued seat -----------------------------------
+//
+// The one place in the convention where `action.target` and the receiver are
+// different players, and therefore the one place where a site that re-derives
+// the receiver for itself goes wrong. Replay 1973971 T15 is what that cost:
+// five sites had, and a reactive discard clue to Bob read as a MISTAKE.
+
+TEST(Reactor0TargetParity, TheDispatchPredicateOwnsTheRule) {
+  Game alt = setup(target_parity_opts("Alternating Clues (5 Suits)"));
+  const State& a = alt.state;
+  const int alice = a.our_player_index;
+  const int bob = a.next_player_index(alice);
+  const int cathy = a.next_player_index(bob);
+
+  for (int target : {bob, cathy}) {
+    ClueAction act{alice, target, {}, BaseClue{ClueKind::RANK, 1}};
+    EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(a, act, bob))
+        << "every clue is reactive under target parity, target " << target;
+    EXPECT_EQ(hanabi::reactor0::reactive_receiver(a, act, bob), cathy)
+        << "and Cathy always receives, target " << target;
+  }
+
+  // Positional everywhere else, which is what keeps this inert in the 2324
+  // variants that are not one of these two.
+  Game plain = setup(target_parity_opts("No Variant"));
+  const State& p = plain.state;
+  ClueAction to_bob{alice, bob, {}, BaseClue{ClueKind::RANK, 1}};
+  ClueAction to_cathy{alice, cathy, {}, BaseClue{ClueKind::RANK, 1}};
+  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(p, to_bob, bob));
+  EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(p, to_cathy, bob));
+  EXPECT_EQ(hanabi::reactor0::reactive_receiver(p, to_cathy, bob), cathy)
+      << "outside target parity the receiver IS the clued seat";
+}
+
+// The interpretation itself, read from THE REACTER'S OWN SEAT.
+//
+// That is what makes this discriminate. A branch that re-derives
+// `receiver = action.target` walks the clued seat's hand -- and when the clued
+// seat is us, every deck id there is nullopt, so the pool comes back empty and
+// the clue reads as a MISTAKE. Read from any other seat the wrong hand is still
+// visible and the branch quietly finds the wrong answer instead of failing, so
+// a fixture giving the clue from our own seat would pass either way.
+//
+// The harness fixes `our_player_index` at 0, so the giver has to be the THIRD
+// seat: Cathy gives, which makes seat 0 her Bob and seat 1 her Cathy.
+SetupOptions clued_at_our_seat_opts(std::string variant_name) {
+  SetupOptions opts;
+  opts.variant_name = std::move(variant_name);
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::CATHY;  // the giver
+  opts.hands = {
+      // `xx` is the harness's genuinely HIDDEN card (test_harness.cpp:96); a
+      // named card gets a real deck id even in our own hand, which no real game
+      // gives us. Naming these made the fixture stop discriminating: a branch
+      // reading the wrong hand could still see it.
+      {"xx", "xx", "xx", "xx", "xx"},  // seat 0 -- US, the reacter and clued
+      {"g1", "y3", "b2", "p2", "r4"},  // seat 1 -- the receiver
+      {"p4", "p5", "b4", "b5", "y5"},  // seat 2 -- the giver
+  };
+  use_reactor0(opts);
+  return opts;
+}
+
+TEST(Reactor0TargetParity, AClueToUsDesignatesACardInTheThirdSeatsHand) {
+  Game g = setup(clued_at_our_seat_opts("Alternating Clues (5 Suits)"));
+  g = take_turn(std::move(g), "Cathy clues 1 to Alice (slot 1)");
+
+  ASSERT_NE(last_clue_interp(g), ClueInterp::MISTAKE)
+      << "the branch must walk the RECEIVER's hand; walking ours finds nothing "
+         "because we cannot see our own cards";
+  const ReactorWC* wc = wc_of(g);
+  ASSERT_NE(wc, nullptr);
+  EXPECT_EQ(wc->reacter, 0) << "we react";
+  EXPECT_EQ(wc->receiver, 1) << "and seat 1 receives, though seat 0 was clued";
+  EXPECT_EQ(wc->receiver_hand, g.state.hands[1]);
+  // The exact pairing, which is the assertion that discriminates. The receiver's
+  // only playable is the g1 in his slot 1, and anchor 1 gives
+  // `calc_slot(1, 1, 5) = 5` -- so we are called on OUR slot 5, to discard,
+  // because odd parity means exactly one play and it is the receiver's.
+  //
+  // A branch reading the wrong hand cannot land here: from our own seat every
+  // card is nullopt, so it has nothing to choose a target from and falls
+  // through to a lock on a different slot.
+  EXPECT_EQ(wc->react_order, g.state.hands[0][4]) << "our slot 5";
+  EXPECT_EQ(g.meta[wc->react_order].status, CardStatus::CALLED_TO_DISCARD)
+      << "the receiver plays, so we discard";
+  EXPECT_TRUE(urgent_at(g, TestPlayer::ALICE, 5))
+      << "and a reaction is urgent";
+}
+
+// Synesthesia reaches the same place with a colour clue, its only kind.
+TEST(Reactor0TargetParity, SynesthesiaAClueToUsAlsoDesignatesTheThirdSeat) {
+  Game g = setup(clued_at_our_seat_opts("Synesthesia (5 Suits)"));
+  g = take_turn(std::move(g), "Cathy clues Red to Alice (slot 1)");
+
+  ASSERT_NE(last_clue_interp(g), ClueInterp::MISTAKE);
+  const ReactorWC* wc = wc_of(g);
+  ASSERT_NE(wc, nullptr);
+  EXPECT_EQ(wc->reacter, 0);
+  EXPECT_EQ(wc->receiver, 1);
+  // Red is colour value 0, so its anchor is 1 -- the same pairing as the rank
+  // case above, and pinned just as specifically so the fixture can fail.
+  EXPECT_EQ(wc->react_order, g.state.hands[0][4]) << "our slot 5";
+  EXPECT_EQ(g.meta[wc->react_order].status, CardStatus::CALLED_TO_DISCARD);
+}
+
+// The decision layer has to agree with the interpreter, or the bot would read
+// these clues but never give one: `read_clue` sent every clue to Bob to the
+// stable reader, and `wc_is_fresh` was handed the clued seat as the receiver.
+TEST(Reactor0TargetParity, ReadClueClassifiesAClueToBobAsReactive) {
+  Game g = setup(target_parity_opts("Alternating Clues (5 Suits)"));
+  const State& s = g.state;
+  const int bob = static_cast<int>(TestPlayer::BOB);
+
+  ClueAction to_bob{s.our_player_index, bob,
+                    s.clue_touched(s.hands[bob], ClueKind::RANK, 1),
+                    BaseClue{ClueKind::RANK, 1}};
+  const Game hypo = g.simulate(Action{to_bob});
+  const auto reading = hanabi::reactor0::read_clue(g, hypo, to_bob);
+
+  EXPECT_NE(reading.shape, hanabi::reactor0::ClueShape::STABLE_PLAY)
+      << "there are no stable clues in this variant";
+  EXPECT_NE(reading.shape, hanabi::reactor0::ClueShape::STABLE_DISCARD);
+  EXPECT_NE(reading.shape, hanabi::reactor0::ClueShape::STABLE_LOCK);
+  EXPECT_EQ(reading.stable_subject, -1)
+      << "and so nothing is designated on a stable side";
+  EXPECT_GE(reading.reacter_side.order, 0)
+      << "the reacter side is what carries this clue's meaning";
+}
+
 // --- the tier consequence -------------------------------------------------
 
 // H1c and N2 both ask "could Bob have handled Cathy himself, with a stable
@@ -228,6 +362,39 @@ TEST(Reactor0TargetParity, SettingsReportsTheTargetRuleRatherThanBuckets) {
   // The values the user asked to see, still present.
   EXPECT_NE(s.find("1=1"), std::string::npos) << s;
   EXPECT_NE(s.find("Purple=5"), std::string::npos) << s;
+}
+
+// N2 asks whether the clue is REACTIVE. That was written as
+// `action.target != bob`, which is only the same question while dispatch is
+// positional -- under target parity a clue to Bob is reactive too, so it should
+// reach N2 and could not.
+TEST(Reactor0TargetParity, N2ReachesAClueToBob) {
+  SetupOptions opts;
+  opts.variant_name = "Alternating Clues (5 Suits)";
+  opts.starting = TestPlayer::ALICE;
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.hands = {
+      {"r4", "y4", "g4", "b4", "p4"},  // Alice (giver, us)
+      {"r2", "y2", "g2", "b2", "p2"},  // Bob -- nothing playable, chop is safe
+      {"r5", "y3", "g3", "b3", "p3"},  // Cathy -- chop r5 is critical
+  };
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const State& s = g.state;
+  const int bob = static_cast<int>(TestPlayer::BOB);
+  const int cathy = static_cast<int>(TestPlayer::CATHY);
+  ASSERT_TRUE(hanabi::reactor0::at_risk_chop(g, s.our_player_index, cathy))
+      << "guard: N2 requires Cathy's chop to be endangered";
+  ASSERT_FALSE(hanabi::reactor0::has_colour_play_clue_for(g, bob, cathy))
+      << "guard: vacuously false in a target-parity variant (v10.1.0)";
+
+  ClueAction to_bob{s.our_player_index, bob,
+                    s.clue_touched(s.hands[bob], ClueKind::RANK, 2),
+                    BaseClue{ClueKind::RANK, 2}};
+  const Game hypo = g.simulate(Action{to_bob});
+  EXPECT_GE(hanabi::reactor0::clue_tier(g, hypo, to_bob), hanabi::reactor0::ClueTier::MEDIUM)
+      << "a clue to Bob IS reactive here, so N2 applies to it";
 }
 
 TEST(Reactor0TargetParity, SettingsIsUnchangedForOrdinaryVariants) {

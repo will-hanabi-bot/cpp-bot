@@ -68,6 +68,13 @@ target-aware lookup. In these variants there are **no stable clues**: Bob is
 always the reacter and Cathy always the receiver, so a clue to Bob touches the
 reacter's own hand while identifying a slot in Cathy's. CONVENTION.md §1f.
 
+It is the one place where the **clued seat and the receiver differ**, so both
+are read from `clue_is_reactive` and `reactive_receiver`
+(`reactor0/interpret_reactive.h`) rather than derived per-site. Replay 1973971
+T15: five sites derived the receiver as `action.target`, walked the reacter's
+own hand — invisible from his own seat — and a reactive discard clue read as a
+MISTAKE.
+
 ### Synesthesia colour
 The second colour a card answers to in a Synesthesia variant: a card of rank N
 is touched by the **Nth** colour clue on top of its own colour

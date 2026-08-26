@@ -319,12 +319,17 @@ bool receiver_call_is_viable(const Game& prev, const Game& game,
 
 std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
                                         const ClueAction& action, int anchor,
-                                        int reacter) {
+                                        int reacter, int receiver) {
   hanabi::instr::ScopedTimer st("reactor0.reactive_rank");
-  hanabi::logging::LogScope ls("reactor0.reactive_rank",
-                               {{"anchor", anchor}, {"reacter", reacter}});
+  hanabi::logging::LogScope ls(
+      "reactor0.reactive_rank",
+      {{"anchor", anchor}, {"reacter", reacter}, {"receiver", receiver}});
   const State& state = game.state;
-  int receiver = action.target;
+  // PASSED IN, never re-derived from `action.target`. The clued seat and the
+  // receiver are the same player in every ordinary variant, and are NOT under
+  // target parity, where a clue to Bob has Cathy as its receiver. Deriving it
+  // here walked the reacter's own hand -- all `nullopt` from his own seat -- so
+  // the pool came back empty and the clue read as a MISTAKE (replay 1973971).
   int hand_size = kHandSize[state.num_players];
   auto conns = delayed_plays(game, action.giver, receiver, /*stable=*/false);
   Rollback rb(game);
@@ -526,12 +531,13 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
 
 std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
                                           const ClueAction& action, int anchor,
-                                          int reacter) {
+                                          int reacter, int receiver) {
   hanabi::instr::ScopedTimer st("reactor0.reactive_colour");
-  hanabi::logging::LogScope ls("reactor0.reactive_colour",
-                               {{"anchor", anchor}, {"reacter", reacter}});
+  hanabi::logging::LogScope ls(
+      "reactor0.reactive_colour",
+      {{"anchor", anchor}, {"reacter", reacter}, {"receiver", receiver}});
   const State& state = game.state;
-  int receiver = action.target;
+  // Passed in, never re-derived -- see `reactive_rank`.
   int hand_size = kHandSize[state.num_players];
   // Mirrors reactive_rank's call exactly, `receiver` argument included — it
   // feeds the play half of `vet_react_slot`, which mode 1 reaches when the
@@ -723,6 +729,10 @@ void record_react_target(Game& game) {
 
 // --- top level ------------------------------------------------------------
 
+bool clue_is_reactive(const State& state, const ClueAction& action, int bob) {
+  return variants::uses_target_parity(*state.variant) || action.target != bob;
+}
+
 int reactive_receiver(const State& state, const ClueAction& action, int reacter) {
   if (!variants::uses_target_parity(*state.variant)) return action.target;
   // Cathy, whoever was clued. reactor0 runs at exactly three players
@@ -786,8 +796,10 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // which, and `/set` can move a single clue, so the bucket is read off the
   // assignment rather than from the kind.
   auto interp = !assign.even
-                    ? reactive_colour(prev, game, action, anchor, reacter)
-                    : reactive_rank(prev, game, action, anchor, reacter);
+                    ? reactive_colour(prev, game, action, anchor, reacter,
+                                      receiver)
+                    : reactive_rank(prev, game, action, anchor, reacter,
+                                    receiver);
   record_react_target(game);
   return interp;
 }

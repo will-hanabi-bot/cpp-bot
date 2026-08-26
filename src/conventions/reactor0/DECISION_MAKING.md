@@ -106,7 +106,7 @@ NOT-LOW iff any of VH1, H2, H3, H4, or:
 …or, when **Cathy's** chop is endangered (`:507-518`):
 
 6. **N3** — the clue gets two new plays. `:509`.
-7. **N2** — the clue is **reactive** and Bob has no colour stable play clue he
+7. **N2** — the clue is **reactive** and Bob has no stable color play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
    since dispatch is positional (§1a, `interpret_clue.cpp:620-631`). `:514-517`.
    In a **target-parity** variant the second arm is vacuously true (no stable
@@ -582,16 +582,18 @@ is judged from Alice's own inference, not common knowledge.
        to a card in an inverted suit whose dupe is seen by Alice.
     6. Give a lock clue to Bob if all of Bob's cards are critical and there are
        `>= 2 clues**`
-    7. Compute the quantity `L = (# of 1-away-from-playable cards) + 2 * (# of
-       trash cards)` in Bob's hand. If `L >= 3` and there are `>= 3 clues**`, then
-       give a lock clue to Bob.
-    8. Give a reactive discard that stamps CTD on a non-critical card in Bob's
+    7. If there are >= 3 cards in Bob's hand with at most one **missing connector**
+       Alice can see in Bob's own hand, **and** Bob cannot give a stable play clue to Cathy,
+       **and** Cathy's chop is not critical, then give a lock clue to Bob.
+    8. If Bob's chop is critical, give a reactive discard that stamps CTD on a non-critical card in Bob's
        hand, tiebreak by the largest number of **missing connectors** Alice can
        see leading up to that card, or a reactive play that stamps CTP on a
        non-critical inverted card in Bob's hand, tiebreak by the same criteria.
        **This rung is unconditional** — it carries no clue-count condition, and
        the `**` relaxation does not reach it.
-    9. Give a lock clue to Bob if there are `>= 2 clues**`
+    9. If Bob's chop is critical, give a stable discard that stamps CTD on a non-critical card in Bob's
+       hand, tiebreak by the largest number of **missing connectors** Alice can
+       see leading up to that card.
 
    **Missing connectors** of a card `X` = the number of identities strictly
    between the top of `X`'s stack and `X` that are **not** visible to Alice in any

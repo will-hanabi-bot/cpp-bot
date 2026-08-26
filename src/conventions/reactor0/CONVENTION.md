@@ -115,10 +115,13 @@ clue_tokens == 8`) is passed to the stable branches only as the `stall` flag
 that reactor's `ref_discard` already honours.
 
 **One family of variants overrides all of this**: under
-`variants::uses_target_parity` there are no stable clues at all and the target
-picks the parity instead. See §1f, *Alternating Clues and Synesthesia*. The
-branch sits above the positional fork, so everything written above is the
-ordinary case.
+`variants::uses_target_parity` there are no stable clues at all, the target
+picks the parity, and the clued seat is **not** the receiver. See §1f,
+*Alternating Clues and Synesthesia*. The dispatch reads
+`clue_is_reactive` / `reactive_receiver`
+(`reactor0/interpret_reactive.h`) rather than testing `action.target == bob`
+directly, and so must every other site that asks the same question — everything
+written above is the ordinary case those two functions reduce to.
 
 ## §1b Stable colour — a direct play clue
 
@@ -1027,11 +1030,30 @@ identifying a slot in Cathy's: Bob acts, Cathy reads which slot he chose, and
 the turn order works out. Nothing in the reactive branches reads `action.list_`,
 so the touched hand needs no further special-casing.
 
-`interpret_reactive` takes the receiver as an explicit argument for exactly this
-reason, decided once by `reactive_receiver`
-(`reactor0/interpret_reactive.cpp`). **The waiting connection's `clue.target`
-records the seat that was CLUED, not the receiver** — every later parity lookup
-keys on it, and here the two come apart.
+**This is the only place in the convention where the clued seat and the
+receiver are different players**, and every site that needs either must read it
+from the one pair of functions that owns the rule
+(`reactor0/interpret_reactive.h`):
+
+| | |
+|---|---|
+| `clue_is_reactive(state, action, bob)` | `uses_target_parity(v) \|\| action.target != bob` |
+| `reactive_receiver(state, action, reacter)` | the clued seat, or Cathy under target parity |
+
+`interpret_reactive` therefore takes the receiver as an argument rather than
+deriving it, and so do `reactive_rank` and `reactive_colour`. **The waiting
+connection's `clue.target` records the seat that was CLUED, not the receiver** —
+every later parity lookup keys on it, and here the two come apart.
+
+**Replay 1973971 T15 is what re-deriving it costs.** v10.0.0 threaded the
+receiver into `interpret_reactive` but left five sites computing it as
+`action.target` for themselves: both reactive branches, `read_clue`'s
+stable/reactive fork, and the two `wc_is_fresh` calls. yagami clued rank 5 to
+will-bot69 — a reactive discard clue, anchor 5, so playing slot 3 designates
+will-bot67's slot 2, his leftmost trash. The branches walked **will-bot69's own
+hand** instead, where every deck id is nullopt from its own seat, so the pool
+came back empty and the clue read as a MISTAKE. will-bot69 discarded its chop.
+Fixed in v10.2.0.
 
 **Anchors are unchanged.** `1=1 … 5=5` and `Red=1, Yellow=2, Green=3, Blue=4,
 Purple=5`, from the same `colour_clue_value` / `rank_reactive_value` tables as
@@ -1345,7 +1367,8 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
-| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, and the `/settings` line |
+| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it |
+| `tests/test_reactor0/test_misc/test_replay_1973971_reactive_receiver_is_not_the_target.cpp` | Replay 1973971 T15 end to end — a reactive discard clue to the reacter read as a MISTAKE because the branch walked his own hand |
 | `tests/test_basics/test_synesthesia.cpp` | The Synesthesia touch matrix — the rank rule and its off-by-one, brown answering only to brown, white and null untouched, rainbow unaffected, and no rank clues offered |
 | `tests/test_basics/test_alternating_clues.cpp` | The legality rule — the first clue is free, each kind blocks its own repeat, a play or discard does not reset it, it alternates across players, hypos carry it, and plain variants are unaffected |
 | `tests/test_reactor0/test_giver_sight_reject.cpp` | §1g — the giver rejects a promise only it can refute, on both the colour and the rank side; the same clue from another seat still reads a stall; a common-knowledge stall is untouched; and `analyse_clues` removes the rejected clue from every rung |

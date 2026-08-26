@@ -30,6 +30,19 @@
 
 namespace hanabi::reactor0 {
 
+// Is this clue REACTIVE?
+//
+// Positional everywhere except a target-parity variant (Alternating Clues,
+// Synesthesia), where there are no stable clues at all and a clue to Bob is
+// reactive too -- it simply touches the reacter's own hand.
+//
+// This and `reactive_receiver` are the SINGLE definition of reactor0's dispatch
+// rule. Every site that needs to know whether a clue is reactive, or who
+// receives it, reads them rather than repeating the test. Replay 1973971 T15 is
+// what that rule is worth: five separate places had re-derived it as
+// `action.target`, and a reactive discard clue to Bob read as a MISTAKE.
+bool clue_is_reactive(const State& state, const ClueAction& action, int bob);
+
 // Who the reaction identifies a slot FOR.
 //
 // Normally the clued seat, `action.target`. In a `variants::uses_target_parity`

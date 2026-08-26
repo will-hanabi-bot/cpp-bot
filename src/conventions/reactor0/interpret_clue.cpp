@@ -923,22 +923,19 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // the receiver either way. A clue to Bob therefore touches the REACTER's own
   // hand while still identifying a slot in Cathy's: Bob acts, Cathy reads which
   // slot he chose, and the turn order works out.
-  if (variants::uses_target_parity(*state.variant)) {
+  // Always reactive, even in stall contexts -- and under target parity that is
+  // EVERY clue, including one to Bob, whose receiver is then Cathy.
+  if (clue_is_reactive(state, action, bob)) {
     return interpret_reactive(prev, game, action, bob,
                               reactive_receiver(state, action, bob));
   }
 
   bool stall_ctx = prev.common.obvious_locked(prev, action.giver) ||
                    game.in_endgame() || prev.state.clue_tokens == 8;
-
-  if (action.target == bob) {
-    // Always stable, even if Bob is loaded.
-    return action.clue.kind == ClueKind::COLOUR
-               ? stable_colour(prev, game, action, stall_ctx)
-               : stable_rank(prev, game, action, stall_ctx);
-  }
-  // Always reactive, even in stall contexts.
-  return interpret_reactive(prev, game, action, bob, action.target);
+  // Always stable, even if Bob is loaded.
+  return action.clue.kind == ClueKind::COLOUR
+             ? stable_colour(prev, game, action, stall_ctx)
+             : stable_rank(prev, game, action, stall_ctx);
 }
 
 }  // namespace hanabi::reactor0

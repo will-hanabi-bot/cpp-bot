@@ -18,6 +18,7 @@
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor/state_eval.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/variants/inverted.h"
@@ -325,7 +326,10 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   const State& s = game.state;
   const int alice = s.our_player_index;
   const int bob = s.next_player_index(alice);
-  if (action.target == bob) return false;             // stable: no finesse
+  // Stable clues carry no finesse. Still correct under target parity, where a
+  // clue to Bob is not stable at all -- but is ODD parity, and a finesse is
+  // Phase B of the EVEN ruleset, so it cannot be one either way.
+  if (action.target == bob) return false;
   // Phase B is not RANK-only -- it belongs to a RULESET, not a clue kind. It
   // lives in `reactive_rank`, which is the EVEN-parity family; Odds and Evens
   // makes that the colour clue, and `/set` can move an individual clue. Reading
@@ -338,7 +342,10 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
            .even) {
     return false;
   }
-  if (!wc_is_fresh(game, hypo, alice, action.target, bob)) return false;
+  // The RECEIVER, not the clued seat -- see `read_clue`.
+  if (!wc_is_fresh(game, hypo, alice, reactive_receiver(s, action, bob), bob)) {
+    return false;
+  }
   // A reactive LOCK is not a finesse. It stamps CHOP_MOVED only a turn later,
   // in `reactive_lock`, so at clue time the receiver's predicted slot carries
   // no status at all -- which sails straight past the "stamped: Phase A, not B"
@@ -515,10 +522,11 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
     // N3 — two new plays.
     if (f.count >= 2) return ClueTier::MEDIUM;
     // N2 — a reactive clue, when Bob could not simply push Cathy's play
-    // himself. Reactor0's dispatch is positional, so "reactive" is just
-    // "not aimed at Bob" (interpret_clue.cpp:318-329). Evaluated last: it
-    // is the only expensive term in this function.
-    if (action.target != bob &&
+    // himself. Asked through the dispatch predicate rather than by hand:
+    // "reactive" is "not aimed at Bob" only while dispatch is positional, and
+    // under target parity EVERY clue is reactive, a clue to Bob included.
+    // Evaluated last: it is the only expensive term in this function.
+    if (clue_is_reactive(s, action, bob) &&
         !has_colour_play_clue_for(game, bob, cathy_seat)) {
       return ClueTier::MEDIUM;
     }

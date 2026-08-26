@@ -13,6 +13,7 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
+#include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/reversed.h"
@@ -197,10 +198,22 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   const State& s = game.state;
   const int alice = s.our_player_index;
   const int bob = s.next_player_index(alice);
-  if (action.target == bob) return read_stable(game, hypo, action, interp);
+  // Mirrors `interpret_clue`'s dispatch through the one predicate that owns it.
+  // Testing `action.target == bob` here sent every clue to Bob to the stable
+  // reader, which under target parity is wrong: there a clue to Bob is reactive
+  // with Cathy receiving, so the decision layer could not classify one at all
+  // and would essentially never give one.
+  if (!clue_is_reactive(s, action, bob)) {
+    return read_stable(game, hypo, action, interp);
+  }
 
   // --- reactive ---------------------------------------------------------
-  if (!wc_is_fresh(game, hypo, alice, action.target, bob)) return r;
+  // `wc_is_fresh` compares its `receiver` argument against `wc.receiver`, so it
+  // must be handed the RECEIVER and not the clued seat -- the two differ under
+  // target parity, and passing the target made this fail closed for every clue
+  // to Bob there.
+  const int receiver = reactive_receiver(s, action, bob);
+  if (!wc_is_fresh(game, hypo, alice, receiver, bob)) return r;
   const ReactorWC& wc = hypo.waiting.front();
   const CardStatus reacter_status = hypo.meta[wc.react_order].status;
 
