@@ -30,8 +30,21 @@
 
 namespace hanabi::reactor0 {
 
+// Who the reaction identifies a slot FOR.
+//
+// Normally the clued seat, `action.target`. In a `variants::uses_target_parity`
+// variant (Alternating Clues, Synesthesia) it is ALWAYS Cathy -- the seat after
+// the reacter -- because there a clue to Bob touches the reacter's own hand and
+// only sets the parity, while the slot it identifies still belongs to Cathy.
+int reactive_receiver(const State& state, const ClueAction& action, int reacter);
+
+// `receiver` is what `reactive_receiver` returns; callers pass it explicitly so
+// the reacter/receiver pair is decided in one place.
+//
+// Nothing in the reactive branches reads `action.list_`, so a clue that touches
+// the REACTER rather than the receiver needs no further special-casing.
 std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                                              const ClueAction& action,
-                                             int reacter);
+                                             int reacter, int receiver);
 
 }  // namespace hanabi::reactor0

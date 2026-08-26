@@ -41,6 +41,10 @@ bool uses_even_parity(const Variant& variant, ClueKind kind) {
                                 : kind == ClueKind::RANK;
 }
 
+bool uses_target_parity(const Variant& variant) {
+  return variant.alternating_clues || variant.synesthesia;
+}
+
 int rank_reactive_value(const Variant& variant, int clue_value) {
   // odd (1) -> 3, even (2) -> 4. Both are valid slots at every hand size the
   // reactive family runs at (5 cards at 3 players, 4 at 4-5).

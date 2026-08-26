@@ -214,8 +214,18 @@ std::vector<Clue> State::all_valid_clues(int target) const {
   const Variant& v = *variant;
   const bool rank_blocked =
       v.special_rank.has_value() && (v.pink_s || v.brown_s || v.deceptive_s);
+  // Alternating Clues: the server rejects a clue of the same kind as the last
+  // one given, by anyone. Filtered HERE rather than in the callers so that all
+  // six of them agree -- including `eval.cpp` and the endgame solver, which
+  // would otherwise search lines built on clues that cannot be played.
+  // Nullopt before the first clue leaves both kinds available.
+  const bool block_rank = v.alternating_clues &&
+                          last_clue_kind == std::optional<ClueKind>{ClueKind::RANK};
+  const bool block_colour =
+      v.alternating_clues &&
+      last_clue_kind == std::optional<ClueKind>{ClueKind::COLOUR};
 
-  for (int rank = 1; rank <= 5; ++rank) {
+  for (int rank = 1; !block_rank && rank <= 5; ++rank) {
     if (rank_blocked && v.special_rank == rank) continue;
     // `clue_ranks` is what the variant actually offers. For the Pink-Ones /
     // Pink-Fives families it agrees exactly with `rank_blocked` above, so
@@ -229,7 +239,8 @@ std::vector<Clue> State::all_valid_clues(int target) const {
       clues.emplace_back(ClueKind::RANK, rank, target);
     }
   }
-  const int num_colours = static_cast<int>(v.colourable_suit_indices.size());
+  const int num_colours =
+      block_colour ? 0 : static_cast<int>(v.colourable_suit_indices.size());
   for (int suit_index = 0; suit_index < num_colours; ++suit_index) {
     if (!clue_touched(hands[target], ClueKind::COLOUR, suit_index).empty()) {
       clues.emplace_back(ClueKind::COLOUR, suit_index, target);

@@ -108,6 +108,8 @@ add_executable(hanabi_tests
   tests/test_basics/test_clue.cpp
   tests/test_basics/test_action.cpp
   tests/test_basics/test_odds_and_evens.cpp
+  tests/test_basics/test_synesthesia.cpp
+  tests/test_basics/test_alternating_clues.cpp
   tests/test_basics/test_variants.cpp
   tests/test_basics/test_variant_reversed.cpp
   tests/test_basics/test_state.cpp
@@ -261,6 +263,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp
   tests/test_reactor0/test_finesse_parity.cpp
+  tests/test_reactor0/test_target_parity.cpp
   tests/test_reactor0/test_pov_reject.cpp
   tests/test_reactor0/test_provably_trash_focus.cpp
   tests/test_reactor0/test_reactive_assignment.cpp

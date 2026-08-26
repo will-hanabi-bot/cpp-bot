@@ -32,6 +32,19 @@ ReactiveAssignment reactive_assignment(
   return ReactiveAssignment{even, value};
 }
 
+ReactiveAssignment reactive_assignment_for(
+    const Variant& variant, const std::vector<ReactiveOverride>& overrides,
+    ClueKind kind, int clue_value, bool target_is_bob) {
+  ReactiveAssignment a = reactive_assignment(variant, overrides, kind, clue_value);
+  if (hanabi::reactor::variants::uses_target_parity(variant)) {
+    // The value -- including a `/set` override of it -- stands. Only the bucket
+    // moves, because in these variants the giver cannot choose the kind that
+    // would otherwise have carried it.
+    a.even = !target_is_bob;
+  }
+  return a;
+}
+
 std::string clue_label(const Variant& variant, ClueKind kind, int clue_value) {
   if (kind == ClueKind::COLOUR) {
     if (clue_value >= 0 &&
@@ -99,6 +112,17 @@ std::string format_settings(const Variant& variant,
     }
     return out + "}";
   };
+  // A target-parity variant has no per-clue bucket to report: the parity comes
+  // from who is clued, so splitting the table into even/odd would describe a
+  // rule this game does not use. Print the one thing that still varies per
+  // clue -- its value -- and state the rule that replaces the split.
+  if (hanabi::reactor::variants::uses_target_parity(variant)) {
+    std::vector<ReactiveRow> all = table.even;
+    all.insert(all.end(), table.odd.begin(), table.odd.end());
+    return "reactor0 — no stable clues: to Bob = odd, to Cathy = even"
+           ", reactive values: " +
+           render(all) + ", rlocks: " + (rlocks ? "on" : "off");
+  }
   return "reactor0 — even reactive values: " + render(table.even) +
          ", odd reactive values: " + render(table.odd) +
          ", rlocks: " + (rlocks ? "on" : "off");

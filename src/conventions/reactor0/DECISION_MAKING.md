@@ -62,7 +62,10 @@ Otherwise, a clue tier is HIGH iff **any** of:
       full visibility** (the same viewpoint as *endangered chop* below, not
       common knowledge). If Cathy has no chop, this condition is vacuously true.
     - **H1c** — Cathy's chop is either a trash or a same-hand-dupe, *or* Bob does
-      not have a colour stable clue to give to Cathy.
+      not have a colour stable clue to give to Cathy. In a **target-parity**
+      variant (Alternating Clues, Synesthesia) there are no stable clues at all,
+      so `has_colour_play_clue_for` returns false outright and this arm is
+      vacuously satisfied — see CONVENTION.md §1f.
 2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed suit,
    via `variants::is_first_or_second_rank`). `:481`.
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank
@@ -106,6 +109,9 @@ NOT-LOW iff any of VH1, H2, H3, H4, or:
 7. **N2** — the clue is **reactive** and Bob has no colour stable play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
    since dispatch is positional (§1a, `interpret_clue.cpp:620-631`). `:514-517`.
+   In a **target-parity** variant the second arm is vacuously true (no stable
+   clues exist) while the first still asks who was clued, so only a clue to
+   Cathy reaches N2 there.
 
 **H1a is NOT on that list, though the spec has always said it should be.**
 `clue_tier` has never had an `if (h1a) return MEDIUM` arm: a position where Bob

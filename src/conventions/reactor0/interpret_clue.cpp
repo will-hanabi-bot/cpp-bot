@@ -876,7 +876,8 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     ClueInterp forced = std::get<ClueInterp>(*game.next_interp);
     if (forced == ClueInterp::REACTIVE) {
       int reacter = state.next_player_index(action.giver);
-      return interpret_reactive(prev, game, action, reacter);
+      return interpret_reactive(prev, game, action, reacter,
+                                reactive_receiver(state, action, reacter));
     }
     // fall through to positional dispatch for any other forced value.
   }
@@ -886,6 +887,23 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   }
 
   int bob = state.next_player_index(action.giver);
+
+  // Target-parity variants (Alternating Clues, Synesthesia) have NO stable
+  // clues at all. Both take the choice of clue KIND away from the giver --
+  // Synesthesia offers colour only, Alternating Clues forces the kind to
+  // alternate -- so the kind cannot carry the reactive parity, and the TARGET
+  // carries it instead: a clue to Bob is ODD, a clue to Cathy is EVEN
+  // (`variants::uses_target_parity`).
+  //
+  // Bob is the reacter either way, being the seat that acts next, and Cathy is
+  // the receiver either way. A clue to Bob therefore touches the REACTER's own
+  // hand while still identifying a slot in Cathy's: Bob acts, Cathy reads which
+  // slot he chose, and the turn order works out.
+  if (variants::uses_target_parity(*state.variant)) {
+    return interpret_reactive(prev, game, action, bob,
+                              reactive_receiver(state, action, bob));
+  }
+
   bool stall_ctx = prev.common.obvious_locked(prev, action.giver) ||
                    game.in_endgame() || prev.state.clue_tokens == 8;
 
@@ -896,7 +914,7 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
                : stable_rank(prev, game, action, stall_ctx);
   }
   // Always reactive, even in stall contexts.
-  return interpret_reactive(prev, game, action, bob);
+  return interpret_reactive(prev, game, action, bob, action.target);
 }
 
 }  // namespace hanabi::reactor0

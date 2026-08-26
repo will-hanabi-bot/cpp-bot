@@ -209,8 +209,9 @@ NewPlayFacts new_play_facts(const Game& game, const Game& hypo) {
         !(game.meta[*recv_order].status != CardStatus::CALLED_TO_PLAY &&
           hypo.meta[*recv_order].status == CardStatus::CALLED_TO_PLAY)) {
       const CardStatus rb = receiver_button(
-          reactive_assignment(*s.variant, game.reactive_overrides, wc.clue.kind,
-                              wc.clue.value)
+          reactive_assignment_for(*s.variant, game.reactive_overrides,
+                                  wc.clue.kind, wc.clue.value,
+                                  /*target_is_bob=*/wc.clue.target == wc.reacter)
               .even,
           reacter_status);
       // Judged against the stacks the reacter leaves behind, and via
@@ -230,6 +231,11 @@ NewPlayFacts new_play_facts(const Game& game, const Game& hypo) {
 // then confirms the named card is genuinely playable from our full visibility.
 bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
   const State& s = game.state;
+  // This models a STABLE colour play clue, and a target-parity variant has no
+  // stable clues at all -- every clue there is reactive. Both callers (H1c and
+  // N2) are asking "could Bob have handled Cathy himself?", and in those
+  // variants the answer is never "yes, with a stable clue".
+  if (variants::uses_target_parity(*s.variant)) return false;
   for (const Clue& c : s.all_colour_clues(receiver)) {
     auto touched = s.clue_touched(s.hands[receiver], c.kind, c.value);
     if (touched.empty()) continue;
@@ -326,8 +332,9 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   // the kind here made VH1 unreachable in those variants, so a finesse was
   // invisible to the pre-check that outranks everything else (replay 1967416
   // T1: yellow to Cathy was the finesse, and the bot clued yellow to Bob).
-  if (!reactive_assignment(*s.variant, game.reactive_overrides, action.clue.kind,
-                           action.clue.value)
+  if (!reactive_assignment_for(*s.variant, game.reactive_overrides,
+                               action.clue.kind, action.clue.value,
+                               /*target_is_bob=*/action.target == bob)
            .even) {
     return false;
   }

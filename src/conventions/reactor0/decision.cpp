@@ -222,8 +222,9 @@ ClueReading read_clue(const Game& game, const Game& hypo,
 
   const State after_bob = state_after_reacter(s, wc.react_order, reacter_status);
   const CardStatus rb = receiver_button(
-      reactive_assignment(*s.variant, game.reactive_overrides, action.clue.kind,
-                          action.clue.value)
+      reactive_assignment_for(*s.variant, game.reactive_overrides,
+                              action.clue.kind, action.clue.value,
+                              /*target_is_bob=*/action.target == wc.reacter)
           .even,
       reacter_status);
   r.receiver_side = {*receive_order, rb,
@@ -499,8 +500,9 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
     return false;
   }
   const CardStatus rb = receiver_button(
-      reactive_assignment(*s.variant, game.reactive_overrides, wc.clue.kind,
-                          wc.clue.value)
+      reactive_assignment_for(*s.variant, game.reactive_overrides, wc.clue.kind,
+                              wc.clue.value,
+                              /*target_is_bob=*/wc.clue.target == wc.reacter)
           .even,
       reacter_status);
   auto recv_id = s.deck[*recv_order].id();

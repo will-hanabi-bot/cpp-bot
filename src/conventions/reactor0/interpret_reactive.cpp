@@ -723,29 +723,45 @@ void record_react_target(Game& game) {
 
 // --- top level ------------------------------------------------------------
 
+int reactive_receiver(const State& state, const ClueAction& action, int reacter) {
+  if (!variants::uses_target_parity(*state.variant)) return action.target;
+  // Cathy, whoever was clued. reactor0 runs at exactly three players
+  // (net/commands.cpp), so the seat after the reacter is always the third one.
+  return state.next_player_index(reacter);
+}
+
 std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                                              const ClueAction& action,
-                                             int reacter) {
+                                             int reacter, int receiver) {
   hanabi::instr::ScopedTimer st("reactor0.interpret_reactive");
-  hanabi::logging::LogScope ls(
-      "reactor0.interpret_reactive",
-      {{"giver", action.giver}, {"target", action.target}, {"reacter", reacter}});
+  hanabi::logging::LogScope ls("reactor0.interpret_reactive",
+                               {{"giver", action.giver},
+                                {"target", action.target},
+                                {"reacter", reacter},
+                                {"receiver", receiver}});
   const State& state = game.state;
   int giver = action.giver;
-  int receiver = action.target;
   const auto& clue = action.clue;
 
   // The clue's reactive assignment: which parity bucket it is in, and its
-  // anchor within that bucket. `/set` overrides both; with no overrides this is
-  // the variant's built-in table.
-  const ReactiveAssignment assign = reactive_assignment(
-      *state.variant, game.reactive_overrides, clue.kind, clue.value);
+  // anchor within that bucket. `/set` overrides the value; with no overrides
+  // this is the variant's built-in table.
+  //
+  // Asked with the TARGET rather than the receiver. The two are the same seat
+  // outside a target-parity variant, and inside one the target is precisely
+  // what decides the parity -- a clue to Bob (the reacter) is odd.
+  const ReactiveAssignment assign = reactive_assignment_for(
+      *state.variant, game.reactive_overrides, clue.kind, clue.value,
+      /*target_is_bob=*/action.target == reacter);
   int anchor = assign.value;
+  // `wc.clue.target` records the seat that was CLUED, which is not always the
+  // receiver -- in a target-parity variant a clue to Bob has Cathy as receiver.
+  // Every later parity lookup keys on it, so it must not be rewritten here.
   ReactorWC wc{giver,
                reacter,
                receiver,
                state.hands[receiver],
-               to_clue(clue, receiver),
+               to_clue(clue, action.target),
                /*focus_slot=*/anchor,
                /*inverted=*/false,
                state.turn_count,

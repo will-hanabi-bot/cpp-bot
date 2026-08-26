@@ -35,9 +35,25 @@ struct ReactiveAssignment {
 
 // The assignment for one clue. An override wins outright; otherwise the
 // variant decides.
+//
+// TARGET-BLIND, so it is the wrong function to ask about a clue that has
+// actually been given -- see `reactive_assignment_for`. It remains correct for
+// the `/settings` table, which describes clues in the abstract.
 ReactiveAssignment reactive_assignment(
     const Variant& variant, const std::vector<ReactiveOverride>& overrides,
     ClueKind kind, int clue_value);
+
+// The assignment for a clue GIVEN TO SOMEBODY. Identical to the above except in
+// a `variants::uses_target_parity` variant, where the parity comes from who was
+// clued rather than from the clue's kind: Bob -> odd, Cathy -> even. The VALUE
+// is the same either way, `/set` included.
+//
+// Every site that asks a real clue or a waiting connection for its parity must
+// use this one. `wc.clue.target` is the seat that was clued -- note this is NOT
+// the receiver in a target-parity variant, where the receiver is always Cathy.
+ReactiveAssignment reactive_assignment_for(
+    const Variant& variant, const std::vector<ReactiveOverride>& overrides,
+    ClueKind kind, int clue_value, bool target_is_bob);
 
 // One row of the /settings table: the label a partner would say, and the value.
 struct ReactiveRow {
@@ -52,6 +68,11 @@ struct ReactiveRow {
 // `clue_colour_names` order), and each lands in its assigned bucket preserving
 // that global order. A clue moved by `/set` therefore appears at the END of its
 // new bucket and vanishes from the other.
+//
+// TARGET-BLIND, like `reactive_assignment` which it calls. In a
+// `uses_target_parity` variant the split it reports is not the one the game
+// plays by -- `format_settings` concatenates the two buckets there and prints
+// the target rule instead of a split.
 struct ReactiveTable {
   std::vector<ReactiveRow> even;
   std::vector<ReactiveRow> odd;

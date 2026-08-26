@@ -799,3 +799,46 @@ the change was not measured against, and the corpus A/B for that is a separate
 piece of work. Either the arm is added or the spec line goes — they should not
 keep disagreeing.
 
+---
+
+## 31. `[reactor0]` Alternating Clues: the bot does not reason about denying its partner a kind
+
+In an Alternating Clues variant the kind you clue decides which kind your
+partner may **not** clue next. A rank clue can therefore deny a partner the rank
+clue they needed, and giving the "wrong" kind is a real cost even when the clue
+itself is good.
+
+v10.0.0 makes the bot play LEGALLY — `State::all_valid_clues` drops the blocked
+kind off `State::last_clue_kind`, so the bot never proposes a clue the server
+would reject and the endgame solver never costs out a line built on one — and
+read clues correctly. It does not weigh the constraint it imposes: the clue
+evaluation list has no term for "this leaves my partner only colour, and the
+card that needs saving is only reachable by rank".
+
+The natural home is a term in the General Clue Evaluation List's tiebreak, or a
+tier condition, keyed on whether the partner has a needed clue of the kind about
+to be blocked. Needs a corpus to size it against, and the bot has never played
+one of these 66 variants, so there is nothing to measure yet.
+
+---
+
+## 32. `[reactor0]` A waiting connection's parity is recomputed from the clue kind, ignoring `wc.even_parity`
+
+`ReactorWC::even_parity` is a snapshot of the clue's parity bucket taken when
+the connection is created, so that a `/set` landing mid-game cannot change what
+an already-given clue meant — the same insulation `rlocks` gets.
+
+Two decision-layer sites do not read it. `decision.cpp` (the receiver button in
+`shape_after_reaction`) and `state_eval.cpp` (the same button in the new-play
+walk) both recompute the parity from `wc.clue.kind` and the CURRENT overrides.
+A `/set` that moves a clue between buckets after the connection was created
+makes them disagree with the reading every seat already agreed on.
+
+v10.0.0 routed both through `reactive_assignment_for` so they are correct for
+the target-parity variants, which was what forced the question. It did not
+change where they read the parity FROM, because that is a behavioural change for
+existing `/set` games and wants its own measurement. The fix is to prefer
+`wc.even_parity` when it is set and fall back to the computed value only when it
+is not — the same shape `reactor0::wc_is_even_parity`
+(`interpret_reaction.cpp`) already uses.
+

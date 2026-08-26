@@ -41,6 +41,11 @@ giver, Bob the next player, Cathy the one after.
   `advance` simulates a playable orange with the Discard button, `eval_state`
   scores 3+ strikes at `−100`, and `eval_game` prices an orange CTD as a play
   call (reactor's §2.6/§2.7).
+  **v10.0.0** adds a second exception, in the other direction: in the 102
+  **Alternating Clues** and **Synesthesia** variants reactor0 gives no stable
+  clues at all and takes a clue's reactive parity from its TARGET rather than
+  its kind. Reactor is unchanged there and would read those clues differently.
+  See §1f, *Alternating Clues and Synesthesia*.
 - **Not shared**: WHEN the reactive negative inference runs. Whenever the
   receiver is called to **chuck**, the elim reasons "the slots before the target
   were passed over, so they are not playable". That is true only if the chuck is
@@ -106,8 +111,14 @@ giver, Bob the next player, Cathy the one after.
   the giver is locked, in the endgame, or at 8 clue tokens (`:622-623`).
 
 The stall context (`giver obviously locked || in_endgame() ||
-clue_tokens == 8`, `:613-614`) is passed to the stable branches only as the
-`stall` flag that reactor's `ref_discard` already honours.
+clue_tokens == 8`) is passed to the stable branches only as the `stall` flag
+that reactor's `ref_discard` already honours.
+
+**One family of variants overrides all of this**: under
+`variants::uses_target_parity` there are no stable clues at all and the target
+picks the parity instead. See §1f, *Alternating Clues and Synesthesia*. The
+branch sits above the positional fork, so everything written above is the
+ordinary case.
 
 ## §1b Stable colour — a direct play clue
 
@@ -988,6 +999,84 @@ Reactive anchors ignore the rainbowish/pinkish focus tables entirely — the
 anchor is the clue value in every variant. `/allplays` is a reactor concept
 and never reaches a reactor0 game at all (§0).
 
+### Alternating Clues and Synesthesia — the target carries the parity
+
+**102 variants**, and the only two families where reactor0 gives **no stable
+clues at all**. Both take the choice of clue KIND away from the giver, so the
+kind cannot carry a signal:
+
+- **Synesthesia** (36 variants) offers colour clues only — it carries
+  `clueRanks: []` as well as its own touch rule, so there is only ever one kind
+  to give.
+- **Alternating Clues** (66 variants) forbids two consecutive clues of the same
+  kind, so on any given turn at most one kind is even legal.
+
+`variants::uses_target_parity` (`conventions/variants/predicates.h`) is the one
+predicate; every site reads it rather than testing the two flags.
+
+Every clue is reactive, and **the roles are fixed regardless of who is clued**:
+
+| Clue | Parity | Reacter | Receiver |
+|---|---|---|---|
+| to **Bob** | **odd** — exactly one play | Bob | **Cathy** |
+| to **Cathy** | **even** — double play / double discard | Bob | **Cathy** |
+
+Bob is always the reacter because he is the seat that acts next; Cathy is always
+the receiver. So a clue to Bob **touches the reacter's own hand** while still
+identifying a slot in Cathy's: Bob acts, Cathy reads which slot he chose, and
+the turn order works out. Nothing in the reactive branches reads `action.list_`,
+so the touched hand needs no further special-casing.
+
+`interpret_reactive` takes the receiver as an explicit argument for exactly this
+reason, decided once by `reactive_receiver`
+(`reactor0/interpret_reactive.cpp`). **The waiting connection's `clue.target`
+records the seat that was CLUED, not the receiver** — every later parity lookup
+keys on it, and here the two come apart.
+
+**Anchors are unchanged.** `1=1 … 5=5` and `Red=1, Yellow=2, Green=3, Blue=4,
+Purple=5`, from the same `colour_clue_value` / `rank_reactive_value` tables as
+everywhere else. Only the bucket moves, via `reactive_assignment_for` — the
+target-aware sibling of `reactive_assignment`, which stays target-blind for the
+`/settings` table. `/set` still moves a clue's value.
+
+**Consequence for the tier rules**: `has_colour_play_clue_for` models a *stable*
+colour play clue and therefore returns false outright here, which makes H1c's
+second arm and N2's second arm vacuous (DECISION_MAKING.md).
+
+#### Synesthesia's touch rule
+
+On top of its own colour, a card of rank N answers to the **Nth colour clue**
+(`Variant::id_touched`, guarded by the `synesthesia` flag). The clue value is
+0-indexed and the rank 1-indexed, so the test is `rank - 1 == value`. Two
+carve-outs, from different places:
+
+| Suit | Touched by |
+|---|---|
+| Red / Blue / Black / … | its own colour, **and** the colour of its rank |
+| Rainbow, Dark Rainbow | every colour (returns true before the rule is reached) |
+| Brown, Dark Brown | **Brown only** — never the colour of its rank |
+| White, Gray, Null, Dark Null | **nothing** |
+
+Brown is excluded by the rule itself. White is excluded by the rule **sitting
+below** the existing whitish early-return, which matches how hanab.live
+currently behaves: White in a Synesthesia variant is indistinguishable from
+Null. Null is excluded twice over, being both.
+
+#### Alternating Clues' legality
+
+A server rule, not a convention, so it lives in the clue enumeration:
+`State::all_valid_clues` drops the kind of the previous clue, keyed on
+`State::last_clue_kind`, which `Game::on_clue` records for every clue real or
+simulated. Filtering there rather than in the callers is what keeps the endgame
+solver and `eval.cpp` from costing out lines built on clues the server would
+reject. A play or discard in between does **not** reset it — the rule is about
+consecutive *clues* — and it tracks the last clue by any player, not by one
+seat.
+
+The bot plays legally and reads clues correctly, but does **not** yet reason
+about the fact that its own clue constrains what its partner may clue next.
+`TODO.md`.
+
 ## §1g POV invariance — shared knowledge retargets, giver-only knowledge rejects
 
 **A clue whose reading predicts a strike is not legal to give.** The rules
@@ -1223,6 +1312,9 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
+| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, and the `/settings` line |
+| `tests/test_basics/test_synesthesia.cpp` | The Synesthesia touch matrix — the rank rule and its off-by-one, brown answering only to brown, white and null untouched, rainbow unaffected, and no rank clues offered |
+| `tests/test_basics/test_alternating_clues.cpp` | The legality rule — the first clue is free, each kind blocks its own repeat, a play or discard does not reset it, it alternates across players, hypos carry it, and plain variants are unaffected |
 | `tests/test_reactor0/test_misc/test_replay_1972716_spent_reaction_is_not_urgent.cpp` | A deferred call whose target the receiver has since played no longer pre-empts the turn — the pairing is read off `react_target_order`, and the clue Bob's chop is owed is given instead |
 | `tests/test_reactor0/test_efficiency.cpp` | efficiency formula + rlocks defaults |
 | `tests/test_reactor0/test_giver_filters.cpp` | MISTAKE clues never offered |

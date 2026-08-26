@@ -474,6 +474,19 @@ cost is that leaving a table and rejoining that same id will not re-announce;
 table ids increment per server session, so a genuine rejoin almost always
 carries a new one.
 
+In **Alternating Clues** and **Synesthesia** variants `/settings` reports the
+target rule instead of the two parity buckets, because there the bucket a clue
+falls into is decided by who is clued rather than by the clue itself:
+
+```
+reactor0 — no stable clues: to Bob = odd, to Cathy = even, reactive values:
+{1=1, 2=2, 3=3, 4=4, 5=5, Red=1, Yellow=2, Green=3, Blue=4, Purple=5},
+rlocks: on
+```
+
+`/set` still moves an individual clue's value. See
+`src/conventions/reactor0/CONVENTION.md` §1f.
+
 At the start of every game the bot writes its version **and the convention
 that game resolved to** as a note on card order 0 (e.g. `bot v2.0.0
 reactor0`), so observers can confirm which build is running and what its

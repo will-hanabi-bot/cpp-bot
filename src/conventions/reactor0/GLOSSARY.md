@@ -56,6 +56,34 @@ by the urgent scan in `src/basics/decide.cpp`; it is stored on the card rather
 than on `Game::waiting` because a deferral clears the waiting connection while
 deliberately keeping the call. Replay 1972716 T5.
 
+### target parity
+The rule, in **Alternating Clues** and **Synesthesia** only, that a clue's
+reactive parity comes from **who is clued** rather than from the clue's kind:
+a clue to Bob is odd (exactly one play), a clue to Cathy is even (double play
+or double discard). Both families take the choice of clue kind away from the
+giver — Synesthesia offers colour only, Alternating Clues forces the kind to
+alternate — so the kind cannot carry a signal. `variants::uses_target_parity`
+(`conventions/variants/predicates.h`); `reactive_assignment_for` is the
+target-aware lookup. In these variants there are **no stable clues**: Bob is
+always the reacter and Cathy always the receiver, so a clue to Bob touches the
+reacter's own hand while identifying a slot in Cathy's. CONVENTION.md §1f.
+
+### Synesthesia colour
+The second colour a card answers to in a Synesthesia variant: a card of rank N
+is touched by the **Nth** colour clue on top of its own colour
+(`Variant::id_touched`, `rank - 1 == value` since the clue value is 0-indexed).
+Brown suits are exempt by the rule; whitish suits are exempt because the rule
+sits below the whitish early-return, which makes White indistinguishable from
+Null there. Not to be confused with *colour value*, which is a clue's reactive
+anchor and is unchanged in these variants.
+
+### alternating clue
+A clue in an **Alternating Clues** variant, where the server rejects a clue of
+the same kind as the previous one given by anybody. Enforced in
+`State::all_valid_clues` off `State::last_clue_kind`, which `Game::on_clue`
+records; a play or discard in between does not reset it, because the rule counts
+consecutive *clues* rather than consecutive turns.
+
 ### group elim (sudoku elim)
 Proving Alice holds a copy of an identity without any of her cards being a
 singleton: for a subset S of her hand with combined possibilities `u`, if

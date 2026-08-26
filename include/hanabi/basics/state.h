@@ -63,6 +63,15 @@ struct State {
   int turn_count = 0;
   int clue_tokens = 8;
   bool half_clue_token = false;
+  // The kind of the most recent clue given by ANY player, or nullopt before the
+  // first one. Only Alternating Clues reads it, where the server rejects a clue
+  // of the same kind as the one before -- see `all_valid_clues`.
+  //
+  // Set in `Game::on_clue`, which every real and simulated clue passes through,
+  // so a hypo and a snapshot replay both rebuild it without being serialised.
+  // A play or a discard in between does NOT reset it: the rule is about
+  // consecutive CLUES, not consecutive turns.
+  std::optional<ClueKind> last_clue_kind;
   int strikes = 0;
   std::optional<int> endgame_turns;
   int next_card_order = 0;

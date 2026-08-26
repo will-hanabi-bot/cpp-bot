@@ -103,6 +103,7 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
                      std::optional<int> special_rank, bool rainbow_s, bool white_s,
                      bool pink_s, bool brown_s, bool deceptive_s, bool scarce_ones,
                      bool funnels, bool chimneys, bool odds_and_evens,
+                     bool alternating_clues, bool synesthesia,
                      std::vector<int> clue_ranks) {
   const auto& catalog = load_suit_catalog();
   Variant v;
@@ -119,6 +120,8 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
   v.scarce_ones = scarce_ones;
   v.funnels = funnels;
   v.chimneys = chimneys;
+  v.alternating_clues = alternating_clues;
+  v.synesthesia = synesthesia;
   v.odds_and_evens = odds_and_evens;
   v.clue_ranks = std::move(clue_ranks);
   v.suits.reserve(suit_names.size());
@@ -252,6 +255,20 @@ bool Variant::id_touched(Identity id, ClueKind kind, int value) const {
       if (rainbow_s) return true;
       if (white_s) return false;
     }
+    // Synesthesia: on top of its own colour, a card of rank N answers to the
+    // Nth colour clue. Two carve-outs, and the position of this branch is what
+    // implements one of them:
+    //
+    //  * BROWN is exempt by the rule itself -- a brown card is clued as brown
+    //    and never as the colour of its rank. It still reaches the name match
+    //    below, so `Brown` alone touches it.
+    //  * WHITE is exempt by SITTING BELOW `st.whitish`, which already returned
+    //    false. That matches how hanab.live currently behaves: White in a
+    //    Synesthesia variant is indistinguishable from Null -- untouched by
+    //    everything -- rather than being reachable through its rank.
+    //
+    // Rainbow returned true further up, so it is unaffected.
+    if (synesthesia && !st.brownish && rank - 1 == value) return true;
     if (st.prism) {
       return ((rank - 1) % clue_colour_names.size()) == static_cast<size_t>(value);
     }
@@ -371,6 +388,8 @@ Variant variant_from_json(const nlohmann::json& entry) {
       entry.value("funnels", false),
       entry.value("chimneys", false),
       entry.value("oddsAndEvens", false),
+      entry.value("alternatingClues", false),
+      entry.value("synesthesia", false),
       // Absent `clueRanks` means the full 1-5. Present-but-empty is the Number
       // Mute family, which offers no rank clues at all -- so `value()` with a
       // 1-5 default would be wrong, and the key has to be probed explicitly.

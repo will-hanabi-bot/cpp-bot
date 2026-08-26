@@ -257,6 +257,10 @@ void Game::clear_contradicted_call(int order) {
 
 void Game::on_clue(const ClueAction& action) {
   const Variant& v = *state.variant;
+  // Alternating Clues keys its legality off this. Recorded for every variant --
+  // the field costs nothing and only `all_valid_clues` reads it -- and recorded
+  // HERE because every clue, real or simulated, arrives through this function.
+  state.last_clue_kind = action.clue.kind;
   IdentitySet new_possible = IdentitySet::create(
       [&](Identity i) { return v.id_touched(i, action.clue.kind, action.clue.value); },
       static_cast<int>(v.suits.size() * 5));

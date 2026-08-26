@@ -93,6 +93,17 @@ struct Variant {
   // also swaps which clue kind carries which reactive parity -- see
   // `variants::uses_even_parity` (conventions/variants/predicates.h).
   bool odds_and_evens = false;
+  // Alternating Clues: no two CONSECUTIVE clues may be of the same kind. A
+  // server rule, not a convention -- `State::all_valid_clues` drops the
+  // offending kind, keyed on `State::last_clue_kind`. It also takes the choice
+  // of clue kind away from the giver, which is why reactor0 cannot hang its
+  // reactive parity on the kind here (`variants::uses_target_parity`).
+  bool alternating_clues = false;
+  // Synesthesia: a card of rank N is ALSO touched by the Nth colour clue, on
+  // top of its own colour. Brown suits are exempt -- they answer only to Brown.
+  // These variants carry `clueRanks: []` as well, so colour is the only clue
+  // kind there at all, which likewise costs the giver the choice of kind.
+  bool synesthesia = false;
   // The rank clue values this variant actually offers, from `clueRanks`.
   // Defaults to {1,2,3,4,5}. Odds and Evens gives {1,2}; the Number Mute
   // family gives {} (no rank clues at all).

@@ -45,4 +45,22 @@ bool uses_even_parity(const Variant& variant, ClueKind kind);
 // parity rather than a rank, so it maps: odd (1) -> 3, even (2) -> 4.
 int rank_reactive_value(const Variant& variant, int clue_value);
 
+// --- target parity --------------------------------------------------------
+
+// Does this variant take a clue's reactive parity from its TARGET rather than
+// from its KIND?
+//
+// True for Alternating Clues and Synesthesia, and for the same underlying
+// reason: both take the choice of clue KIND away from the giver, so the kind
+// can no longer carry a signal. Synesthesia offers colour clues only
+// (`clueRanks: []`); Alternating Clues forces the kind to alternate, so on any
+// given turn at most one kind is even legal.
+//
+// Where it is true, reactor0 has NO stable clues: every clue is reactive, Bob
+// is always the reacter and Cathy always the receiver, and the target picks the
+// parity -- a clue to Bob is ODD (exactly one play), a clue to Cathy is EVEN
+// (double play / double discard). Reactive VALUES are unaffected; they come
+// from the same table as everywhere else.
+bool uses_target_parity(const Variant& variant);
+
 }  // namespace hanabi::reactor::variants
