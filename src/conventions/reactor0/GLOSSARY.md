@@ -281,13 +281,22 @@ A card safe to press Discard on: every reading is trash on a **plain** suit, or
 every reading is an immediately playable **inverted** one (the two arms of
 `is_chuckable`, `src/conventions/reactor0/calls.cpp`).
 
-Which readings count depends on what the team has spent on the card. For an
-untouched card, `possibilities()` — `inferred` when it is non-empty, else
-`possible`. For a card that is **clued or stamped**, the trash arm also demands
-that **`possible`** be all trash: `inferred` is a convention deduction and can
-be wrong, and a discard cannot be taken back. Replay 1971788 T29 is the case —
-a lock's rank promise read a Dark Omni 5 as one of the trash 1s. A
-`CALLED_TO_DISCARD` card is exempt, since it never passes through this test.
+The readings that count are `possibilities()` — `inferred` when it is non-empty,
+else `possible` — narrowed for our own seat by `sight_narrowed`. **Whether a clue
+was spent on the card makes no difference**: if every identity it can still be is
+trash, it is trash.
+
+v8.8.0 briefly required `possible` to agree for a clued or stamped card, on the
+grounds that `inferred` is a deduction and a discard cannot be taken back. That
+was withdrawn in **v10.4.0**. It had shipped alongside the real fix for replay
+1971788 T29 — an Odds and Evens rank clue read as promising a literal rank
+rather than a parity, which is what made a Dark Omni 5 look like a trash 1 — and
+`rank_satisfies_promise` already prevents that reading. What the extra demand
+cost was every genuinely-known trash card whose raw empathy still admitted
+something useful, which after a colour clue is most of them: the chuck list came
+back empty and phase 2 threw the chop instead. Replay 1974046 T22 lost a game
+that way, discarding a critical b5 while holding a card read `{b2}` with blue on
+2.
 
 Not to be confused with *provably trash* (above), which is the same "every
 reading is trash" question asked of `sight_narrowed` on the clue-interpretation

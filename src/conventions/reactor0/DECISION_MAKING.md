@@ -815,17 +815,28 @@ the first elements of each list the **pitch list**. Take all of the cards
 currently stamped CTD, and add all chuckable cards (either trash non-inverted or
 playable inverted) to it to form the **chuck list**.
 
-**An INVESTED card needs proof, not an inference.** Chuckability is judged from
-`possibilities()`, which prefers `inferred` — a convention deduction that can be
-wrong. For an untouched card that costs nothing, since nothing narrowed it. For
-a card that is **clued or carries a stamp**, the trash arm additionally requires
-**`possible`** to be all trash (`is_chuckable`, `calls.cpp`), because the throw
-is irreversible. Replay 1971788 T29: a lock's rank promise had narrowed slot 5
-to `{r1,y1,g1,b1,p1}` — all trash — while `possible` still held `d3,d4,d5`, each
-a single copy. It was the `d5`; the max score fell 30 to 29 while an unclued
-chop sat in slot 1. A `CALLED_TO_DISCARD` card is exempt: it joins the list
-through its own arm, and refusing a partner's explicit instruction would break
-the signal they spent a clue on.
+**The inferred set is the answer.** Chuckability is judged from
+`possibilities()` — `inferred` when it is non-empty, else `possible` — narrowed
+for our own seat by `sight_narrowed`. If every identity a card can still be is
+trash then the card is trash, **whether or not a clue was spent on it**
+(`is_chuckable`, `calls.cpp`). A `CALLED_TO_DISCARD` card never reaches this
+test at all: it joins the list through its own arm, since refusing a partner's
+explicit instruction would break the signal they spent a clue on.
+
+v8.8.0 briefly demanded more of a clued or stamped card — that **`possible`** be
+all trash as well, because the throw is irreversible — and **v10.4.0 removed
+that**. It had shipped alongside the real fix for replay 1971788 T29, where an
+Odds and Evens rank clue was read as promising a literal RANK rather than a
+PARITY; that misreading is what narrowed a Dark Omni 5's slot to
+`{r1,y1,g1,b1,p1}`, and `rank_satisfies_promise` (`variants/pinkish.cpp`) now
+prevents it — the replay's own regression test passes without the guard. What
+the extra demand cost was every genuinely-known trash card whose raw empathy
+still admitted something useful, which after a colour clue is most of them: the
+chuck list came back EMPTY and phase 2 fell through to the rung-12 floor and
+threw the CHOP instead. Replay 1974046 T22 lost a game that way, discarding a
+critical `b5` while holding a card read `{b2}` with blue on 2; replay 1974052 T6
+is the same defect reached through a colour clue narrowing a reactive inference
+to `{y1}`.
 
 **"Trash non-inverted" means non-inverted.** A card that is trash but *could* be
 on the inverted suit is not chuckable: pressing Discard on an inverted card is a

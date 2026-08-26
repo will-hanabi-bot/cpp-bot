@@ -16,6 +16,10 @@ convention, or anything else that changes what existing clues mean to partners
 running an older build. If a change looks like one, say so and *ask* — do not
 take the major bump on your own initiative.
 
+The major/minor split also decides how much verification a change gets: a major
+bump is the **only** thing that triggers a behavioural A/B sweep. See
+**Behavioural A/B sweeps** below.
+
 After making the change, **write the new version number in the change summary**
 you return to the user.
 
@@ -88,10 +92,10 @@ each and makes the full suite take ~7 minutes instead of ~23 seconds.
 
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
-build/hanabi_reactor0_tests.exe   # reactor0 only          92 tests, 13 s
-build/hanabi_tests.exe            # convention-neutral    255 tests, 0.2 s
-build/hanabi_reactor_tests.exe    # reactor + replays     120 tests, 20 s
-build/hanabi_decision_tests.exe   # decision quality       47 tests
+build/hanabi_reactor0_tests.exe   # reactor0 only         229 tests,  6 s
+build/hanabi_tests.exe            # convention-neutral    352 tests,  1.4 s
+build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
+build/hanabi_decision_tests.exe   # decision quality      121 tests,  0.7 s
 ```
 
 Pick the scope from the report's `Convention:` field:
@@ -121,6 +125,54 @@ Two rules:
   looks convention-local can break the other convention's corpus.
 - On Windows a running test binary is locked, so a rebuild cannot relink it
   while it is executing. Let the run finish first (see README §5.7).
+
+## Behavioural A/B sweeps
+
+A **sweep** replays a few thousand recorded turns under the previous release and
+under the working build and diffs the chosen action, to find behaviour that moved
+where no test was watching. It is the only way to see a change's blast radius,
+and it costs **30–60 minutes** for a full pair — roughly 6,000
+`replay_log.exe` spawns — during which `replay_log.exe` cannot be relinked.
+
+**Do not run one by default.** A minor bump — which is every bump unless the
+user says otherwise — is gated on:
+
+1. the four test binaries (see *Running tests* above), and
+2. the replay regression tests already in `tests/`, which run inside those
+   binaries and are the durable form of the pinned corpus, plus
+3. `build/replay_log.exe logs/<bot>-<id>.log --turn <N> --rerun` on the specific
+   replay the change is about, before and after, recorded in the commit message.
+
+That is the whole gate. **Sweep only on a MAJOR bump, or when the user asks for
+one** — a major bump is by definition a cross-version compatibility break, so
+the corpus moving is precisely what is being measured. Iteration here is fast
+enough that a sweep run against a minor bump is stale within the day: the next
+change moves some of the same replays, and the 40 minutes buys nothing.
+
+Before starting one, say what it will cost and wait. If a sweep is running, do
+not rebuild.
+
+The harness is **not** in this repo, deliberately — it is a dozen lines of shell
+(for each `(log, turn)` pair, run `--rerun` under a baseline worktree build and
+the working build; print `same|...` or `MOVED|...`), rebuilt in seconds when it
+is actually wanted. Committing it would invite it to be run.
+
+Three hygiene rules, each of which has cost a wasted run:
+
+- **Freeze the build first.** Rebuilding `replay_log.exe` mid-sweep silently
+  changes the thing being measured.
+- **`TaskStop` does not reap the child `sh`.** It keeps appending to the output
+  file after the task reports stopped. Kill strays explicitly:
+  `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'sh.exe' -and
+  $_.CommandLine -like '*ab.sh*' }`, then re-query to confirm none remain. Beware
+  that a filter on the command line also matches the PowerShell process running
+  it — match on `Name` too.
+- **Check `rows == distinct` before believing any number.** Contamination from a
+  stray shell shows up as duplicate `(log, turn)` rows, and a sweep that looks
+  clean because it double-counted `same` rows is worse than no sweep.
+
+Read **every** mover individually and say what each one is. A mover count with no
+readings is not a result.
 
 ## Test changes
 

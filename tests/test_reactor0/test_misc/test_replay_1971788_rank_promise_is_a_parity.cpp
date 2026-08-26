@@ -1,4 +1,4 @@
-// Throwing away an invested card needs proof, not an inference.
+// An Odds and Evens rank clue promises a PARITY, not a rank.
 //
 // Turn 29, "Odds and Evens & Dark Omni (6 Suits)", stacks [2,4,3,1,4,2], ZERO
 // clues. will-bot69's slot 5 (order 7) was clued and chop-moved, and read
@@ -15,12 +15,17 @@
 //     `apply_rank_promise` narrowed the lock slot to *rank 1* by filtering on
 //     `i.rank == clue.value`. Under Odds and Evens the value names a PARITY:
 //     the promise was "1, 3 or 5", which the d5 satisfies.
-//   * the throw. `is_chuckable` reads `inferred` whenever it is non-empty and
-//     never consults `possible`, and nothing on reactor0's discard path checks
-//     criticality at all.
+//   * the throw. v8.8.0 also made `is_chuckable` require `possible` to agree
+//     with `inferred` for a clued or stamped card.
 //
-// Either fix alone saves the card; both are in. The chop was a y1 -- pure
-// trash -- so the corrected action costs nothing.
+// Either fix alone saves the card, and **v10.4.0 removed the second**: it was
+// belt and braces on top of a reading that is no longer wrong, and it cost every
+// genuinely-known trash card whose raw empathy still admitted something useful
+// (replay 1974046 T22 lost a game to that). This test therefore now pins the
+// PARITY fix, which is what actually keeps the d5 out of the chuck list -- it
+// passes unchanged without the guard.
+//
+// The chop was a y1 -- pure trash -- so the corrected action costs nothing.
 #include <gtest/gtest.h>
 
 #include "hanabi/basics/action.h"
@@ -32,7 +37,7 @@
 
 // Variant: Odds and Evens & Dark Omni (6 Suits). 3 players, our_player_index=1.
 
-TEST(MiscReplay1971788, ACluedCardIsNotChuckedOnInferenceAlone) {
+TEST(MiscReplay1971788, TheRankPromiseIsAParityNotARank) {
   // Reconstruct exactly the Game the live bot saw at turn 29.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(

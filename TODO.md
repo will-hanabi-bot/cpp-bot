@@ -842,3 +842,45 @@ existing `/set` games and wants its own measurement. The fix is to prefer
 is not — the same shape `reactor0::wc_is_even_parity`
 (`interpret_reaction.cpp`) already uses.
 
+---
+
+## 33. `[reactor0]` The zero-clue safety promise and the chuck list have no defined interaction
+
+The **zero-clue safety promise**: the chop is locked in on the turn a clue takes
+the team down to zero clues, and is not reset until the player before Alice has
+at least one clue remaining. Cards drawn during the stall are not chop, so the
+player who drew them is not expected to throw them, and the promise is that the
+locked card is safe to lose.
+
+The lock itself is implemented. `Game::zcs_turn` records the turn the team ran
+dry (`decide.cpp:352`), `chop`'s second pass skips any card drawn after it
+(`decide.cpp:609-614`), and `reset_zcs` fires only on an action taken from a
+state that still had a clue (`decide.cpp:351`, `:468`, `:497`) — so a discard
+that buys the token back does not clear it, which is the "until the player
+before Alice has at least one clue" part.
+
+What is undefined is what happens when Alice holds a card she can *name* as
+trash while the lock is on. Phase 2's chuck and pitch rungs all sit **above**
+the `12.discard_chop` floor (`calls.cpp:468`, `:528`), so any chuck candidate
+pre-empts the locked chop. v10.4.0 made that far more common by removing the
+`possible`-must-agree guard from `is_chuckable`, and the two readings genuinely
+conflict:
+
+* **Honour the promise.** Partners have modelled the locked card as the one
+  leaving. Throwing something else desynchronises the hand they think Alice has,
+  which is exactly what the lock exists to prevent.
+* **Take the free out.** The locked chop is only *promised* safe, not *known*
+  safe, and a known-trash card in hand is a strictly cheaper thing to lose.
+
+**Worked example — replay 1972691 T24**, "Odds and Evens & Light Pink (4 Suits)",
+stacks `[4,4,4,2]`, `zcs_turn = 20` with one clue back on the counter.
+will-bot67's locked chop was order 23, a **b5 — playable and critical**; order 27,
+drawn during the stall, was correctly skipped. It threw the b5. From v10.4.0 it
+throws order 13 instead, an r1 it reads as `{r1,r3,r4}` with red on 4, i.e.
+known trash — saving the b5 but breaking the promise.
+
+Deliberately left alone in v10.4.0: it predates that change, it is a convention
+question rather than a bug in the chuck list, and resolving it means ruling on
+which of the two readings wins. If the promise wins, the gate belongs in
+`choose_action` ahead of the chuck rungs, keyed on `zcs_turn` and on the locked
+chop still being in hand.
