@@ -225,6 +225,13 @@ Two things outrank the phases below, and one thing sits between them:
     WHETHER to clue; when its answer IS a clue, the endgame stall list below
     decides which one.
 
+0b. **The endgame may decline to clue.** When step 0's answer is a clue but
+    every candidate has been dropped as undecodable or vetoed as predicting a
+    strike, `prefer_stall_clue` returns nothing and the fork falls through to
+    the steps below rather than giving an unvetted clue (v10.1.0, replay
+    1973575 T62). `choose_clue` reads the same filtered pool, so in that
+    position it declines too and step 4 plays or discards.
+
 1.  **A VERY HIGH tier clue**, if one is available.
 
 2.  **A pending REACTION.**  If Alice holds a reacter-CTP — or, in a variant

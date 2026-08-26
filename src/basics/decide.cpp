@@ -1036,14 +1036,30 @@ PerformAction Game::take_action() const {
     // visible. Purple to Cathy is a double play under Odds and Evens and wins
     // 30. The solver returned red to Bob, which names his leftmost touched card
     // that could be playable -- an r1 -- and the game ended 29 on the strike.
-    auto prefer_stall_clue = [&](PerformAction chosen) {
+    // Returns nullopt for "the endgame asked for a clue and none is legal",
+    // which the call sites below turn into falling out of the fork rather than
+    // giving one anyway. The solver builds its clues from `all_valid_clues`,
+    // which never consulted the convention, so without this the unvetted pick
+    // comes straight back -- and that is the path replay 1973575 T62 took.
+    auto prefer_stall_clue =
+        [&](PerformAction chosen) -> std::optional<PerformAction> {
       if (convention != Convention::REACTOR0) return chosen;
       if (!hanabi::is_clue(chosen)) return chosen;
       auto all_clues = enumerate_clue_candidates();
+      // Cannot clue at all (no tokens, or we are the pending receiver). Nothing
+      // to vet against, so the endgame's own answer stands as before.
       if (all_clues.empty()) return chosen;
       auto cands = hanabi::reactor0::analyse_clues(*this, all_clues);
       auto better = hanabi::reactor0::choose_endgame_clue(*this, cands);
-      if (!better) return chosen;
+      if (!better) {
+        // Every candidate was dropped as undecodable or vetoed as predicting a
+        // strike. Burning a card beats handing a partner a promise we know to
+        // be false, so decline the clue and let the ordinary ladder answer.
+        hanabi::logging::log_branch("endgame.no_legal_clue",
+                                    {{"candidates", cands.size()},
+                                     {"legal_clues", all_clues.size()}});
+        return std::nullopt;
+      }
       if (*better != chosen) {
         hanabi::logging::log_branch("endgame.prefer_stall_clue", {});
       }
@@ -1055,7 +1071,9 @@ PerformAction Game::take_action() const {
     // `src/endgame/forced_endgame.cpp` for the rule list. Cheap enough
     // (O(n × hand × suits)) to check before the solver kicks in.
     if (auto forced = hanabi::endgame::forced_endgame_action(*this); forced) {
-      return prefer_stall_clue(prefer_certain_play(*forced));
+      if (auto a = prefer_stall_clue(prefer_certain_play(*forced))) return *a;
+      // The forced rule wanted a clue and none is legal -- fall through to the
+      // solver, and past it to the ordinary ladder.
     }
 
     // The deck must actually be running out.
@@ -1162,7 +1180,12 @@ PerformAction Game::take_action() const {
         }
       }
       if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
-        return prefer_stall_clue(prefer_certain_play(result.action));
+        if (auto a = prefer_stall_clue(prefer_certain_play(result.action))) {
+          return *a;
+        }
+        // The solver's winning line was a clue and none is legal. Leave the
+        // fork; `choose_clue` reads the same MISTAKE-filtered candidate set, so
+        // it declines too and phase 2 plays or discards.
       }
       // Solver returned no winning action or winrate < 1%; fall through to heuristic.
     }

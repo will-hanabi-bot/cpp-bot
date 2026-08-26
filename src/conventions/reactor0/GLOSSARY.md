@@ -282,8 +282,25 @@ be wrong, and a discard cannot be taken back. Replay 1971788 T29 is the case —
 a lock's rank promise read a Dark Omni 5 as one of the trash 1s. A
 `CALLED_TO_DISCARD` card is exempt, since it never passes through this test.
 
-Not to be confused with *provably trash*, which is the same "every reading is
-trash" question asked of `sight_narrowed` on the clue-interpretation side.
+Not to be confused with *provably trash* (above), which is the same "every
+reading is trash" question asked of `sight_narrowed` on the clue-interpretation
+side.
+
+### provably trash
+Every identity still open for a card is basic trash once the copies **this seat
+can see** are accounted for (`provably_trash` / `sight_narrowed`,
+`reactor0/state_eval.cpp`). Sight-based, so it is per-seat: the holder of a
+duplicate cannot see it and reaches a different answer from everyone else.
+
+What follows from it depends on **which seat is asking**, and the two are
+opposite (CONVENTION.md §1g):
+
+* **reading** a clue somebody else gave — it declines the play and reads a
+  stall. The seat that acts has the better view, so no strike results. Replay
+  1967478 T42.
+* **giving** one — it REJECTS. The receiver cannot see what proves the card
+  dead and will read the play regardless, so a clue whose promise only the giver
+  can refute is one the giver must not give. Replay 1973575 T62.
 
 ### parity promise
 Under Odds and Evens a rank clue names a class, not a rank, so the promise it

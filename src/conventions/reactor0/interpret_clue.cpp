@@ -567,7 +567,23 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
     //
     // Deliberately PER-SEAT (§1g): the holder of the b5 cannot see it, so they
     // alone still read a play here. The seat that ACTS has the right reading.
-    if (provably_trash(game, *target)) return stall_or_fix();
+    //
+    // WHICH SEAT IS ASKING DECIDES WHAT THAT MEANS. §1g's rule is that
+    // giver-only knowledge REJECTS; it does not reinterpret. For a seat
+    // READING a clue somebody else gave, the above holds and the clue is a
+    // stall. For the seat DECIDING WHETHER TO GIVE IT, it does not: the
+    // receiver cannot see what proves this card dead, so he will read the play
+    // whatever the giver concludes. Downgrading it to a stall privately is how
+    // the giver ends up handing over a promise it knows to be false.
+    //
+    // Replay 1973575 T62: purple on 4, and Purple to Bob names his slot 1,
+    // whose empathy is {p3, p5}. Alice could see the only p5 in Bob's own slot
+    // 5, read the clue as a stall, and gave it. Bob -- who cannot see his own
+    // p5 -- read the play and bombed the p3.
+    if (provably_trash(game, *target)) {
+      if (action.giver == state.our_player_index) return std::nullopt;
+      return stall_or_fix();
+    }
     auto target_id = game.state.deck[*target].id();
     if (game.meta[*target].status == CardStatus::CALLED_TO_DISCARD &&
         !(target_id && game.state.is_playable(*target_id))) {
@@ -759,7 +775,15 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
       // ...and the same sight-based test as §1b's direct play: `possible` here
       // is common knowledge, which cannot see a duplicate sitting unclued in
       // another hand. Replay 1967478 T42.
-      if (unnecessary_focus || provably_trash(game, *focus)) {
+      // Split deliberately. `unnecessary_focus` reads `common.thoughts`, so it
+      // is COMMON knowledge and every seat computes it alike -- a stall there
+      // is a stall for everybody. `provably_trash` is sight-based and therefore
+      // per-seat, so for the GIVER it is not a stall at all but a clue that
+      // must not be given: see the matching branch in `stable_colour` and
+      // replay 1973575 T62, where the rank half of it was `odd` to Bob.
+      if (unnecessary_focus) return ClueInterp::STALL;
+      if (provably_trash(game, *focus)) {
+        if (action.giver == state.our_player_index) return std::nullopt;
         return ClueInterp::STALL;
       }
 

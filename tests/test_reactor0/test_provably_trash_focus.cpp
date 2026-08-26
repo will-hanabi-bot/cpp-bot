@@ -12,6 +12,14 @@
 // cannot and still reads one. The seat that ACTS has the right reading, so no
 // strike results.
 //
+// WHICH SEAT IS ASKING decides what that means, and v10.1.0 split the two. A
+// seat READING a clue somebody else gave reads a stall, as below. The seat
+// DECIDING WHETHER TO GIVE one may not: the receiver cannot see what proves the
+// card dead and will read the play regardless, so §1g's rule applies and the
+// clue is REJECTED rather than reinterpreted. Replay 1973575 T62 is the cost of
+// having conflated them -- Alice gave a purple clue she had privately decided
+// was a stall, and Bob bombed the p3 it promised.
+//
 // Replay 1967478 T42: blue on 4, so b5 was the only useful blue and will-bot67
 // held it unclued. will-bot69's two clued blues were both trash, yet the
 // leftmost was stamped CALLED_TO_PLAY and narrowed to {b5} -- and T42 played it.
@@ -82,14 +90,46 @@ TEST(Reactor0ProvablyTrashFocus, SightDropsAnIdentityWhoseCopiesAreAllVisible) {
 
 // --- the reading ----------------------------------------------------------
 
+// GIVING it. Alice is our own seat here, so the sight that proves Bob's blues
+// dead is hers alone and the clue is one she must not give.
 TEST(Reactor0ProvablyTrashFocus, StableColourDeclinesAProvablyTrashFocus) {
   Game g = setup(blue_opts("b5"));
   g = take_turn(std::move(g), "Alice clues blue to Bob");
 
-  EXPECT_EQ(last_clue_interp(g), ClueInterp::STALL)
-      << "every blue Bob could hold is trash once the b5 he can see is placed";
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::MISTAKE)
+      << "the giver can prove the card it would name is dead, but the RECEIVER "
+         "cannot -- so this is a clue that must not be given, not a stall";
   EXPECT_FALSE(any_status(g, TestPlayer::BOB, CardStatus::CALLED_TO_PLAY))
-      << "so nothing is called to play";
+      << "and nothing is called to play either way -- this half is what the "
+         "file has always been about";
+}
+
+// RECEIVING it, which is the case replay 1967478 T42 is: the clue is somebody
+// else's, and our private sight legitimately tells us it carries no call.
+//
+// Bob gives it, so positionally HE is the giver and Cathy is his next player --
+// which is what makes this a stable clue. We are seat 0, watching. The b5 sits
+// in Bob's own hand where we can see it and he cannot.
+TEST(Reactor0ProvablyTrashFocus, AClueWeDidNotGiveIsStillAStall) {
+  SetupOptions opts;
+  opts.variant_name = "No Variant";
+  opts.starting = TestPlayer::BOB;
+  opts.play_stacks = {0, 4, 0, 4, 0};
+  opts.hands = {
+      {"g4", "p4", "g3", "p3", "g2"},  // Alice -- us, watching
+      {"b5", "r4", "r5", "p5", "y5"},  // Bob -- giver, holds the b5 himself
+      {"b1", "b2", "r1", "r2", "r3"},  // Cathy -- target, two trash blues
+  };
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  g = take_turn(std::move(g), "Bob clues blue to Cathy");
+
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::STALL)
+      << "we did not give this clue, so our sight reinterprets rather than "
+         "rejects -- the per-seat rule of replay 1967478";
+  EXPECT_FALSE(any_status(g, TestPlayer::CATHY, CardStatus::CALLED_TO_PLAY))
+      << "and still nothing is called to play";
 }
 
 // The mirror: with the b5 in BOB's own hand instead, the very same blue clue is

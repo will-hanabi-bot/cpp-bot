@@ -1092,6 +1092,15 @@ without ever building reactor0's candidate pool, so the veto never ran on those
 turns. Replay 1971808 T59 lost a point to exactly that. `choose_endgame_clue`
 closes it — see DECISION_MAKING.md "The endgame stall list".
 
+**And when nothing survives, the endgame gives no clue at all** (v10.1.0).
+`prefer_stall_clue` used to fall back on the solver's own pick whenever
+`choose_endgame_clue` declined, which handed back the unvetted clue the pool had
+just rejected — the solver builds its clues from `all_valid_clues` and has never
+consulted the convention. It now returns nullopt instead and the fork falls
+through to the ordinary ladder, where `choose_clue` reads the same filtered pool
+and also declines, landing on the play/discard phase. Burning a card beats
+handing a partner a promise known to be false.
+
 **One reading is deliberately PER-SEAT: a direct play whose focus the holder can
 prove is trash.** §1b priority 5 and §1c priority 1 both decline when
 `provably_trash` (`reactor0/facts.h`) says every identity still open for the
@@ -1108,6 +1117,30 @@ The receiver and the giver therefore both decline, while the player *holding*
 the duplicate cannot see it and still reads a play. That divergence is accepted:
 the seat that ACTS has the right reading, so no strike results, and the holder's
 model corrects itself the moment anyone clues that card.
+
+**But the GIVER may not decline — it must REJECT** (v10.1.0). "Declining" is a
+reading, and a reading is a claim about what the *receiver* will conclude. The
+receiver is exactly the seat that cannot see the duplicate, so he reads a play
+whatever the giver privately works out. A giver that quietly downgrades the clue
+to a stall has handed over a promise it has itself decided is false. So when the
+seat evaluating is the giver (`action.giver == our_player_index`), both sites
+return `std::nullopt` instead — a MISTAKE, which `analyse_clues` drops, removing
+the clue from every rung of both clue choosers at once. Reading a clue somebody
+else gave is untouched.
+
+This is §1g's headline rule in its sharpest form, and it is the same device the
+orange ladder already uses (§1f's giver-side chuck veto, which reads
+`state.deck[o].id()` and is therefore giver-side by construction).
+
+Replay 1973575 T62 is the cost of having conflated the two. Purple on 4, and
+Purple to will-bot67 named his slot 1, whose empathy was `{p3, p5}`. will-bot69
+could see the only p5 — in will-bot67's *own* slot 5 — proved slot 1 was the dead
+p3, read the clue as a stall and gave it. The reading was OTHER, so
+`predicts_a_strike` had nothing to veto and the endgame stall list's rung 3
+selected it. will-bot67, who cannot see his own p5, read the play and bombed.
+The rank half was `odd` to the same seat, illegal for the same reason: under
+Odds and Evens the promise is the rightmost *newly* touched card, and slots
+3/4/5 were already clued, so it landed on slot 1 again.
 
 `is_chuckable` (`reactor0/calls.cpp`) applies the same narrowing for our own
 seat, so a card we can prove is worthless reaches the chuck list — empathy alone
@@ -1315,6 +1348,8 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, and the `/settings` line |
 | `tests/test_basics/test_synesthesia.cpp` | The Synesthesia touch matrix — the rank rule and its off-by-one, brown answering only to brown, white and null untouched, rainbow unaffected, and no rank clues offered |
 | `tests/test_basics/test_alternating_clues.cpp` | The legality rule — the first clue is free, each kind blocks its own repeat, a play or discard does not reset it, it alternates across players, hypos carry it, and plain variants are unaffected |
+| `tests/test_reactor0/test_giver_sight_reject.cpp` | §1g — the giver rejects a promise only it can refute, on both the colour and the rank side; the same clue from another seat still reads a stall; a common-knowledge stall is untouched; and `analyse_clues` removes the rejected clue from every rung |
+| `tests/test_reactor0/test_misc/test_replay_1973575_giver_sight_must_not_downgrade.cpp` | Replay 1973575 T62 end to end — Purple to will-bot67 promised a dead p3 because the giver could see the real p5 in his own hand |
 | `tests/test_reactor0/test_misc/test_replay_1972716_spent_reaction_is_not_urgent.cpp` | A deferred call whose target the receiver has since played no longer pre-empts the turn — the pairing is read off `react_target_order`, and the clue Bob's chop is owed is given instead |
 | `tests/test_reactor0/test_efficiency.cpp` | efficiency formula + rlocks defaults |
 | `tests/test_reactor0/test_giver_filters.cpp` | MISTAKE clues never offered |
