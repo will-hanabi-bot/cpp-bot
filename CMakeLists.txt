@@ -247,6 +247,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1974046_known_trash_is_chucked.cpp
   tests/test_reactor0/test_misc/test_replay_1974052_known_trash_after_colour_clue.cpp
   tests/test_reactor0/test_misc/test_replay_1974218_sarcastic_needs_a_known_identity.cpp
+  tests/test_reactor0/test_misc/test_replay_1974257_inverted_trash_target_is_pitched.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp
   tests/test_reactor0/test_misc/test_replay_1966696_mixed_rank_direct_play_stamps_ctp.cpp
@@ -274,6 +275,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_target_parity.cpp
   tests/test_reactor0/test_giver_sight_reject.cpp
   tests/test_reactor0/test_orange_chop_and_pitch.cpp
+  tests/test_reactor0/test_inverted_trash_target.cpp
   tests/test_reactor0/test_pov_reject.cpp
   tests/test_reactor0/test_provably_trash_focus.cpp
   tests/test_reactor0/test_reactive_assignment.cpp

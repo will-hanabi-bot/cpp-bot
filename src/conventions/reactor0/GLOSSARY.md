@@ -411,12 +411,34 @@ reading declines; an all-orange one does not, and becomes a *chuck*.
 `src/conventions/reactor0/interpret_clue.cpp:364-450`.
 
 ### dc-target walk
-Colour mode 2 tries each trash/dupe dc-candidate in turn instead of committing
+**Both** buckets try each trash/dupe dc-candidate in turn instead of committing
 to the leftmost, skipping a pairing whose react slot is dead **by shared
 knowledge** and rejecting the clue outright when only the giver can tell (the
-§1g split). Rank Phase C does *not* walk — it keeps the strict leftmost
-dc-target. `src/conventions/reactor0/interpret_reactive.cpp:476-521`;
+§1g split). Rank Phase C kept a strict-leftmost rule until v10.6.0; the walk is
+now the same rule in both. `src/conventions/reactor0/interpret_reactive.cpp`;
 CONVENTION.md §1d.
+
+### target priority
+The order in which the reading looks for a reactive target, always
+leftmost-first within a step, moving on when the reacter's own reaction does not
+work: **playable → finesse (even bucket only) → trash**. Target selection comes
+first and the reacter's action follows from it — the receiver's button is
+whatever sheds or plays that card, and the parity decides the reacter's from
+there (even matches it, odd opposes it). `slot_elims`
+(`reactor0/interpret_reaction.cpp`) computes the same three categories for the
+deferred negatives, and is the compact statement of the rule.
+
+### pitch target
+A **trash or same-hand-dupe card on an inverted suit**, named as a reactive
+target. The receiver sheds it by pressing **Play** — a pitch throws it away —
+not Discard, which on an inverted card is a chuck and would strike on anything
+unplayable. So the parity lands the reacter on the *opposite* button to the
+plain-trash case: **Discard** in the odd bucket, **Play** in the even one. A
+CRITICAL inverted card is never a pitch target, there being nothing to spare;
+this is `receiver_ctp_set`'s `!playable && !critical`, applied to selection.
+Nameable since v10.6.0 — replay 1974257 T30, where every expendable card the
+receiver held was orange, so the pool came back empty and the clue read as a
+MISTAKE.
 
 ### orange ladder
 Reactor0's reading of a colour clue naming an inverted (Orange / Dark Orange)

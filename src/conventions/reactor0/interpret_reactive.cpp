@@ -102,6 +102,10 @@ struct DcTarget {
   int order = -1;
   int index = -1;  // 0-based hand index
   bool lock = false;
+  // On an inverted suit the receiver sheds this card with PLAY (a pitch), not
+  // DISCARD, so the parity hands the reacter the opposite button to the plain
+  // case. Carried on the target because that is where it is decided.
+  bool inverted = false;
 };
 
 // The reactor0 dc-target: the LEFTMOST card whose actual identity is basic
@@ -111,9 +115,18 @@ struct DcTarget {
 // derives the target from hand position alone, so a second red 1 further
 // right cannot move it and an existing CALLED_TO_DISCARD cannot skip it.
 //
-// The one exclusion is inverted (orange) cards: a CTD on orange is a
-// chuck-as-play-attempt, which strikes on trash, so such a card can never be
-// named — it is not a naming preference but an illegal target.
+// Inverted (orange) cards are IN the pool, and `DcTarget::inverted` says so.
+// Until v10.6.0 they were excluded outright, on the grounds that a CTD on
+// orange is a chuck-as-play-attempt and strikes on trash. True of the DISCARD
+// button, and blind to the other one: an expendable orange is thrown by
+// pressing PLAY -- a pitch -- which `receiver_ctp_set` has always admitted
+// (`!playable && !critical`, interpret_clue.cpp). So such a card can be named;
+// what changes is the receiver's button, and by parity the reacter's with it.
+//
+// Replay 1974257 T30: will-bot67 held o3, o3, g5, y5, o4 with orange on 1 and
+// nothing playable. Every expendable card he had was orange, so the pool came
+// back EMPTY, the green clue read as a MISTAKE, and will-bot69 threw its chop.
+// The leftmost duped o3 was the target all along.
 //
 // With no such card: under rlocks the single candidate is the OLDEST slot
 // with lock=true (the reactive-lock reading); otherwise the reactor
@@ -137,7 +150,7 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
     int o = hand[i];
     auto id = state.deck[o].id();
     if (!id) continue;
-    if (variants::is_inverted_id(state, *id)) continue;
+    const bool inverted = variants::is_inverted_id(state, *id);
     bool trash = state.is_basic_trash(*id);
     bool dupe = false;
     if (!trash) {
@@ -151,8 +164,15 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
       }
     }
     if (trash || dupe) {
+      // A pitch throws the card away, so it must be one the receiver can
+      // SPARE -- the same question `receiver_ctp_set` asks. A critical orange
+      // is trash to nobody and must not be named. (Basic trash is never
+      // critical, so this only ever bites the same-hand-dupe arm, where the
+      // other copy makes it non-critical anyway; it is here as the statement
+      // of the rule rather than as a live filter.)
+      if (inverted && state.is_critical(*id)) continue;
       bool lock = rlocks && static_cast<int>(i) == oldest_index;
-      found.push_back(DcTarget{o, static_cast<int>(i), lock});
+      found.push_back(DcTarget{o, static_cast<int>(i), lock, inverted});
       if (!all_trash_targets) return found;
     }
   }
@@ -160,7 +180,8 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
 
   if (rlocks) {
     if (oldest_index < 0) return {};
-    return {DcTarget{hand[oldest_index], oldest_index, /*lock=*/true}};
+    return {DcTarget{hand[oldest_index], oldest_index, /*lock=*/true,
+                     /*inverted=*/false}};
   }
   // rlocks off: the receiver's hand is all good/unique/unplayable —
   // sacrifice, using reactor's ordering.
@@ -172,8 +193,10 @@ std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
     // Inverted cards can never be named (see above). A standing CTD is NOT
     // a reason to skip: a new call simply replaces it, since a player holds
     // at most one CALLED_TO_DISCARD at a time (call_invariants.h).
+    // The SACRIFICE list is a different question -- throwing a card that is
+    // still useful -- and is left plain-only. Nothing in v10.6.0 turns on it.
     if (id && variants::is_inverted_id(game.state, *id)) continue;
-    sac.push_back(DcTarget{o, i, /*lock=*/false});
+    sac.push_back(DcTarget{o, i, /*lock=*/false, /*inverted=*/false});
   }
   return sac;
 }
@@ -519,14 +542,18 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     return ClueInterp::REACTIVE;
   }
 
-  // Phase C — double discard (0 plays): the reacter discards the react
-  // slot, the receiver discards the dc-target (or locks). Unlike colour
-  // mode 2 this keeps the strict leftmost dc-target rule: it asks only for
-  // ONE candidate, so the loop below still walks nothing but the rlocks-off
-  // sacrifice list.
+  // Phase C — the trash targets, walked leftmost-first exactly as colour
+  // mode 2 walks them. Normally a double discard (0 plays): the reacter
+  // discards the react slot and the receiver discards the dc-target, or locks.
+  //
+  // v10.6.0 made this WALK. It used to ask for one candidate and give up if
+  // the reacter's side did not work on it, which was a documented asymmetry
+  // with the odd bucket and is now gone: the reading is target-first in both
+  // buckets -- playable, then finesse (even only), then trash, each
+  // leftmost-first, moving on when the reacter's own reaction does not work.
   for (const auto& cand : dc_candidates(prev, game, receiver,
                                         game.allow_reactive_locks,
-                                        /*all_trash_targets=*/false)) {
+                                        /*all_trash_targets=*/true)) {
     rb.undo();
     int target_slot = cand.index + 1;
     int react_slot = calc_slot(anchor, target_slot, hand_size);
@@ -535,11 +562,14 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       continue;
     }
     int react_order = state.hands[reacter][react_slot - 1];
-    // Phase C always discards — there is no target to be inverted, since the
-    // dc-target is not a play. Routed through the shared helper for uniformity
-    // only; `reacter_plays=false` is exactly the old critical check.
+    // An INVERTED target is shed with PLAY (a pitch), and EVEN parity matches
+    // the two buttons -- so the reacter presses Play too. That is a genuine
+    // blind play when his own card is plain, and a pitch of his own when it is
+    // a known orange, which is why the stamp mirrors Phase A's inverted arm.
+    // A plain target keeps the old reading: both press Discard.
+    const bool target_inverted = cand.inverted;
     if (vet_react_slot(prev, game, react_order, conns,
-                       /*reacter_plays=*/false) != ReactVet::OK) {
+                       /*reacter_plays=*/target_inverted) != ReactVet::OK) {
       continue;
     }
     rb.arm();
@@ -548,7 +578,14 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       out.old_inferred = t.inferred;
       return out;
     });
-    auto interp = target_discard(game, action, react_order, /*urgent=*/true);
+    auto interp =
+        target_inverted
+            ? (react_slot_is_a_pitch(game, react_order)
+                   ? stamp_orange_pitch(game, action, react_order,
+                                        /*urgent=*/true)
+                   : target_play(game, action, react_order, /*urgent=*/true,
+                                 /*stable=*/false))
+            : target_discard(game, action, react_order, /*urgent=*/true);
     // Same as Phase A and Phase B above. `target_discard` narrows to the
     // NON-CRITICAL ids, which is the plain-suit reading of "throw this away";
     // on an inverted suit a chuck is a play attempt, so the card must be
@@ -709,6 +746,47 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
       continue;
     }
     int react_order = state.hands[reacter][react_slot - 1];
+
+    // An INVERTED target is shed with PLAY (a pitch), not DISCARD -- so odd
+    // parity, which opposes the two buttons, puts the reacter on DISCARD
+    // rather than on the blind play the plain case asks for. Everything below
+    // the branch is about that blind play and does not apply.
+    //
+    // `slot_elims` (interpret_reaction.cpp, category 3) has always computed
+    // this side of the reading for the deferred negatives -- "the receiver
+    // sheds trash with the OTHER button, so the parity test flips" -- and
+    // `resolve_reaction` derives the receiver's button from the one the
+    // reacter presses, so it already stamps a CTP and narrows with
+    // `receiver_ctp_set`. Only the SELECTION here was missing. Replay 1974257
+    // T30.
+    if (cand.inverted) {
+      if (vet_react_slot(prev, game, react_order, conns,
+                         /*reacter_plays=*/false) != ReactVet::OK) {
+        continue;
+      }
+      rb.arm();
+      game.with_thought(react_order, [](const Thought& t) {
+        Thought out = t;
+        out.old_inferred = t.inferred;
+        return out;
+      });
+      // The same pair mode 1 uses for its Discard arm: pressing Discard on a
+      // card that could be a playable orange is a CHUCK, and `target_discard`
+      // narrows to the non-critical plain reading, which cannot describe one.
+      const bool react_could_chuck =
+          game.common.thoughts[react_order].possible.exists([&](Identity i) {
+            return variants::is_inverted_id(state, i) && state.is_playable(i);
+          });
+      auto interp =
+          react_could_chuck
+              ? stamp_orange_chuck(game, action, react_order, /*urgent=*/true)
+              : target_discard(game, action, react_order, /*urgent=*/true);
+      if (interp) narrow_to_stamped_button(game, react_order);
+      if (!interp) continue;
+      if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
+      return ClueInterp::REACTIVE;
+    }
+
     // Shared: nothing the reacter could hold here can play → retarget.
     IdentitySet react_poss =
         hanabi::reactor::effective_possible_for(game, react_order);

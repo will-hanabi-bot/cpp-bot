@@ -513,19 +513,25 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
   `include/hanabi/conventions/variants/reversed.h`) — via
   `effective_possible_for(react).contains(connector)`, else the next one-away
   is tried.
-- **Phase C — double discard** (`:422-457`). Zero plays: the reacter
-  **discards** the react slot (urgent CTD; a known-critical react slot
-  advances to the next dc-candidate, `:441-444`) and the receiver's
-  dc-target — chosen by the same rules as colour mode 2 below — resolves at
-  reaction time. There is no target to be inverted here, so this phase always
-  vets as a discard.
+- **Phase C — the trash targets** (`:422-457`). Normally a double discard,
+  zero plays: the reacter **discards** the react slot (urgent CTD) and the
+  receiver's dc-target resolves at reaction time. The dc-candidates are
+  **walked** leftmost-first, exactly as colour mode 2 walks them — a
+  known-critical react slot advances to the next candidate.
+  **Inverted-suit swap:** an inverted dc-target is shed by **pitching** it
+  (Play), so even parity puts the reacter on **Play** too — a blind play, or
+  `stamp_orange_pitch` when his own slot is a known orange, mirroring Phase A's
+  inverted arm.
 
 ### Vetting the react slot follows the swap
 
-`vet_react_slot` (`:187-262`). Both reactive paths swap the reacter's action
-when the receiver's target is inverted — rank Phase A goes play → **discard**,
-colour mode 1 goes discard → **play** — so the question asked of the react slot
-has to swap with it. A third case sits above both: when the react card is one
+`vet_react_slot` (`:187-262`). Every reactive path swaps the reacter's action
+when the receiver's target is inverted — rank Phase A goes play → **discard**
+and Phase C discard → **play**, colour mode 1 goes discard → **play** and
+mode 2 play → **discard** — so the question asked of the react slot has to swap
+with it. The swap direction differs between the play targets and the trash ones
+because the button that ADVANCES an orange stack (Discard) is not the button
+that THROWS an orange away (Play). A third case sits above both: when the react card is one
 the holder knows is an **expendable orange**, a "play" call is neither a blind
 play nor a chuck but a **pitch**, and a pitch is unconditionally safe.
 
@@ -625,8 +631,13 @@ Orange 3 at a stack of 0 — useful, so pitching it still loses a copy.
   a react slot holding a known critical advances the target). **Inverted-suit
   swap:** for an orange target the reacter is called to **play** instead
   (`:522-525`), and the vet swaps with it — see above.
-- **Mode 2 — no playable** (`:535-598`): the reacter **blind-plays** the
-  react slot. The dc-candidates are **walked**, not fixed (`:492`): a pairing
+- **Mode 2 — the trash targets** (`:535-598`): the reacter **blind-plays** the
+  react slot. **Inverted-suit swap:** an inverted dc-target is shed by
+  **pitching** it (Play), so odd parity puts the reacter on **Discard** —
+  `stamp_orange_chuck` when his own slot could be a playable orange, otherwise
+  `target_discard`. The playability checks below are skipped there; they exist
+  only for the blind play. Replay 1974257 T30.
+  The dc-candidates are **walked**, not fixed (`:492`): a pairing
   whose react slot every seat can already see cannot play teaches nothing, so
   the reading moves on to the next trash/dupe candidate rightward. The split
   is §1g's, and it is the whole reason this is safe:
@@ -655,13 +666,14 @@ lock).
    slot-ascending — regardless of cluedness or of any status already stamped
    on them. This is a deliberate divergence from reactor, which reorders and
    filters its pool: here the receiver derives the target from hand position
-   alone, so a standing `CALLED_TO_DISCARD` cannot skip a card. The one
-   exclusion is inverted-suit cards, which can never be named at all (a CTD
-   on orange is a chuck that strikes on trash).
-   **Only colour mode 2 sees more than the leftmost** — it passes
-   `all_trash_targets=true` (`:491`) so it has something to walk. Rank Phase C
-   passes false (`:381`) and keeps the strict leftmost rule, so a second copy
-   further right still cannot move its target;
+   alone, so a standing `CALLED_TO_DISCARD` cannot skip a card.
+   **Inverted-suit cards are in the pool**, flagged `DcTarget::inverted`; a
+   critical one is not, since a pitch throws the card away and there would be
+   nothing to spare. Until v10.6.0 they were excluded outright, which was right
+   about the Discard button and blind to the other one — see §1f.
+   **Both buckets walk** the pool leftmost-first
+   (`all_trash_targets=true`); rank Phase C kept a strict-leftmost rule until
+   v10.6.0;
 2. no such card and **rlocks on** → the single candidate is the **oldest
    slot**, flagged as the lock;
 3. no such card and **rlocks off** → reactor's sacrifice ordering
@@ -1416,6 +1428,8 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp` | Replay 1973976 T12 end to end — the pitch needed BOTH the vet and the stamp; reverting either puts it back |
 | `tests/test_reactor0/test_misc/test_replay_1974046_known_trash_is_chucked.cpp` | Replay 1974046 T22 end to end — a card read {b2} with blue on 2 is chucked instead of the critical b5 chop |
 | `tests/test_reactor0/test_misc/test_replay_1974052_known_trash_after_colour_clue.cpp` | Replay 1974052 T6 — the same, reached by a colour clue narrowing a reactive inference to {y1} |
+| `tests/test_reactor0/test_inverted_trash_target.cpp` | §1d — the 2x2: an inverted trash target puts the reacter on Discard in the odd bucket and Play in the even one, with a plain trash target as the control in each; plus the even bucket walking past an unusable react slot |
+| `tests/test_reactor0/test_misc/test_replay_1974257_inverted_trash_target_is_pitched.cpp` | Replay 1974257 T30 end to end — every expendable card the receiver held was orange, so the target pool came back empty and the clue read as a MISTAKE |
 | `tests/test_reactor0/test_misc/test_replay_1974218_sarcastic_needs_a_known_identity.cpp` | Replay 1974218 T25 end to end — a sarcastic discard invented from a merely-touched card had pinned a cardinal 2 to {i4}, hiding it from the reactive play clue that asked for it |
 | `tests/test_reactor0/test_misc/test_replay_1973974_playable_orange_chop_is_not_saved.cpp` | Replay 1973974 T10 end to end — a partner locked over a playable orange on his chop |
 | `tests/test_reactor0/test_misc/test_replay_1973971_reactive_receiver_is_not_the_target.cpp` | Replay 1973971 T15 end to end — a reactive discard clue to the reacter read as a MISTAKE because the branch walked his own hand |
