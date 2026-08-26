@@ -135,6 +135,13 @@ an un-stamped Phase B target. Since VERY HIGH is the one thing that outranks a
 pending reaction, a lock misread as a finesse lets Alice abandon a reaction to
 give it — replay 1966091 T10, which cost a strike.
 
+**A playable card on an INVERTED suit is never any of these.** Discard chucks it
+onto its own stack, so it is not endangered, it is not a play the team must
+arrange, and it is expendable — `chop_is_free_chuck` (`state_eval.cpp`), read by
+`at_risk_chop`, `has_playable_chop` and `chop_is_expendable` alike, and so by
+H1a, H1c, N5 and §3. Replay 1973974 T10 locked a partner over one. See
+CONVENTION.md §1f.
+
 **Endangered chop** (`at_risk_chop`, `:130-152`), judged from Alice's full
 visibility. All of the following must hold:
 

@@ -293,6 +293,22 @@ Not to be confused with *provably trash* (above), which is the same "every
 reading is trash" question asked of `sight_narrowed` on the clue-interpretation
 side.
 
+### free chuck
+A **playable** card on an **inverted** suit. Pressing Discard on it puts it on
+its own stack, so losing it is not a loss — it is the play. It is therefore
+treated exactly like basic trash or a same-hand dupe wherever a chop is weighed:
+not endangered, not a play to arrange, and expendable (`chop_is_free_chuck`,
+`reactor0/state_eval.cpp`). Replay 1973974 T10.
+
+### pitch
+Pressing **Play** on a card every reading of which is inverted. The button
+discards it, so the call cannot strike and the card need not be playable — the
+only question is whether it can be spared, which is `slot_is_pitchable`
+(`reactor0/interpret_reaction.h`): any playable plain reading, or any
+non-critical inverted one. Distinct from a *chuck*, which is pressing Discard on
+an inverted card to stack it. Replay 1973976 T12 needed both the vet and the
+stamp to know the difference.
+
 ### provably trash
 Every identity still open for a card is basic trash once the copies **this seat
 can see** are accounted for (`provably_trash` / `sight_narrowed`,

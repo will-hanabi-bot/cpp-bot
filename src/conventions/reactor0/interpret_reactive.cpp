@@ -18,6 +18,7 @@
 #include "hanabi/conventions/reactor0/reactive_assignment.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/predicates.h"
 #include "hanabi/conventions/variants/reversed.h"
@@ -209,6 +210,22 @@ enum class ReactVet { OK, RETARGET, REJECT };
 //
 // `variants::would_lose_inverted_reacter` is already swap-aware at both call
 // sites, so it stays where it is — only this vet was missing the swap.
+// Is pressing PLAY on this card a PITCH rather than a play?
+//
+// Only when EVERY reading is inverted. That is the whole condition, and it is
+// what makes a pitch safe to reason about: Play on an orange sends it to the
+// discard pile, so it cannot strike, and the question stops being "is it
+// playable?" and becomes "can it be spared?".
+//
+// Reads `common`, so giver, reacter and observer agree.
+bool react_slot_is_a_pitch(const Game& game, int react_order) {
+  const State& s = game.state;
+  const IdentitySet poss = game.common.thoughts[react_order].possible;
+  return poss.non_empty() && poss.forall([&s](Identity i) {
+    return variants::is_inverted_id(s, i);
+  });
+}
+
 ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
                         const std::vector<std::pair<int, Identity>>& conns,
                         bool reacter_plays) {
@@ -248,8 +265,27 @@ ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
   // playability vet below would always answer no (a basic-trash id is never in
   // `playable_set` and can never be a connector), which is how a free pitch
   // came to be skipped — bug_report_4_1_0.txt 4.1.0b, replay 1957942 T19.
-  // `can_pitch_for_free` reads `common`, so the reacter walks with us.
-  if (variants::can_pitch_for_free(game, react_order)) return ReactVet::OK;
+  //
+  // `slot_is_pitchable` is the shared definition (interpret_reaction.h), the
+  // same one the deferred negatives ask: ANY playable plain reading, or ANY
+  // NON-CRITICAL inverted one. Until v10.3.0 this asked
+  // `variants::can_pitch_for_free` instead, which requires EVERY reading to be
+  // a dead orange -- so a known orange that might still be the playable one was
+  // called unpitchable and the target was retargeted away. Replay 1973976 T12:
+  // will-bot69's slot 3 was {o1,o2,o3,o4} with orange on 1, so o2 was playable
+  // and o3/o4 were merely non-critical; the pitch that would have chucked
+  // will-bot67's playable o2 onto the stack was skipped.
+  // GATED ON `react_slot_is_a_pitch`, and that gate is load-bearing. The tests
+  // below this point are about STRIKING -- the playability retarget, and the
+  // giver-only reject that reads the card's real id. Neither applies to a pitch,
+  // which discards rather than plays. But letting `slot_is_pitchable` alone
+  // short-circuit them would disable the strike checks for almost every unclued
+  // card in an Orange variant, since a wide empathy always admits some
+  // non-critical orange.
+  if (react_slot_is_a_pitch(game, react_order) &&
+      slot_is_pitchable(state, effective_possible_for(game, react_order))) {
+    return ReactVet::OK;
+  }
 
   auto is_workable = [&](Identity i) {
     if (prev.state.playable_set.contains(i)) return true;
@@ -603,10 +639,25 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
           game.common.thoughts[react_order].possible.exists([&](Identity i) {
             return variants::is_inverted_id(state, i) && state.is_playable(i);
           });
+      // An inverted target swaps the reacter onto the PLAY button -- and when
+      // his own card is a known orange, pressing Play is a PITCH, not a play.
+      // `reactor::target_play` narrows `inferred` to the playable set and bails
+      // when that empties, so it can never stamp one; Phase A already reaches
+      // for `stamp_orange_pitch` in the mirror-image case and this is the same
+      // need on the odd-parity side.
+      //
+      // Replay 1973976 T12: will-bot69's slot 3 was a known orange {o1..o4}
+      // with orange on 1, inferred {o3, o4}. Neither is playable, so
+      // `target_play` refused to stamp, the target was skipped, and the pitch
+      // that would have chucked will-bot67's playable o2 onto the stack never
+      // happened -- the clue degraded to naming his r1 instead.
       auto interp =
           target_inverted
-              ? target_play(game, action, react_order, /*urgent=*/true,
-                            /*stable=*/false)
+              ? (react_slot_is_a_pitch(game, react_order)
+                     ? stamp_orange_pitch(game, action, react_order,
+                                          /*urgent=*/true)
+                     : target_play(game, action, react_order, /*urgent=*/true,
+                                   /*stable=*/false))
           : react_could_chuck
               ? stamp_orange_chuck(game, action, react_order, /*urgent=*/true)
               : target_discard(game, action, react_order, /*urgent=*/true);

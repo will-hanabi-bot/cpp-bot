@@ -128,6 +128,27 @@ bool has_same_hand_dupe(const State& s, int player, int chop_order,
   return false;
 }
 
+// A playable card on an INVERTED suit costs its holder nothing to lose, because
+// losing it is not what happens: pressing Discard on an orange CHUCKS it onto
+// its own stack. It is the one card the holder should be throwing.
+//
+// So it belongs with basic trash and a same-hand dupe wherever those are asked
+// about -- it is not endangered, it is not a play the team must arrange, and it
+// is expendable. All three chop predicates below read it.
+//
+// Replay 1973974 T10: will-bot69's chop was a playable o2, which made both arms
+// of `priority_3_applies` fire, and will-bot67 spent a clue LOCKING him over a
+// card he was about to chuck for a point.
+//
+// Judged from the caller's full visibility, like every other term here: nullopt
+// for our own card, in which case there is nothing to conclude.
+bool chop_is_free_chuck(const State& s, std::optional<int> chop) {
+  if (!chop) return false;
+  auto id = s.deck[*chop].id();
+  if (!id) return false;
+  return variants::is_inverted_id(s, *id) && s.is_playable(*id);
+}
+
 bool at_risk_chop(const Game& game, int alice, int player) {
   const State& s = game.state;
   auto chop = game.chop(player);
@@ -135,6 +156,8 @@ bool at_risk_chop(const Game& game, int alice, int player) {
   auto id = s.deck[*chop].id();
   if (!id) return false;  // unknown from our POV — cannot verify
   if (s.is_basic_trash(*id)) return false;
+  // A playable inverted card is chucked, not lost — nothing to save.
+  if (chop_is_free_chuck(s, chop)) return false;
 
   // Same-hand duplicate: the holder can pitch one copy safely.
   if (has_same_hand_dupe(s, player, *chop, *id)) return false;
@@ -165,6 +188,10 @@ bool has_playable_chop(const Game& game, int player) {
   auto id = s.deck[*chop].id();
   if (!id) return false;  // unknown from our POV — cannot verify
   if (!s.is_playable(*id)) return false;
+  // ...but not an INVERTED playable. N5 exists because the team should be
+  // arranging to collect the card; a playable orange collects itself the moment
+  // its holder discards, so there is nothing to arrange and no clue is owed.
+  if (chop_is_free_chuck(s, chop)) return false;
   return !has_same_hand_dupe(s, player, *chop, *id);
 }
 
@@ -299,6 +326,7 @@ bool chop_is_expendable(const Game& game, int player) {
   auto id = game.state.deck[*chop].id();
   if (!id) return false;
   return game.state.is_basic_trash(*id) ||
+         chop_is_free_chuck(game.state, chop) ||
          has_same_hand_dupe(game.state, player, *chop, *id);
 }
 

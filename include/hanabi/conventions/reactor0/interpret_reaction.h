@@ -52,6 +52,28 @@ bool is_lock_target(const ReactorWC& wc, int target_slot);
 bool wc_is_fresh(const Game& game, const Game& hypo, int giver, int receiver,
                  int reacter);
 
+// --- what a reacter can be asked to press ---------------------------------
+//
+// One definition each, read by BOTH the clue-time vet (`vet_react_slot`,
+// interpret_reactive.cpp) and the deferred negatives that ask whether the
+// alternative reading ever existed. `cand` is the reacter's empathy as every
+// seat reconstructs it -- `effective_possible_for` -- so the answer is
+// POV-invariant.
+//
+// Both are EXISTENTIAL: a slot is actionable if ANY reading it still admits
+// makes that button acceptable. Demanding every reading is a different and much
+// stronger claim, and demanding it of a pitch is what made a known orange read
+// as unpitchable at replay 1973976 T12.
+
+// Could the reacter press PLAY on this slot -- a real play, or a pitch he can
+// spare? On an inverted suit Play DISCARDS the card, so the question there is
+// affordability, not playability.
+bool slot_is_pitchable(const State& s, const IdentitySet& cand);
+
+// Could the reacter press DISCARD on this slot -- an ordinary throw he can
+// spare, or a chuck that stacks the card?
+bool slot_is_chuckable(const State& s, const IdentitySet& cand);
+
 // The receiver's target slot, recovered at CLUE TIME from the reacter's
 // called slot. `calc_slot` is its own inverse in the slot argument, so
 // feeding it the reacter's slot yields the same number `calc_target_slot`

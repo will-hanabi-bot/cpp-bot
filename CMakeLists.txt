@@ -241,6 +241,8 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1972716_spent_reaction_is_not_urgent.cpp
   tests/test_reactor0/test_misc/test_replay_1973575_giver_sight_must_not_downgrade.cpp
   tests/test_reactor0/test_misc/test_replay_1973971_reactive_receiver_is_not_the_target.cpp
+  tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp
+  tests/test_reactor0/test_misc/test_replay_1973974_playable_orange_chop_is_not_saved.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp
   tests/test_reactor0/test_misc/test_replay_1966696_mixed_rank_direct_play_stamps_ctp.cpp
@@ -267,6 +269,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_finesse_parity.cpp
   tests/test_reactor0/test_target_parity.cpp
   tests/test_reactor0/test_giver_sight_reject.cpp
+  tests/test_reactor0/test_orange_chop_and_pitch.cpp
   tests/test_reactor0/test_pov_reject.cpp
   tests/test_reactor0/test_provably_trash_focus.cpp
   tests/test_reactor0/test_reactive_assignment.cpp

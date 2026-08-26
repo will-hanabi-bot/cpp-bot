@@ -998,6 +998,50 @@ The new predicate is `variants::includes_dark_inverted`
 (`src/conventions/variants/predicates.cpp:32-37`), which like
 `includes_inverted` reads the real `SuitType` flags rather than matching suit
 names.
+
+#### Pressing Play on a known orange is a PITCH (v10.3.0)
+
+When **every** reading of the reacter's card is inverted, the Play button cannot
+strike — it discards — so the call is a pitch and two things follow, both of
+which the code had wrong on the odd-parity side:
+
+* **The vet asks affordability, not playability.** `slot_is_pitchable`
+  (`reactor0/interpret_reaction.h`) is the one definition, shared with the
+  deferred negatives: *any* playable plain reading, or *any* NON-CRITICAL
+  inverted one. It replaces `variants::can_pitch_for_free`, which demanded that
+  every reading be a dead orange. The swap is **gated on the card being a known
+  orange**, because the tests below it in `vet_react_slot` are about striking —
+  the playability retarget and the giver-only reject — and letting a bare
+  existential short-circuit those would disable the strike checks for nearly
+  every unclued card in an Orange variant.
+* **The stamp must be `stamp_orange_pitch`.** `reactor::target_play` narrows
+  `inferred` to the playable set and bails when that empties, so it can never
+  stamp a pitch. Phase A of `reactive_rank` already reached for the pitch stamp;
+  `reactive_colour` mode 1 did not.
+
+Replay 1973976 T12 needed **both**, and reverting either alone puts it back.
+Orange on 1, and will-bot69's slot 3 was a known orange whose last o2 was
+already accounted for — effective empathy `{o1, o3, o4}`, nothing playable and
+nothing a connector, `inferred {o3, o4}`. The vet retargeted; had it not, the
+stamp would have refused. The pitch that would have chucked will-bot67's
+playable o2 onto the stack was skipped and the clue degraded to naming his r1.
+
+#### A playable orange on chop is expendable (v10.3.0)
+
+Discard CHUCKS an orange onto its own stack, so a playable orange on a chop is
+the one card its holder should be throwing: it scores itself. It therefore joins
+basic trash and the same-hand dupe in all three chop predicates
+(`chop_is_free_chuck`, `state_eval.cpp`):
+
+| | with a playable inverted chop |
+|---|---|
+| `at_risk_chop` | **false** — nothing is at risk |
+| `has_playable_chop` | **false** — no play to arrange |
+| `chop_is_expendable` | **true** |
+
+All three had to change together, because §3 fires on either of the first two
+(`priority_3_applies`). Replay 1973974 T10: will-bot69's chop was a playable o2
+and will-bot67 spent a clue LOCKING him over it.
 Reactive anchors ignore the rainbowish/pinkish focus tables entirely — the
 anchor is the clue value in every variant. `/allplays` is a reactor concept
 and never reaches a reactor0 game at all (§0).
@@ -1368,6 +1412,9 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
 | `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it |
+| `tests/test_reactor0/test_orange_chop_and_pitch.cpp` | §1f — a playable orange chop reads expendable in all three chop predicates, with a dead orange, a plain playable, a plain useful and an unplayable orange as controls; and `slot_is_pitchable` on a known orange, a plain card and Dark Orange |
+| `tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp` | Replay 1973976 T12 end to end — the pitch needed BOTH the vet and the stamp; reverting either puts it back |
+| `tests/test_reactor0/test_misc/test_replay_1973974_playable_orange_chop_is_not_saved.cpp` | Replay 1973974 T10 end to end — a partner locked over a playable orange on his chop |
 | `tests/test_reactor0/test_misc/test_replay_1973971_reactive_receiver_is_not_the_target.cpp` | Replay 1973971 T15 end to end — a reactive discard clue to the reacter read as a MISTAKE because the branch walked his own hand |
 | `tests/test_basics/test_synesthesia.cpp` | The Synesthesia touch matrix — the rank rule and its off-by-one, brown answering only to brown, white and null untouched, rainbow unaffected, and no rank clues offered |
 | `tests/test_basics/test_alternating_clues.cpp` | The legality rule — the first clue is free, each kind blocks its own repeat, a play or discard does not reset it, it alternates across players, hypos carry it, and plain variants are unaffected |
