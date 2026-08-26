@@ -200,8 +200,29 @@ TEST(BotAnnounce, TheBulkTableListDoesNotAnnounce) {
   EXPECT_FALSE(client.debug_announced_table(7));
 }
 
-// Leaving and rejoining the same id is a real join, so it announces again.
-TEST(BotAnnounce, RejoiningAfterTheTableIsGoneAnnouncesAgain) {
+// --- `tableGone` must not clear the flag ---------------------------------
+//
+// WHAT THESE CAN AND CANNOT SEE. `queue_send` drops silently when the transport
+// is not connected (`ws_transport.cpp:222`) and never touches `pending_`, so the
+// chat line itself is invisible to a test. The flag is the only seam -- and it
+// is a latch, so it cannot COUNT announcements.
+//
+// It does not need to. `announce_join` sends iff
+// `announced_tables_.insert(tid).second`, i.e. iff the id was absent. So:
+//
+//     no second send when the table comes back
+//   <=>  the id was present when it came back
+//   <=>  the flag survived the `tableGone` in between
+//
+// The assertion immediately after `tableGone` is therefore exactly equivalent
+// to the send being suppressed, and it is the one that discriminates: on the
+// build before v9.4.0 the flag reads false there.
+
+// `tableGone` is not only sent when we leave. The server sends it at GAME END
+// and then re-sends the same id as the shared replay, still `joined: true`.
+// Clearing here made the joined-diff in `on_table` read that as a fresh join, so
+// the bot announced itself again after every game.
+TEST(BotAnnounce, ATableComingBackAfterTableGoneDoesNotReAnnounce) {
   ScopedTempCwd cwd;
   BotConfig cfg = make_config();
   BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});
@@ -209,11 +230,80 @@ TEST(BotAnnounce, RejoiningAfterTheTableIsGoneAnnouncesAgain) {
   client.handle_message("welcome", {{"username", "TestBot"}});
 
   client.handle_message("table", table_payload(7, true));
-  ASSERT_TRUE(client.debug_announced_table(7));
+  ASSERT_TRUE(client.debug_announced_table(7)) << "guard: the real join spoke";
 
   client.handle_message("tableGone", json{{"tableID", 7}});
-  EXPECT_FALSE(client.debug_announced_table(7)) << "the flag is cleared";
+  EXPECT_TRUE(client.debug_announced_table(7))
+      << "the flag outlives the table: it records that we have already "
+         "introduced ourselves at this id, not that the table exists";
 
   client.handle_message("table", table_payload(7, true));
   EXPECT_TRUE(client.debug_announced_table(7));
+}
+
+// The live sequence, transcribed from logs/bot-0.log table 327 (lines 855-1040),
+// which is the shape that actually reached the lobby.
+TEST(BotAnnounce, EndOfGameReplayTableDoesNotReAnnounce) {
+  ScopedTempCwd cwd;
+  BotConfig cfg = make_config();
+  BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});
+  BotClient client(transport, cfg);
+  client.handle_message("welcome", {{"username", "TestBot"}});
+
+  auto table_327 = [](const char* name, bool running) {
+    return json{{"id", 327},
+                {"joined", true},
+                {"running", running},
+                {"name", name},
+                {"players", json::array({"TestBot"})}};
+  };
+
+  // 855 -- we sit down. This is the one announcement that is owed.
+  client.handle_message("table", table_327("threw imperiling cf", false));
+  ASSERT_TRUE(client.debug_announced_table(327)) << "guard: the real join spoke";
+
+  // 865 -- the game starts; the table is resent, still joined. No new edge.
+  client.handle_message("table", table_327("threw imperiling cf", true));
+
+  // 1019 -- game end. THE DISCRIMINATOR: before v9.4.0 this cleared the flag,
+  // which is precisely what let the replay below speak.
+  client.handle_message("tableGone", json{{"tableID", 327}});
+  EXPECT_TRUE(client.debug_announced_table(327))
+      << "game end must not make the bot forget it has already introduced "
+         "itself at table 327";
+
+  // 1026 -- the game is stored.
+  client.handle_message("finishOngoingGame",
+                        json{{"tableID", 327}, {"databaseID", 1939888}});
+
+  // 1031, 1036, 1038 -- back as the shared replay, same id, still joined. With
+  // the flag intact `announce_join`'s insert fails and it returns without
+  // sending.
+  client.handle_message("table",
+                        table_327("threw imperiling cf (Game #1939888)", true));
+  client.handle_message("table",
+                        table_327("threw imperiling cf (Game #1939888)", true));
+  EXPECT_TRUE(client.debug_announced_table(327));
+
+  // 1040 -- and it goes for good, still without clearing.
+  client.handle_message("tableGone", json{{"tableID", 327}});
+  EXPECT_TRUE(client.debug_announced_table(327))
+      << "so a later resend of this id cannot speak either";
+}
+
+// The fix must suppress the REPLAY, not the feature.
+TEST(BotAnnounce, AFreshTableIdStillAnnounces) {
+  ScopedTempCwd cwd;
+  BotConfig cfg = make_config();
+  BotTransport transport("ws://localhost/ws", "", [](auto, auto) {});
+  BotClient client(transport, cfg);
+  client.handle_message("welcome", {{"username", "TestBot"}});
+
+  client.handle_message("table", table_payload(327, true));
+  ASSERT_TRUE(client.debug_announced_table(327)) << "guard: 327 has spoken";
+  client.handle_message("tableGone", json{{"tableID", 327}});
+
+  client.handle_message("table", table_payload(400, true));
+  EXPECT_TRUE(client.debug_announced_table(400))
+      << "a table id we have never introduced ourselves at still announces";
 }

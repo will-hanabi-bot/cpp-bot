@@ -465,6 +465,15 @@ to correct itself, nor when somebody switches it with `/setall`. It fires on the
 joined edge of a `table` message, once per table id, and not from the bulk
 `tableList` snapshot — which would otherwise greet every table on reconnect.
 
+**Once per table id, for the life of the process.** `tableGone` deliberately
+does not clear that record. The server sends `tableGone` at *game end* and then
+re-sends the same id as the shared replay, still `joined: true` — so clearing it
+made the joined edge read as a fresh join and the bot re-announced itself after
+every game (fixed in v9.4.0; `logs/bot-0.log` table 327 is the transcript). The
+cost is that leaving a table and rejoining that same id will not re-announce;
+table ids increment per server session, so a genuine rejoin almost always
+carries a new one.
+
 At the start of every game the bot writes its version **and the convention
 that game resolved to** as a note on card order 0 (e.g. `bot v2.0.0
 reactor0`), so observers can confirm which build is running and what its

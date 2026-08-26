@@ -67,7 +67,34 @@ BotClient::BotClient(BotTransport& transport, const BotConfig& config)
   // empty, and run it on a dedicated thread so long take_action calls don't
   // block the network io_context.
   compute_guard_.emplace(boost::asio::make_work_guard(compute_ioc_));
-  compute_thread_ = std::thread([this]() { compute_ioc_.run(); });
+  // An exception that escapes a posted handler propagates out of `run()`, and
+  // out of a bare thread function that is `std::terminate` -- the whole
+  // process, both games, no diagnostic. That is how a `std::bad_alloc` during
+  // one turn killed a live bot: the posted lambda guards `take_action` itself,
+  // but not the snapshot emit around it, and its catch block allocates to
+  // format the message, so under exhaustion the handler can throw a second time
+  // on the way out.
+  //
+  // Re-entering `run()` after a handler throws is the documented Asio
+  // behaviour; handlers already dispatched are not re-run, so the other tables
+  // keep being served. The turn that threw is lost and that game stalls until
+  // someone `/terminate`s it -- which is a far better outcome than taking the
+  // process down with it. `run()` returning normally means the work guard was
+  // released, i.e. the destructor is shutting us down.
+  compute_thread_ = std::thread([this]() {
+    for (;;) {
+      try {
+        compute_ioc_.run();
+        return;
+      } catch (const std::exception& e) {
+        std::cerr << "!! compute thread: " << e.what()
+                  << " -- turn dropped, continuing\n";
+      } catch (...) {
+        std::cerr << "!! compute thread: unknown exception"
+                  << " -- turn dropped, continuing\n";
+      }
+    }
+  });
 }
 
 BotClient::~BotClient() {
@@ -273,9 +300,33 @@ void BotClient::on_table_list(const json& data) {
 void BotClient::on_table_gone(const json& data) {
   int tid = data.value("tableID", -1);
   if (tid == -1) return;
+  // The lobby view must stay current -- `chat_join` / `chat_start` /
+  // `chat_set_variant` all pick their target out of it.
   tables_.erase(tid);
-  // Leaving and rejoining the same id is a real join, so let it announce again.
-  announced_tables_.erase(tid);
+  // `announced_tables_` is deliberately NOT cleared.
+  //
+  // `tableGone` is not only sent when we leave. The server sends it at GAME
+  // END, and then re-sends the same id as the shared replay with
+  // `joined: true`. Clearing the guard here made `on_table`'s joined-diff read
+  // that as a fresh join, so the bot announced itself again at the end of every
+  // game. logs/bot-0.log, table 327:
+  //
+  //    855  table     {"id":327,"joined":true,"name":"threw imperiling cf"}
+  //    865  tableStart
+  //   1019  tableGone {"tableID":327}
+  //   1026  finishOngoingGame {"databaseID":1939888,...}
+  //   1031  table     {"id":327,"joined":true,
+  //                    "name":"threw imperiling cf (Game #1939888)"}
+  //
+  // The cost is that leaving a table and rejoining that same id will not
+  // re-announce. Table ids increment per server session, so a genuine rejoin
+  // almost always carries a new one.
+  //
+  // The Game is released here too -- see `finish_game`. This is the catch-all
+  // for the two paths that never reach it: a REPLAY (`on_init` only records
+  // `games_in_progress_` when `!is_replay`) and a table abandoned without a
+  // `gameOver`.
+  games_.erase(tid);
 }
 
 void BotClient::on_table_start(const json& data) {
@@ -618,6 +669,13 @@ void BotClient::maybe_take_turn(int table_id) {
                         hanabi::instr::ScopedTimer st("take_action");
                         perform = snapshot.take_action();
                       } catch (const std::exception& e) {
+                        // Ordered deliberately: `std::cerr` first, because the
+                        // likeliest thing to land here is `std::bad_alloc` and
+                        // the logger record below allocates a `json` and a
+                        // `std::string` to build itself. If that throws it now
+                        // reaches the thread's own guard rather than
+                        // `std::terminate`, but there is no reason to let the
+                        // diagnostic be what fails.
                         std::cerr << "!! take_action failed for table "
                                   << table_id << ": " << e.what() << "\n";
                         if (glog) {
@@ -686,6 +744,19 @@ void BotClient::finish_game(int tid, std::optional<int> end_condition) {
                   {"scope", "per_game"},
                   {"scopes", hanabi::instr::Aggregator::to_json(snap)}});
   }
+  // Release the Game. Until v9.4.0 nothing ever erased `games_`, so every game
+  // the process played stayed resident -- each one a full `Game`, which is a
+  // `Player` per seat with a thoughts vector the size of the deck, plus `base`,
+  // a second deep copy of all of it. One transcript (logs/bot-0.log) records
+  // 719 games in a single run, and the endgame solver copies a Game per search
+  // node on top of that; the bots died of `std::bad_alloc`.
+  //
+  // Safe here because nothing holds a reference into `games_` past this point.
+  // The compute lambda took its own snapshot BY VALUE and its tail touches only
+  // that copy; `on_database_id` runs later but reads only `game_loggers_`; and
+  // every other reader does a `games_.find` and returns on a miss, so a late
+  // `gameAction` for this table is a no-op rather than a crash.
+  games_.erase(tid);
   if (config_.disconnect_on_game_end) {
     transport_.queue_send("tableUnattend", json{{"tableID", tid}});
   }

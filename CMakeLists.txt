@@ -134,6 +134,7 @@ add_executable(hanabi_tests
   tests/test_net/test_setall.cpp
   tests/test_net/test_help_and_announce.cpp
   tests/test_net/test_set_persistence.cpp
+  tests/test_net/test_game_lifecycle.cpp
 )
 target_include_directories(hanabi_tests PRIVATE tests)
 target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)

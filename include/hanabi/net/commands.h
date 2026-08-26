@@ -63,9 +63,11 @@ class BotClient {
   const BotConfig& config_;
   std::string username_;
 
-  // Tables whose join announcement has already gone out. Guards against a
-  // resent `table` message double-posting; cleared by `on_table_gone` so
-  // leaving and rejoining the same id announces again.
+  // Tables whose join announcement has already gone out, for the life of the
+  // process. Deliberately NOT cleared by `on_table_gone`: the server sends
+  // `tableGone` at game end and then re-sends the table as the shared replay,
+  // so clearing it made the bot re-announce after every game. See
+  // `on_table_gone`. Costs 4 bytes per table ever seen.
   std::unordered_set<int> announced_tables_;
 
   // Tables visible in the lobby (id -> table info from `table` / `tableList`).
