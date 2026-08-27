@@ -1284,6 +1284,28 @@ stall buys the skipped turn back. Returns the better of the two by the same
 unblock tiebreak Rule 2 uses (`unblock_score`, shared). Replay 1974303 T44 —
 two playable criticals against an all-trash partner, and the bot clued.
 
+**Rule 5 — the partner needs two turns** (v11.0.0) is Rule 4's mirror, and the
+one rule here that forces a **stall**. Three players, `cards_left == 1`, a clue
+available, and the **next seat** holding two cards CP can see are both critical
+and playable now. With one card left, whoever draws it starts the final round
+and every seat gets exactly one turn after that — so if CP acts, Bob gets one
+turn and one of his two criticals dies, while if CP stalls, Bob acts and draws
+and then gets a final-round turn as well, cashing both. The stall is worth a
+point and costs CP nothing, since CP keeps a final-round turn for whatever they
+were going to do; that is why, unlike Rule 0, it does not stand down for a
+certain play in hand.
+
+It sits **below Rules 2 and 3**, which play out of CP's own hand: when both want
+the turn, a point CP controls beats a point CP is betting a partner will take.
+Its one soft spot is that Bob must know to play them — a reasonable bet, since
+the stall is itself a clue and `prefer_stall_clue` lets the convention choose
+which, so the stall can be the very clue that tells him. Replay 1974119 T53 —
+22/25 with one card left and will-bot69 holding both the g5 and the y5; the
+forced layer declined, `decide.cpp` fell through to `endgame.honours_reacter_call`
+and spent the turn on a standing urgent CTD, ending 24/25. Note what that replay
+is *not*: the priority was never inverted (`forced_endgame_action` has always run
+above that branch) — the rule was simply missing.
+
 This is **not** Rule 2 at a different deck size: Rule 2 wants two *singleton*
 criticals, and 1974303's second critical is read as three identities, every one
 of them playable and critical. There is no clue-token guard, deliberately — with
@@ -1370,7 +1392,7 @@ ever sees, a known-trash orange had a guaranteed misplay as its sole option —
 bug_report_5_0_0.txt, replay 1957953 T30, which struck.
 
 The same routing now applies to forced Rules 2 and 3
-(`forced_endgame.cpp:209-218`, `:296-305`):
+(`forced_endgame.cpp:209-218`, `:423-427`):
 its candidates are filtered by `is_playable`, which on an inverted suit means
 *the chuck advances the stack*, so returning `PerformPlay` pitched a
 singleton-critical card into the discard pile.
@@ -1445,7 +1467,8 @@ Behavioural rules above are pinned by:
 | `tests/test_reactor/test_decision_making/` | Low-clue-count gate, high-value-clue conditions, the v1.7.0 destroyed-play rule |
 | `tests/test_reactor/test_endgame/` | 10 endgame replay regressions: solver winrate, forced-endgame 5-lockout / two-critical, final-round stall-vs-play |
 | `tests/test_endgame/test_two_criticals_dead_partner.cpp` | Forced-endgame Rule 4 unit tests — the fire case, the unpinned-critical clause that puts it outside Rule 2, the shared unblock tiebreak, and one negative per condition |
-| `tests/test_reactor0/test_endgame/` | reactor0 endgame replay regressions: forced-endgame Rule 3 (sole holder of a blocking card, 1966675 T26), Rule 4 (two criticals with a dead partner, 1974303 T44) |
+| `tests/test_endgame/test_partner_needs_two_turns.cpp` | Forced-endgame Rule 5 unit tests — the fire case, one negative per condition, and the invariant that a forced action outranks a standing urgent reacter call, asserted in a PLAIN variant |
+| `tests/test_reactor0/test_endgame/` | reactor0 endgame replay regressions: forced-endgame Rule 3 (sole holder of a blocking card, 1966675 T26), Rule 4 (two criticals with a dead partner, 1974303 T44), Rule 5 (the partner needs two turns, 1974119 T53) |
 | `tests/test_reactor/test_misc/` | 36 mid-game convention replay regressions: empathy narrowing, focus/target selection, pink promise, play-queue order, clue eval |
 | `tests/test_endgame/` | Convention-neutral solver unit tests (forced-endgame rules, helper, smoke) |
 

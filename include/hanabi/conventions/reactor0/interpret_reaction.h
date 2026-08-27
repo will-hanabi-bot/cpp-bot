@@ -48,7 +48,7 @@ bool is_lock_target(const ReactorWC& wc, int target_slot);
 //
 // `react_order >= 0` additionally excludes the residue of an aborted reactive,
 // where the WC is pushed before any phase runs
-// (`interpret_reactive.cpp:660-661`) and no phase ever records a slot.
+// (`interpret_reactive.cpp:570-571`) and no phase ever records a slot.
 bool wc_is_fresh(const Game& game, const Game& hypo, int giver, int receiver,
                  int reacter);
 

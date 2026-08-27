@@ -14,7 +14,7 @@ The right-hand side of the reactive slot arithmetic
 is the **clue value** — the rank for rank clues, the *colour value* for
 colour clues. Stored in `ReactorWC::focus_slot` (the field name is
 reactor's; reactor0 never computes a focus).
-`src/conventions/reactor0/interpret_reactive.cpp:419-430`.
+`src/conventions/reactor0/interpret_reactive.cpp:329-340`.
 Not to be confused with *clue tier*, which is how worthwhile **giving** a clue
 is. "Value" in reactor0 always means this anchor.
 
@@ -64,9 +64,17 @@ or double discard). Both families take the choice of clue kind away from the
 giver — Synesthesia offers colour only, Alternating Clues forces the kind to
 alternate — so the kind cannot carry a signal. `variants::uses_target_parity`
 (`conventions/variants/predicates.h`); `reactive_assignment_for` is the
-target-aware lookup. In these variants there are **no stable clues**: Bob is
+target-aware lookup. While it binds there are **no stable clues**: Bob is
 always the reacter and Cathy always the receiver, so a clue to Bob touches the
-reacter's own hand while identifying a slot in Cathy's. CONVENTION.md §1f.
+reacter's own hand while identifying a slot in Cathy's.
+
+**It stands down at 60%** (v11.0.0): once `score >= 0.6 * variant maximum` — a
+constant 5 per suit, not `max_score()` — a clue to Bob is STABLE again, because
+the odd bucket is a reactive discard and forcing one late costs more than it
+buys. Clues to Cathy are untouched and stay even. `bob_clue_is_reactive`
+(`reactor0/interpret_reactive.cpp:967-976`). In **Synesthesia**, which can never
+give a rank clue, those stable clues read off a fixed colour table naming a
+button and a slot — see *synesthesia table*. CONVENTION.md §1f.
 
 It is the one place where the **clued seat and the receiver differ**, so both
 are read from `clue_is_reactive` and `reactive_receiver`
@@ -74,6 +82,20 @@ are read from `clue_is_reactive` and `reactive_receiver`
 T15: five sites derived the receiver as `action.target`, walked the reacter's
 own hand — invisible from his own seat — and a reactive discard clue read as a
 MISTAKE.
+
+### synesthesia table
+The fixed lookup a **stable** Synesthesia clue is read with, once *target parity*
+has stood down at 60%: each clue colour names one button and one slot in Bob's
+hand. Red 1 *pitch*, Yellow 2 pitch, Green 3 *chuck*, Blue 2 chuck, Purple 5
+pitch, Orange 1 chuck, any other colour 4 pitch. Keyed on the colour NAME, and
+deliberately **not** the `colour_clue_value` table, which gives Blue 4.
+`synesthesia_call` (`reactor0/synesthesia_stable.cpp:18-31`).
+
+It exists because Synesthesia carries `clueRanks: []`, so the ordinary
+colour/rank ladders have no split to express. Alternating Clues keeps those
+ladders. A named action that is bad by COMMON knowledge stamps nothing and the
+clue is a stall; one that only the seeing seats can tell is bad makes the clue a
+MISTAKE (§1g). CONVENTION.md §1f.
 
 ### Synesthesia colour
 The second colour a card answers to in a Synesthesia variant: a card of rank N
@@ -134,7 +156,7 @@ DECISION_MAKING.md, *Decision phase 1*.
 The reacter playing the computed react slot without knowing its identity.
 Reactor0 uses it in the rank double play, the finesse, and colour mode 2;
 the giver guarantees playability from their own view and observers who can
-see the card reject the clue otherwise. `interpret_reactive.cpp:379-382`.
+see the card reject the clue otherwise. `interpret_reactive.cpp:289-292`.
 
 ### colour value
 The fixed value a colour name contributes as the reactive anchor: Red=1,
@@ -165,7 +187,7 @@ and *touched-card rank classification*.
 ### double discard (clue)
 The rank-reactive fallback when no play or finesse target exists: zero
 plays — the reacter discards the react slot and the receiver discards the
-dc-target (or locks). `interpret_reactive.cpp:366-398`. The giver will not
+dc-target (or locks). `interpret_reactive.cpp:276-308`. The giver will not
 *offer* one that buys nothing — see *pointless double discard*.
 
 ### pointless double discard
@@ -228,7 +250,7 @@ voided with it. Engine-wide, not reactor0-specific. See CONVENTION.md §1i;
 As in reactor — the reacter plays a card that connects with a
 one-away-from-playable card in the receiver's hand — but reactor0 walks
 **targets** leftmost-first (reactor walks react slots in the fixed order
-{1,5,4,3,2}). `interpret_reactive.cpp:301-364`.
+{1,5,4,3,2}). `interpret_reactive.cpp:211-274`.
 
 ### play reveal
 A stable clue that fills in a previously-clued card as a new obvious
@@ -322,7 +344,7 @@ press Discard on this slot at all? *Some* reading is a playable inverted card,
 or *some* reading is a non-critical plain one. Existential, not universal, and
 it is the union of the two arms of `stamp_react_discard_button`.
 
-**`stamp_react_discard_button`** (`interpret_reactive.cpp:333-342`) is the
+**`stamp_react_discard_button`** (`interpret_reactive.cpp:956-964`) is the
 shared ladder every Discard-button reacter call goes through — rank Phase A's
 and Phase B's inverted-target arms, Phase C's plain arm, and both colour modes.
 It tries `stamp_orange_chuck` first (narrowing `inferred` to the identities the
@@ -562,7 +584,7 @@ at no cost, so the vet short-circuits to `OK`. The playability question can
 never be answered yes by a trash identity, which is how a free pitch came to be
 skipped — bug_report_4_1_0.txt 4.1.0b. The scope is *trash*, not *orange*:
 pitching a useful orange still loses a copy and is still rejected.
-`src/conventions/reactor0/interpret_reactive.cpp:187-262`.
+`src/conventions/reactor0/interpret_reactive.cpp:187-203`.
 
 ### bluff
 A reaction in which the reacter plays a card the pairing did not predict, so the

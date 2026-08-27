@@ -16,6 +16,7 @@
 #include "hanabi/conventions/reactor/interpret_clue.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
+#include "hanabi/conventions/reactor0/synesthesia_stable.h"
 #include "hanabi/conventions/variants/brownish.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/pinkish.h"
@@ -929,6 +930,16 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     return interpret_reactive(prev, game, action, bob,
                               reactive_receiver(state, action, bob));
   }
+
+  // SYNESTHESIA has its own stable convention, because it can never give a rank
+  // clue and so cannot express the ordinary ladders' colour/rank split. Its
+  // clue colours name a button and a slot outright, from a fixed table (§1f).
+  //
+  // Only reachable once target parity has stood down -- below the 60% threshold
+  // `clue_is_reactive` above took every clue -- so this needs no score test of
+  // its own. Alternating Clues does NOT come here: it has both kinds available,
+  // so its stable clues use the ordinary ladders unchanged.
+  if (state.variant->synesthesia) return synesthesia_stable(game, action);
 
   bool stall_ctx = prev.common.obvious_locked(prev, action.giver) ||
                    game.in_endgame() || prev.state.clue_tokens == 8;

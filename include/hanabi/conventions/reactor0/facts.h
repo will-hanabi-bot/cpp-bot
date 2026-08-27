@@ -79,7 +79,7 @@ NewPlayFacts new_play_facts(const Game& game, const Game& hypo);
 bool chop_is_expendable(const Game& game, int player);
 
 // Is this candidate a VH1 clue — a finesse worth the tempo? True when the
-// interpretation is reactive rank Phase B (`interpret_reactive.cpp:575-665`) and
+// interpretation is reactive rank Phase B (`interpret_reactive.cpp:485-575`) and
 // Cathy's chop is not trash or a same-hand-dupe.
 //
 // The sole member of `ClueTier::VERY_HIGH`, the tier Precedence step 1 admits.

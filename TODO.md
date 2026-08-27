@@ -84,8 +84,8 @@ half, in both conventions, and reading under reactor.
 **Today.** Neither convention initiates one, and reactor decodes neither. The
 POV-invariant
 abort in reactor's finesse phase
-(`src/conventions/reactor/interpret_reactive.cpp:832-846`) — mirrored by
-reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:614-619`) —
+(`src/conventions/reactor/interpret_reactive.cpp:742-756`) — mirrored by
+reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:524-529`) —
 returns `nullopt` whenever the observer can see that the reacter's card is
 *not* the required `prev_id`, which is exactly the bluff case; there is
 deliberately no "try the next slot" retry.
@@ -137,7 +137,7 @@ live-game evidence first.
 
 `new_play_facts` (`src/conventions/reactor0/state_eval.cpp:170-187`) counts
 `CALLED_TO_PLAY` transitions only. On an inverted suit a *play* call is stamped
-`CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:548-551`), so a genuine
+`CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:458-461`), so a genuine
 two-play reactive reads as zero plays there.
 
 This matters more, not less, after the v7.0.0 overhaul: `new_play_facts` is
@@ -160,7 +160,7 @@ deletes `get_result` outright in favour of the ordered priority list in
 The spec gates the colour play+dc mode's target walk on one condition only:
 "if the target would make Bob discard a known **critical** card, target the
 next leftmost playable". Implemented literally
-(`src/conventions/reactor0/interpret_reactive.cpp:363-373`) — so a react slot
+(`src/conventions/reactor0/interpret_reactive.cpp:273-283`) — so a react slot
 the reacter *knows* is playable is still eligible to be discarded, losing a
 play. Reactor's equivalent loop additionally skips react slots in the
 reacter's `obvious_playables`
@@ -817,8 +817,15 @@ card that needs saving is only reachable by rank".
 
 The natural home is a term in the General Clue Evaluation List's tiebreak, or a
 tier condition, keyed on whether the partner has a needed clue of the kind about
-to be blocked. Needs a corpus to size it against, and the bot has never played
-one of these 66 variants, so there is nothing to measure yet.
+to be blocked.
+
+**v11.0.0 raises the stakes and supplies the corpus.** The stakes, because past
+60% of the variant maximum a clue to Bob is STABLE again (CONVENTION.md §1f), so
+the kind now selects between the colour and rank ladders rather than being pure
+overhead -- denying a partner a kind can deny them a whole class of meaning. The
+corpus, because the claim that "the bot has never played one of these 66
+variants" is no longer true: there are 42 Alternating Clues games in `logs/` as
+of v11.0.0, which is enough to size a term against.
 
 ---
 

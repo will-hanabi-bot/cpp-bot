@@ -285,6 +285,74 @@ std::optional<PerformAction> two_criticals_dead_partner_action(const Game& game)
   return best.first;
 }
 
+// Rule 5 — "the partner needs two turns".
+//
+// Precondition: three players, `cards_left == 1`, a clue is available, and the
+// NEXT seat holds at least TWO cards CP can see are both critical and playable
+// now. Then CP must STALL rather than draw the last card.
+//
+// Why the stall is forced. With one card left, whoever draws it starts the final
+// round, and every seat gets exactly one turn after that. Counting from CP's
+// turn at three seats:
+//
+//   CP acts  -> CP draws the last card. Final round is Bob, Cathy, CP.
+//              Bob gets ONE turn and cashes one of his two criticals; the other
+//              is lost.
+//   CP stalls -> Bob acts and draws. Final round is Cathy, CP, Bob.
+//              Bob gets a turn now AND a turn in the final round: both cash.
+//
+// So the stall buys a whole point, and it costs CP nothing: CP still has a turn
+// in the final round for whatever they were going to do. That is why this rule
+// does not stand down for a certain play in hand the way Rule 0 does -- at
+// `cards_left == 1` the play keeps until the final round, while Bob's second
+// critical does not.
+//
+// Replay 1974119 T53, "Alternating Clues & Brown (5 Suits)", stacks
+// [5,4,4,5,4] = 22/25 with one card left: will-bot69 held the g5 AND the y5,
+// both playable. will-bot67 discarded, will-bot69 got one turn, and the game
+// ended 24/25. `forced_endgame_action` was entered and declined -- no rule
+// covered the shape -- so `decide.cpp` fell through to `honours_reacter_call`
+// and threw the turn away on a standing urgent CTD.
+//
+// NOT Rule 4 with the seats swapped. Rule 4 is about criticals in CP's OWN hand
+// and tells CP to PLAY; this is about the partner's hand and tells CP to WAIT.
+// They can both want the turn -- CP holding two criticals while Bob does too --
+// and Rule 2/Rule 3 are deliberately left above this one, because a play out of
+// CP's own hand is a point CP controls, while this rule is a bet that Bob will
+// cash what he is holding.
+//
+// That bet is the rule's one soft spot: Bob must actually know to play them. It
+// is a reasonable bet because the stall is itself a CLUE -- `prefer_stall_clue`
+// lets reactor0 choose which, so the stall can be the very clue that tells him.
+//
+// Reading Bob's hand from `state.deck` is giver-side knowledge CP genuinely has,
+// the same channel Rules 3 and 4 use.
+std::optional<PerformAction> partner_needs_two_turns_action(const Game& game) {
+  const State& s = game.state;
+  if (s.num_players != 3) return std::nullopt;
+  if (s.cards_left != 1) return std::nullopt;
+  if (!s.can_clue()) return std::nullopt;
+
+  const int cp = s.current_player_index;
+  const int bob = s.next_player_index(cp);
+  int cashable = 0;
+  for (int o : s.hands[bob]) {
+    // Never nullopt in practice -- CP sees every hand but their own -- so an
+    // unreadable card simply does not count toward the two.
+    auto id = s.deck[o].id();
+    if (!id) continue;
+    if (s.is_critical(*id) && s.is_playable(*id)) ++cashable;
+  }
+  if (cashable < 2) return std::nullopt;
+
+  // "Do not draw" expressed the way Rule 1 expresses it: hand back a clue and
+  // let `prefer_stall_clue` (decide.cpp) pick which one. An empty set means no
+  // stall exists, so fall through rather than invent an action.
+  auto clues = game.find_all_clues(cp);
+  if (clues.empty()) return std::nullopt;
+  return clues.front();
+}
+
 // Rule 3 — "sole holder of a blocking card".
 //
 // Precondition: `cards_left == 1`, `clue_tokens < num_players`, and CP knows
@@ -626,6 +694,13 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
   }
 
   if (s.clue_tokens == 0) return std::nullopt;
+
+  // Rule 5: the next seat is holding two criticals it can only cash if we do
+  // NOT draw the last card. Below Rules 2 and 3, which play out of our own hand:
+  // when both want the turn, a point we control beats a point we are betting a
+  // partner will take. Above the 5-lockout only because both answer with a
+  // stall, so the order between them cannot change the action.
+  if (auto a = partner_needs_two_turns_action(game)) return a;
 
   bool any_lockout = false;
   for (int suit = 0; suit < static_cast<int>(s.variant->suits.size()); ++suit) {

@@ -45,6 +45,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor0/call_invariants.cpp
   src/conventions/reactor0/efficiency.cpp
   src/conventions/reactor0/interpret_clue.cpp
+  src/conventions/reactor0/synesthesia_stable.cpp
   src/conventions/reactor0/decision.cpp
   src/conventions/reactor0/calls.cpp
   src/conventions/reactor0/interpret_reaction.cpp
@@ -123,6 +124,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_snapshot_roundtrip.cpp
   tests/test_endgame/test_forced_endgame.cpp
   tests/test_endgame/test_two_criticals_dead_partner.cpp
+  tests/test_endgame/test_partner_needs_two_turns.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_certain_play.cpp
   tests/test_endgame/test_required_play.cpp
@@ -272,12 +274,14 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_endgame/test_replay_1971808_stall_clue_priority.cpp
   tests/test_reactor0/test_endgame/test_replay_1972670_required_play_with_one_card_left.cpp
   tests/test_reactor0/test_endgame/test_replay_1974303_two_criticals_with_a_dead_partner.cpp
+  tests/test_reactor0/test_endgame/test_replay_1974119_partner_needs_two_turns.cpp
   tests/test_reactor0/test_endgame/test_replay_1973602_timeout_yields_to_a_finesse.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp
   tests/test_reactor0/test_finesse_parity.cpp
   tests/test_reactor0/test_target_parity.cpp
+  tests/test_reactor0/test_synesthesia_stable.cpp
   tests/test_reactor0/test_giver_sight_reject.cpp
   tests/test_reactor0/test_orange_chop_and_pitch.cpp
   tests/test_reactor0/test_inverted_trash_target.cpp

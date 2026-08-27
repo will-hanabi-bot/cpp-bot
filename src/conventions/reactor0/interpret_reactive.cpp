@@ -250,96 +250,6 @@ bool react_slot_is_a_pitch(const Game& game, int react_order) {
   });
 }
 
-// Stamp the reacter's slot when the call is the PLAY button. Three steps, in
-// this order, shared by every site that issues one so they cannot drift.
-//
-//   1. EVERY reading inverted -> a pitch, unambiguously. This stays first and is
-//      not folded into "play first": `state.is_playable` is true of an o2 on an
-//      inverted suit, so `target_play` would happily stamp a PLAY reading on a
-//      card whose Play button actually discards it. That is the v10.3.0 defect
-//      (replay 1973976 T12) and step 1 is what prevents it.
-//   2. Otherwise the ordinary play reading.
-//   3. Otherwise, for a CLUED or STAMPED card with an inverted reading it can
-//      spare, a pitch. Play first, pitch as a fallback: the pitch is read only
-//      where no reading can play, so every strike check above keeps its force.
-//
-// Step 3 is v10.8.0, replay 1974331 T8: will-bot69's slot 4 was clued to
-// {r3,y1,y3,g3,b3,o3} and was the o3 -- two copies, none discarded, so free to
-// throw. Nothing in its `inferred` could play, `target_play` refused to stamp,
-// Phase A walked past the pairing, and the second candidate blind-played a b2
-// onto an empty blue stack. The cluedness condition is where v10.3.0's worry
-// lives: an UNCLUED card in an Orange variant has a wide enough empathy to
-// always admit some non-critical orange, and letting that alone license a pitch
-// would disable the strike checks across the board.
-std::optional<ClueInterp> stamp_react_play_button(Game& game,
-                                                  const ClueAction& action,
-                                                  int react_order) {
-  const State& state = game.state;
-  if (react_slot_is_a_pitch(game, react_order)) {
-    return stamp_orange_pitch(game, action, react_order, /*urgent=*/true);
-  }
-  if (auto interp = target_play(game, action, react_order, /*urgent=*/true,
-                                /*stable=*/false)) {
-    return interp;
-  }
-  const bool invested = state.deck[react_order].clued ||
-                        game.meta[react_order].status != CardStatus::NONE;
-  if (!invested) return std::nullopt;
-  // `slot_has_spare_inverted`, NOT `slot_is_pitchable`: `target_play` has just
-  // established that no reading plays, so the plain half of the wider predicate
-  // could only be satisfied by something `inferred` excludes -- at 1974331 T8
-  // that is a y1 the reading had already ruled out, which has nothing to do
-  // with why the card can be pitched.
-  if (!slot_has_spare_inverted(state,
-                               effective_possible_for(game, react_order))) {
-    return std::nullopt;
-  }
-  return stamp_orange_pitch(game, action, react_order, /*urgent=*/true);
-}
-
-// Stamp the reacter's slot when the call is the DISCARD button. The mirror of
-// `stamp_react_play_button` above, and it exists for the same reason: one ladder,
-// shared by every site that issues the button, so they cannot drift.
-//
-//   1. A CHUCK, when some reading is an inverted card the stack is waiting for --
-//      on an inverted suit the Discard button stacks the card rather than
-//      throwing it.
-//   2. Otherwise the ordinary throw-away reading.
-//
-// Those two arms are exactly `slot_is_chuckable` (interpret_reaction.h) asked of
-// the slot's own inferences -- a playable inverted reading, or a non-critical
-// plain one -- which is what makes the refusal meaningful: the call is declined
-// when NEITHER reading exists, never because the wrong one was picked. The
-// predicate is deliberately not called here; the two stamps already answer their
-// own halves of it, and a separate gate is precisely what drifted before.
-//
-// v10.9.0, replay 1974342 T13. There used to be a `react_could_chuck` gate that
-// chose between the two arms instead of cascading, and it asked its question of
-// `possible` while `stamp_orange_chuck` asks it of `possibilities()` -- i.e. of
-// `inferred` once that is non-empty. reactor0's own deferred negatives
-// (`slot_elims`) strip the PLAYABLE identities from a reacter's unpaired slots,
-// which is that exact axis, so on any reacter that had already been through one
-// reactive the gate said "chuck", the chuck stamp found nothing playable and
-// inverted left to name, and there was no path back to the ordinary discard.
-// will-bot69's slots 4 and 5 were both `{r2,r3,r4,y3,y4,g2,g3,g4,o2,o3,o4}` with
-// orange on 0: `possible` still held the o1, `inferred` did not, and both
-// pairings died on it. The clue -- a plain reactive discard -- read as a MISTAKE
-// and the bot threw the Blue 5 off its chop instead. Both slots were chuckable
-// the whole time through the plain arm (r2, two copies, none discarded).
-//
-// `stamp_orange_chuck` computes its keep-set before it mutates anything
-// (reactor0/interpret_clue.cpp), so a refusal by arm 1 is free and the cascade
-// is safe to write in this order.
-std::optional<ClueInterp> stamp_react_discard_button(Game& game,
-                                                     const ClueAction& action,
-                                                     int react_order) {
-  if (auto interp =
-          stamp_orange_chuck(game, action, react_order, /*urgent=*/true)) {
-    return interp;
-  }
-  return target_discard(game, action, react_order, /*urgent=*/true);
-}
-
 ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
                         const std::vector<std::pair<int, Identity>>& conns,
                         bool reacter_plays) {
@@ -960,10 +870,113 @@ void record_react_target(Game& game) {
 
 }  // namespace
 
+// --- the two button ladders ---------------------------------------------
+
+// Stamp the reacter's slot when the call is the PLAY button. Three steps, in
+// this order, shared by every site that issues one so they cannot drift.
+//
+//   1. EVERY reading inverted -> a pitch, unambiguously. This stays first and is
+//      not folded into "play first": `state.is_playable` is true of an o2 on an
+//      inverted suit, so `target_play` would happily stamp a PLAY reading on a
+//      card whose Play button actually discards it. That is the v10.3.0 defect
+//      (replay 1973976 T12) and step 1 is what prevents it.
+//   2. Otherwise the ordinary play reading.
+//   3. Otherwise, for a CLUED or STAMPED card with an inverted reading it can
+//      spare, a pitch. Play first, pitch as a fallback: the pitch is read only
+//      where no reading can play, so every strike check above keeps its force.
+//
+// Step 3 is v10.8.0, replay 1974331 T8: will-bot69's slot 4 was clued to
+// {r3,y1,y3,g3,b3,o3} and was the o3 -- two copies, none discarded, so free to
+// throw. Nothing in its `inferred` could play, `target_play` refused to stamp,
+// Phase A walked past the pairing, and the second candidate blind-played a b2
+// onto an empty blue stack. The cluedness condition is where v10.3.0's worry
+// lives: an UNCLUED card in an Orange variant has a wide enough empathy to
+// always admit some non-critical orange, and letting that alone license a pitch
+// would disable the strike checks across the board.
+std::optional<ClueInterp> stamp_react_play_button(Game& game,
+                                                  const ClueAction& action,
+                                                  int react_order,
+                                                  bool urgent, bool stable) {
+  const State& state = game.state;
+  if (react_slot_is_a_pitch(game, react_order)) {
+    return stamp_orange_pitch(game, action, react_order, urgent);
+  }
+  if (auto interp = target_play(game, action, react_order, urgent, stable)) {
+    return interp;
+  }
+  const bool invested = state.deck[react_order].clued ||
+                        game.meta[react_order].status != CardStatus::NONE;
+  if (!invested) return std::nullopt;
+  // `slot_has_spare_inverted`, NOT `slot_is_pitchable`: `target_play` has just
+  // established that no reading plays, so the plain half of the wider predicate
+  // could only be satisfied by something `inferred` excludes -- at 1974331 T8
+  // that is a y1 the reading had already ruled out, which has nothing to do
+  // with why the card can be pitched.
+  if (!slot_has_spare_inverted(state,
+                               effective_possible_for(game, react_order))) {
+    return std::nullopt;
+  }
+  return stamp_orange_pitch(game, action, react_order, urgent);
+}
+
+// Stamp the reacter's slot when the call is the DISCARD button. The mirror of
+// `stamp_react_play_button` above, and it exists for the same reason: one ladder,
+// shared by every site that issues the button, so they cannot drift.
+//
+//   1. A CHUCK, when some reading is an inverted card the stack is waiting for --
+//      on an inverted suit the Discard button stacks the card rather than
+//      throwing it.
+//   2. Otherwise the ordinary throw-away reading.
+//
+// Those two arms are exactly `slot_is_chuckable` (interpret_reaction.h) asked of
+// the slot's own inferences -- a playable inverted reading, or a non-critical
+// plain one -- which is what makes the refusal meaningful: the call is declined
+// when NEITHER reading exists, never because the wrong one was picked. The
+// predicate is deliberately not called here; the two stamps already answer their
+// own halves of it, and a separate gate is precisely what drifted before.
+//
+// v10.9.0, replay 1974342 T13. There used to be a `react_could_chuck` gate that
+// chose between the two arms instead of cascading, and it asked its question of
+// `possible` while `stamp_orange_chuck` asks it of `possibilities()` -- i.e. of
+// `inferred` once that is non-empty. reactor0's own deferred negatives
+// (`slot_elims`) strip the PLAYABLE identities from a reacter's unpaired slots,
+// which is that exact axis, so on any reacter that had already been through one
+// reactive the gate said "chuck", the chuck stamp found nothing playable and
+// inverted left to name, and there was no path back to the ordinary discard.
+// will-bot69's slots 4 and 5 were both `{r2,r3,r4,y3,y4,g2,g3,g4,o2,o3,o4}` with
+// orange on 0: `possible` still held the o1, `inferred` did not, and both
+// pairings died on it. The clue -- a plain reactive discard -- read as a MISTAKE
+// and the bot threw the Blue 5 off its chop instead. Both slots were chuckable
+// the whole time through the plain arm (r2, two copies, none discarded).
+//
+// `stamp_orange_chuck` computes its keep-set before it mutates anything
+// (reactor0/interpret_clue.cpp), so a refusal by arm 1 is free and the cascade
+// is safe to write in this order.
+std::optional<ClueInterp> stamp_react_discard_button(Game& game,
+                                                     const ClueAction& action,
+                                                     int react_order,
+                                                     bool urgent) {
+  if (auto interp = stamp_orange_chuck(game, action, react_order, urgent)) {
+    return interp;
+  }
+  return target_discard(game, action, react_order, urgent);
+}
+
 // --- top level ------------------------------------------------------------
 
+bool bob_clue_is_reactive(const State& state) {
+  if (!variants::uses_target_parity(*state.variant)) return false;
+  // 5 points per suit, from the SUIT COUNT rather than `max_ranks`, which is
+  // live: `max_score()` shrinks as criticals are discarded, and a cap that moves
+  // mid-game would move the switch point with it. Two seats reading the same
+  // past clue must never land on different sides of the threshold.
+  const int cap = 5 * static_cast<int>(state.variant->suits.size());
+  // `score() >= 0.6 * cap`, in integers.
+  return 5 * state.score() < 3 * cap;
+}
+
 bool clue_is_reactive(const State& state, const ClueAction& action, int bob) {
-  return variants::uses_target_parity(*state.variant) || action.target != bob;
+  return action.target != bob || bob_clue_is_reactive(state);
 }
 
 int reactive_receiver(const State& state, const ClueAction& action, int reacter) {

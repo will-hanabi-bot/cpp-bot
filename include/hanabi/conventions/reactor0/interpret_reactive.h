@@ -30,11 +30,34 @@
 
 namespace hanabi::reactor0 {
 
+// Does a clue to BOB still read as reactive?
+//
+// Under target parity (Alternating Clues, Synesthesia) every clue is reactive, a
+// clue to Bob included -- but only while the score is below **60% of the variant
+// maximum**. Past that a clue to Bob is STABLE again (v11.0.0).
+//
+// Why the switch exists. The reactive reading of a clue to Bob is the ODD
+// bucket, which is a reactive DISCARD. Late in a game that is actively harmful:
+// it forces a discard nobody needed and it crowds out the two things that
+// actually matter near the end -- saving a good card, and getting a play clue
+// out in time. Clues to CATHY are unaffected and keep the even bucket.
+//
+// The cap is the VARIANT maximum, a constant 5 per suit, deliberately not
+// `State::max_score()`. A shrinking cap would move the switch point mid-game as
+// criticals died, and both seats must agree on which side of it every past clue
+// was given. Compared in integers -- `5 * score >= 3 * cap` -- so there is no
+// float rounding for two seats to disagree about.
+//
+// FALSE outside a target-parity variant, where a clue to Bob was never reactive
+// in the first place.
+bool bob_clue_is_reactive(const State& state);
+
 // Is this clue REACTIVE?
 //
 // Positional everywhere except a target-parity variant (Alternating Clues,
-// Synesthesia), where there are no stable clues at all and a clue to Bob is
-// reactive too -- it simply touches the reacter's own hand.
+// Synesthesia), where a clue to Bob is reactive too -- it simply touches the
+// reacter's own hand -- until `bob_clue_is_reactive` says the score has passed
+// the threshold above.
 //
 // This and `reactive_receiver` are the SINGLE definition of reactor0's dispatch
 // rule. Every site that needs to know whether a clue is reactive, or who
@@ -50,6 +73,40 @@ bool clue_is_reactive(const State& state, const ClueAction& action, int bob);
 // the reacter -- because there a clue to Bob touches the reacter's own hand and
 // only sets the parity, while the slot it identifies still belongs to Cathy.
 int reactive_receiver(const State& state, const ClueAction& action, int reacter);
+
+// Stamp a slot when the call is the PLAY button (a real play, or a *pitch* on an
+// inverted suit, where Play discards). Three steps, in order: every reading
+// inverted -> pitch; otherwise the ordinary play reading; otherwise, for a clued
+// or already-stamped card with an inverted reading it can spare, a pitch. See
+// the definition for why the order is load-bearing (replays 1973976 T12 and
+// 1974331 T8).
+//
+// Stamp a slot when the call is the DISCARD button: a *chuck* that stacks an
+// inverted card, else the ordinary throw-away reading (replay 1974342 T13).
+//
+// ONE ladder each, shared by every site that issues the button so they cannot
+// drift.
+//
+// `urgent` is what a REACTIVE call adds: a reaction must be actioned on the
+// reacter's very next turn, which is what `decide.cpp`'s urgent scan keys on.
+// `stable` is `target_play`'s own flag, and it moves the OTHER way -- it widens
+// the delayed-play chain the stamp narrows `inferred` against, which a reactive
+// clue cannot rely on when a player has several obvious playables
+// (`reactor/interpret_clue.cpp:107`).
+//
+// They are separate parameters rather than one, even though every caller so far
+// sets them opposite: collapsing two questions into one flag is exactly the kind
+// of coupling that drifts. Synesthesia's stable table (§1f) passes
+// `urgent=false, stable=true` -- it names an action, but pends no reaction.
+std::optional<ClueInterp> stamp_react_play_button(Game& game,
+                                                  const ClueAction& action,
+                                                  int react_order,
+                                                  bool urgent = true,
+                                                  bool stable = false);
+std::optional<ClueInterp> stamp_react_discard_button(Game& game,
+                                                     const ClueAction& action,
+                                                     int react_order,
+                                                     bool urgent = true);
 
 // `receiver` is what `reactive_receiver` returns; callers pass it explicitly so
 // the reacter/receiver pair is decided in one place.

@@ -42,10 +42,12 @@ giver, Bob the next player, Cathy the one after.
   scores 3+ strikes at `−100`, and `eval_game` prices an orange CTD as a play
   call (reactor's §2.6/§2.7).
   **v10.0.0** adds a second exception, in the other direction: in the 102
-  **Alternating Clues** and **Synesthesia** variants reactor0 gives no stable
-  clues at all and takes a clue's reactive parity from its TARGET rather than
-  its kind. Reactor is unchanged there and would read those clues differently.
-  See §1f, *Alternating Clues and Synesthesia*.
+  **Alternating Clues** and **Synesthesia** variants reactor0 takes a clue's
+  reactive parity from its TARGET rather than its kind, and below 60% of the
+  variant maximum gives no stable clues at all. **v11.0.0** stands that down
+  past 60%, where a clue to Bob is stable again — and in Synesthesia reads off
+  a fixed colour table. Reactor is unchanged throughout and would read every one
+  of these clues differently. See §1f, *Alternating Clues and Synesthesia*.
 - **Not shared**: WHEN the reactive negative inference runs. Whenever the
   receiver is called to **chuck**, the elim reasons "the slots before the target
   were passed over, so they are not playable". That is true only if the chuck is
@@ -99,7 +101,7 @@ giver, Bob the next player, Cathy the one after.
   meaning here. It is never set on a reactor0 game
   (`src/net/commands.cpp:292-302`), `chat_allplays` skips reactor0 games when
   retro-applying (`:914-933`), and a reactor0 waiting connection always stores
-  `all_plays = false` (`interpret_reactive.cpp:997-1014`).
+  `all_plays = false` (`interpret_reactive.cpp:1029`).
 
 ## §1a Dispatch — purely positional
 
@@ -115,8 +117,10 @@ clue_tokens == 8`) is passed to the stable branches only as the `stall` flag
 that reactor's `ref_discard` already honours.
 
 **One family of variants overrides all of this**: under
-`variants::uses_target_parity` there are no stable clues at all, the target
-picks the parity, and the clued seat is **not** the receiver. See §1f,
+`variants::uses_target_parity` the target picks the parity and the clued seat is
+**not** the receiver — and below 60% of the variant maximum there are no stable
+clues at all. Past 60% a clue to Bob is stable again, read in Synesthesia off a
+fixed colour table rather than the ladders above. See §1f,
 *Alternating Clues and Synesthesia*. The dispatch reads
 `clue_is_reactive` / `reactive_receiver`
 (`reactor0/interpret_reactive.h`) rather than testing `action.target == bob`
@@ -386,7 +390,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
 
 ## §1d Reactive — the clue value is the anchor
 
-`reactor0::interpret_reactive` (`interpret_reactive.cpp:976-1049`). There is
+`reactor0::interpret_reactive` (`interpret_reactive.cpp:990-1056`). There is
 no reactive focus. The anchor is:
 
 > **react_slot + target_slot ≡ anchor (mod hand size)** where
@@ -493,7 +497,7 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
 
 ### Rank reactive — an even number of plays (2 or 0)
 
-`reactive_rank` (`interpret_reactive.cpp:470-723`):
+`reactive_rank` (`interpret_reactive.cpp:380-631`):
 
 - **Phase A — double play** (`:487-573`). The target pool is the receiver's
   playable cards, slots ascending — **including already-CTP'd cards**
@@ -576,7 +580,7 @@ which is why only this vet was wrong.
 
 **"Safe to throw away" excepts a playable inverted reading.** The discard vet
 asks whether every reading of the react slot is critical, and retargets when
-one is (`every_reading_loses` `interpret_reactive.cpp:364-372`). That is the
+one is (`every_reading_loses` `interpret_reactive.cpp:274-281`). That is the
 PLAIN-suit reading of the Discard button: on an inverted suit Discard is a
 CHUCK, which puts the card on its stack, so a reading that is inverted *and*
 playable is not a loss at all — it is the play the call is asking for. Without
@@ -641,7 +645,7 @@ Orange 3 at a stack of 0 — useful, so pitching it still loses a copy.
 
 ### Colour reactive — one play
 
-`reactive_colour` (`interpret_reactive.cpp:725-971`):
+`reactive_colour` (`interpret_reactive.cpp:635-837`):
 
 - **Mode 1 — receiver has a playable** (`:741-825`): the reacter **discards**
   the react slot and the receiver plays the target (leftmost playable;
@@ -677,7 +681,7 @@ lock).
 
 ### The dc-target
 
-`dc_candidates` (`interpret_reactive.cpp:142-232`):
+`dc_candidates` (`interpret_reactive.cpp:142-203`):
 
 1. cards whose actual identity is **basic trash** or a **same-hand dupe**,
    slot-ascending — regardless of cluedness or of any status already stamped
@@ -765,7 +769,7 @@ Narrowing after the fact is not enough on its own, because `target_discard`
 Orange is always — and the whole clue then reads as a `MISTAKE`. So the chuck is
 reached by the stamp rather than by the narrowing: as of v10.9.0 every
 Discard-button site goes through `stamp_react_discard_button`
-(`interpret_reactive.cpp:333-342`), which tries `stamp_orange_chuck` — the same
+(`interpret_reactive.cpp:956-964`), which tries `stamp_orange_chuck` — the same
 stamp the stable orange ladder uses (`interpret_clue.cpp:286-311`) — and falls
 back to `target_discard`. See §1f for why the ladder replaced the v7.30.0
 either/or gate.
@@ -1092,7 +1096,7 @@ throw, and `reactor::target_discard` — which narrows `inferred` to the
 NON-critical ids, the plain-suit reading — cannot describe one.
 
 **The stamp asks two questions in order** (`stamp_react_discard_button`,
-`interpret_reactive.cpp:333-342`), shared by **all five** sites that issue a
+`interpret_reactive.cpp:956-964`), shared by **all five** sites that issue a
 Discard-button call — rank Phase A's and Phase B's inverted-target arms, Phase
 C's plain arm, and both colour modes — so they cannot drift:
 
@@ -1166,12 +1170,46 @@ kind cannot carry a signal:
 `variants::uses_target_parity` (`conventions/variants/predicates.h`) is the one
 predicate; every site reads it rather than testing the two flags.
 
-Every clue is reactive, and **the roles are fixed regardless of who is clued**:
+While it binds, every clue is reactive, and **the roles are fixed regardless of
+who is clued**:
 
 | Clue | Parity | Reacter | Receiver |
 |---|---|---|---|
 | to **Bob** | **odd** — exactly one play | Bob | **Cathy** |
 | to **Cathy** | **even** — double play / double discard | Bob | **Cathy** |
+
+#### It stands down at 60% (v11.0.0)
+
+**Once `score >= 0.6 * variant maximum`, a clue to Bob is STABLE again.** Clues
+to Cathy are untouched and keep the even bucket.
+
+The odd bucket is a reactive DISCARD, and late in a game that is actively
+harmful: it forces a discard nobody needed, and it crowds out the two things
+that matter near the end — saving a good card, and getting a play clue out in
+time.
+
+The **cap is the variant maximum**, a constant 5 per suit, deliberately not
+`State::max_score()`. A shrinking cap would move the switch point mid-game as
+criticals died, and every seat must agree on which side of it a past clue was
+given. It is compared in integers, `5 * score >= 3 * cap`, so no two seats can
+round differently. `bob_clue_is_reactive`
+(`reactor0/interpret_reactive.cpp:967-976`) owns the whole rule.
+
+**This is a cross-version break**, which is what makes v11 a major bump: a
+v10 bot reads a clue to Bob at 22/25 as a reactive discard and a v11 bot reads
+it as stable.
+
+Only TWO sites take the gate. `clue_is_reactive` is one. The other is
+`has_colour_play_clue_for` (`state_eval.cpp:273-302`), which models a *stable*
+colour clue and used to return false outright here — the question it answers is
+"could Bob have handled Cathy himself?", and Cathy is Bob's own "Bob", so past
+the threshold that clue is stable and the question has a real answer again.
+
+`reactive_assignment_for` (`reactive_assignment.cpp:35-46`) is deliberately
+**not** gated. The clues that stay reactive still cannot take their parity from
+the kind, so a clue to Cathy remains **even** on both sides of the threshold.
+Turning `uses_target_parity` off wholesale would silently re-key it to the kind
+and change what a rank clue to Cathy means.
 
 Bob is always the reacter because he is the seat that acts next; Cathy is always
 the receiver. So a clue to Bob **touches the reacter's own hand** while still
@@ -1213,6 +1251,68 @@ target-aware sibling of `reactive_assignment`, which stays target-blind for the
 **Consequence for the tier rules**: `has_colour_play_clue_for` models a *stable*
 colour play clue and therefore returns false outright here, which makes H1c's
 second arm and N2's second arm vacuous (DECISION_MAKING.md).
+
+#### Synesthesia's stable clue table
+
+Alternating Clues has both kinds available, so past the threshold its stable
+clues use the ordinary `stable_colour` / `stable_rank` ladders unchanged.
+**Synesthesia cannot**: it carries `clueRanks: []`, so there is no rank ladder to
+reach and a colour ladder alone cannot express the split. Its stable clues
+therefore read off a FIXED TABLE that names an action outright — one button and
+one slot in Bob's hand — keyed on the clue colour's NAME:
+
+| Clue colour | Button | Slot |
+|---|---|---|
+| Red | Play (*pitch*) | 1 |
+| Yellow | Play (*pitch*) | 2 |
+| Green | Discard (*chuck*) | 3 |
+| Blue | Discard (*chuck*) | **2** |
+| Purple | Play (*pitch*) | 5 |
+| Orange | Discard (*chuck*) | 1 |
+| any other colour | Play (*pitch*) | 4 |
+
+`synesthesia_call` (`reactor0/synesthesia_stable.cpp:18-31`). Note it is **not**
+the `colour_clue_value` table above — that one gives Blue=4 and lets Orange take
+the first untaken value. Blue naming slot 2 is deliberate.
+
+**Collisions are impossible**, which is what makes a fixed table safe here where
+`colour_clue_value` needed its "first untaken" dance. Across all 36 Synesthesia
+variants the suits are a subset of {Red, Yellow, Green, Blue, Purple} plus **at
+most one** other, and of those others only Orange, Brown, Black and Teal are
+clueable at all — Rainbow and Dark Rainbow are `allClueColors` and add no colour
+of their own, while White, Gray, Null and Dark Null are `noClueColors`. So at
+most one clue colour ever reaches the catch-all.
+`Reactor0Synesthesia.NoVariantCanCollideTwoColours` asserts it over the whole
+variant list rather than trusting the argument.
+
+**Dark Orange clues as "Orange"** and so takes the Orange row — which is exactly
+where chuck and pitch carry their literal inverted meanings — and Dark Brown
+clues as "Brown", falling to the catch-all with Black and Teal (`data/suits.json`).
+
+A 3-suit variant offers only three colours, so some slots are simply unreachable
+there. That is a limit of the variant, not of the table.
+
+**When the named action is bad, nothing is stamped and the clue is a STALL.**
+The vet is `slot_is_pitchable` / `slot_is_chuckable`
+(`reactor0/interpret_reaction.h`) asked of `effective_possible_for` — COMMON
+knowledge, so giver and receiver reach the same verdict about whether a call was
+made at all.
+
+**When only the seeing seats can tell it is bad, the clue is a MISTAKE** and the
+giver never offers it (§1g: shared knowledge retargets, giver-only knowledge
+rejects). Degrading it to a stall instead would be a cancellation Bob has no way
+to decode. The four cases are the two buttons crossed with the two suit kinds:
+
+| | plain suit | inverted suit |
+|---|---|---|
+| **pitch** (Play) | Play plays it: must be playable | Play throws it: must be a copy to spare |
+| **chuck** (Discard) | Discard throws it: must not be the last copy | Discard stacks it: must be playable |
+
+The stamps themselves go through `stamp_react_play_button` /
+`stamp_react_discard_button` (`reactor0/interpret_reactive.h`) with
+`urgent=false` — the same two ladders the reactive sites use, so the two cannot
+drift. A stable clue names an action without pending a reaction that must be
+actioned on the very next turn.
 
 #### Synesthesia's touch rule
 
@@ -1537,7 +1637,8 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
-| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it |
+| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it; plus the 60% switch — the 14/15/16 boundary, a 3-suit cap of 15, plain variants inert, and a clue to Cathy staying reactive AND even on both sides |
+| `tests/test_reactor0/test_synesthesia_stable.cpp` | §1f — Synesthesia's stable table: every row incl. Blue→chuck slot 2 and Dark Orange taking the Orange row, the catch-all, the no-collision property asserted over all 36 variants, and the three readings (a stamp, a common-knowledge stall, a giver-only MISTAKE) each separated from what `stable_colour` would have done |
 | `tests/test_reactor0/test_orange_chop_and_pitch.cpp` | §1f — a playable orange chop reads expendable in all three chop predicates, with a dead orange, a plain playable, a plain useful and an unplayable orange as controls; and `slot_is_pitchable` on a known orange, a plain card and Dark Orange |
 | `tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp` | Replay 1973976 T12 end to end — the pitch needed BOTH the vet and the stamp; reverting either puts it back |
 | `tests/test_reactor0/test_misc/test_replay_1974046_known_trash_is_chucked.cpp` | Replay 1974046 T22 end to end — a card read {b2} with blue on 2 is chucked instead of the critical b5 chop |

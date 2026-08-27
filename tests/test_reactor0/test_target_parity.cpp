@@ -403,3 +403,119 @@ TEST(Reactor0TargetParity, SettingsIsUnchangedForOrdinaryVariants) {
   EXPECT_NE(s.find("even reactive values"), std::string::npos) << s;
   EXPECT_EQ(s.find("to Bob = odd"), std::string::npos) << s;
 }
+
+// --- the 60% switch (v11.0.0) --------------------------------------------
+//
+// Target parity is a mid-game rule. The reactive reading of a clue to Bob is the
+// ODD bucket -- a reactive DISCARD -- and late in a game that forces a discard
+// nobody needed while crowding out the two things that matter near the end:
+// saving a good card, and getting a play clue out in time.
+//
+// So once the score reaches 60% of the VARIANT maximum, a clue to Bob is stable
+// again. Clues to Cathy are untouched and keep the even bucket -- the kind still
+// cannot carry parity, so nothing else about target parity moves.
+
+namespace {
+
+// `target_parity_opts` with the stacks dialled to a chosen score. Five suits, so
+// the cap is 25 and the threshold is 15.
+SetupOptions scored_opts(std::string variant_name, std::vector<int> stacks) {
+  SetupOptions opts = target_parity_opts(std::move(variant_name));
+  opts.play_stacks = std::move(stacks);
+  return opts;
+}
+
+}  // namespace
+
+TEST(Reactor0TargetParity, BobClueGoesStableAtSixtyPercent) {
+  // 0.6 * 25 = 15 exactly, so 15 is the first score that switches. Asserted with
+  // 14 either side of it, because an off-by-one here means two builds disagree
+  // about what a clue meant -- which is the whole reason v11 is a major bump.
+  struct Row { std::vector<int> stacks; int score; bool reactive; };
+  const Row rows[] = {
+      {{3, 3, 3, 3, 2}, 14, true},
+      {{3, 3, 3, 3, 3}, 15, false},
+      {{4, 3, 3, 3, 3}, 16, false},
+  };
+  for (const Row& r : rows) {
+    Game g = setup(scored_opts("Alternating Clues (5 Suits)", r.stacks));
+    ASSERT_EQ(g.state.score(), r.score) << "guard: fixture scores what it claims";
+    EXPECT_EQ(hanabi::reactor0::bob_clue_is_reactive(g.state), r.reactive)
+        << "score " << r.score << " of 25: a clue to Bob should be "
+        << (r.reactive ? "reactive" : "STABLE");
+  }
+}
+
+TEST(Reactor0TargetParity, TheCapIsTheVariantMaximumNotMaxScore) {
+  // Three suits -> cap 15 -> threshold 9. If the cap were `max_score()` it would
+  // shrink as criticals died and the switch point would move mid-game, so two
+  // seats could place the same past clue on different sides of it.
+  // Its own hands: r/g/b only, so the five-suit fixture's purples do not exist.
+  const auto three_suit = [](std::vector<int> stacks) {
+    SetupOptions opts;
+    opts.variant_name = "Alternating Clues (3 Suits)";
+    opts.play_stacks = std::move(stacks);
+    opts.starting = TestPlayer::ALICE;
+    opts.hands = {
+        {"r5", "g5", "b5", "r4", "g4"},
+        {"b4", "r3", "g3", "b3", "r2"},
+        {"g2", "b2", "r1", "g1", "b1"},
+    };
+    use_reactor0(opts);
+    return setup(std::move(opts));
+  };
+  Game g = three_suit({3, 3, 2});
+  ASSERT_EQ(g.state.score(), 8);
+  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+      << "8 of 15 is below 60%";
+
+  Game h = three_suit({3, 3, 3});
+  ASSERT_EQ(h.state.score(), 9);
+  EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(h.state))
+      << "9 of 15 is exactly 60%, so a clue to Bob is stable";
+}
+
+TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedAtEveryScore) {
+  for (const std::vector<int>& stacks :
+       {std::vector<int>{0, 0, 0, 0, 0}, std::vector<int>{5, 5, 5, 5, 5}}) {
+    Game g = setup(scored_opts("No Variant", stacks));
+    EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+        << "outside a target-parity variant a clue to Bob was never reactive";
+  }
+}
+
+// The dispatch either side of the switch, and -- the load-bearing half -- that
+// a clue to CATHY does not move with it.
+TEST(Reactor0TargetParity, OnlyBobsClueCrossesTheThreshold) {
+  const auto probe = [](const std::vector<int>& stacks) {
+    return setup(scored_opts("Alternating Clues (5 Suits)", stacks));
+  };
+  Game below = probe({3, 3, 3, 3, 2});   // 14
+  Game above = probe({3, 3, 3, 3, 3});   // 15
+
+  const int alice = below.state.our_player_index;
+  const int bob = below.state.next_player_index(alice);
+  const int cathy = below.state.next_player_index(bob);
+  ClueAction to_bob{alice, bob, {}, BaseClue{ClueKind::RANK, 1}};
+  ClueAction to_cathy{alice, cathy, {}, BaseClue{ClueKind::RANK, 1}};
+
+  EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(below.state, to_bob, bob))
+      << "below the threshold a clue to Bob is still reactive";
+  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(above.state, to_bob, bob))
+      << "above it a clue to Bob is STABLE -- the whole change";
+
+  for (const Game* g : {&below, &above}) {
+    EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g->state, to_cathy, bob))
+        << "a clue to Cathy is reactive on both sides";
+    EXPECT_EQ(hanabi::reactor0::reactive_receiver(g->state, to_cathy, bob), cathy);
+    // The assertion that catches a wholesale `uses_target_parity` flip. If the
+    // gate had been applied to `reactive_assignment_for` too, a clue to Cathy
+    // would stop taking its parity from the target and start taking it from the
+    // KIND -- silently changing what a rank clue to Cathy means.
+    EXPECT_TRUE(reactive_assignment_for(*g->state.variant, g->reactive_overrides,
+                                        ClueKind::RANK, 1,
+                                        /*target_is_bob=*/false)
+                    .even)
+        << "a clue to Cathy stays EVEN on both sides of the threshold";
+  }
+}

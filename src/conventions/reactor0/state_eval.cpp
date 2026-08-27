@@ -272,11 +272,17 @@ NewPlayFacts new_play_facts(const Game& game, const Game& hypo) {
 // then confirms the named card is genuinely playable from our full visibility.
 bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
   const State& s = game.state;
-  // This models a STABLE colour play clue, and a target-parity variant has no
-  // stable clues at all -- every clue there is reactive. Both callers (H1c and
-  // N2) are asking "could Bob have handled Cathy himself?", and in those
-  // variants the answer is never "yes, with a stable clue".
-  if (variants::uses_target_parity(*s.variant)) return false;
+  // This models a STABLE colour play clue, and while target parity binds there
+  // are no stable clues at all -- every clue is reactive. Both callers (H1c and
+  // N2) are asking "could Bob have handled Cathy himself?", and there the answer
+  // is never "yes, with a stable clue".
+  //
+  // Asked as `bob_clue_is_reactive` rather than `uses_target_parity` since
+  // v11.0.0. The question is about a clue from BOB to CATHY, and Cathy is Bob's
+  // own "Bob" -- so past the 60% threshold that clue is stable again and this
+  // has a real answer to give. Gating on the variant alone would keep both arms
+  // vacuous for the rest of the game.
+  if (bob_clue_is_reactive(s)) return false;
   for (const Clue& c : s.all_colour_clues(receiver)) {
     auto touched = s.clue_touched(s.hands[receiver], c.kind, c.value);
     if (touched.empty()) continue;
@@ -344,7 +350,7 @@ bool chop_is_expendable(const Game& game, int player) {
 }
 
 // VH1's "the clue gets a finesse": the interpretation is reactive rank Phase B
-// (`interpret_reactive.cpp:575-665`), the blind-play phase that calls the
+// (`interpret_reactive.cpp:485-575`), the blind-play phase that calls the
 // reacter onto a prerequisite for a one-away card in the receiver's hand.
 //
 // Phase B is invisible to a walk over `hypo.meta`, because it stamps ONLY the
@@ -397,7 +403,7 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   auto receive_order = predicted_receiver_order(hypo);
   if (!receive_order) return false;
   // Phase B's own two gates, from the phase that produces it
-  // (interpret_reactive.cpp:582, :608-609), rather than "is the receiver
+  // (interpret_reactive.cpp:492, :519-520), rather than "is the receiver
   // unstamped".
   //
   // Not quite verbatim any more: since v10.10.0 Phase B asks the connector of

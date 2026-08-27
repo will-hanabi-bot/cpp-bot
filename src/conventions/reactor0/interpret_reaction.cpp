@@ -58,7 +58,7 @@ std::optional<int> predicted_target_slot(const Game& hypo) {
   // reacter's called slot recovers the receiver's target slot — the same
   // number `calc_target_slot` derives at resolution time. Hand size comes
   // from `kHandSize`, matching the reactive selection paths
-  // (interpret_reactive.cpp:219, :408).
+  // (interpret_reactive.cpp:190, :318).
   return hanabi::reactor::calc_slot(wc.focus_slot, react_slot,
                                     kHandSize[hypo.state.num_players]);
 }

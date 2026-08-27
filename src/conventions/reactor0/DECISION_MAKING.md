@@ -63,9 +63,12 @@ Otherwise, a clue tier is HIGH iff **any** of:
       common knowledge). If Cathy has no chop, this condition is vacuously true.
     - **H1c** — Cathy's chop is either a trash or a same-hand-dupe, *or* Bob does
       not have a colour stable clue to give to Cathy. In a **target-parity**
-      variant (Alternating Clues, Synesthesia) there are no stable clues at all,
-      so `has_colour_play_clue_for` returns false outright and this arm is
-      vacuously satisfied — see CONVENTION.md §1f.
+      variant (Alternating Clues, Synesthesia) there are no stable clues at all
+      *while target parity binds*, so `has_colour_play_clue_for` returns false
+      outright and this arm is vacuously satisfied. Past 60% of the variant
+      maximum it stands down (v11.0.0) and the arm has a real answer again:
+      Cathy is Bob's own "Bob", so a clue from him to her is stable there. Asked
+      as `bob_clue_is_reactive`, not as the variant flag — see CONVENTION.md §1f.
 2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed suit,
    via `variants::is_first_or_second_rank`). `:481`.
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank
@@ -127,7 +130,7 @@ uses.
 **"Gets a finesse"** (VH1) means the clue's interpretation is reactive rank
 **Phase B**, and *only* Phase B — the blind-play phase that walks one-away
 targets and calls the reacter onto the prerequisite
-(`interpret_reactive.cpp:575-665`). Phase A (double play, `:487-573`) and Phase C
+(`interpret_reactive.cpp:485-575`). Phase A (double play, `:487-573`) and Phase C
 (double discard, `:667-721`) are not finesses. A reactive lock has to be excluded
 explicitly (`predicts_reactive_lock`): it stamps CHOP_MOVED a turn later, so at
 clue time the receiver's predicted slot carries no status and looks exactly like
@@ -350,7 +353,12 @@ the solver returned slot 2 where slot 5 was called, and `calc_slot(4, 2, 5) = 2`
 redirected will-bot69 onto a Null 5 that was not playable.
 
 Two things sit above it. `forced_endgame_action` runs first — a forced action
-takes precedence over any conventional interpretation — and the rule **stands
+takes precedence over any conventional interpretation, and that ordering is
+older than it looks: replay 1974119 T53 was read as an inversion of it, but the
+forced layer had simply declined, no rule covering "one card left and the NEXT
+seat holds two criticals it needs two turns to cash". That gap is **Rule 5**
+(v11.0.0, `forced_endgame.cpp`), which forces a stall there; the precedence
+itself never moved — and the rule **stands
 down whenever we hold a card that certainly scores**, because a guaranteed point
 is worth more than the signal and sequencing it is what the search is for
 (replay 1957936 T41: an urgent CTD of plain trash beside a pinned Orange 2 whose
@@ -1046,10 +1054,10 @@ lives in `src/conventions/reactor0/decision.cpp`:
 |---|---|---|
 | reactive vs stable | positional compare `action.target != bob` | `interpret_clue.cpp:620-631` |
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:214-266` |
-| finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:575-665` |
-| double discard clue | reactive rank Phase C | `interpret_reactive.cpp:667-721` |
+| finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:485-575` |
+| double discard clue | reactive rank Phase C | `interpret_reactive.cpp:577-631` |
 | a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |
-| reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:487-573`; `:741-825`, `:829-971` |
+| reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:397-483`; `:651-737`, `:739-837` |
 | lock clue | `predicts_reactive_lock` | `interpret_reaction.cpp:31-47` |
 | "this clue creates a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |
 | new touches, for the default tiebreak | `elim_result` / `bad_touch_result` | `src/basics/clue_result.cpp` |

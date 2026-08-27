@@ -119,9 +119,18 @@ std::string format_settings(const Variant& variant,
   if (hanabi::reactor::variants::uses_target_parity(variant)) {
     std::vector<ReactiveRow> all = table.even;
     all.insert(all.end(), table.odd.begin(), table.odd.end());
-    return "reactor0 — no stable clues: to Bob = odd, to Cathy = even"
+    // The 60% switch belongs here too: a human reading /settings needs to know
+    // that a clue to Bob stops being reactive partway through the game, and in
+    // Synesthesia what it becomes instead.
+    const std::string late =
+        variant.synesthesia
+            ? ", from 60% of max a clue to Bob is STABLE: Red=pitch1, "
+              "Yellow=pitch2, Green=chuck3, Blue=chuck2, Purple=pitch5, "
+              "Orange=chuck1, other=pitch4"
+            : ", from 60% of max a clue to Bob is STABLE";
+    return "reactor0 — no stable clues below 60%: to Bob = odd, to Cathy = even"
            ", reactive values: " +
-           render(all) + ", rlocks: " + (rlocks ? "on" : "off");
+           render(all) + late + ", rlocks: " + (rlocks ? "on" : "off");
   }
   return "reactor0 — even reactive values: " + render(table.even) +
          ", odd reactive values: " + render(table.odd) +
