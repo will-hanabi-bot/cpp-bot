@@ -884,3 +884,41 @@ question rather than a bug in the chuck list, and resolving it means ruling on
 which of the two readings wins. If the promise wins, the gate belongs in
 `choose_action` ahead of the chuck rungs, keyed on `zcs_turn` and on the locked
 chop still being in hand.
+---
+
+## 34. `[reactor0]` The bot can READ a spare-orange pitch but would never GIVE one
+
+v10.8.0 taught the reacter to read a Play-button call on a clued slot with a
+spare inverted reading as a **pitch** (step 3 of `stamp_react_play_button`,
+CONVENTION.md §1f, replay 1974331 T8). The giver side did not move with it, and
+two tests in `vet_react_slot` (`interpret_reactive.cpp`) still ask only about
+playing:
+
+* **The playability retarget** — `effective_possible_for(react_order).exists(is_workable)`.
+  Shared knowledge, so a failure retargets. A clued slot whose `possible` holds
+  nothing playable and nothing that connects, but which does hold a spare
+  inverted reading, is retargeted away before any stamp runs and the pitch never
+  fires. 1974331 does not exercise this: its slot 4 held a playable y1 in
+  `possible` (Deceptive-Ones let a rank-3 clue touch it), which is exactly why
+  the vet passed.
+* **The giver-only reject** — `react_actual_id && !is_workable(*react_actual_id)`
+  → `REJECT`. The giver CAN see the react card, and a spare orange is visibly
+  unable to play, so the giver rejects the whole clue. This is the sharper half:
+  **will-bot67 and will-bot69 can decode this clue from each other but neither
+  can ever offer it.** It is only readable today because a human gave it.
+
+Both want the same amendment — the vet's question must swap to affordability
+when the call would be a pitch, exactly as the stamp's now does — and both are
+strike checks, so widening them carelessly is the opposite failure: letting a
+bare existential through would disable the strike tests for every clued card in
+an Orange variant. That is why v10.8.0 changed the stamp only, where the
+`target_play`-first ordering makes the fallback safe by construction.
+
+The shape of the fix is probably to give the vet the same three-step ladder the
+stamp has: ask playability first, and fall back to `slot_has_spare_inverted` for
+a clued or stamped slot only when the playability answer is no. Deliberately not
+attempted blind — it wants its own ruling and its own replay.
+
+`tests/test_reactor0/test_orange_chop_and_pitch.cpp` documents the asymmetry:
+its `pitch_pair_opts` fixture has to run from BOB's seat, because from the
+giver's chair the clue is rejected before the stamp is reached.

@@ -1011,11 +1011,39 @@ The new predicate is `variants::includes_dark_inverted`
 `includes_inverted` reads the real `SuitType` flags rather than matching suit
 names.
 
-#### Pressing Play on a known orange is a PITCH (v10.3.0)
+#### Pressing Play on an orange is a PITCH (v10.3.0, widened v10.8.0)
 
-When **every** reading of the reacter's card is inverted, the Play button cannot
-strike — it discards — so the call is a pitch and two things follow, both of
-which the code had wrong on the odd-parity side:
+The Play button on an inverted card **discards** it, so a call to press it is a
+pitch: it cannot strike, and the card need not be playable — the only question is
+whether there is a copy to spare.
+
+**The stamp asks three questions in order** (`stamp_react_play_button`,
+`interpret_reactive.cpp`), shared by every site that issues a Play-button call so
+they cannot drift:
+
+1. **Every reading inverted → pitch**, unambiguously. This stays first: `is_playable`
+   is true of an o2 on an inverted suit, so `target_play` would otherwise stamp a
+   PLAY reading on a card whose Play button discards it — the v10.3.0 defect.
+2. **Otherwise the ordinary play reading** (`reactor::target_play`).
+3. **Otherwise, for a CLUED or STAMPED card with an inverted reading it can
+   spare, a pitch** (`slot_has_spare_inverted`). Play first, pitch as fallback:
+   the pitch is read only where no reading can play, so every strike check above
+   keeps its force. **v10.8.0**, replay 1974331 T8 — will-bot69's slot 4 was
+   clued to `{r3,y1,y3,g3,b3,o3}` and was the o3; nothing in its `inferred` could
+   play, so the pairing was walked past and the next candidate blind-played a b2
+   onto an empty blue stack.
+
+   Step 3 asks `slot_has_spare_inverted`, **not** `slot_is_pitchable`: step 2 has
+   already ruled the play reading out, so the wider predicate's plain half could
+   only answer about a play that cannot happen. At 1974331 that half is satisfied
+   by a y1 the reading had excluded.
+
+   The **clued or stamped** condition is where v10.3.0's worry lives — an unclued
+   card in an Orange variant has a wide enough empathy to always admit some
+   non-critical orange.
+
+When **every** reading of the reacter's card is inverted, two further things
+follow, both of which the code had wrong on the odd-parity side:
 
 * **The vet asks affordability, not playability.** `slot_is_pitchable`
   (`reactor0/interpret_reaction.h`) is the one definition, shared with the
@@ -1429,6 +1457,7 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_misc/test_replay_1974046_known_trash_is_chucked.cpp` | Replay 1974046 T22 end to end — a card read {b2} with blue on 2 is chucked instead of the critical b5 chop |
 | `tests/test_reactor0/test_misc/test_replay_1974052_known_trash_after_colour_clue.cpp` | Replay 1974052 T6 — the same, reached by a colour clue narrowing a reactive inference to {y1} |
 | `tests/test_reactor0/test_inverted_trash_target.cpp` | §1d — the 2x2: an inverted trash target puts the reacter on Discard in the odd bucket and Play in the even one, with a plain trash target as the control in each; plus the even bucket walking past an unusable react slot |
+| `tests/test_reactor0/test_misc/test_replay_1974331_a_clued_spare_orange_is_pitchable.cpp` | Replay 1974331 T8 end to end — a clued slot holding a spare o3 was walked past because nothing in its `inferred` could play, and the next candidate blind-played a b2 onto an empty stack |
 | `tests/test_reactor0/test_misc/test_replay_1974257_inverted_trash_target_is_pitched.cpp` | Replay 1974257 T30 end to end — every expendable card the receiver held was orange, so the target pool came back empty and the clue read as a MISTAKE |
 | `tests/test_reactor0/test_misc/test_replay_1974218_sarcastic_needs_a_known_identity.cpp` | Replay 1974218 T25 end to end — a sarcastic discard invented from a merely-touched card had pinned a cardinal 2 to {i4}, hiding it from the reactive play clue that asked for it |
 | `tests/test_reactor0/test_misc/test_replay_1973974_playable_orange_chop_is_not_saved.cpp` | Replay 1973974 T10 end to end — a partner locked over a playable orange on his chop |

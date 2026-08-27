@@ -70,6 +70,12 @@ bool wc_is_fresh(const Game& game, const Game& hypo, int giver, int receiver,
 // affordability, not playability.
 bool slot_is_pitchable(const State& s, const IdentitySet& cand);
 
+// Its inverted half on its own: is there a reading that is inverted and can be
+// SPARED? This is the pitch question proper -- asked when the play reading has
+// already been ruled out, where the plain half of `slot_is_pitchable` would be
+// answering about a play that cannot happen.
+bool slot_has_spare_inverted(const State& s, const IdentitySet& cand);
+
 // Could the reacter press DISCARD on this slot -- an ordinary throw he can
 // spare, or a chuck that stacks the card?
 bool slot_is_chuckable(const State& s, const IdentitySet& cand);

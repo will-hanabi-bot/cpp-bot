@@ -132,11 +132,21 @@ bool wc_even_parity(const Game& prev, const ReactorWC& wc);
 
 // Could the reacter press PLAY on this slot -- a real play, or a pitch he can
 // spare?
-bool slot_is_pitchable(const State& s, const IdentitySet& cand) {
+// The inverted half of `slot_is_pitchable`, named because it is asked on its
+// own. Pressing Play on an inverted card THROWS IT AWAY, so the only question
+// is whether there is a copy to spare -- which is exactly what
+// `receiver_ctp_set` asks of the receiver's side of the same button.
+bool slot_has_spare_inverted(const State& s, const IdentitySet& cand) {
   return cand.exists([&s](Identity i) {
-    if (variants::is_inverted_id(s, i)) return !s.is_critical(i);
-    return s.is_playable(i);
+    return variants::is_inverted_id(s, i) && !s.is_critical(i);
   });
+}
+
+bool slot_is_pitchable(const State& s, const IdentitySet& cand) {
+  const bool plays = cand.exists([&s](Identity i) {
+    return !variants::is_inverted_id(s, i) && s.is_playable(i);
+  });
+  return plays || slot_has_spare_inverted(s, cand);
 }
 
 // Could the reacter press DISCARD on this slot -- an ordinary throw he can

@@ -609,7 +609,7 @@ is judged from Alice's own inference, not common knowledge.
    visible → 3; `g4` needs `g1 g2 g3`, and `g3` is in Bob's hand → 2; `r4` needs
    `r1 r2 r3`, and `r2` is in Bob's hand and `r3` in Cathy's → 1. So `b4` wins.
 
-4. **Alice is locked or at 8 clues and is forced to clue or pitch.** Tiebreak by the following:
+4. **Alice is locked, at 8 clues, or at pace 0 and is forced to clue or pitch.** Tiebreak by the following:
     1. Same as 3.1
     2. Same as 3.3
     3. Same as 3.5

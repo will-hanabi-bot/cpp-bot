@@ -31,6 +31,7 @@ namespace variants = hanabi::reactor::variants;
 using hanabi::reactor::calc_slot;
 using hanabi::reactor::delayed_plays;
 using hanabi::reactor::effective_possible_for;
+using hanabi::reactor0::slot_has_spare_inverted;
 using hanabi::reactor::target_discard;
 using hanabi::reactor::target_play;
 
@@ -249,6 +250,53 @@ bool react_slot_is_a_pitch(const Game& game, int react_order) {
   });
 }
 
+// Stamp the reacter's slot when the call is the PLAY button. Three steps, in
+// this order, shared by every site that issues one so they cannot drift.
+//
+//   1. EVERY reading inverted -> a pitch, unambiguously. This stays first and is
+//      not folded into "play first": `state.is_playable` is true of an o2 on an
+//      inverted suit, so `target_play` would happily stamp a PLAY reading on a
+//      card whose Play button actually discards it. That is the v10.3.0 defect
+//      (replay 1973976 T12) and step 1 is what prevents it.
+//   2. Otherwise the ordinary play reading.
+//   3. Otherwise, for a CLUED or STAMPED card with an inverted reading it can
+//      spare, a pitch. Play first, pitch as a fallback: the pitch is read only
+//      where no reading can play, so every strike check above keeps its force.
+//
+// Step 3 is v10.8.0, replay 1974331 T8: will-bot69's slot 4 was clued to
+// {r3,y1,y3,g3,b3,o3} and was the o3 -- two copies, none discarded, so free to
+// throw. Nothing in its `inferred` could play, `target_play` refused to stamp,
+// Phase A walked past the pairing, and the second candidate blind-played a b2
+// onto an empty blue stack. The cluedness condition is where v10.3.0's worry
+// lives: an UNCLUED card in an Orange variant has a wide enough empathy to
+// always admit some non-critical orange, and letting that alone license a pitch
+// would disable the strike checks across the board.
+std::optional<ClueInterp> stamp_react_play_button(Game& game,
+                                                  const ClueAction& action,
+                                                  int react_order) {
+  const State& state = game.state;
+  if (react_slot_is_a_pitch(game, react_order)) {
+    return stamp_orange_pitch(game, action, react_order, /*urgent=*/true);
+  }
+  if (auto interp = target_play(game, action, react_order, /*urgent=*/true,
+                                /*stable=*/false)) {
+    return interp;
+  }
+  const bool invested = state.deck[react_order].clued ||
+                        game.meta[react_order].status != CardStatus::NONE;
+  if (!invested) return std::nullopt;
+  // `slot_has_spare_inverted`, NOT `slot_is_pitchable`: `target_play` has just
+  // established that no reading plays, so the plain half of the wider predicate
+  // could only be satisfied by something `inferred` excludes -- at 1974331 T8
+  // that is a y1 the reading had already ruled out, which has nothing to do
+  // with why the card can be pitched.
+  if (!slot_has_spare_inverted(state,
+                               effective_possible_for(game, react_order))) {
+    return std::nullopt;
+  }
+  return stamp_orange_pitch(game, action, react_order, /*urgent=*/true);
+}
+
 ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
                         const std::vector<std::pair<int, Identity>>& conns,
                         bool reacter_plays) {
@@ -445,15 +493,16 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     });
     // `reactor::target_play` narrows `inferred` to the playable set and bails
     // when that empties, so it can never stamp a pitch — a pitched card need
-    // not be playable at all. `stamp_orange_pitch` is the stable side's answer
-    // to exactly that (reactor0 §1b) and is reused here.
+    // not be playable at all. `stamp_react_play_button` is the shared ladder
+    // that decides between the two (see its comment); `free_pitch` keeps its
+    // own arm above it because a card whose every reading is a DEAD orange is
+    // a pitch before any of that is asked.
     auto interp =
         target_inverted
             ? target_discard(game, action, react_order, /*urgent=*/true)
         : free_pitch
             ? stamp_orange_pitch(game, action, react_order, /*urgent=*/true)
-            : target_play(game, action, react_order, /*urgent=*/true,
-                          /*stable=*/false);
+            : stamp_react_play_button(game, action, react_order);
     // Build the reacter's inference to match whichever button was stamped.
     if (interp) narrow_to_stamped_button(game, react_order);
     if (!interp) continue;
@@ -580,11 +629,7 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     });
     auto interp =
         target_inverted
-            ? (react_slot_is_a_pitch(game, react_order)
-                   ? stamp_orange_pitch(game, action, react_order,
-                                        /*urgent=*/true)
-                   : target_play(game, action, react_order, /*urgent=*/true,
-                                 /*stable=*/false))
+            ? stamp_react_play_button(game, action, react_order)
             : target_discard(game, action, react_order, /*urgent=*/true);
     // Same as Phase A and Phase B above. `target_discard` narrows to the
     // NON-CRITICAL ids, which is the plain-suit reading of "throw this away";
@@ -690,11 +735,7 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
       // happened -- the clue degraded to naming his r1 instead.
       auto interp =
           target_inverted
-              ? (react_slot_is_a_pitch(game, react_order)
-                     ? stamp_orange_pitch(game, action, react_order,
-                                          /*urgent=*/true)
-                     : target_play(game, action, react_order, /*urgent=*/true,
-                                   /*stable=*/false))
+              ? stamp_react_play_button(game, action, react_order)
           : react_could_chuck
               ? stamp_orange_chuck(game, action, react_order, /*urgent=*/true)
               : target_discard(game, action, react_order, /*urgent=*/true);

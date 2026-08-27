@@ -334,13 +334,27 @@ not endangered, not a play to arrange, and expendable (`chop_is_free_chuck`,
 `reactor0/state_eval.cpp`). Replay 1973974 T10.
 
 ### pitch
-Pressing **Play** on a card every reading of which is inverted. The button
-discards it, so the call cannot strike and the card need not be playable — the
-only question is whether it can be spared, which is `slot_is_pitchable`
-(`reactor0/interpret_reaction.h`): any playable plain reading, or any
-non-critical inverted one. Distinct from a *chuck*, which is pressing Discard on
-an inverted card to stack it. Replay 1973976 T12 needed both the vet and the
-stamp to know the difference.
+Pressing **Play** on an inverted card. The button discards it, so the call cannot
+strike and the card need not be playable — the only question is whether there is
+a copy to spare. Distinct from a *chuck*, which is pressing Discard on an
+inverted card to stack it. Replay 1973976 T12 needed both the vet and the stamp
+to know the difference.
+
+Two predicates, and which one is asked matters (`reactor0/interpret_reaction.h`):
+
+* **`slot_is_pitchable`** — could the reacter press Play on this slot at all?
+  Any playable **plain** reading, or any spare inverted one. This is the vet's
+  question, and the deferred negatives'.
+* **`slot_has_spare_inverted`** — its inverted half alone: is there a reading
+  that is inverted and NOT critical? This is the pitch question proper, asked at
+  step 3 of `stamp_react_play_button` once the play reading has been ruled out,
+  where the plain half would be answering about a play that cannot happen.
+
+A card whose **every** reading is inverted is a pitch outright (step 1). A clued
+or stamped card with a mixed empathy is a pitch only as a **fallback**, after
+`target_play` finds nothing that can play — v10.8.0, replay 1974331 T8. An
+UNCLUED card is not: its empathy is wide enough to always admit some spare
+orange, so allowing it would disable the strike checks across the board.
 
 ### provably trash
 Every identity still open for a card is basic trash once the copies **this seat
