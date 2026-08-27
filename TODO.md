@@ -85,7 +85,7 @@ half, in both conventions, and reading under reactor.
 POV-invariant
 abort in reactor's finesse phase
 (`src/conventions/reactor/interpret_reactive.cpp:832-846`) — mirrored by
-reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:601-606`) —
+reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:614-619`) —
 returns `nullopt` whenever the observer can see that the reacter's card is
 *not* the required `prev_id`, which is exactly the bluff case; there is
 deliberately no "try the next slot" retry.

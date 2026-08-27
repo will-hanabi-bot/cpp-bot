@@ -593,8 +593,23 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     }
     int react_order = state.hands[reacter][react_slot - 1];
     // "Bob knows his card does not connect" → try the next one-away.
+    //
+    // Asked of BOTH sets, and it has to be. `effective_possible_for` filters
+    // `possible` by the copies every other seat can see; the stamp below is
+    // `target_play`, which narrows `inferred`. Where those disagree the guard
+    // passes and the stamp then refuses -- and worse, the pin at the bottom of
+    // the loop writes `inferred = {prev_id}` unconditionally, which WIDENS a
+    // reading that had already excluded the connector (§1i forbids exactly
+    // that). Replay 1973406 T18: yagami_blue's slot 2 was inferred `{g1}` while
+    // its `possible` was still the whole green suit, so the g5 pairing passed
+    // this guard on `possible` and died at the stamp on `inferred`.
+    //
+    // Both sets read `common`, so giver, reacter and receiver walk in step.
     IdentitySet effective = effective_possible_for(game, react_order);
-    if (!effective.contains(*prev_id)) continue;
+    if (!effective.contains(*prev_id) ||
+        !game.common.thoughts[react_order].possibilities().contains(*prev_id)) {
+      continue;
+    }
     // POV-invariant abort, as in reactor: if a visible actual id of the
     // reacter's card is NOT the prereq, the whole reactive is a MISTAKE —
     // no "try the next target", because the reacter (who cannot see their
@@ -625,10 +640,20 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
                                     /*stable=*/false);
     // Same for Phase B's blind-play call.
     if (interp) narrow_to_stamped_button(game, react_order);
-    if (!interp) {
-      rb.undo();
-      return std::nullopt;
-    }
+    // WALK, do not give up. A stamp that refuses means the reacter's side does
+    // not work on THIS pairing -- shared knowledge, so every seat walks to the
+    // next one-away target together. Phase A, Phase C and both colour modes
+    // have handled it this way since v10.6.0; Phase B was the last site still
+    // carrying the pre-v10.6.0 give-up, which killed the whole clue on the
+    // first unusable pairing even when a later one was perfectly good.
+    //
+    // Replay 1973406 T18 (`/set 1 even 5`, so anchor 5): Neema's slot 3 (g5,
+    // green on 3) is one away and comes first, pairing with yagami_blue's slot 2
+    // -- inferred `{g1}`, which cannot be the g4. Phase B returned MISTAKE there
+    // instead of walking on to her slot 4 (b3, blue on 1), whose pairing is
+    // yagami_blue's slot 1: an unclued card that can hold the b2. The clue read
+    // as nothing at all and the bot locked Neema instead of blind-playing.
+    if (!interp) continue;
     Identity pi = *prev_id;
     game.with_thought(react_order, [pi](const Thought& t) {
       Thought out = t;

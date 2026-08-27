@@ -99,7 +99,7 @@ giver, Bob the next player, Cathy the one after.
   meaning here. It is never set on a reactor0 game
   (`src/net/commands.cpp:292-302`), `chat_allplays` skips reactor0 games when
   retro-applying (`:914-933`), and a reactor0 waiting connection always stores
-  `all_plays = false` (`interpret_reactive.cpp:972-989`).
+  `all_plays = false` (`interpret_reactive.cpp:997-1014`).
 
 ## §1a Dispatch — purely positional
 
@@ -386,18 +386,18 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
 
 ## §1d Reactive — the clue value is the anchor
 
-`reactor0::interpret_reactive` (`interpret_reactive.cpp:951-1029`). There is
+`reactor0::interpret_reactive` (`interpret_reactive.cpp:976-1049`). There is
 no reactive focus. The anchor is:
 
 > **react_slot + target_slot ≡ anchor (mod hand size)** where
 > **anchor = the rank** for rank clues, and **the fixed colour value** for
-> colour clues (`:964-974`; `calc_slot` is reactor's,
+> colour clues (`:989-999`; `calc_slot` is reactor's,
 > `src/conventions/reactor/interpret_reaction.cpp:16-19`).
 
 The waiting connection stores the anchor in `ReactorWC::focus_slot` plus a
 clue-time snapshot of `allow_reactive_locks` in `ReactorWC::rlocks`
-(`:975-992`). The receiver never selects targets — their POV returns
-`REACTIVE` immediately and decodes positionally at reaction time (`:999`).
+(`:1000-1017`). The receiver never selects targets — their POV returns
+`REACTIVE` immediately and decodes positionally at reaction time (`:1024`).
 
 **Candidate walks are transactional** (`Rollback`, `:53-72`). Every phase
 snapshots the game immediately before its first mutation and restores on each
@@ -493,7 +493,7 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
 
 ### Rank reactive — an even number of plays (2 or 0)
 
-`reactive_rank` (`interpret_reactive.cpp:470-698`):
+`reactive_rank` (`interpret_reactive.cpp:470-723`):
 
 - **Phase A — double play** (`:487-573`). The target pool is the receiver's
   playable cards, slots ascending — **including already-CTP'd cards**
@@ -507,14 +507,30 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
   standard even-parity reading ("the reacter discarded → I discard my target")
   lands on the chuck that advances the orange stack. The receiver's own stamp
   is made at reaction time (§1d), so the swap only decides selection here.
-- **Phase B — finesse** (`:575-640`). Walked by **target**, leftmost one-away
+- **Phase B — finesse** (`:575-665`). Walked by **target**, leftmost one-away
   first (reactor walks react slots in a fixed order instead). The reacter
   must hold the connector — direction-aware, so `next()` on a reversed suit
   and `prev()` elsewhere (`variants::connector_of`,
-  `include/hanabi/conventions/variants/reversed.h`) — via
-  `effective_possible_for(react).contains(connector)`, else the next one-away
-  is tried.
-- **Phase C — the trash targets** (`:642-696`). Normally a double discard,
+  `include/hanabi/conventions/variants/reversed.h`).
+
+  The connector test is asked of **both** `effective_possible_for(react)` and
+  the slot's own `possibilities()` (`:596-611`), and it has to be. The first
+  filters `possible` by the copies every other seat can see; the stamp is
+  `target_play`, which narrows `inferred`. Where the two disagree the test
+  passes and the stamp then refuses — and the pin at the end of the loop writes
+  `inferred = {connector}` unconditionally, which would **widen** a reading that
+  had already excluded it (§1i forbids exactly that).
+
+  **A refused stamp walks to the next one-away target** (`:643`), as Phase A,
+  Phase C and both colour modes do. Until v10.10.0 Phase B alone returned
+  `MISTAKE` on the first unusable pairing — the last site still carrying the
+  give-up v10.6.0 removed everywhere else. Replay 1973406 T18, `/set 1 even 5`
+  so anchor 5: Neema's slot 3 (g5, green on 3) is one away and comes first,
+  pairing with yagami_blue's slot 2, which was inferred `{g1}` and cannot be the
+  g4. The clue died there and never reached her slot 4 (b3, blue on 1), whose
+  pairing is yagami_blue's slot 1 — an unclued card that can hold the b2. The
+  bot locked Neema instead of blind-playing the connector.
+- **Phase C — the trash targets** (`:667-721`). Normally a double discard,
   zero plays: the reacter **discards** the react slot (urgent CTD) and the
   receiver's dc-target resolves at reaction time. The dc-candidates are
   **walked** leftmost-first, exactly as colour mode 2 walks them — a
@@ -545,7 +561,7 @@ play nor a chuck but a **pitch**, and a pitch is unconditionally safe.
 
 The three outcomes are §1g's split, and each call site derives `reacter_plays`
 from the same `variants::target_is_inverted` test that drives its swap
-(`:506-521` rank, `:737-745` colour).
+(`:506-521` rank, `:762-770` colour).
 
 Vetting the un-swapped call is bug_report_4.txt 4.1, in both directions.
 Asking a **discard** call for playability throws good clues away: at replay
@@ -625,28 +641,28 @@ Orange 3 at a stack of 0 — useful, so pitching it still loses a copy.
 
 ### Colour reactive — one play
 
-`reactive_colour` (`interpret_reactive.cpp:700-946`):
+`reactive_colour` (`interpret_reactive.cpp:725-971`):
 
-- **Mode 1 — receiver has a playable** (`:716-800`): the reacter **discards**
+- **Mode 1 — receiver has a playable** (`:741-825`): the reacter **discards**
   the react slot and the receiver plays the target (leftmost playable;
   a react slot holding a known critical advances the target). **Inverted-suit
   swap:** for an orange target the reacter is called to **play** instead
-  (`:783-786`), and the vet swaps with it — see above.
-- **Mode 2 — the trash targets** (`:804-946`): the reacter **blind-plays** the
+  (`:808-811`), and the vet swaps with it — see above.
+- **Mode 2 — the trash targets** (`:829-971`): the reacter **blind-plays** the
   react slot. **Inverted-suit swap:** an inverted dc-target is shed by
   **pitching** it (Play), so odd parity puts the reacter on **Discard**, via
   the same `stamp_react_discard_button` ladder (§1f). The playability checks
   below are skipped there; they exist only for the blind play. Replay
   1974257 T30.
-  The dc-candidates are **walked**, not fixed (`:825`): a pairing
+  The dc-candidates are **walked**, not fixed (`:850`): a pairing
   whose react slot every seat can already see cannot play teaches nothing, so
   the reading moves on to the next trash/dupe candidate rightward. The split
   is §1g's, and it is the whole reason this is safe:
     - `effective_possible_for(react_order)` holds no playable → **retarget**
-      (`:869-876`). Shared: the reacter computes the same set for its own
+      (`:894-901`). Shared: the reacter computes the same set for its own
       card, so every seat walks in step.
     - the react slot's **actual** identity is unplayable, or
-      `would_lose_inverted_reacter` → **reject the clue** (`:877-889`), never
+      `would_lose_inverted_reacter` → **reject the clue** (`:902-914`), never
       retarget. Giver-only: the reacter sees no identity in its own hand and
       would still compute the original pairing, blind-play it and strike.
 

@@ -6,6 +6,6 @@ namespace hanabi {
 // card order 0 as soon as a game starts, so observers can verify which
 // build a will-bot is running. Don't forget to mention the new version
 // in the change summary, per CLAUDE.md.
-inline constexpr const char* kBotVersion = "v10.9.0";
+inline constexpr const char* kBotVersion = "v10.10.0";
 
 }  // namespace hanabi
