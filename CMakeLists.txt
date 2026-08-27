@@ -122,6 +122,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_strike_preserves_ctp.cpp
   tests/test_basics/test_snapshot_roundtrip.cpp
   tests/test_endgame/test_forced_endgame.cpp
+  tests/test_endgame/test_two_criticals_dead_partner.cpp
   tests/test_endgame/test_helper.cpp
   tests/test_endgame/test_certain_play.cpp
   tests/test_endgame/test_required_play.cpp
@@ -268,6 +269,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_endgame/test_replay_1970943_required_play_with_none_certain.cpp
   tests/test_reactor0/test_endgame/test_replay_1971808_stall_clue_priority.cpp
   tests/test_reactor0/test_endgame/test_replay_1972670_required_play_with_one_card_left.cpp
+  tests/test_reactor0/test_endgame/test_replay_1974303_two_criticals_with_a_dead_partner.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp

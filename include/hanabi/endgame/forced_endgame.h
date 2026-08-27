@@ -21,6 +21,12 @@
 //     much weaker signal, so the CANDIDATE has to carry the confidence: it must
 //     be clued, and everything it could be that is not already trash must be
 //     the one required identity. Replay 1972670 T25.
+//   * 4. Two criticals, dead partner — three players, `cards_left == 2`, the
+//     NEXT seat's hand entirely trash, and CP holding two cards every reading of
+//     which is playable AND critical. CP gets two turns from here if they act
+//     now and one if they stall, and the partner cannot play whatever he is
+//     told, so no stall buys the skipped turn back. Replay 1974303 T44. Note
+//     the test is "every reading", not Rule 2's pinned identity.
 //   * 2. Two-critical play — CP knows they hold two critical cards, one
 //     playable, at `cards_left == 1` and `clue_tokens < n`.
 //   * 3. Sole holder — CP pins a playable identity no other seat holds, whose
@@ -29,8 +35,9 @@
 //     otherwise be locked out of their post-4 final turn.
 //
 // Rules 0c and 1-3 are `cards_left == 1` only; 0 and 0b are `cards_left == 0`
-// only. 0c is asked ABOVE 1-3 because it is a play that must happen now and
-// those rules can answer with a stall clue.
+// only; Rule 4 is `cards_left == 2` only and is therefore the sole rule that
+// fires at that deck size. 0c is asked ABOVE 1-3 because it is a play that must
+// happen now and those rules can answer with a stall clue.
 // See `src/endgame/forced_endgame.cpp` for the predicates.
 #pragma once
 

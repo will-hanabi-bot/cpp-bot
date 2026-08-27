@@ -1271,7 +1271,26 @@ final round can reach (`best_reachable_plays`), gambled on the leftmost clued
 card that could be it, else the leftmost of any. **Rule 0c** asks the same
 question at `cards_left == 1`, where the ceiling is a weaker signal, so the
 candidate must be clued AND have exactly one non-trash reading, which must be
-the required identity. The rest fire only when `cards_left == 1`.
+the required identity.
+
+**Rule 4 — two criticals, dead partner** is the only rule at `cards_left == 2`,
+and sits above that gate for the same reason. Three players; the **next seat's
+hand entirely trash**, read from `state.deck` (giver-side knowledge CP genuinely
+has, the same channel Rule 3 uses); and **two cards in CP's hand every reading of
+which is playable and critical** — `certain_plays` filtered by criticality, so
+the inverted-suit button comes along for free. CP then gets two turns if they act
+now and one if they stall, and the partner cannot play whatever he is told, so no
+stall buys the skipped turn back. Returns the better of the two by the same
+unblock tiebreak Rule 2 uses (`unblock_score`, shared). Replay 1974303 T44 —
+two playable criticals against an all-trash partner, and the bot clued.
+
+This is **not** Rule 2 at a different deck size: Rule 2 wants two *singleton*
+criticals, and 1974303's second critical is read as three identities, every one
+of them playable and critical. There is no clue-token guard, deliberately — with
+the partner unable to play at all, CP needs both turns however many clues the
+team is holding.
+
+The rest fire only when `cards_left == 1`.
 
 - **Rule 2 — two-critical play** (`:154-219`), checked first. Fires when
   `clue_tokens < num_players` and the current player holds ≥ 2
@@ -1425,7 +1444,8 @@ Behavioural rules above are pinned by:
 | `tests/test_reactor/test_receiver_misinterpretation/` | Re-tasking a pending reacter (1916791) |
 | `tests/test_reactor/test_decision_making/` | Low-clue-count gate, high-value-clue conditions, the v1.7.0 destroyed-play rule |
 | `tests/test_reactor/test_endgame/` | 10 endgame replay regressions: solver winrate, forced-endgame 5-lockout / two-critical, final-round stall-vs-play |
-| `tests/test_reactor0/test_endgame/` | reactor0 endgame replay regressions: forced-endgame Rule 3 (sole holder of a blocking card, 1966675 T26) |
+| `tests/test_endgame/test_two_criticals_dead_partner.cpp` | Forced-endgame Rule 4 unit tests — the fire case, the unpinned-critical clause that puts it outside Rule 2, the shared unblock tiebreak, and one negative per condition |
+| `tests/test_reactor0/test_endgame/` | reactor0 endgame replay regressions: forced-endgame Rule 3 (sole holder of a blocking card, 1966675 T26), Rule 4 (two criticals with a dead partner, 1974303 T44) |
 | `tests/test_reactor/test_misc/` | 36 mid-game convention replay regressions: empathy narrowing, focus/target selection, pink promise, play-queue order, clue eval |
 | `tests/test_endgame/` | Convention-neutral solver unit tests (forced-endgame rules, helper, smoke) |
 

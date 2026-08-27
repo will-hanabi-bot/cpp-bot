@@ -152,6 +152,27 @@ bool five_lockout_fires(const Game& game, int suit) {
 // permanently. Playing y4 first means y5 becomes playable, will-bot67
 // plays y5 on their final-round turn, CP plays r5 on their final-round
 // turn = full score.
+// Shared by Rules 2 and 4 -- one definition rather than a copy each.
+//
+// The successor identity for a suit's reversed direction is rank-1
+// (`Identity::prev`); for normal suits it is rank+1 (`Identity::next`). The
+// bonus only counts when the successor is itself still useful, since unblocking
+// a trash card means nothing.
+int unblock_score(const State& s, Identity id) {
+  const auto& st = s.variant->suits[id.suit_index].suit_type;
+  auto succ = st.reversed ? id.prev() : id.next();
+  if (!succ) return 0;
+  if (s.is_basic_trash(*succ)) return 0;
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == s.current_player_index) continue;
+    for (int o : s.hands[p]) {
+      auto deck_id = s.deck[o].id();
+      if (deck_id && *deck_id == *succ) return 1;
+    }
+  }
+  return 0;
+}
+
 std::optional<PerformAction> two_critical_play_action(const Game& game) {
   const State& s = game.state;
   int cp = s.current_player_index;
@@ -174,34 +195,12 @@ std::optional<PerformAction> two_critical_play_action(const Game& game) {
   }
   if (playable.empty()) return std::nullopt;
 
-  // Score each playable critical by whether its play unblocks a
-  // successor held by another player. The successor identity for a
-  // suit's reversed direction is rank-1 (Identity::prev); for normal
-  // suits it's rank+1 (Identity::next). The unblock bonus only counts
-  // when the successor itself is critical or useful (i.e., not already
-  // basic-trash), since unblocking a trash card means nothing.
-  auto successor = [&](Identity id) -> std::optional<Identity> {
-    const auto& st = s.variant->suits[id.suit_index].suit_type;
-    return st.reversed ? id.prev() : id.next();
-  };
-  auto unblock_score = [&](Identity id) -> int {
-    auto succ = successor(id);
-    if (!succ) return 0;
-    if (s.is_basic_trash(*succ)) return 0;
-    for (int p = 0; p < s.num_players; ++p) {
-      if (p == cp) continue;
-      for (int o : s.hands[p]) {
-        auto deck_id = s.deck[o].id();
-        if (deck_id && *deck_id == *succ) return 1;
-      }
-    }
-    return 0;
-  };
-
+  // Score each playable critical by whether its play unblocks a successor held
+  // by another player -- `unblock_score` above.
   auto best = playable.front();
-  int best_score = unblock_score(best.second);
+  int best_score = unblock_score(s, best.second);
   for (size_t i = 1; i < playable.size(); ++i) {
-    int score = unblock_score(playable[i].second);
+    int score = unblock_score(s, playable[i].second);
     if (score > best_score) {
       best = playable[i];
       best_score = score;
@@ -216,6 +215,74 @@ std::optional<PerformAction> two_critical_play_action(const Game& game) {
     return PerformAction{PerformDiscard{best.first}};
   }
   return PerformAction{PerformPlay{best.first}};
+}
+
+// Rule 4 — "two criticals, dead partner".
+//
+// Precondition: three players, `cards_left == 2`, the NEXT seat's hand is
+// entirely basic trash, and CP holds at least TWO cards every reading of which
+// both advances a stack and is critical. Then CP must play.
+//
+// Why the play is forced. CP gets exactly two turns from here if they act on
+// this one and one if they stall, and they have two criticals to cash. Bob
+// cannot play whatever he is told, so he discards, the deck drains on schedule,
+// and there is no stall that buys back the turn CP skipped -- a clue would
+// simply cost one of the two criticals outright.
+//
+// Replay 1974303 T44, "Matryoshka & Dark Null (5 Suits)", stacks r4 y5 g4 b4
+// d4: will-bot69 held a known d5 and a card read {r5, g5, b5}, while will-bot67
+// held b1, r3, r1, y1, y3. The bot clued rank 2 to Cathy and lost the point.
+//
+// NOT Rule 2 with the card count changed. Rule 2 wants two SINGLETON-critical
+// cards, and 1974303's second critical is read as three identities -- every one
+// of them playable and critical, which is the property that actually matters.
+// So the test here is `certain_plays` (every reading advances a stack, on the
+// button that does so, `endgame/helper.cpp`) filtered to cards every reading of
+// which is also critical. Building on `certain_plays` also inherits its
+// inverted-suit handling, where the advancing button is Discard.
+//
+// Reading Bob's hand from `state.deck` is giver-side knowledge CP genuinely has
+// -- the same channel Rule 3 uses for "no other player holds X". A card whose
+// identity CP cannot see fails the test, so the rule never fires on a hand it
+// cannot fully read.
+//
+// Three players only: the two-turns-for-CP arithmetic is stated for three
+// seats, and a forced rule short-circuits the solver, so it is not asserted at
+// counts no replay exercises.
+std::optional<PerformAction> two_criticals_dead_partner_action(const Game& game) {
+  const State& s = game.state;
+  if (s.num_players != 3) return std::nullopt;
+  if (s.cards_left != 2) return std::nullopt;
+
+  const int cp = s.current_player_index;
+  const int bob = s.next_player_index(cp);
+  if (s.hands[bob].empty()) return std::nullopt;
+  for (int o : s.hands[bob]) {
+    auto id = s.deck[o].id();
+    if (!id || !s.is_basic_trash(*id)) return std::nullopt;
+  }
+
+  // Every reading advances a stack (`certain_plays`) AND every reading is
+  // critical. A card pinned to one identity can also be scored for the unblock
+  // tiebreak; an unpinned one cannot, since no single identity is being
+  // asserted, so it scores 0.
+  std::vector<std::pair<PerformAction, int>> crits;
+  for (const PerformAction& a : certain_plays(game)) {
+    const int o = std::holds_alternative<PerformPlay>(a)
+                      ? std::get<PerformPlay>(a).target
+                      : std::get<PerformDiscard>(a).target;
+    const IdentitySet live = game.me().thoughts[o].possibilities();
+    if (live.is_empty()) continue;
+    if (!live.forall([&](Identity i) { return s.is_critical(i); })) continue;
+    crits.push_back({a, live.length() == 1 ? unblock_score(s, live.head()) : 0});
+  }
+  if (crits.size() < 2) return std::nullopt;
+
+  auto best = crits.front();
+  for (size_t i = 1; i < crits.size(); ++i) {
+    if (crits[i].second > best.second) best = crits[i];
+  }
+  return best.first;
 }
 
 // Rule 3 — "sole holder of a blocking card".
@@ -539,6 +606,11 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
       if (auto a = required_play_action(game, /*narrow=*/true)) return a;
     }
   }
+
+  // Rule 4: two criticals to cash, two turns to cash them in, and a partner
+  // who cannot play. Above the `cards_left == 1` gate because it is the only
+  // rule that fires at 2 -- the same reason Rules 0/0b/0c sit above it.
+  if (auto a = two_criticals_dead_partner_action(game)) return a;
 
   if (s.cards_left != 1) return std::nullopt;
 
