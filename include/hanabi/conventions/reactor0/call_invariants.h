@@ -15,6 +15,18 @@
 //    urgent scan in `Game::take_action` correct without consulting signal
 //    turns: the first urgent card in slot order *is* the most recent call.
 //
+//    **The erasure is ASYMMETRIC in the kind of call doing it.** `urgent`
+//    separates the two, the same discriminator `calls_of` uses:
+//      * a RECEIVER call (non-urgent) retires both kinds to its left —
+//        landing to the right of a standing reacter call means leftmost
+//        targeting has left that reacter card unactionable;
+//      * a REACTER call (urgent) retires only other REACTER calls. It is
+//        actioned by the urgent scan on the holder's very next turn and
+//        never joins the receiver deque, so it has no standing to retire a
+//        receiver call. Replay 1974512 is what the symmetric version cost:
+//        a reacter stamp on an older slot erased a standing receiver call on
+//        a playable p1, which the holder then never picked back up.
+//
 // 3. **A dead call is dropped.** A call is only as good as the card. Once
 //    common knowledge leaves the stamped button with no identity it handles
 //    correctly, every seat drops it -- which also removes the card from the
@@ -45,8 +57,16 @@ namespace hanabi::reactor0 {
 // and `requires_high_tier` counts it, so the holder stays "occupied". Replay
 // 1967287.
 //
-// Enforce every rule across all hands. Idempotent. Call after any reactor0
-// interpretation that may have stamped a call.
+// Enforce every rule across all hands. Idempotent.
+//
+// Call after any reactor0 interpretation that may have stamped a call -- and
+// after EVERY play and discard, whether or not a reaction was being resolved.
+// Rules 3 and 4 turn on the STACKS, not on the stamps, so a call can die
+// because somebody else advanced a pile. Until v10.12.0 the play and discard
+// hooks only reached this from inside their `if (!waiting.empty())` block, so
+// an ordinary play never re-checked standing calls and a dead one could survive
+// indefinitely -- replay 1971981, where a receiver call narrowed to {r1, m1}
+// outlived both being played and the holder blind-played it into a strike.
 void enforce_call_invariants(Game& game);
 
 }  // namespace hanabi::reactor0

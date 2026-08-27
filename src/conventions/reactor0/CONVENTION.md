@@ -1385,19 +1385,37 @@ shape on the stable side, where the veto was missing until v5.0.0.
 
 `enforce_call_invariants`
 (`include/hanabi/conventions/reactor0/call_invariants.h`,
-`src/conventions/reactor0/call_invariants.cpp`), run after every reactor0
-interpretation at the engine seam (`src/basics/decide.cpp:63`, `:285`,
-`:346`) rather than at each stamping site, so no path can forget it.
+`src/conventions/reactor0/call_invariants.cpp`), run at the engine seam rather
+than at each stamping site, so no path can forget it: after every clue
+interpretation (`src/basics/decide.cpp:184`) and after **every** play and
+discard (`:523`, `:553`, via `enforce_calls_after_action`), whether or not a
+reaction was being resolved. That last part is v10.12.0 — rules 3 and 4 turn on
+the STACKS rather than on the stamps, so a call can die because somebody else
+advanced a pile, and until then the play and discard hooks only reached the
+enforcement from inside their `waiting` block.
 
 1. **Play calls run in play order.** A hand may carry **several**
    `CALLED_TO_PLAY` cards at once, and the holder actions them
    **most-recently-stamped first**, skipping any it knows from empathy must be
-   trash (`src/basics/decide.cpp:695-710`). There is no unwinding: if the
+   trash (`src/basics/decide.cpp:962-1008`). There is no unwinding: if the
    holder plays an older call, the receiver does not interpret that play.
    To keep stamp order and slot order from disagreeing, a newer call on an
    **older** slot **erases** the earlier call on any newer slot — a newer clue
-   would not have pointed past a card that was still playable. The invariant
-   is therefore that CTP cards run newest slot → oldest slot in exactly play
+   would not have pointed past a card that was still playable.
+
+   **The erasure is asymmetric in the KIND of call doing it** (v10.12.0),
+   separated by `urgent`, the same discriminator `calls_of` uses. A **receiver**
+   call retires both kinds to its left: landing to the right of a standing
+   reacter call means leftmost targeting has left that reacter card
+   unactionable. A **reacter** call retires only other reacter calls — it is
+   actioned by the urgent scan on the holder's very next turn and never joins
+   the receiver deque, so it has no standing to retire a receiver call. Replay
+   1974512 T8 is the cost of the symmetric version: a reacter stamp on an older
+   slot erased a standing receiver call on a playable p1, which was never
+   recovered, and at T12 the bot discarded its chop instead of playing it.
+
+   The invariant is therefore that CTP cards of ONE KIND run newest slot →
+   oldest slot in exactly play
    order, which is what lets the shared urgent scan pick by slot without
    consulting signal turns.
 2. **At most one discard call.** Unlike play calls, `CALLED_TO_DISCARD` does

@@ -17,6 +17,19 @@
 // The resulting invariant is that CTP cards run newest slot to oldest slot in
 // exactly play order, which is what makes the shared urgent scan in
 // Game::take_action correct without it consulting signal turns.
+//
+// That erasure is ASYMMETRIC in the kind of call doing it (v10.12.0):
+//
+//   * a RECEIVER call (non-urgent) retires both kinds to its left -- landing to
+//     the right of a standing reacter call means leftmost targeting has left
+//     that reacter card unactionable;
+//   * a REACTER call (urgent) retires only other REACTER calls. It is actioned
+//     by the urgent scan on the very next turn and never joins the receiver
+//     deque, so it has no standing to retire a receiver call.
+//
+// Replay 1974512 T8 is what the symmetric version cost: a reacter stamp on an
+// older slot erased a standing receiver-CTP on a playable p1, which was then
+// never recovered.
 #include <gtest/gtest.h>
 
 #include "hanabi/basics/game.h"
@@ -32,20 +45,37 @@ namespace {
 // The invariant: walking slots newest -> oldest, CTP stamp turns never
 // increase. Equivalently, no CTP card is older-stamped than a CTP card in a
 // newer slot.
+//
+// Asked WITHIN each kind of call, not across them (v10.12.0). Rule 1 is
+// asymmetric: a receiver call retires both kinds to its left, but a reacter
+// call retires only other reacter calls, so a receiver-CTP may legitimately sit
+// in a newer slot than a later-stamped reacter-CTP. That is replay 1974512's
+// shape and it is now legal.
+//
+// What this therefore does NOT cover is the one surviving cross-kind
+// constraint -- that no RECEIVER call is stamped later than a reacter call in an
+// older slot. The tests that care about it assert the two stamps directly.
 void expect_ctp_in_play_order(const Game& g, TestPlayer player,
                               const char* label) {
-  std::optional<int> prev_turn;
-  for (int slot = 1; slot <= 5; ++slot) {
-    int o = order_at(g, player, slot);
-    if (g.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
-    int turn = g.meta[o].signal_turn ? *g.meta[o].signal_turn : -1;
-    if (prev_turn) {
-      EXPECT_LE(turn, *prev_turn)
-          << label << ": slot " << slot << " was stamped at turn " << turn
-          << ", later than the CTP card in a newer slot (turn " << *prev_turn
-          << ") -- CTP cards must run newest slot to oldest in play order";
+  for (int kind = 0; kind < 2; ++kind) {
+    const bool want_urgent = kind == 0;
+    std::optional<int> prev_turn;
+    for (int slot = 1; slot <= 5; ++slot) {
+      int o = order_at(g, player, slot);
+      if (g.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      if (g.meta[o].urgent != want_urgent) continue;
+      int turn = g.meta[o].signal_turn ? *g.meta[o].signal_turn : -1;
+      if (prev_turn) {
+        EXPECT_LE(turn, *prev_turn)
+            << label << ": " << (want_urgent ? "reacter" : "receiver")
+            << " CTP on slot " << slot << " was stamped at turn " << turn
+            << ", later than the " << (want_urgent ? "reacter" : "receiver")
+            << " CTP in a newer slot (turn " << *prev_turn
+            << ") -- calls of one kind must run newest slot to oldest in play "
+               "order";
+      }
+      prev_turn = turn;
     }
-    prev_turn = turn;
   }
 }
 
@@ -96,6 +126,141 @@ TEST(Reactor0CallInvariants, NewerClueCallingAnOlderSlotErasesTheEarlierCall) {
   EXPECT_FALSE(urgent_at(g, TestPlayer::BOB, 2))
       << "and its urgency must go with it";
   expect_ctp_in_play_order(g, TestPlayer::BOB, "reactive past a standing call");
+}
+
+// The same fixture, with the standing call made a RECEIVER call. A reacter
+// stamp on an older slot must now leave it alone -- replay 1974512 T8, where
+// erasing it cost a playable p1 the bot never picked back up.
+TEST(Reactor0CallInvariants, AReacterCallDoesNotEraseAReceiverCall) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y1", "y3", "b3", "b1", "y4"},   // Bob: slot 4 = b1, playable
+      {"r4", "y2", "g1", "b4", "p4"},   // Cathy: slot 3 = g1, only playable
+  };
+  use_reactor0(opts);
+  Game g = setup(opts);
+
+  // The standing call on Bob's slot 2 is a RECEIVER call: NOT urgent. That one
+  // bit is the whole difference from the test above.
+  int bob_s2 = order_at(g, TestPlayer::BOB, 2);
+  g.with_meta(bob_s2, [](ConvData& m) {
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.urgent = false;
+    m = m.reason(0).signal(0);
+  });
+  g.with_thought(bob_s2, [](const Thought& t) {
+    Thought out = t;
+    out.old_inferred = t.inferred;
+    return out;
+  });
+
+  g = take_turn(std::move(g), "Alice clues 2 to Cathy");
+
+  if (last_clue_interp(g) != ClueInterp::REACTIVE) {
+    GTEST_SKIP() << "clue not read as reactive in this position";
+  }
+  ASSERT_FALSE(g.waiting.empty());
+  ASSERT_EQ(g.waiting.front().react_order, order_at(g, TestPlayer::BOB, 4))
+      << "fixture must call an older slot than the standing one";
+
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 4), CardStatus::CALLED_TO_PLAY)
+      << "the new reacter call stands";
+  EXPECT_TRUE(urgent_at(g, TestPlayer::BOB, 4)) << "and it is urgent";
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY)
+      << "the standing RECEIVER call must survive -- a reacter call is "
+         "actioned by the urgent scan and never joins the receiver deque, so "
+         "it has no standing to retire one";
+  EXPECT_FALSE(urgent_at(g, TestPlayer::BOB, 2))
+      << "and it is still a receiver call";
+  expect_ctp_in_play_order(g, TestPlayer::BOB, "reacter past a receiver call");
+}
+
+// The other direction still erases: a RECEIVER call landing to the right of a
+// standing reacter call means leftmost targeting has left the reacter card
+// unactionable, so the urgent call goes. Asserted against the invariant
+// directly rather than through a clue, because a receiver call is stamped when
+// the reacter acts, not at clue time.
+TEST(Reactor0CallInvariants, AReceiverCallStillErasesAReacterCallToItsLeft) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y1", "y3", "b3", "b1", "y4"},
+      {"r4", "y2", "g1", "b4", "p4"},
+  };
+  use_reactor0(opts);
+  Game g = setup(opts);
+
+  const int bob_s2 = order_at(g, TestPlayer::BOB, 2);  // reacter, newer slot
+  const int bob_s4 = order_at(g, TestPlayer::BOB, 4);  // receiver, older slot
+  g.with_meta(bob_s2, [](ConvData& m) {
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.urgent = true;
+    m = m.reason(0).signal(0);
+  });
+  g.with_meta(bob_s4, [](ConvData& m) {
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.urgent = false;
+    m = m.reason(3).signal(3);   // stamped LATER, on the older slot
+  });
+
+  hanabi::reactor0::enforce_call_invariants(g);
+
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 4), CardStatus::CALLED_TO_PLAY)
+      << "the newer receiver call stands";
+  EXPECT_NE(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY)
+      << "the standing REACTER call on a newer slot is retired -- leftmost "
+         "targeting has left it unactionable";
+  EXPECT_FALSE(urgent_at(g, TestPlayer::BOB, 2))
+      << "and its urgency goes with it";
+}
+
+// Rule 3 has to notice a stack somebody ELSE advanced.
+//
+// The dead-call rules turn on the stacks, not on the stamps, so a call can die
+// without anybody clueing. Until v10.12.0 the play and discard hooks only
+// reached `enforce_call_invariants` from inside their `waiting` block, so an
+// ordinary play never re-checked standing calls: replay 1971981, where a
+// receiver call narrowed to {r1, m1} outlived both being played and the holder
+// blind-played it into a strike.
+TEST(Reactor0CallInvariants, AnOrdinaryPlayRetiresACallItJustKilled) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},   // Alice (us)
+      {"y1", "y3", "b3", "b4", "y4"},   // Bob: slot 2 carries the call
+      {"r1", "y2", "g4", "b2", "p4"},   // Cathy: slot 1 is the r1
+  };
+  opts.starting = TestPlayer::CATHY;    // she takes the ordinary play below
+  use_reactor0(opts);
+  Game g = setup(opts);
+
+  const int bob_s2 = order_at(g, TestPlayer::BOB, 2);
+  const Identity r1 = g.state.expand_short("r1");
+  g.with_meta(bob_s2, [](ConvData& m) {
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.urgent = false;
+    m = m.reason(0).signal(0);
+  });
+  g.with_thought(bob_s2, [r1](const Thought& t) {
+    Thought out = t;
+    out.old_inferred = t.inferred;
+    out.inferred = IdentitySet::single(r1);
+    return out;
+  });
+  ASSERT_EQ(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY);
+  ASSERT_TRUE(g.state.is_playable(r1)) << "the call is live to begin with";
+  ASSERT_TRUE(g.waiting.empty())
+      << "no reaction pending -- that is the whole point";
+
+  // Cathy plays the other r1. Nothing is clued and no reaction resolves, so
+  // before v10.12.0 nothing re-examined Bob's call.
+  g = take_turn(std::move(g), "Cathy plays r1 (slot 1)", "p1");
+
+  EXPECT_FALSE(g.state.is_playable(r1)) << "red is on 1 now";
+  EXPECT_NE(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY)
+      << "every identity the call could still be is trash, so rule 3 retires "
+         "it -- even though the turn was an ordinary play";
+  expect_infs(g, std::nullopt, TestPlayer::BOB, 2, {"r1"});
 }
 
 TEST(Reactor0CallInvariants, CallOnANewerSlotLeavesTheOlderCallStanding) {

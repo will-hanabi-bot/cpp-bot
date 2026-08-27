@@ -62,11 +62,36 @@ void enforce_play_order(Game& game, const std::vector<int>& hand) {
   }
   if (newest_call <= 0) return;  // no call, or already on the newest slot
 
+  // Which KIND of call is doing the erasing. `urgent` is the discriminator the
+  // rest of the convention already uses -- `calls_of` routes an urgent CTP to
+  // `reacter_ctp` and the rest to `receiver_ctp` (calls.cpp) -- so it is read
+  // here rather than a second flag being invented.
+  const bool newest_is_reacter = game.meta[hand[newest_call]].urgent;
+
   // Everything in a newer slot was called earlier, and a later clue would
   // not have pointed past a card still playable — so those calls are dead.
+  //
+  // ASYMMETRIC, and deliberately so.
+  //
+  //   * A RECEIVER call erases both kinds to its left. Landing to the right of
+  //     a standing reacter call means leftmost targeting has left that reacter
+  //     card unactionable, so the urgent call must go with it.
+  //   * A REACTER call erases only other REACTER calls. It is actioned by the
+  //     urgent scan on the holder's very next turn and never joins the receiver
+  //     deque `calls_of` builds, so it has no standing to retire a receiver
+  //     call -- the two orderings are maintained against different consumers.
+  //
+  // v10.12.0, replay 1974512 T8. will-bot67 held a receiver-CTP on slot 4
+  // (order 11, the p1, stamped when will-bot69 reacted at num 1). At num 7
+  // will-bot69's R3 clue made will-bot67 the reacter and stamped an urgent CTP
+  // on slot 5 -- an OLDER slot -- which became `newest_call` and erased the
+  // receiver call. It was never recovered: order 11 read NONE for the rest of
+  // the game, so at T12 the bot discarded its chop with a playable p1 in hand.
   for (int i = 0; i < newest_call; ++i) {
     int o = hand[i];
-    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) erase_call(game, o);
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (newest_is_reacter && !game.meta[o].urgent) continue;
+    erase_call(game, o);
   }
 }
 

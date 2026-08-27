@@ -179,10 +179,20 @@ exempt. Named from replay 1942181 T41.
 
 ### call invariants
 The two rules constraining a hand's outstanding calls, enforced after every
-reactor0 interpretation: play calls run newest slot → oldest in play order
-(a newer call on an older slot **erases** the earlier call on a newer slot),
-and a hand holds **at most one** `CALLED_TO_DISCARD` at a time. Revealed
-trash (`meta.trash`) is not a call. See CONVENTION.md §1h;
+reactor0 interpretation **and after every play and discard**: play calls run
+newest slot → oldest in play order (a newer call on an older slot **erases** the
+earlier call on a newer slot), and a hand holds **at most one**
+`CALLED_TO_DISCARD` at a time. Revealed trash (`meta.trash`) is not a call.
+
+The play-order erasure is **asymmetric in the kind of call** doing it, split on
+`urgent`: a *receiver* call retires both kinds to its left, a *reacter* call
+retires only other reacter calls. A reacter call is actioned by the urgent scan
+on the very next turn and never joins the receiver deque, so it has no standing
+to retire a receiver call (v10.12.0, replay 1974512).
+
+Enforcing on every play and discard — not only when a reaction resolves — is
+what lets the dead-call rules notice that somebody else advanced a stack past
+every identity a call could still be (replay 1971981). See CONVENTION.md §1h;
 `include/hanabi/conventions/reactor0/call_invariants.h`.
 
 ### deferred reaction negative

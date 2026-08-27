@@ -353,6 +353,36 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   next_interp = std::nullopt;
 }
 
+namespace {
+
+// Re-check every hand's outstanding calls after a play or a discard.
+//
+// Rule 3 -- "a call is only as good as the card" -- has to SEE the stacks the
+// action just moved. `on_play` / `on_discard` run before these hooks, so the
+// state is already current here.
+//
+// Until v10.12.0 the only `enforce_call_invariants` on these two paths sat
+// inside their `if (!waiting.empty())` block, so it ran only when a reaction
+// was being resolved. An ordinary play never re-checked standing calls, and a
+// call could outlive every identity it was ever about. Replay 1971981: a
+// receiver call on will-bot69's slot 3 was narrowed to {r1, m1} while both were
+// playable; by T9 both had been played, and with rule 3 never getting a look
+// the dead call still stood and the holder blind-played it into a strike.
+//
+// That went unnoticed because rule 1 used to erase such calls for an unrelated
+// reason -- any newer stamp on an older slot took them out, reacter stamps
+// included. Narrowing rule 1 to leave receiver calls alone (the actual subject
+// of this version) removed that accidental cover and exposed the real gap.
+//
+// `enforce_call_invariants` is idempotent, so the in-block call each hook still
+// makes on the reaction path is harmless.
+void enforce_calls_after_action(Game& game) {
+  if (game.convention != Convention::REACTOR0) return;
+  hanabi::reactor0::enforce_call_invariants(game);
+}
+
+}  // namespace
+
 void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   using namespace hanabi::reactor;
   check_missed(action.player_index_v, action.order);
@@ -490,6 +520,7 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   fire_reaction_elim(prev, action.player_index_v, action.order);
   elim();
   resolve_deferred_elims();
+  enforce_calls_after_action(*this);
   if (prev.state.can_clue()) reset_zcs();
 }
 
@@ -519,6 +550,7 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   fire_reaction_elim(prev, action.player_index_v, action.order);
   elim();
   resolve_deferred_elims();
+  enforce_calls_after_action(*this);
   if (prev.state.can_clue()) reset_zcs();
 }
 
