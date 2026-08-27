@@ -239,6 +239,34 @@ Two things outrank the phases below, and one thing sits between them:
     1973575 T62). `choose_clue` reads the same filtered pool, so in that
     position it declines too and step 4 plays or discards.
 
+0c. **A TIMED-OUT solve yields to a VERY HIGH clue** (v10.11.0). Step 0 owns the
+    turn outright only when the search actually finished. When it times out, the
+    truncated-search pre-check runs a **tier 0** ahead of its existing two:
+    `choose_very_high_clue`, and nothing weaker. Only then does it fall to
+    tier 1 (a certain play) and tier 2 (a standing call). A solve that FINISHES
+    is untouched — replays 1966757 and 1969860 pin that the solver's own answer
+    stands there.
+
+    Replay 1973602 T58: `rem_score() = 4 <= num_suits + 1 = 7` handed the turn
+    to the fork, so step 1 was never reached — `analyse_clues` and `choose_clue`
+    were called **zero** times. The solve burned its full six seconds, timed
+    out, and tier 1 played a certain r5. Yellow to will-bot69 was a VH1 finesse
+    worth two Dark Pink cards.
+
+    **Why not HIGH.** The obvious wider reading — let an occupied Alice give a
+    HIGH clue here, since `clue_is_admissible` would — was measured and
+    rejected. Over the 165 logged turns that reach this pre-check it moved 19,
+    every one play→clue, and only 2 were the finesse; the other 17 were merely
+    HIGH, **8 at pace ≤ 1 and 3 at pace 0**. That is structural rather than a
+    threshold wanting a tweak: H1 and H4 are properties of the **position**, not
+    of the candidate clue — they lift *every* legal clue that turn (see the tier
+    definitions above) — and "Bob's chop is endangered" is the ordinary state of
+    an endgame. The arm therefore degenerated into "if Bob's chop is at risk,
+    clue instead of banking a certain point". Replay 1973566 T43 is the shape:
+    pace 0, one clue token, giving up a standing reacter call to burn it. The
+    HIGH rules were written for mid-game value and do not transfer to a pace-0
+    position; VERY HIGH is the only tier that should out-rank a certain play.
+
 1.  **A VERY HIGH tier clue**, if one is available.
 
 2.  **A pending REACTION.**  If Alice holds a reacter-CTP — or, in a variant

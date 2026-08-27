@@ -271,6 +271,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_endgame/test_replay_1971808_stall_clue_priority.cpp
   tests/test_reactor0/test_endgame/test_replay_1972670_required_play_with_one_card_left.cpp
   tests/test_reactor0/test_endgame/test_replay_1974303_two_criticals_with_a_dead_partner.cpp
+  tests/test_reactor0/test_endgame/test_replay_1973602_timeout_yields_to_a_finesse.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp

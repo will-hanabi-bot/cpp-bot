@@ -1222,6 +1222,47 @@ PerformAction Game::take_action() const {
           if (auto* pd = std::get_if<PerformDiscard>(&p)) return pd->target;
           return -1;
         };
+        // 0. Before either of those: a VERY HIGH clue.
+        //
+        // The two tiers below take an action whose value we can establish
+        // ourselves, which is right as far as it goes -- but a truncated search
+        // has not earned the right to pre-empt Precedence step 1. Taking the
+        // certain play unconditionally is how replay 1973602 T58 came out:
+        // `rem_score() = 4 <= num_suits + 1`, so the fork owned the turn, the
+        // solve ran its full 6 s and timed out, and tier 1 played the r5 in
+        // hand. A yellow clue to will-bot69 was a VH1 finesse worth two Dark
+        // Pink cards -- yellow's reactive value is 2 and `calc_slot(2,1,5) = 1`
+        // pairs his one-away d4 with yagami_black's d3 -- and `analyse_clues`
+        // was never even called on that turn.
+        //
+        // VERY HIGH and NOTHING WEAKER, deliberately. The first cut also
+        // admitted HIGH through `choose_clue`, on the grounds that
+        // `clue_is_admissible` lets an occupied Alice give one. Swept over the
+        // 165 logged turns that reach this pre-check, that moved 19 -- all
+        // play->clue -- and only 2 of them were the finesse. The other 17 were
+        // merely HIGH, 8 at pace <= 1 and 3 at pace 0. The reason is structural:
+        // H1 and H4 are properties of the POSITION, not of the candidate ("it
+        // lifts every legal clue that turn", DECISION_MAKING.md), and "Bob's
+        // chop is endangered" is the common case in an endgame -- so the HIGH
+        // arm degenerated into "clue instead of banking a certain point".
+        // Replay 1973566 T43 is the shape: pace 0, one clue token, and it gave
+        // up a standing reacter call to burn it. Those tiers were written for
+        // mid-game value and do not transfer to a pace-0 position.
+        //
+        // Scoped to the TIMED-OUT branch only. A solve that FINISHED still owns
+        // the turn -- replays 1966757 and 1969860 pin that.
+        if (convention == Convention::REACTOR0) {
+          auto all_clues = enumerate_clue_candidates();
+          if (!all_clues.empty()) {
+            auto cands = hanabi::reactor0::analyse_clues(*this, all_clues);
+            if (auto vh = hanabi::reactor0::choose_very_high_clue(*this, cands)) {
+              hanabi::logging::log_branch(
+                  "endgame.timeout_precheck",
+                  {{"tier", 0}, {"clue", "very_high"}});
+              return *vh;
+            }
+          }
+        }
         auto certain = hanabi::endgame::certain_plays(*this);
         if (!certain.empty()) {
           hanabi::logging::log_branch(
