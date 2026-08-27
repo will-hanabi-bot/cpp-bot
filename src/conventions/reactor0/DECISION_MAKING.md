@@ -660,6 +660,15 @@ is judged from Alice's own inference, not common knowledge.
    precedence — an endangered chop outranks a stall — but it is worth stating,
    because it means the rungs below are rarer than their position suggests.
 
+   **Pace 0 is the third way in**, alongside locked and 8 tokens, and it is the
+   one that does not depend on Bob at all. There every remaining turn has to
+   produce a play, so a pitch or a chuck that advances nothing costs a point
+   outright and Alice is as forced to clue as she is at 8 tokens. Note what this
+   does to the floor: §4 always returns *some* clue, tier ignored, so on a
+   pace-0 turn where §3 declines Alice will essentially always clue rather than
+   discard. Replay 1973996 T52 is the position it was written for — pace 0,
+   seven tokens, unlocked, and she threw a card that advanced nothing.
+
    Rungs 4.4 and 4.5 sit **above** the lock, unlike their counterparts in §3.
    Two reasons. A lock commits Bob's whole hand, so at a forced clue it is worth
    less than information or than a harmless stall. And at 8 tokens a re-clue of

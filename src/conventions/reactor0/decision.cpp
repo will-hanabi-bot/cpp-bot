@@ -1156,8 +1156,36 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // of priority 3 declined on "no safe play or discard", section 4 needed 8
   // tokens and there were 7, and a locked Alice bombed her way out of the turn
   // with a perfectly good play reveal on the table.
+  //
+  // PACE 0 is the third arm (v10.13.0). There every remaining turn has to
+  // produce a play, so a pitch or a chuck that does not advance a stack costs a
+  // point outright -- Alice is as forced to clue as she is at 8 tokens, and a
+  // low-value clue is the cheapest thing she can do. The tier gate already
+  // stands aside there (rule 1a's window closes at `pace() >= 1`), so all that
+  // was missing is reaching section 4 at all.
+  //
+  // Replay 1973996 T52: pace 0, 7 tokens, Alice unlocked, so this returned
+  // nullptr, `choose_clue` declined and phase 2 threw a card that advanced
+  // nothing.
+  //
+  // "AND IS FORCED TO CLUE OR PITCH" is load-bearing on this arm, unlike the
+  // other two. Section 4 sits in decision phase 1, which is ABOVE the play
+  // phase, and its floor returns some clue regardless of tier -- so opening it
+  // whenever pace is 0 makes Alice clue instead of playing a card she can
+  // already see. Swept over the 1187 logged pace-0 turns, that moved 272, and
+  // 133 of them were `play -> clue`: exactly backwards at a pace where the only
+  // thing that scores is a play. She is forced only when she has none.
+  //
+  // Asked of her OWN view rather than `common`: whether she will play this turn
+  // is decided by what she knows, which is also what the play phase below will
+  // read.
   const bool locked = g.common.thinks_locked(g, alice_of(g));
-  if (g.state.clue_tokens != 8 && !locked) return nullptr;
+  const bool forced_at_pace_zero =
+      g.state.pace() == 0 &&
+      g.me().thinks_playables(g, alice_of(g)).empty();
+  if (g.state.clue_tokens != 8 && !locked && !forced_at_pace_zero) {
+    return nullptr;
+  }
   // 4.1 is "same as 3.1", which carries 3.1's own clue-count condition.
   if (clues_at_least(g, 2)) {
     if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;       // 4.1
