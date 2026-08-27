@@ -1,6 +1,8 @@
 #include "hanabi/conventions/reactor0/call_invariants.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <vector>
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
@@ -184,10 +186,60 @@ void drop_dead_chuck_calls(Game& game, const std::vector<int>& hand) {
   }
 }
 
+// Rule 0: a reacter-CTP whose paired target has left the receiver's hand is
+// RELEGATED to a receiver-CTP -- `urgent` is cleared and nothing else is.
+//
+// A reaction is urgent because the RECEIVER is decoding against it: he learns
+// which of HIS slots the clue named from which of OURS we action. Once his
+// paired card has gone there is nobody left to inform, so the call stops
+// out-ranking the rest of the turn. It does NOT stop being a call: the card is
+// still read as playable and still wants playing.
+//
+// `urgent` is exactly the reacter/receiver discriminator -- `calls_of`
+// (`calls.cpp`) routes an urgent CTP to `reacter_ctp` and every other CTP to
+// the `receiver_ctp` deque -- so clearing it IS the relegation, and the card
+// then reaches the pitch list and phase 2's rungs 2-8 by the ordinary route.
+//
+// Until v11.1.0 the de-urgenting lived in `decide.cpp`'s urgent scan, which
+// merely SKIPPED the call and left the flag set. `calls_of` therefore went on
+// filing it under `reacter_ctp`, where the only thing that ever actions it is
+// the scan that had just skipped it -- and `choose_action` has no rung 1
+// (`calls.h`). The call became permanently unactionable. Replay 1975197 T5:
+// will-bot67 deferred at T2, will-bot69 played the paired card at T3, and at T5
+// the bot discarded its chop holding a call read {i1,s1,b1,n1}, every reading
+// playable.
+//
+// CTP ONLY. A spent reacter-CTD needs nothing: the chuck list takes any
+// CALLED_TO_DISCARD regardless of urgency (`calls.cpp`), so it still reaches
+// rung 11, and `test_replay_1972716_spent_reaction_is_not_urgent` pins it as
+// still urgent. Only the pitch list filters on the urgency-derived
+// classification, so only the CTP was orphaned.
+void relegate_spent_reactions(Game& game, const std::vector<int>& hand) {
+  const State& s = game.state;
+  for (int o : hand) {
+    const ConvData& m = game.meta[o];
+    if (m.status != CardStatus::CALLED_TO_PLAY || !m.urgent) continue;
+    const int paired = m.react_target_order;
+    if (paired < 0 || paired >= static_cast<int>(s.holders.size())) continue;
+    const auto& holder_hand = s.hands[s.holder_of(paired)];
+    if (std::find(holder_hand.begin(), holder_hand.end(), paired) !=
+        holder_hand.end()) {
+      continue;  // still in hand: the receiver is still decoding against us
+    }
+    // Only the urgency. The status, the inference the call installed, and
+    // `signal_turn` all stand -- this is a relegation, not an `erase_call`.
+    game.with_meta(o, [](ConvData& d) { d.urgent = false; });
+  }
+}
+
 }  // namespace
 
 void enforce_call_invariants(Game& game) {
   for (const auto& hand : game.state.hands) {
+    // Rule 0 runs FIRST: `enforce_play_order` reads `urgent` as its
+    // reacter/receiver discriminator, so it has to see the relegation in the
+    // same pass or it will retire the wrong calls for one more turn.
+    relegate_spent_reactions(game, hand);
     drop_dead_play_calls(game, hand);
     drop_dead_chuck_calls(game, hand);
     enforce_play_order(game, hand);

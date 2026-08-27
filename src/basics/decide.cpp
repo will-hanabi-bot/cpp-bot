@@ -968,6 +968,15 @@ PerformAction Game::take_action() const {
         // and is skipped exactly like a call the holder can see is trash. The
         // reading on our card stands -- only the urgency lapses.
         //
+        // CTD ONLY as of v11.1.0. A spent reacter-CTP is now relegated for real
+        // by rule 0 of `enforce_call_invariants`, so `urgent` is already false
+        // and the loop skipped it one line above; leaving it merely skipped
+        // here is what stranded it, since `calls_of` routes on that same flag
+        // and nothing else in reactor0 actions a `reacter_ctp` (replay 1975197
+        // T5). The CTD is deliberately NOT relegated -- the chuck list takes any
+        // CALLED_TO_DISCARD regardless of urgency, so it still reaches rung 11,
+        // and 1972716 pins it as still urgent -- which is why this test stays.
+        //
         // In practice this only bites after a DEFERRAL, since the reacter
         // normally acts before the receiver ever gets a turn. Replay 1972716
         // T5: we deferred at T2, the receiver played the paired card at T3, and

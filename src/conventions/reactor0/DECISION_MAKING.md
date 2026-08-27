@@ -279,8 +279,17 @@ Two things outrank the phases below, and one thing sits between them:
       - inverted suit present:  reacter-CTP and reacter-CTD are equally urgent.
 
     A reaction stops being urgent once its **target has left the receiver's
-    hand** (`ConvData::react_target_order`, applied in `decide.cpp`'s urgent
-    scan).  The call and its inference stand; only the urgency lapses.
+    hand** (`ConvData::react_target_order`) — there is nobody left decoding
+    against it. The call and its inference stand.
+
+    For a **CTP** that is a **relegation to a receiver-CTP**, performed by rule 0
+    of `enforce_call_invariants`: clearing `urgent` is what moves the card out of
+    `reacter_ctp` and into the `receiver_ctp` deque, so decision phase 2 reaches
+    it through the pitch list instead. Alice also stops counting as *occupied*,
+    since there is no longer a reaction pending. Without that move the call is
+    stranded — the urgent scan skips it and phase 2 has no rung 1 — which is
+    what replay 1975197 T5 cost. A **CTD** is only skipped by the scan, not
+    relegated: the chuck list takes any CTD whatever its urgency.
 
 3.  **Decision phase 1** — giving a clue.
 
@@ -974,8 +983,9 @@ list by priority:
 
 1. If Alice has a reacter-CTP or a reacter-CTD card, she must immediately action
    the most recent one. (Per the Precedence section, only a VERY HIGH clue
-   outranks this — and the call is no longer urgent at all once its target has
-   left the receiver's hand.)
+   outranks this. Once its target has left the receiver's hand a reacter-CTP is
+   no longer urgent and leaves this rung altogether — it is relegated to a
+   receiver-CTP and picked up by the pitch list below.)
 2. Alice pitches a card in the pitch list that is known to connect with a card in
    either Bob's or Cathy's hand.
 3. Alice chucks a known inverted suit in the chuck list that is known to connect

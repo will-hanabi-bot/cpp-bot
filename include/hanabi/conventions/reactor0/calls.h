@@ -105,8 +105,20 @@ ActionLists action_lists(const Game& game, int player);
 //
 // Rung 1, "action a pending reacter call", is NOT implemented here:
 // `Game::take_action`'s urgent return already does it, and does it ABOVE the
-// clue phase where the Precedence section puts it. By the time this is reached
-// there is no pending reaction left to action.
+// clue phase where the Precedence section puts it.
+//
+// A reacter call therefore has exactly two ends, and this list is one of them:
+// it is either actioned by that urgent return, or -- once its paired target
+// leaves the receiver's hand and there is nobody left decoding against it --
+// RELEGATED to a receiver-CTP by rule 0 of `enforce_call_invariants`. Relegation
+// clears `urgent`, which is the discriminator `calls_of` routes on, so the card
+// joins the `receiver_ctp` deque and this list reaches it through the pitch list
+// at rungs 2-8 like any other receiver call.
+//
+// Until v11.1.0 the de-urgenting only SKIPPED the call in the scan and left the
+// flag set, so it stayed a `reacter_ctp` that nothing could action and this
+// comment's old claim -- "by the time this is reached there is no pending
+// reaction left to action" -- was false. Replay 1975197 T5.
 //
 // Rungs 12 and 13 are a floor, so this returns a value for any hand that has a
 // card in it. Nullopt means the hand is empty.

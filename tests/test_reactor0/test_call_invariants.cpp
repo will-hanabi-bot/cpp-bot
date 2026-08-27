@@ -33,7 +33,10 @@
 #include <gtest/gtest.h>
 
 #include "hanabi/basics/game.h"
+#include <algorithm>
+
 #include "hanabi/conventions/reactor0/call_invariants.h"
+#include "hanabi/conventions/reactor0/calls.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 
 using namespace hanabi;
@@ -493,4 +496,132 @@ TEST(Reactor0CallInvariants, ACtpOnASpareOrangeSurvives) {
   hanabi::reactor0::enforce_call_invariants(g);
   EXPECT_EQ(g.meta[o3].status, CardStatus::CALLED_TO_PLAY)
       << "a pitch of a spare orange is a live call, not a dead one";
+}
+
+// Rule 0 (v11.1.0): a reacter-CTP whose paired target has left the receiver's
+// hand is RELEGATED to a receiver-CTP.
+//
+// `urgent` is the reacter/receiver discriminator `calls_of` routes on, so
+// clearing it IS the relegation: the card leaves `reacter_ctp`, joins the
+// `receiver_ctp` deque, and is reached by the pitch list and phase 2's rungs
+// 2-8 instead of by the urgent scan.
+//
+// Before this, the de-urgenting lived in `decide.cpp`'s urgent scan and merely
+// SKIPPED the call, leaving the flag set. `calls_of` went on filing it under
+// `reacter_ctp` -- where the only thing that actions it is the scan that had
+// just skipped it, `choose_action` having no rung 1 -- so the call became
+// permanently unactionable. Replay 1975197 T5 discarded its chop holding one.
+//
+// The three tests below differ only in what happens to the paired card, or in
+// which button the call carries.
+namespace {
+
+// Alice leads so Cathy acts second; Bob's slot 3 carries the call. Green is on
+// 0 and Cathy holds no green, so the call's {g1} reading survives whatever she
+// does -- rule 3 must not be what clears it.
+SetupOptions relegation_opts() {
+  SetupOptions opts;
+  opts.variant_name = "No Variant";
+  opts.starting = TestPlayer::CATHY;
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.clue_tokens = 7;  // the control has Cathy discard, illegal at the cap
+  opts.hands = {
+      {"y4", "y3", "p4", "p3", "y2"},   // Alice
+      {"b4", "b3", "g1", "b2", "y5"},   // Bob -- slot 3 is the called card
+      {"r1", "r3", "p2", "r4", "r5"},   // Cathy -- slot 1 is the paired target
+  };
+  use_reactor0(opts);
+  return opts;
+}
+
+// Seed a reacter call on Bob's slot 3, paired with Cathy's slot 1.
+//
+// The reading has to suit the BUTTON, or rules 3 and 4 erase the call before
+// rule 0 is ever the question: a CTP needs a reading its Play button could
+// advance ({g1}, green on 0), a CTD one its Discard button could spare ({y4},
+// two copies and not playable). Getting that wrong is what made the first draft
+// of the CTD test look like a relegation when it was an erasure.
+Game seed_reacter_call(Game g, CardStatus button) {
+  const int called = order_at(g, TestPlayer::BOB, 3);
+  const int paired = order_at(g, TestPlayer::CATHY, 1);
+  const Identity reading = button == CardStatus::CALLED_TO_PLAY
+                               ? Identity{2, 1}   // g1 -- playable
+                               : Identity{1, 4};  // y4 -- sparable
+  g.with_thought(called, [reading](const Thought& t) {
+    Thought out = t;
+    out.inferred = IdentitySet::from_iter({reading});
+    return out;
+  });
+  g.with_meta(called, [&](ConvData& m) {
+    m.status = button;
+    m.urgent = true;
+    m.react_target_order = paired;
+    m = m.reason(0).signal(0);
+  });
+  return g;
+}
+
+}  // namespace
+
+TEST(Reactor0CallInvariants, ASpentReacterPlayCallRelegatesToTheReceiverDeque) {
+  Game g = seed_reacter_call(setup(relegation_opts()),
+                             CardStatus::CALLED_TO_PLAY);
+  const int called = order_at(g, TestPlayer::BOB, 3);
+  ASSERT_TRUE(g.meta[called].urgent) << "guard: it starts as a reacter call";
+
+  // Cathy plays the paired card, so it leaves her hand.
+  g = take_turn(std::move(g), "Cathy plays r1 (slot 1)", "p5");
+
+  EXPECT_EQ(g.meta[called].status, CardStatus::CALLED_TO_PLAY)
+      << "the call stands -- this is a relegation, not an erasure";
+  EXPECT_TRUE(g.common.thoughts[called].inferred.contains(Identity{2, 1}))
+      << "and so does the inference it installed";
+  EXPECT_FALSE(g.meta[called].urgent)
+      << "but it is no longer urgent: nobody is decoding against it";
+
+  const auto calls = hanabi::reactor0::calls_of(g, static_cast<int>(TestPlayer::BOB));
+  EXPECT_NE(calls.reacter_ctp, called) << "it has left the reacter slot";
+  EXPECT_NE(std::find(calls.receiver_ctp.begin(), calls.receiver_ctp.end(), called),
+            calls.receiver_ctp.end())
+      << "and joined the receiver deque, which is what the pitch list is built "
+         "from -- the whole point of relegating rather than skipping";
+  EXPECT_FALSE(calls.has_reaction())
+      << "so Alice is no longer occupied by a pending reaction";
+}
+
+// The control, and the discriminator: the paired card is still held, so the
+// receiver is still decoding and the call keeps its urgency.
+TEST(Reactor0CallInvariants, AReacterCallKeepsUrgencyWhileItsTargetIsHeld) {
+  Game g = seed_reacter_call(setup(relegation_opts()),
+                             CardStatus::CALLED_TO_PLAY);
+  const int called = order_at(g, TestPlayer::BOB, 3);
+  const int paired = g.meta[called].react_target_order;
+
+  // Cathy acts on a DIFFERENT card, so the paired one stays put.
+  g = take_turn(std::move(g), "Cathy discards r3 (slot 2)", "p5");
+
+  const auto& cathy = g.state.hands[static_cast<int>(TestPlayer::CATHY)];
+  ASSERT_NE(std::find(cathy.begin(), cathy.end(), paired), cathy.end())
+      << "guard: the paired card is still in the receiver's hand";
+  EXPECT_TRUE(g.meta[called].urgent)
+      << "nothing has changed for the receiver, so the reaction is still urgent";
+}
+
+// CTP only. A spent reacter-CTD is left alone: the chuck list takes any
+// CALLED_TO_DISCARD regardless of urgency, so it still reaches rung 11 and was
+// never orphaned. `MiscReplay1972716.SpentReactionStopsBeingUrgent` depends on
+// this, and it is the replay that motivated the de-urgenting in the first place.
+TEST(Reactor0CallInvariants, ASpentReacterDiscardCallIsNotRelegated) {
+  Game g = seed_reacter_call(setup(relegation_opts()),
+                             CardStatus::CALLED_TO_DISCARD);
+  const int called = order_at(g, TestPlayer::BOB, 3);
+
+  g = take_turn(std::move(g), "Cathy plays r1 (slot 1)", "p5");
+
+  ASSERT_EQ(g.meta[called].status, CardStatus::CALLED_TO_DISCARD)
+      << "guard: the {y4} reading keeps rule 4 off it, so what this measures "
+         "is rule 0 and nothing else";
+  EXPECT_TRUE(g.meta[called].urgent)
+      << "the CTD keeps its urgency -- only the pitch list filters on the "
+         "urgency-derived classification, so only the CTP was ever orphaned";
 }
