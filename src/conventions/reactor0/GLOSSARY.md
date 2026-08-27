@@ -300,10 +300,43 @@ reacter could not read.
 Starved — the hardness measure that picks the rlocks default.
 `src/conventions/reactor0/efficiency.cpp`.
 
+### chuck
+Pressing **Discard** on an inverted card. The button stacks it, so the call is a
+play attempt rather than a throw. The mirror of a *pitch*.
+
+Two predicates share the name and are NOT the same question — see *chuckable*
+below for the decision-side one. The interpretation-side one is
+**`slot_is_chuckable`** (`reactor0/interpret_reaction.h`): could the reacter
+press Discard on this slot at all? *Some* reading is a playable inverted card,
+or *some* reading is a non-critical plain one. Existential, not universal, and
+it is the union of the two arms of `stamp_react_discard_button`.
+
+**`stamp_react_discard_button`** (`interpret_reactive.cpp:333-342`) is the
+shared ladder every Discard-button reacter call goes through — rank Phase A's
+and Phase B's inverted-target arms, Phase C's plain arm, and both colour modes.
+It tries `stamp_orange_chuck` first (narrowing `inferred` to the identities the
+button actually advances) and falls back to `reactor::target_discard` (the
+non-critical plain reading). Refusing means *neither* arm applied, which is
+exactly `!slot_is_chuckable(possibilities())`.
+
+The ladder is v10.9.0, replay 1974342 T13. Before it the two colour sites
+*chose* an arm with a gate that read `possible` while the chuck stamp reads
+`possibilities()`; the deferred negatives pull the playables out of `inferred`
+and leave `possible` alone, so on any reacter that had already reacted once the
+gate picked the chuck, the chuck had nothing to name, and a plain reactive
+discard read as a `MISTAKE`. The other three sites had no chuck arm at all. See
+CONVENTION.md §1f.
+
 ### chuckable
 A card safe to press Discard on: every reading is trash on a **plain** suit, or
 every reading is an immediately playable **inverted** one (the two arms of
 `is_chuckable`, `src/conventions/reactor0/calls.cpp`).
+
+This is the **decision-side** predicate — "would pressing Discard here be safe?"
+— and it is UNIVERSAL over the readings. Do not confuse it with the
+interpretation-side `slot_is_chuckable` under *chuck* above, which is
+existential: "is there a reading this call could mean?" A card can be
+`slot_is_chuckable` without being `is_chuckable`.
 
 The readings that count are `possibilities()` — `inferred` when it is non-empty,
 else `possible` — narrowed for our own seat by `sight_narrowed`. **Whether a clue

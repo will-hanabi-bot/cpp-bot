@@ -127,8 +127,8 @@ uses.
 **"Gets a finesse"** (VH1) means the clue's interpretation is reactive rank
 **Phase B**, and *only* Phase B — the blind-play phase that walks one-away
 targets and calls the reacter onto the prerequisite
-(`interpret_reactive.cpp:383-447`). Phase A (double play, `:307-382`) and Phase C
-(double discard, `:448-482`) are not finesses. A reactive lock has to be excluded
+(`interpret_reactive.cpp:575-640`). Phase A (double play, `:487-573`) and Phase C
+(double discard, `:642-696`) are not finesses. A reactive lock has to be excluded
 explicitly (`predicts_reactive_lock`): it stamps CHOP_MOVED a turn later, so at
 clue time the receiver's predicted slot carries no status and looks exactly like
 an un-stamped Phase B target. Since VERY HIGH is the one thing that outranks a
@@ -970,10 +970,10 @@ lives in `src/conventions/reactor0/decision.cpp`:
 |---|---|---|
 | reactive vs stable | positional compare `action.target != bob` | `interpret_clue.cpp:620-631` |
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:173-229` |
-| finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:383-447` |
-| double discard clue | reactive rank Phase C | `interpret_reactive.cpp:448-482` |
+| finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:575-640` |
+| double discard clue | reactive rank Phase C | `interpret_reactive.cpp:642-696` |
 | a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |
-| reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:307-382`; `:503-560`, `:561-626` |
+| reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:487-573`; `:716-800`, `:804-946` |
 | lock clue | `predicts_reactive_lock` | `interpret_reaction.cpp:31-47` |
 | "this clue creates a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |
 | new touches, for the default tiebreak | `elim_result` / `bad_touch_result` | `src/basics/clue_result.cpp` |

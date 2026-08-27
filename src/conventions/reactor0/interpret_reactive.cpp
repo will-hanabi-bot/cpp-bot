@@ -297,6 +297,49 @@ std::optional<ClueInterp> stamp_react_play_button(Game& game,
   return stamp_orange_pitch(game, action, react_order, /*urgent=*/true);
 }
 
+// Stamp the reacter's slot when the call is the DISCARD button. The mirror of
+// `stamp_react_play_button` above, and it exists for the same reason: one ladder,
+// shared by every site that issues the button, so they cannot drift.
+//
+//   1. A CHUCK, when some reading is an inverted card the stack is waiting for --
+//      on an inverted suit the Discard button stacks the card rather than
+//      throwing it.
+//   2. Otherwise the ordinary throw-away reading.
+//
+// Those two arms are exactly `slot_is_chuckable` (interpret_reaction.h) asked of
+// the slot's own inferences -- a playable inverted reading, or a non-critical
+// plain one -- which is what makes the refusal meaningful: the call is declined
+// when NEITHER reading exists, never because the wrong one was picked. The
+// predicate is deliberately not called here; the two stamps already answer their
+// own halves of it, and a separate gate is precisely what drifted before.
+//
+// v10.9.0, replay 1974342 T13. There used to be a `react_could_chuck` gate that
+// chose between the two arms instead of cascading, and it asked its question of
+// `possible` while `stamp_orange_chuck` asks it of `possibilities()` -- i.e. of
+// `inferred` once that is non-empty. reactor0's own deferred negatives
+// (`slot_elims`) strip the PLAYABLE identities from a reacter's unpaired slots,
+// which is that exact axis, so on any reacter that had already been through one
+// reactive the gate said "chuck", the chuck stamp found nothing playable and
+// inverted left to name, and there was no path back to the ordinary discard.
+// will-bot69's slots 4 and 5 were both `{r2,r3,r4,y3,y4,g2,g3,g4,o2,o3,o4}` with
+// orange on 0: `possible` still held the o1, `inferred` did not, and both
+// pairings died on it. The clue -- a plain reactive discard -- read as a MISTAKE
+// and the bot threw the Blue 5 off its chop instead. Both slots were chuckable
+// the whole time through the plain arm (r2, two copies, none discarded).
+//
+// `stamp_orange_chuck` computes its keep-set before it mutates anything
+// (reactor0/interpret_clue.cpp), so a refusal by arm 1 is free and the cascade
+// is safe to write in this order.
+std::optional<ClueInterp> stamp_react_discard_button(Game& game,
+                                                     const ClueAction& action,
+                                                     int react_order) {
+  if (auto interp =
+          stamp_orange_chuck(game, action, react_order, /*urgent=*/true)) {
+    return interp;
+  }
+  return target_discard(game, action, react_order, /*urgent=*/true);
+}
+
 ReactVet vet_react_slot(const Game& prev, const Game& game, int react_order,
                         const std::vector<std::pair<int, Identity>>& conns,
                         bool reacter_plays) {
@@ -497,9 +540,14 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     // that decides between the two (see its comment); `free_pitch` keeps its
     // own arm above it because a card whose every reading is a DEAD orange is
     // a pitch before any of that is asked.
+    //
+    // The inverted-target arm goes through `stamp_react_discard_button` for the
+    // mirror-image reason: `target_discard` alone narrows to the NON-critical
+    // plain reading, which cannot describe a react slot that is itself an
+    // orange the stack is waiting for.
     auto interp =
         target_inverted
-            ? target_discard(game, action, react_order, /*urgent=*/true)
+            ? stamp_react_discard_button(game, action, react_order)
         : free_pitch
             ? stamp_orange_pitch(game, action, react_order, /*urgent=*/true)
             : stamp_react_play_button(game, action, react_order);
@@ -572,7 +620,7 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
       return out;
     });
     auto interp = variants::target_is_inverted(state, receive_order)
-                      ? target_discard(game, action, react_order, /*urgent=*/true)
+                      ? stamp_react_discard_button(game, action, react_order)
                       : target_play(game, action, react_order, /*urgent=*/true,
                                     /*stable=*/false);
     // Same for Phase B's blind-play call.
@@ -630,12 +678,14 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     auto interp =
         target_inverted
             ? stamp_react_play_button(game, action, react_order)
-            : target_discard(game, action, react_order, /*urgent=*/true);
+            : stamp_react_discard_button(game, action, react_order);
     // Same as Phase A and Phase B above. `target_discard` narrows to the
     // NON-CRITICAL ids, which is the plain-suit reading of "throw this away";
     // on an inverted suit a chuck is a play attempt, so the card must be
     // PLAYABLE -- and a playable orange 5 is critical, so that narrowing keeps
-    // the trash orange and drops the one the call actually meant.
+    // the trash orange and drops the one the call actually meant. That is why
+    // the plain arm is the shared discard ladder and not a bare `target_discard`:
+    // the chuck reading has to be reachable here too.
     if (interp) narrow_to_stamped_button(game, react_order);
     if (!interp) continue;
     if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
@@ -714,13 +764,10 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
       // Dark Orange empties outright, since every card there is one-of-each, so
       // it refuses to stamp and the whole clue reads as a MISTAKE. Replay
       // 1967491 T36: will-bot67's slot 5 was {d2, d4} with the dark stack on 1,
-      // and chucking it stacks the d2. `stamp_orange_chuck` narrows to exactly
-      // the identities that button advances.
-      const bool react_could_chuck =
-          !target_inverted &&
-          game.common.thoughts[react_order].possible.exists([&](Identity i) {
-            return variants::is_inverted_id(state, i) && state.is_playable(i);
-          });
+      // and chucking it stacks the d2. `stamp_react_discard_button` tries the
+      // chuck first and falls back to the ordinary throw-away, so both readings
+      // are reachable and the call is refused only when neither exists.
+      //
       // An inverted target swaps the reacter onto the PLAY button -- and when
       // his own card is a known orange, pressing Play is a PITCH, not a play.
       // `reactor::target_play` narrows `inferred` to the playable set and bails
@@ -736,9 +783,7 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
       auto interp =
           target_inverted
               ? stamp_react_play_button(game, action, react_order)
-          : react_could_chuck
-              ? stamp_orange_chuck(game, action, react_order, /*urgent=*/true)
-              : target_discard(game, action, react_order, /*urgent=*/true);
+              : stamp_react_discard_button(game, action, react_order);
       // As Phase A and Phase B do. Replay 1967376: this is where an Odds and
       // Evens RANK clue lands (the odd bucket runs this ruleset), and without
       // the narrowing the reacter-CTD kept a trash o1 and lost the playable o5.
@@ -811,17 +856,10 @@ std::optional<ClueInterp> reactive_colour(const Game& prev, Game& game,
         out.old_inferred = t.inferred;
         return out;
       });
-      // The same pair mode 1 uses for its Discard arm: pressing Discard on a
+      // The same ladder mode 1 uses for its Discard arm: pressing Discard on a
       // card that could be a playable orange is a CHUCK, and `target_discard`
       // narrows to the non-critical plain reading, which cannot describe one.
-      const bool react_could_chuck =
-          game.common.thoughts[react_order].possible.exists([&](Identity i) {
-            return variants::is_inverted_id(state, i) && state.is_playable(i);
-          });
-      auto interp =
-          react_could_chuck
-              ? stamp_orange_chuck(game, action, react_order, /*urgent=*/true)
-              : target_discard(game, action, react_order, /*urgent=*/true);
+      auto interp = stamp_react_discard_button(game, action, react_order);
       if (interp) narrow_to_stamped_button(game, react_order);
       if (!interp) continue;
       if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
@@ -971,6 +1009,10 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                     : reactive_rank(prev, game, action, anchor, reacter,
                                     receiver);
   record_react_target(game);
+  // An unread reactive leaves the WC pushed above in place, with
+  // `react_order == -1` and no urgent stamp on any card. `take_action` reports
+  // it -- see `decide.cpp`'s `reactor0.reactive_unreadable` branch, and the
+  // comment there for why it cannot be reported from here.
   return interp;
 }
 

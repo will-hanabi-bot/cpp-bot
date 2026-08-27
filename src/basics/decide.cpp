@@ -838,6 +838,39 @@ PerformAction Game::take_action() const {
   const Player& m = me();
   int next_player_index = s.next_player_index(s.our_player_index);
 
+  // --- Report a reactive we owe a reaction to but could not read. ---------
+  //
+  // reactor0's quietest failure. `interpret_reactive` pushes the waiting
+  // connection BEFORE any phase runs, so a MISTAKE leaves one behind with
+  // `react_order == -1` and no urgent stamp -- and the scan just below keys on
+  // the stamp, not on `waiting`. The turn falls through to the ordinary ladder
+  // with nothing said. It is also ASYMMETRIC: the receiver's POV returns
+  // REACTIVE unconditionally, so he is still waiting for a reaction and will
+  // decode whatever we do next as one. Replay 1974342 T13 is what that costs --
+  // the reacter chucked its chop (a Blue 5) and the receiver read that as the
+  // reaction, stamping CALLED_TO_PLAY on a Red 4 with red on 0.
+  //
+  // Reported HERE and not at the interpretation, deliberately: the live bot
+  // installs its `CurrentLoggerGuard` around `take_action` only
+  // (`src/net/commands.cpp`), so a `log_branch` inside `interpret_reactive`
+  // would be a no-op for exactly the case that matters -- a partner's clue
+  // arriving on the network thread. Our own next turn is both logged and the
+  // moment the reaction was owed. `scripts/find_unreadable_reactives.py`
+  // sweeps `logs/` for the same signal after the fact.
+  if (convention == Convention::REACTOR0 && !waiting.empty() &&
+      waiting.front().reacter == s.our_player_index &&
+      waiting.front().react_order < 0) {
+    const ReactorWC& wc = waiting.front();
+    hanabi::logging::log_branch(
+        "reactor0.reactive_unreadable",
+        {{"giver", wc.giver},
+         {"receiver", wc.receiver},
+         {"anchor", wc.focus_slot},
+         {"clue_kind", wc.clue.kind == ClueKind::COLOUR ? "C" : "R"},
+         {"clue_value", wc.clue.value},
+         {"clue_turn", wc.turn}});
+  }
+
   // --- Handle urgent (signalled to play / signalled to discard) cards. ---
   std::optional<int> urgent_order;
   for (int o : s.our_hand()) {

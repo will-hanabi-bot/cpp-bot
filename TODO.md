@@ -85,7 +85,7 @@ half, in both conventions, and reading under reactor.
 POV-invariant
 abort in reactor's finesse phase
 (`src/conventions/reactor/interpret_reactive.cpp:832-846`) — mirrored by
-reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:328-332`) —
+reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:601-606`) —
 returns `nullopt` whenever the observer can see that the reacter's card is
 *not* the required `prev_id`, which is exactly the bluff case; there is
 deliberately no "try the next slot" retry.
@@ -137,7 +137,7 @@ live-game evidence first.
 
 `new_play_facts` (`src/conventions/reactor0/state_eval.cpp:170-187`) counts
 `CALLED_TO_PLAY` transitions only. On an inverted suit a *play* call is stamped
-`CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:282-284`), so a genuine
+`CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:548-551`), so a genuine
 two-play reactive reads as zero plays there.
 
 This matters more, not less, after the v7.0.0 overhaul: `new_play_facts` is
@@ -160,7 +160,7 @@ deletes `get_result` outright in favour of the ordered priority list in
 The spec gates the colour play+dc mode's target walk on one condition only:
 "if the target would make Bob discard a known **critical** card, target the
 next leftmost playable". Implemented literally
-(`src/conventions/reactor0/interpret_reactive.cpp:424-429`) — so a react slot
+(`src/conventions/reactor0/interpret_reactive.cpp:363-373`) — so a react slot
 the reacter *knows* is playable is still eligible to be discarded, losing a
 play. Reactor's equivalent loop additionally skips react slots in the
 reacter's `obvious_playables`
@@ -183,7 +183,7 @@ writes `CALLED_TO_DISCARD` + `urgent` + `signal_turn` and only *then* tests
 whether the narrowing emptied, returning `std::nullopt` with the stamp left
 behind. `target_play` has the same shape. Reactor0 works around this by
 snapshotting and rolling back its candidate walks (`Rollback`,
-`src/conventions/reactor0/interpret_reactive.cpp:53-72`); reactor itself does
+`src/conventions/reactor0/interpret_reactive.cpp:59-77`); reactor itself does
 not, so an abandoned candidate can keep a call no clue ever made.
 
 Fixing it in the shared primitives would touch every reactor path at once, so
