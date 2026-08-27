@@ -502,3 +502,76 @@ TEST(Reactor0ClueTier, BobCanColourClueCathyBlocksH1) {
       << "Bob has a colour play clue for Cathy, so H1c vetoes H1. Got "
       << name_of(t) << " (HIGH means H1c never fired).";
 }
+
+// --- `chop_is_critical`: rungs 3.7 / 3.8 / 3.9's chop test ----------------
+//
+// Not `is_critical` alone and not `at_risk_chop` either. Criticality already
+// implies no same-hand dupe, no copy in another hand and none provably in
+// Alice's, so on a plain suit the two agree. The divergence is the inverted
+// suit, which is why the predicate exists.
+
+TEST(Reactor0ChopIsCritical, ALastCopyOnAPlainSuitCounts) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "b1", "p1", "y2", "b2"},
+      {"r5", "y4", "g4", "b4", "p4"},  // chop (slot 1) = the last red 5
+      {"y3", "g1", "p3", "b3", "r3"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(1), order_at(g, TestPlayer::BOB, 1)) << "guard: Bob's chop";
+  EXPECT_TRUE(hanabi::reactor0::chop_is_critical(g, 1))
+      << "the r5 is the last one and cannot be replaced";
+  EXPECT_TRUE(hanabi::reactor0::at_risk_chop(g, 0, 1))
+      << "on a plain suit the two predicates agree";
+}
+
+TEST(Reactor0ChopIsCritical, APlayableInvertedChopDoesNot) {
+  SetupOptions opts;
+  // "Orange (5 Suits)" -- r/y/g/b/o, orange inverted. Orange on 0, so the o1 on
+  // Bob's chop is BOTH critical-looking and playable: pressing Discard on it
+  // chucks it onto its own stack, so there is nothing to arrange and nothing to
+  // lose. That is the whole reason this is not a plain `is_critical` test.
+  opts.variant_name = "Orange (5 Suits)";
+  opts.hands = {
+      {"y1", "b1", "y2", "b2", "y3"},
+      {"o1", "y4", "g4", "b4", "r4"},  // chop (slot 1) = a playable orange
+      {"y5", "g1", "b3", "r3", "g3"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(1), order_at(g, TestPlayer::BOB, 1)) << "guard: Bob's chop";
+  ASSERT_TRUE(g.state.is_playable(Identity{4, 1})) << "guard: the o1 plays";
+  EXPECT_FALSE(hanabi::reactor0::chop_is_critical(g, 1))
+      << "a chuck puts it on its stack, so the rungs have nothing to arrange";
+}
+
+TEST(Reactor0ChopIsCritical, ASecondCopyStillInTheDeckDoesNot) {
+  SetupOptions opts;
+  // The divergence in the other direction: `at_risk_chop` fires here because
+  // nobody can SEE a second copy, but the g4 is not critical -- its twin is
+  // still in the deck. Replay 1973281 T19 is this position, and it is why 3.8
+  // asks for critical rather than at-risk.
+  opts.hands = {
+      {"y1", "b1", "p1", "y2", "b2"},
+      {"g4", "y4", "r4", "b4", "p4"},  // chop (slot 1) = one of two g4s
+      {"y3", "g1", "p3", "b3", "r3"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(1), order_at(g, TestPlayer::BOB, 1)) << "guard: Bob's chop";
+  EXPECT_TRUE(hanabi::reactor0::at_risk_chop(g, 0, 1))
+      << "no second g4 is visible anywhere, so it reads as at risk";
+  EXPECT_FALSE(hanabi::reactor0::chop_is_critical(g, 1))
+      << "but the other g4 is still in the deck -- losing this one costs "
+         "nothing yet, so 3.8 and 3.9 must stand down";
+}

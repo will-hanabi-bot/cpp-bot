@@ -155,7 +155,7 @@ bool is_chuckable(const Game& game, int player, int order) {
 // and discarded its unknown slot-1 chop, which was an orange 4, striking.
 //
 // Judged from the HOLDER's view, like `is_chuckable`. `has_same_hand_dupe`
-// (reactor0/state_eval.cpp:117) answers the same question but reads
+// (reactor0/state_eval.cpp:121-129) answers the same question but reads
 // `state.deck[o].id()`, which is nullopt for one's own cards -- it is only ever
 // asked about somebody ELSE's hand, and cannot serve here.
 //

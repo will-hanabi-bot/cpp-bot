@@ -24,7 +24,7 @@ visibility. All four must hold: Alice knows the identity and it is not basic
 trash; there is **no second copy in the holder's own hand**; no copy is
 visible in the third player's hand; and Alice cannot prove she is holding a
 copy (see *group elim*). Input to H1 and N2/N3 (DECISION_MAKING.md).
-`src/conventions/reactor0/state_eval.cpp:121-145`. Stricter than reactor's
+`src/conventions/reactor0/state_eval.cpp:165-196`. Stricter than reactor's
 `chop_is_nontrash` (`src/conventions/reactor/state_eval.cpp:44-49`), which
 tests basic trash only.
 
@@ -96,7 +96,7 @@ Proving Alice holds a copy of an identity without any of her cards being a
 singleton: for a subset S of her hand with combined possibilities `u`, if
 fewer than |S| copies of `u \ {id}` remain unaccounted for, one of them must
 be `id`. |S| = 1 is the ordinary singleton case.
-`src/conventions/reactor0/state_eval.cpp:60-101`. Distinct from `cross_elim`
+`src/conventions/reactor0/state_eval.cpp:70-111`. Distinct from `cross_elim`
 (`src/basics/player_elim.cpp:165-226`), which strips locked identities from
 cards *outside* such a group rather than identifying one inside it.
 
@@ -173,9 +173,10 @@ A double discard aimed at a receiver who was going to act safely anyway:
 their chop is expendable, or they already hold a known play, a
 `CALLED_TO_PLAY`, a `CALLED_TO_DISCARD` or known trash. Reactor0 drops such a
 clue from its candidate set when a stable clue to Bob would instead get a card
-played (the pointless-double-discard filter, removed in v7.0.0;
-`src/conventions/reactor0/state_eval.cpp:516-559`). Reactive locks are
-exempt. Named from replay 1942181 T41.
+played. The dedicated filter this named was removed in v7.0.0; the rule now
+lives in the General Clue Evaluation List's priority 2 admissibility condition,
+`discard_is_affordable` (`src/conventions/reactor0/decision.cpp:354-360`).
+Reactive locks are exempt. Named from replay 1942181 T41.
 
 ### call invariants
 The two rules constraining a hand's outstanding calls, enforced after every
@@ -445,7 +446,7 @@ hand. A NOT-LOW condition of the *pace-clue tier gate*: it lifts every clue
 that turn to at least MEDIUM, because the team is expecting that card to be
 saved or played. Weaker than *at-risk chop* — it ignores copies in Cathy's
 hand and in Alice's — which is the point: the card need not be in danger to be
-worth a clue. `src/conventions/reactor0/state_eval.cpp:151-161`;
+worth a clue. `src/conventions/reactor0/state_eval.cpp:197-213`;
 DECISION_MAKING.md, *Clue Tier Definitions*. Added after replay 1942330 T33.
 
 ### touched-card rank classification

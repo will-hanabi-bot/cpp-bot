@@ -30,7 +30,7 @@ We will mostly borrow the existing implementations of high/medium/low tier clues
 Note the change to H1 to also require that Cathy's chop be either playable or
 critical.
 
-A clue tier (`clue_tier`, `state_eval.cpp:424-520`) is VERY HIGH iff:
+A clue tier (`clue_tier`, `state_eval.cpp:485-582`) is VERY HIGH iff:
 
 1. **VH1** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
    finesse**. A finesse is reactive Phase B, which belongs to the **even-parity
@@ -442,7 +442,7 @@ knows is **not** the next card on that inverted suit's stack. This knowledge nee
 not be global: it is Alice's own inference that counts. Note *occupied* is not the
 same as *loaded*.
 
-Concretely, `requires_high_tier` (`state_eval.cpp:253-265`) reads the stamp
+Concretely, `requires_high_tier` (`state_eval.cpp:300-312`) reads the stamp
 literally and counts a `CALLED_TO_DISCARD` **only in a variant that contains an
 inverted suit** — there, pressing Discard is how an inverted card is played, so
 the call is a deferred play. In a plain variant a reacter-CTD does not occupy
@@ -618,14 +618,16 @@ is judged from Alice's own inference, not common knowledge.
     6. Give a lock clue to Bob if all of Bob's cards are critical and there are
        `>= 2 clues**`
     7. If there are >= 3 cards in Bob's hand with at most one **missing connector**
-       Alice can see in Bob's own hand, **and** Bob cannot give a stable play clue to Cathy,
-       **and** Cathy's chop is not critical, then give a lock clue to Bob.
+       Alice can see in Bob's own hand, **and** Bob cannot give a stable
+       **colour** play clue to Cathy, **and** Cathy's chop is not critical, then
+       give a lock clue to Bob. Both Cathy clauses are **vacuous at two seats**,
+       as H1b/H1c's are.
     8. If Bob's chop is critical, give a reactive discard that stamps CTD on a non-critical card in Bob's
        hand, tiebreak by the largest number of **missing connectors** Alice can
        see leading up to that card, or a reactive play that stamps CTP on a
        non-critical inverted card in Bob's hand, tiebreak by the same criteria.
-       **This rung is unconditional** — it carries no clue-count condition, and
-       the `**` relaxation does not reach it.
+       Bob's chop is its **only** condition: there is no clue-count condition
+       here, and the `**` relaxation has nothing to reach.
     9. If Bob's chop is critical, give a stable discard that stamps CTD on a non-critical card in Bob's
        hand, tiebreak by the largest number of **missing connectors** Alice can
        see leading up to that card.
@@ -649,16 +651,49 @@ is judged from Alice's own inference, not common knowledge.
        other type of stable clue that would cause a strike or a discard of a
        critical card.
     6. Give a lock clue to Bob.
+    7. Below 2 strikes, give a stable clue — play or discard — whose subject is a
+       card Bob can afford to lose: trash, a same-hand-dupe, or a card Alice can
+       see a dupe of in another hand. This is the one rung in the whole list that
+       **tolerates a predicted misplay**; the strike is the price of not burning
+       a card, and it is only worth paying while a strike is still survivable.
+    8. Give a reactive discard that stamps CTD on a non-critical card in Bob's
+       hand, or a reactive play that stamps CTP on a non-critical **inverted**
+       card in Bob's hand; tiebreak by the largest number of **missing
+       connectors** Alice can see leading up to that card. Wider than 3.8 on
+       both arms — the CTD arm also accepts a double discard and the CTP arm
+       also accepts a reactive discard — and it carries **no condition at all**,
+       neither a clue count nor 3.8's critical-chop gate, because §4 must
+       return a clue.
 
-   **When §4 is reachable at all.** §3 sits above §4, and its own last rung (3.9)
-   is a lock with the same `>= 2 clues**` condition — which 8 tokens always
-   satisfies. So whenever §3's precondition holds (Bob's chop is endangered or
-   playable, and he has no safe play or discard), 3.9 fires and none of §4 runs. §4 is therefore the
-   branch for a forced clue when **Bob is not in trouble**: his chop is neither
-   endangered nor playable, he already has something safe to do, or he is
-   locked. That is the right
-   precedence — an endangered chop outranks a stall — but it is worth stating,
-   because it means the rungs below are rarer than their position suggests.
+   **The floor.** If every rung above declines, §4 returns the best candidate by
+   the default tiebreak **ignoring tier**. At 8 clues a discard is illegal, so
+   §4 has to hand back something; without the floor an empty result falls into
+   the last-resort branch and blind-plays slot 1, which is worse than any
+   decodable clue.
+
+   **When §4 is reachable at all.** §3 sits above §4, and before the 3.7–3.9
+   amendment it always terminated: its last rung was a lock carrying the same
+   `>= 2 clues**` condition, which 8 tokens always satisfies. So whenever §3's
+   precondition held, something in §3 fired and none of §4 ran, and §4 was only
+   ever the branch for a forced clue when **Bob was not in trouble**.
+
+   That is no longer true, and the difference is worth being precise about.
+   Every rung that can end §3 now carries a condition of its own: 3.6 needs
+   Bob's whole hand critical, 3.7 needs three cards close to playing *and* two
+   vetoes, and **3.8 and 3.9 both need Bob's chop to be critical**. Critical is
+   strictly narrower than the test that got us into §3 — that one is
+   `at_risk_chop`, which also fires for a card whose only other copy is still
+   unseen in the deck. So a chop that is endangered but replaceable now walks
+   the whole of §3, matches nothing, and falls through: to §4 if Alice is
+   locked, at 8 clues or at pace 0, and otherwise past §4 entirely into the
+   play/discard phase. Replay 1973281 T19 is that position — a g4 on Bob's chop
+   with its twin still in the deck — and falling through is the point: Bob can
+   colour-clue Cathy himself, so forcing him to throw a g3 to save it buys
+   nothing.
+
+   §4 is therefore reachable in strictly more positions than it was, and the
+   rungs below are less rare than their position suggests. The precedence is
+   unchanged — a genuinely critical chop still outranks a stall.
 
    **Pace 0 is the third way in**, alongside locked and 8 tokens, and it is the
    one that does not depend on Bob at all. There every remaining turn has to
@@ -1001,12 +1036,16 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | the pitch and chuck lists | `action_lists` |
 | Actionable Card Priority, rungs 2-13 | `choose_action` |
 | rung 1 (action a pending reaction) | `take_action`'s urgent return, above the clue phase |
-| the §3.8 / §4.8 tiebreak | `missing_connectors` |
+| §3.7's "close to playing" count, and the §3.8 / §3.9 / §4.8 tiebreak | `missing_connectors` |
+| §3.7's veto on Bob cluing Cathy | `has_colour_play_clue_for` |
+| §3.7 / §3.8 / §3.9's chop test | `chop_is_critical` (`facts.h`) |
+| the §3.8 / §4.8 reactive ditch | `rung_reactive_ditch` |
+| §3.9's stable ditch | `rung_stable_ditch` |
 
 | Rule | Existing machinery | Where |
 |---|---|---|
 | reactive vs stable | positional compare `action.target != bob` | `interpret_clue.cpp:620-631` |
-| two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:173-229` |
+| two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:214-266` |
 | finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:575-665` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:667-721` |
 | a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |

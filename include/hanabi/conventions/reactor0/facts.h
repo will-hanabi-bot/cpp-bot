@@ -40,6 +40,23 @@ bool at_risk_chop(const Game& game, int alice, int player);
 // that it is a play the team should be collecting.
 bool has_playable_chop(const Game& game, int player);
 
+// "`player`'s chop is critical" — the test rungs 3.7 / 3.8 / 3.9 are written on.
+//
+// Criticality already carries most of `at_risk_chop` with it: the last copy of a
+// still-useful card cannot have a same-hand dupe, a copy in another hand, or a
+// copy Alice can prove she holds. The one thing it does NOT carry is the
+// inverted suit — pressing Discard on a playable orange CHUCKS it onto its
+// stack, so a critical playable orange saves itself and there is nothing for
+// those rungs to arrange. Hence: critical, but not a playable inverted card.
+//
+// Narrower than `at_risk_chop`, which §3's own precondition uses: that also
+// fires for a NON-critical card whose only other copy is still unseen in the
+// deck. These rungs are about a card that is genuinely the last one.
+//
+// False for a locked hand (no chop) and for a chop whose identity the caller
+// cannot see, as with its siblings above.
+bool chop_is_critical(const Game& game, int player);
+
 // What a clue's interpretation does to the play count, walked as CTP-status
 // transitions between the real game and the clue's hypo.
 //
@@ -62,7 +79,7 @@ NewPlayFacts new_play_facts(const Game& game, const Game& hypo);
 bool chop_is_expendable(const Game& game, int player);
 
 // Is this candidate a VH1 clue — a finesse worth the tempo? True when the
-// interpretation is reactive rank Phase B (`interpret_reactive.cpp:383-447`) and
+// interpretation is reactive rank Phase B (`interpret_reactive.cpp:575-665`) and
 // Cathy's chop is not trash or a same-hand-dupe.
 //
 // The sole member of `ClueTier::VERY_HIGH`, the tier Precedence step 1 admits.

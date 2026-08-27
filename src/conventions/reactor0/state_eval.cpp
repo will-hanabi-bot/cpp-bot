@@ -149,6 +149,19 @@ bool chop_is_free_chuck(const State& s, std::optional<int> chop) {
   return variants::is_inverted_id(s, *id) && s.is_playable(*id);
 }
 
+// Rungs 3.7 / 3.8 / 3.9's "X's chop is critical". See facts.h for why this is
+// not simply `is_critical` and not `at_risk_chop` either.
+bool chop_is_critical(const Game& game, int player) {
+  const State& s = game.state;
+  auto chop = game.chop(player);
+  if (!chop) return false;  // locked hand — no chop
+  auto id = s.deck[*chop].id();
+  if (!id) return false;  // unknown from our POV — cannot verify
+  if (!s.is_critical(*id)) return false;
+  // The chuck plays it rather than losing it, so nothing needs arranging.
+  return !chop_is_free_chuck(s, chop);
+}
+
 bool at_risk_chop(const Game& game, int alice, int player) {
   const State& s = game.state;
   auto chop = game.chop(player);
@@ -331,7 +344,7 @@ bool chop_is_expendable(const Game& game, int player) {
 }
 
 // VH1's "the clue gets a finesse": the interpretation is reactive rank Phase B
-// (`interpret_reactive.cpp:383-447`), the blind-play phase that calls the
+// (`interpret_reactive.cpp:575-665`), the blind-play phase that calls the
 // reacter onto a prerequisite for a one-away card in the receiver's hand.
 //
 // Phase B is invisible to a walk over `hypo.meta`, because it stamps ONLY the
@@ -383,9 +396,15 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   if (predicts_reactive_lock(hypo)) return false;
   auto receive_order = predicted_receiver_order(hypo);
   if (!receive_order) return false;
-  // Phase B's own two gates, verbatim from the phase that produces it
-  // (interpret_reactive.cpp:417, :427-428), rather than "is the receiver
+  // Phase B's own two gates, from the phase that produces it
+  // (interpret_reactive.cpp:582, :608-609), rather than "is the receiver
   // unstamped".
+  //
+  // Not quite verbatim any more: since v10.10.0 Phase B asks the connector of
+  // BOTH `effective_possible_for` and `possibilities()`, so it is the stricter
+  // of the two. That direction is the safe one here -- this runs on the hypo,
+  // where a Phase B that refused left no reacter CTP for the status test below
+  // to find.
   //
   // That test used to mean "Phase A and colour mode 1 stamp the receiver at
   // clue time, Phase B does not". Since v8.0.0 no reactive stamps the receiver

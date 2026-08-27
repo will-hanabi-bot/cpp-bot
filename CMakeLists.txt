@@ -344,6 +344,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_replay_1966653_locked_alice_is_exempt_from_the_tier_gate.cpp
   tests/test_reactor0/test_decision_making/test_replay_1973996_pace_zero_reaches_section_four.cpp
   tests/test_reactor0/test_decision_making/test_replay_1943094_pace_zero_still_plays.cpp
+  tests/test_reactor0/test_decision_making/test_replay_1973281_rung38_needs_a_critical_chop.cpp
   tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp
   tests/test_reactor0/test_decision_making/test_low_pace_clues.cpp
   tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp

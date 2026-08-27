@@ -1497,9 +1497,11 @@ What used to be documented here, and where it went:
 
 As of v7.1.0 the **code** runs both phases: the priority list chooses the clue,
 and the Actionable Card Priority list chooses the play or discard. Reactor0 no
-longer reaches the shared ladder in `src/basics/decide.cpp` at all. Only rungs
-§4.5 and §4.6 remain specification, and DECISION_MAKING.md's *Not yet
-implemented* table says so. Reactor is unaffected throughout; its decision rules stay in
+longer reaches the shared ladder in `src/basics/decide.cpp` at all. Every rung of
+both lists is now in the build — DECISION_MAKING.md's *Not yet implemented* table
+has said "nothing" since v8.9.0, and `TODO.md` carries what is left, which is
+about how the engine executes a decision rather than which decision reactor0
+makes. Reactor is unaffected throughout; its decision rules stay in
 [reactor's CONVENTION.md §2](../reactor/CONVENTION.md).
 
 ## Test coverage
@@ -1510,8 +1512,9 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_stable_colour.cpp` | play reveal, direct play, no-ref-play, stall |
 | `tests/test_reactor0/test_stable_rank.cpp` | the rank priority ladder |
 | `tests/test_reactor0/test_stable_colour_baseline.cpp` | §1i — a contradicted inference resets and the clue reads afresh, touched and untouched |
-| `tests/test_reactor0/test_call_invariants.cpp` | §1h — CTP play order, single CTD, revealed trash left alone |
+| `tests/test_reactor0/test_call_invariants.cpp` | §1h — CTP play order **per kind** (a reacter stamp never erases an older receiver stamp; the reverse still does), single CTD, revealed trash left alone |
 | `tests/test_reactor0/test_candidate_rollback.cpp` | a clue stamps exactly the card it names; abandoned candidates roll back |
+| `tests/test_reactor0/test_react_discard_button.cpp` | §1d/§1f — the Discard button tries the chuck arm *then* the discard arm at every site, so a dead chuck no longer swallows the reactive |
 | `tests/test_reactor0/test_pov_reject.cpp` | §1g — giver-only knowledge rejects rather than retargets |
 | `tests/test_reactor0/test_dc_target_leftmost.cpp` | leftmost trash/dupe always, over a standing CTD and over a second copy |
 | `tests/test_reactor0/test_reversed_finesse.cpp` | the connector runs up the ranks on a reversed suit |
@@ -1553,10 +1556,13 @@ implemented* table says so. Reactor is unaffected throughout; its decision rules
 | `tests/test_reactor0/test_efficiency.cpp` | efficiency formula + rlocks defaults |
 | `tests/test_reactor0/test_giver_filters.cpp` | MISTAKE clues never offered |
 | `tests/test_basics/test_snapshot_convention.cpp` | convention/rlocks snapshot round-trip + reactor back-compat |
-| `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | Clue tiers (DECISION_MAKING.md) — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim; VH1 reading VERY HIGH; and H4, which reads HIGH and not VERY HIGH so that a pending reaction still outranks it |
+| `tests/test_reactor0/test_decision_making/test_clue_tier.cpp` | Clue tiers (DECISION_MAKING.md) — H1/H2 and each endangered-chop disqualifier, incl. the same-hand dupe and both singleton and group elim; VH1 reading VERY HIGH; and H4, which reads HIGH and not VERY HIGH so that a pending reaction still outranks it; plus `chop_is_critical`, §3.7–§3.9's chop test, pinned against `at_risk_chop` in both directions — a playable inverted chop and a second copy still in the deck |
 | `tests/test_reactor0/test_decision_making/test_pace_clue_gate.cpp` | The two gate windows (DECISION_MAKING.md, *Decision phase 1*) — both token boundaries incl. `clue_tokens == 3`, the HIGH row reaching past 3, the 8-token exemption, the no-stamp negative that pins the split, and the two pace boundaries (occupied `>= 1`, unoccupied `>= 3`, both silent at pace 0), plus the locked exemption inside the unoccupied window — plus required tier, and that reactor's own gate is unchanged |
 | `tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp` | Which reactives priority 2 refuses to propose — all three arms of `discard_is_affordable` and its negative, plus the shape facts the rungs select on (a clue to Bob is never reactive; a colour reactive is never a double discard; a playless clue to Bob is not a stable play) |
 | `tests/test_reactor0/test_decision_making/test_clue_shape.cpp` | Clue-shape classification — result-orientation on inverted suits, and the receiver judged against the stacks the reacter leaves behind |
-| `tests/test_reactor0/test_decision_making/test_clue_priority.cpp` | The General Clue Evaluation List itself — the default tiebreak, all three gate windows, `discard_is_affordable`, `missing_connectors` against the spec's worked example, rung 1 outranking the lower rungs, the §4 floor and its empty-set counterpart, and `choose_very_high_clue` as Precedence step 1 |
+| `tests/test_reactor0/test_decision_making/test_clue_priority.cpp` | The General Clue Evaluation List itself — the default tiebreak, all three gate windows, `discard_is_affordable`, `missing_connectors` against the spec's worked example, rung 1 outranking the lower rungs, the §4 floor and its empty-set counterpart, `choose_very_high_clue` as Precedence step 1, and §3.7's two Cathy clauses going vacuous at two seats |
 | `tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp` | Prefers a stable play over a double discard, end to end on the replay that motivated it, plus both shapes read off a real Phase C |
 | `tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp` | N5 end to end — a playable non-duped chop on Bob lifts every clue, so a direct play clue beats the lock the flattened gate used to pick |
+| `tests/test_reactor0/test_decision_making/test_replay_1973996_pace_zero_reaches_section_four.cpp` | §4's pace-0 arm — Alice does not discard at pace 0, and the stall clue that replaces it is legal: it reads, and not as a colour stable play |
+| `tests/test_reactor0/test_decision_making/test_replay_1943094_pace_zero_still_plays.cpp` | the *forced* half of that arm — at pace 0 with a known play in hand §4 stays shut and Alice plays |
+| `tests/test_reactor0/test_decision_making/test_replay_1973281_rung38_needs_a_critical_chop.cpp` | §3.8's chop test — an at-risk-but-replaceable chop walks the whole of §3, so Alice discards instead of forcing Bob to throw a g3 |

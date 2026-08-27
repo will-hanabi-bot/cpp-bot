@@ -948,3 +948,68 @@ TEST(Reactor0CluePriority, EndgameOddRankToBobWhenNoReactiveExists) {
       << "an ODD rank clue to Bob names his rightmost touched card that could "
          "be playable -- the r5. Got " << describe(pick);
 }
+
+// --- rung 3.7's Cathy clauses at two seats --------------------------------
+//
+// 3.7 vetoes its lock when "Bob can give a stable colour play clue to Cathy".
+// At two seats there IS no Cathy: `cathy_of` is `next_player_index(bob)`, which
+// wraps straight back to Alice. So the unguarded question is "could Bob colour-
+// clue ALICE a playable card?" -- a real question, usually true, and entirely
+// the wrong one. It suppressed the rung on every two-player position where
+// Alice happened to hold something playable.
+//
+// The doc says both Cathy clauses are vacuous at two seats, which is also how
+// H1b/H1c have always read theirs (`state_eval.cpp:537-538`).
+//
+// The corpus cannot see this: 1 of the 1,991 recorded games is two-player, so
+// no sweep would ever have moved. This test is the only thing watching it.
+TEST(Reactor0CluePriority, TwoSeatRungThreeSevenIgnoresTheAbsentCathy) {
+  SetupOptions opts;
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  // 7, not 8: at 8 tokens section 4 opens and hands back a lock of its own at
+  // 4.6, which would mask the rung under test.
+  opts.clue_tokens = 7;
+  opts.hands = {
+      // Every 1, so Bob could colour-clue Alice a playable card in five
+      // different ways -- the veto's trigger, if it were asked about Alice.
+      {"r1", "y1", "g1", "b1", "p1"},
+      // Chop (slot 1) is the last y5. The four 2s each sit one connector from
+      // playable and Alice can see every connector, so all four count toward
+      // 3.7's ">= 3 cards with at most one missing connector".
+      {"y5", "r2", "g2", "b2", "p2"},
+  };
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+  // One clued card, so a re-clue has something to read as a lock.
+  g = pre_clue(std::move(g), TestPlayer::BOB, 2, {"2"});
+  const int bob = static_cast<int>(TestPlayer::BOB);
+
+  ASSERT_EQ(g.state.num_players, 2) << "guard: the whole point is two seats";
+  ASSERT_TRUE(hanabi::reactor0::priority_3_applies(g))
+      << "guard: Bob is stuck on an endangered chop, so section 3 runs";
+  ASSERT_TRUE(hanabi::reactor0::has_colour_play_clue_for(g, bob, 0))
+      << "guard: the trap is armed -- Bob CAN colour-clue seat 0 a playable "
+         "card, which is what `cathy_of` wraps round to here";
+
+  auto cands = analysed(g);
+  ASSERT_TRUE(has_shape(cands, ClueShape::STABLE_LOCK))
+      << "guard: a lock candidate exists, so 3.7 has something to return";
+  ASSERT_TRUE(has_shape(cands, ClueShape::STABLE_DISCARD))
+      << "guard: 3.9's stable discard is also on offer, so choosing the lock "
+         "is a real preference and not the only option";
+
+  auto pick = chosen(g);
+  const ClueCandidate* got = nullptr;
+  for (const auto& c : cands) {
+    if (describe(std::optional<PerformAction>{c.perform}) == describe(pick)) {
+      got = &c;
+    }
+  }
+  ASSERT_NE(got, nullptr) << "chose " << describe(pick);
+  EXPECT_EQ(got->reading.shape, ClueShape::STABLE_LOCK)
+      << "3.7 must fire: with no Cathy its two Cathy clauses are vacuous. Got "
+      << describe(pick) << " (" << hanabi::reactor0::shape_name(got->reading.shape)
+      << ") -- stable_discard means the veto asked about Alice and 3.9 answered "
+         "instead.";
+}

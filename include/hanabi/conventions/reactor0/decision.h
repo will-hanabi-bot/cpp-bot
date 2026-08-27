@@ -46,7 +46,7 @@ enum class ClueShape : std::uint8_t {
   STABLE_PLAY,       // priority 3.1 / 4.1
   STABLE_DISCARD,    // priority 3.3 / 3.5 — stamps a CTD on Bob
   TRASH_REVEAL,      // priority 3.3's other arm — flags trash, stamps nothing
-  STABLE_LOCK,       // priority 3.6 / 3.7 / 3.9
+  STABLE_LOCK,       // priority 3.6 / 3.7 / 4.6
 };
 
 const char* shape_name(ClueShape s);

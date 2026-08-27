@@ -945,6 +945,39 @@ const ClueCandidate* rung_reactive_ditch(const Game& g,
   return best;
 }
 
+// 3.9 -- the STABLE counterpart of `rung_reactive_ditch`.
+//
+// "Give a stable discard that stamps CTD on a non-critical card in Bob's hand,
+// tiebreak by the largest number of missing connectors Alice can see leading up
+// to that card." Same tiebreak as the reactive rung above, deliberately sharing
+// its shape so the two cannot drift: the card least likely ever to matter is the
+// one to spend.
+//
+// Reads `reading.stable_subject` rather than `reacter_side.order`, since on a
+// stable clue Bob is the TARGET and not a reacter -- the idiom the other stable
+// pools use (`pool_stable_ditch_trash` / `_dupe`).
+const ClueCandidate* rung_stable_ditch(const Game& g,
+                                       const std::vector<ClueCandidate>& cs) {
+  Pool p = select(cs, [&g](const ClueCandidate& c) {
+    if (!is_stable_to_bob(g, c)) return false;
+    if (c.reading.shape != ClueShape::STABLE_DISCARD) return false;
+    auto id = id_of(g.state, c.reading.stable_subject);
+    return id && !g.state.is_critical(*id);
+  });
+  if (p.empty()) return nullptr;
+  const ClueCandidate* best = p.front();
+  int best_missing = missing_connectors(g, best->reading.stable_subject);
+  for (const ClueCandidate* c : p) {
+    const int m = missing_connectors(g, c->reading.stable_subject);
+    if (m > best_missing ||
+        (m == best_missing && c->default_score > best->default_score)) {
+      best = c;
+      best_missing = m;
+    }
+  }
+  return best;
+}
+
 const ClueCandidate* first_of(const Game& g, Pool p) {
   return settle(g, std::move(p), {});
 }
@@ -1039,31 +1072,54 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
       if (auto* c = first_of(g, pool_lock(g, cs))) return c;
     }
   }
-  // 3.7 -- L = (# 1-away) + 2 * (# trash) in Bob's hand
-  if (clues_at_least(g, 3)) {
-    int L = 0;
+  // 3.7 -- Bob's hand is nearly all close-to-playable, he cannot hand Cathy a
+  // stable colour play clue himself, and Cathy's chop is not critical. Then a
+  // lock is the right way to freeze what he has.
+  //
+  // Replaces the old `L = (# 1-away) + 2 * (# trash) >= 3` weighting, and drops
+  // its `>= 3 clues**` condition: the amended rung carries no clue-count
+  // condition, and a lock is illegal at 0 tokens anyway, so no candidate exists
+  // there to pick.
+  {
+    int close = 0;
     for (int o : g.state.hands[bob_of(g)]) {
-      auto id = id_of(g.state, o);
-      if (!id) continue;
-      if (g.state.is_basic_trash(*id)) {
-        L += 2;
-      } else if (g.state.playable_away(*id) == 1) {
-        L += 1;
-      }
+      if (id_of(g.state, o) && missing_connectors(g, o) <= 1) ++close;
     }
-    if (L >= 3) {
+    // "Bob cannot give a stable play clue to Cathy" -- the COLOUR one, the same
+    // predicate and the same reading H1c uses. If he can handle her himself,
+    // committing his whole hand to a lock is premature.
+    //
+    // Both Cathy clauses are VACUOUS AT TWO SEATS, and both have to say so
+    // explicitly: `cathy_of` wraps round to Alice in a two-player game, so an
+    // unguarded call asks whether Bob could colour-clue *Alice*, which is a
+    // real but entirely different question and would veto the lock on the
+    // strength of it. This is H1c's `!has_cathy ||` idiom
+    // (`state_eval.cpp:537-538`).
+    const bool bob_can_handle_cathy =
+        has_cathy(g) && has_colour_play_clue_for(g, bob_of(g), cathy_of(g));
+    if (close >= 3 && !bob_can_handle_cathy &&
+        !(has_cathy(g) && chop_is_critical(g, cathy_of(g)))) {
       if (auto* c = first_of(g, pool_lock(g, cs))) return c;
     }
   }
-  // 3.8 -- unconditional: it carries no clue-count condition, and the `**`
-  // relaxation does not reach it (the ruling on open item 2).
-  if (auto* c = rung_reactive_ditch(g, cs, {ClueShape::REACTIVE_DISCARD},
-                                    {ClueShape::REACTIVE_PLAY})) {
-    return c;
+  // 3.8 -- only when BOB'S CHOP IS CRITICAL. Still unconditional on the clue
+  // count: it carries none, and the `**` relaxation does not reach it (the
+  // ruling on open item 2).
+  //
+  // The chop test is what replay 1973281 T19 turned on. Alice was forcing Bob
+  // to throw a g3 to save a g4 on his chop when he could simply have clued
+  // yellow to Cathy -- so neither this rung nor the lock above was needed and
+  // she should just discard.
+  if (chop_is_critical(g, bob_of(g))) {
+    if (auto* c = rung_reactive_ditch(g, cs, {ClueShape::REACTIVE_DISCARD},
+                                      {ClueShape::REACTIVE_PLAY})) {
+      return c;
+    }
   }
-  // 3.9
-  if (clues_at_least(g, 2)) {
-    if (auto* c = first_of(g, pool_lock(g, cs))) return c;
+  // 3.9 -- the stable counterpart of 3.8, on the same condition. Was a lock
+  // before the amendment; a lock now only comes from 3.6 or 3.7.
+  if (chop_is_critical(g, bob_of(g))) {
+    if (auto* c = rung_stable_ditch(g, cs)) return c;
   }
   return nullptr;
 }

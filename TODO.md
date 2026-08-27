@@ -780,9 +780,9 @@ test_replay_1885467.cpp:129` already pins a `winrate == 0` that has this shape.
 `DECISION_MAKING.md`'s *Clue Tier Definitions* lists **H1a** among the NOT-LOW
 conditions: Bob is unlocked, has no safe action, and his chop is *endangered*,
 and that alone should be worth MEDIUM even when the Cathy conditions H1b/H1c
-fail. `clue_tier` (`src/conventions/reactor0/state_eval.cpp:425-515`) has never
-implemented it. `h1a` is computed at `:464` and read once, inside the H1
-conjunction at `:468`; the NOT-LOW block below starts at N5 (`:485`) and never
+fail. `clue_tier` (`src/conventions/reactor0/state_eval.cpp:485-582`) has never
+implemented it. `h1a` is computed at `:530` and read once, inside the H1
+conjunction at `:534`; the NOT-LOW block below starts at N5 (`:566`) and never
 consults it.
 
 So a position where Bob is stuck on an endangered chop, but Bob could have
