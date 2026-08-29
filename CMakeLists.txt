@@ -234,6 +234,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_button_reveal.cpp
   tests/test_reactor0/test_call_invariants.cpp
   tests/test_reactor0/test_chuck_dupes.cpp
+  tests/test_reactor0/test_no_chuck_at_eight_clues.cpp
   tests/test_reactor0/test_deferred_elim.cpp
   tests/test_reactor0/test_reaction_elim_filter.cpp
   tests/test_reactor0/test_reactive_bluff.cpp

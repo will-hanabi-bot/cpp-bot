@@ -868,7 +868,7 @@ before Alice has at least one clue" part.
 
 What is undefined is what happens when Alice holds a card she can *name* as
 trash while the lock is on. Phase 2's chuck and pitch rungs all sit **above**
-the `12.discard_chop` floor (`calls.cpp:468`, `:528`), so any chuck candidate
+the `12.discard_chop` floor (`calls.cpp:494`, `:553`), so any chuck candidate
 pre-empts the locked chop. v10.4.0 made that far more common by removing the
 `possible`-must-agree guard from `is_chuckable`, and the two readings genuinely
 conflict:
@@ -929,34 +929,3 @@ attempted blind — it wants its own ruling and its own replay.
 `tests/test_reactor0/test_orange_chop_and_pitch.cpp` documents the asymmetry:
 its `pitch_pair_opts` fixture has to run from BOB's seat, because from the
 giver's chair the clue is rejected before the stamp is reached.
----
-
-## 35. `[reactor0]` The chuck rungs can emit an ILLEGAL discard at 8 clues
-
-**Today.** Actionable Card Priority rungs **9, 10 and 11** all press the DISCARD
-button (`chuck_known_inverted`, `chuck_maybe_inverted`, `chuck_leftmost`,
-`reactor0/calls.cpp:451-469`) with no token guard. At 8 clues a discard is
-illegal whatever it is aimed at -- a chuck that would advance an inverted stack
-is still the Discard button -- so the server rejects the action and the bot
-DEADLOCKS.
-
-Rung 13 already knows this (`13.pitch_chop_at_eight`, `:513`, which pitches with
-the PLAY button instead), and so does the shared ladder
-(`cant_discard` includes `clue_tokens == 8`, `basics/decide.cpp:1527`). The three
-chuck rungs sit ABOVE rung 13 and were simply never given the same guard.
-
-**How it is reached.** Only when the clue phase declines with nothing at all,
-which at 8 tokens means `analyse_clues` returned an empty set -- every legal clue
-read as a MISTAKE. Replay 1977786 T35 is an instance:
-`rung: "11.chuck_leftmost"` -> `discard(order=5)` at 8 tokens.
-
-**Not closed by v11.2.0.** That release makes a clue to Bob stable at 8 tokens,
-which gives the clue phase something readable to offer and so avoids this path in
-target-parity variants. The hole itself is untouched and is not
-variant-specific: any position where every clue reads as a MISTAKE at 8 tokens
-reaches it.
-
-**Fix.** Gate rungs 9-11 on `s.clue_tokens != 8` so the ladder falls through to
-rung 13, which is already correct. Small, but it changes the action ladder for
-EVERY variant rather than just the two this release is about, so it wants its own
-measurement rather than riding along with a convention patch.

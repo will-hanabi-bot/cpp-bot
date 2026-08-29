@@ -375,7 +375,32 @@ std::optional<PerformAction> choose_action(const Game& game) {
   const int alice = s.our_player_index;
   if (s.hands[alice].empty()) return std::nullopt;
 
-  const ActionLists lists = action_lists(game, alice);
+  ActionLists lists = action_lists(game, alice);
+
+  // AT 8 TOKENS THERE IS NO CHUCK LIST, because there is no Discard button.
+  //
+  // A chuck is the DISCARD button -- that an inverted card happens to reach its
+  // stack does not change which button was pressed -- and the server rejects a
+  // discard at 8 clues outright. Emitting one is not a bad choice, it is an
+  // ILLEGAL action: the move is refused and the bot deadlocks, unable to take
+  // its turn at all.
+  //
+  // Rungs 3, 9, 10 and 11 all walk this list, and none of them was guarded.
+  // Rung 13 below already knows (`13.pitch_chop_at_eight`, which presses PLAY
+  // instead), and so does the shared ladder (`cant_discard`, decide.cpp) -- the
+  // chuck rungs were simply never given the same test. Clearing the list here
+  // rather than guarding four call sites keeps the rule in one place and states
+  // it in the vocabulary it belongs to: at 8 tokens nothing is chuckable.
+  //
+  // Rung 12's `discard_chop` needs no guard: rung 13 returns above it whenever
+  // the tokens are full, so it is already unreachable there.
+  //
+  // Found at replay 1977786 T35, where `11.chuck_leftmost` answered a forced
+  // turn with `discard(order=5)` at 8 tokens. v11.2.0 gave the clue phase
+  // something readable to offer in that position, which routed around this path
+  // in the target-parity variants; the hole itself is not variant-specific and
+  // is what this closes.
+  if (s.clue_tokens == 8) lists.chuck.clear();
 
   // 2 -- pitch a card that sets up a card Bob or Cathy already holds.
   for (int o : lists.pitch) {

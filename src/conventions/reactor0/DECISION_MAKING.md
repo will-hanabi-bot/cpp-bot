@@ -1031,6 +1031,26 @@ list by priority:
     her chop card instead (as reaching this point means she also did not have a
     clue to give).
 
+**AT 8 CLUES THE CHUCK LIST IS EMPTY** (v11.3.0), so rungs 3, 9, 10 and 11 above
+cannot fire and rung 12 cannot reach its chuck. A chuck IS the **Discard**
+button -- that an inverted card happens to land on its stack does not change
+which button was pressed -- and the server rejects a discard at 8 clues
+outright. Emitting one is not a poor choice but an **illegal action**: the move
+is refused and Alice cannot take her turn at all.
+
+Rung 13 always answers in its place, which is why the list still terminates: it
+pitches the chop with the **Play** button. A locked hand, which has no chop,
+falls to `12.locked_no_chop`, also a pitch. So at 8 clues every rung that can
+still fire presses Play.
+
+`choose_action` clears the list once, up front (`reactor0/calls.cpp`), rather
+than guarding four rungs separately -- the rule belongs to the list, not to its
+readers. Replay 1977786 T35 is where it surfaced: `11.chuck_leftmost` answered a
+forced turn with `discard(order=5)` at 8 tokens. v11.2.0 made a clue to Bob
+stable at 8 clues (CONVENTION.md §1f), which gave the clue phase something
+readable to offer and so routed around this path in the target-parity variants;
+the hole itself was never variant-specific, and this closes it.
+
 ---
 
 ## How this maps to code
