@@ -43,10 +43,36 @@ ReactiveAssignment reactive_assignment(
     const Variant& variant, const std::vector<ReactiveOverride>& overrides,
     ClueKind kind, int clue_value);
 
+// Does a COLOUR clue to Bob join the EVEN bucket here (v11.5.0)?
+//
+// True for a `variants::uses_target_parity` variant with exactly TWO clue
+// colours. Target parity normally takes the bucket from the target -- Bob odd,
+// Cathy even -- which with only two colours leaves the whole game just two
+// colour anchors. Putting colour-to-Bob in the even bucket with its own values
+// doubles that to four:
+//
+//     to Cathy   Red 1, Blue 4
+//     to Bob     Red 2, Blue 5
+//
+// All nine such variants are Red + Blue (six Alternating Clues, three
+// Synesthesia); their third suit is `allClueColors` or `noClueColors`, which is
+// what leaves only two.
+//
+// COLOUR ONLY. A rank clue to Bob stays odd, so Alternating Clues keeps a
+// one-play bucket through its ranks. Synesthesia has no rank clues, so its three
+// two-colour variants have NO odd bucket at all below the stable switch -- every
+// clue there is a double play or double discard. That is intended, not an
+// oversight.
+bool bob_colour_joins_even(const Variant& variant);
+
 // The assignment for a clue GIVEN TO SOMEBODY. Identical to the above except in
 // a `variants::uses_target_parity` variant, where the parity comes from who was
-// clued rather than from the clue's kind: Bob -> odd, Cathy -> even. The VALUE
-// is the same either way, `/set` included.
+// clued rather than from the clue's kind: Bob -> odd, Cathy -> even.
+//
+// The VALUE is the same either way, `/set` included -- EXCEPT for the colour
+// clue to Bob that `bob_colour_joins_even` describes, which carries its own
+// anchor (Cathy's + 1 by default; an explicit `/set` is used verbatim, with no
+// shift applied on top).
 //
 // Every site that asks a real clue or a waiting connection for its parity must
 // use this one. `wc.clue.target` is the seat that was clued -- note this is NOT

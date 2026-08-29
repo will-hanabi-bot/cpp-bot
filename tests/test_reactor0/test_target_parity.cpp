@@ -608,3 +608,154 @@ TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedByTheTokenRule) {
         << "tokens " << tokens;
   }
 }
+
+// --- two clue colours: a COLOUR clue to Bob joins the even bucket (v11.5.0) --
+//
+// Target parity normally takes the bucket from the target -- Bob odd, Cathy
+// even -- which with only two clue colours leaves the whole game just TWO colour
+// anchors. Putting colour-to-Bob in the even bucket with its own values doubles
+// that to four:
+//
+//     to Cathy   Red 1, Blue 4
+//     to Bob     Red 2, Blue 5
+//
+// All nine such variants are Red + Blue: six Alternating Clues (Rainbow, White,
+// Omni, Null, Muddy Rainbow, Light Pink) and three Synesthesia (Rainbow, White,
+// Null). Their third suit is `allClueColors` or `noClueColors`, which is what
+// leaves only two.
+
+TEST(Reactor0TwoColours, ColourToBobIsEvenWithItsOwnAnchor) {
+  const std::vector<ReactiveOverride> none;
+  for (const char* name : {"Alternating Clues & Rainbow (3 Suits)",
+                           "Synesthesia & Null (3 Suits)"}) {
+    const Variant& v = get_variant(name);
+    ASSERT_EQ(v.clue_colour_names.size(), 2u)
+        << name << " should offer exactly two clue colours";
+    ASSERT_EQ(v.clue_colour_names[0], "Red");
+    ASSERT_EQ(v.clue_colour_names[1], "Blue");
+    EXPECT_TRUE(hanabi::reactor0::bob_colour_joins_even(v)) << name;
+
+    struct Row { int idx; int cathy; int bob; };
+    for (const Row& r : {Row{0, 1, 2}, Row{1, 4, 5}}) {
+      const auto to_cathy = reactive_assignment_for(v, none, ClueKind::COLOUR,
+                                                    r.idx, /*target_is_bob=*/false);
+      const auto to_bob = reactive_assignment_for(v, none, ClueKind::COLOUR,
+                                                  r.idx, /*target_is_bob=*/true);
+      EXPECT_TRUE(to_cathy.even) << name << " colour " << r.idx << " to Cathy";
+      EXPECT_EQ(to_cathy.value, r.cathy) << name << " colour " << r.idx;
+      EXPECT_TRUE(to_bob.even)
+          << name << ": with only two colours a colour clue to Bob is EVEN, not "
+                     "odd -- that is the whole rule";
+      EXPECT_EQ(to_bob.value, r.bob)
+          << name << ": and it carries its own anchor, one past Cathy's";
+    }
+  }
+}
+
+// The negative that pins the rule to the COLOUR COUNT rather than to target
+// parity generally. Three clue colours and a clue to Bob is odd again.
+TEST(Reactor0TwoColours, ThreeColoursKeepsColourToBobOdd) {
+  const std::vector<ReactiveOverride> none;
+  const Variant& v = get_variant("Alternating Clues (3 Suits)");
+  ASSERT_EQ(v.clue_colour_names.size(), 3u)
+      << "guard: Red/Green/Blue, so the rule must not fire";
+  EXPECT_FALSE(hanabi::reactor0::bob_colour_joins_even(v));
+
+  for (int i = 0; i < 3; ++i) {
+    const auto to_bob = reactive_assignment_for(v, none, ClueKind::COLOUR, i,
+                                                /*target_is_bob=*/true);
+    EXPECT_FALSE(to_bob.even) << "colour " << i << " to Bob stays odd";
+    EXPECT_EQ(to_bob.value,
+              reactive_assignment_for(v, none, ClueKind::COLOUR, i, false).value)
+        << "and keeps Cathy's value, since only the two-colour rule shifts it";
+  }
+}
+
+// RANK clues are untouched, which is what leaves Alternating Clues a one-play
+// bucket. (Synesthesia has no ranks, so its two-colour variants have no odd
+// bucket at all below the stable switch -- intended, and stated in §1f.)
+TEST(Reactor0TwoColours, RankToBobIsStillOdd) {
+  const std::vector<ReactiveOverride> none;
+  const Variant& v = get_variant("Alternating Clues & Rainbow (3 Suits)");
+  for (int rank = 1; rank <= 5; ++rank) {
+    const auto to_bob = reactive_assignment_for(v, none, ClueKind::RANK, rank,
+                                                /*target_is_bob=*/true);
+    EXPECT_FALSE(to_bob.even) << "rank " << rank << " to Bob is still ODD";
+    EXPECT_EQ(to_bob.value, rank) << "with its ordinary value";
+  }
+}
+
+// `/set` is taken VERBATIM: the +1 is a DEFAULT, not a transformation imposed on
+// what the player asked for.
+TEST(Reactor0TwoColours, AnOverrideIsUsedWithoutTheShift) {
+  const Variant& v = get_variant("Alternating Clues & Rainbow (3 Suits)");
+  const std::vector<ReactiveOverride> set_red{
+      ReactiveOverride{ClueKind::COLOUR, 0, /*even=*/true, /*reactive_value=*/3}};
+
+  const auto to_bob = reactive_assignment_for(v, set_red, ClueKind::COLOUR, 0,
+                                              /*target_is_bob=*/true);
+  EXPECT_TRUE(to_bob.even) << "the bucket is structural and still applies";
+  EXPECT_EQ(to_bob.value, 3)
+      << "the player set 3, so it is 3 -- NOT 4. The default shift applies only "
+         "where there is no override to respect.";
+  // Blue, with no override, still takes the default.
+  EXPECT_EQ(reactive_assignment_for(v, set_red, ClueKind::COLOUR, 1, true).value, 5);
+}
+
+// End to end: the shifted anchor is what lands in the waiting connection, so
+// clue-time selection and reaction-time resolution cannot drift apart.
+TEST(Reactor0TwoColours, TheShiftedAnchorReachesTheWaitingConnection) {
+  SetupOptions opts;
+  opts.variant_name = "Alternating Clues & Rainbow (3 Suits)";
+  opts.play_stacks = {0, 0, 0};
+  opts.clue_tokens = 7;  // below 8, so target parity still binds
+  opts.starting = TestPlayer::ALICE;
+  opts.hands = {
+      {"r4", "b4", "r3", "b3", "r2"},   // Alice (giver, us)
+      {"r1", "b1", "r5", "b5", "r4"},   // Bob
+      {"b2", "r2", "b3", "r3", "b4"},   // Cathy
+  };
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+  ASSERT_EQ(g.state.score(), 0) << "guard: below the stable switch";
+
+  g = take_turn(std::move(g), "Alice clues Blue to Bob");
+  const ReactorWC* wc = wc_of(g);
+  ASSERT_NE(wc, nullptr) << "a clue to Bob is still REACTIVE here";
+  EXPECT_EQ(wc->focus_slot, 5)
+      << "Blue to Bob anchors at 5, not Cathy's 4 -- the anchor every calc_slot "
+         "reads comes from the same assignment the giver used";
+  ASSERT_TRUE(wc->even_parity.has_value());
+  EXPECT_TRUE(*wc->even_parity)
+      << "and it is bound into the connection as EVEN, so resolution a turn "
+         "later cannot contradict the reading";
+}
+
+// `/settings` is what a human reads to know the convention in play, so "to Bob =
+// odd" would misdescribe half the clues available in these nine variants.
+TEST(Reactor0TwoColours, SettingsSpellsOutBothTables) {
+  const std::string s = hanabi::reactor0::format_settings(
+      get_variant("Alternating Clues & Rainbow (3 Suits)"), {}, /*rlocks=*/true);
+  std::fprintf(stderr, "/settings: %s\n", s.c_str());
+
+  EXPECT_EQ(s.find("to Bob = odd"), std::string::npos)
+      << "that line is wrong here -- a COLOUR clue to Bob is even: " << s;
+  EXPECT_NE(s.find("a COLOUR clue to Bob is EVEN too"), std::string::npos) << s;
+  EXPECT_NE(s.find("rank to Bob stays odd"), std::string::npos)
+      << "the exception has its own exception, and a reader needs both: " << s;
+  EXPECT_NE(s.find("Red=1"), std::string::npos) << "Cathy's table: " << s;
+  EXPECT_NE(s.find("Red=2"), std::string::npos) << "Bob's table: " << s;
+  EXPECT_NE(s.find("Blue=5"), std::string::npos) << "Bob's table: " << s;
+  EXPECT_NE(s.find("rank values"), std::string::npos)
+      << "Alternating Clues has ranks, and they are the only odd bucket left "
+         "here, so a reader needs them: " << s;
+
+  // Synesthesia carries `clueRanks: []`, so advertising a rank table there
+  // would offer clues that cannot be given -- and it is also where the odd
+  // bucket disappears entirely.
+  const std::string syn = hanabi::reactor0::format_settings(
+      get_variant("Synesthesia & Null (3 Suits)"), {}, /*rlocks=*/true);
+  EXPECT_NE(syn.find("no rank clues"), std::string::npos) << syn;
+  EXPECT_EQ(syn.find("rank values"), std::string::npos) << syn;
+  EXPECT_NE(syn.find("Red=2"), std::string::npos) << "Bob's table: " << syn;
+}

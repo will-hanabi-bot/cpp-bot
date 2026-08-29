@@ -1178,6 +1178,41 @@ who is clued**:
 | to **Bob** | **odd** — exactly one play | Bob | **Cathy** |
 | to **Cathy** | **even** — double play / double discard | Bob | **Cathy** |
 
+…with one exception, immediately below.
+
+#### Two clue colours: a COLOUR clue to Bob is EVEN too (v11.5.0)
+
+A variant with exactly **two** clue colours would otherwise give the whole game
+just two colour anchors. So there a **colour** clue to Bob joins the even bucket
+and carries its own anchor, which makes it four:
+
+| | Red | Blue |
+|---|---|---|
+| to **Cathy** | 1 | 4 |
+| to **Bob** | **2** | **5** |
+
+**Nine variants**, and every one is Red + Blue: six Alternating Clues (Rainbow,
+White, Omni, Null, Muddy Rainbow, Light Pink) and three Synesthesia (Rainbow,
+White, Null). Their third suit is `allClueColors` or `noClueColors`, which is
+what leaves only two clueable colours.
+
+**Colour only.** A rank clue to Bob is still odd, so Alternating Clues keeps a
+one-play bucket through its ranks. **Synesthesia has no rank clues, so its three
+two-colour variants have no odd bucket at all** while target parity binds —
+every clue there is a double play or double discard, and single-play signalling
+waits for the stable channel the 50% switch and the 8-clue rule open. That is
+intended, not an oversight.
+
+Bob's anchor **defaults** to Cathy's + 1, which is where 2 and 5 come from. It is
+a default and not a derivation imposed on the player: a `/set` override is used
+**verbatim**, with no shift on top. `/set`'s grammar is `(kind, value)` with no
+target, so it cannot give Bob and Cathy different values — a limit of the
+command rather than of this rule.
+
+`bob_colour_joins_even` (`reactor0/reactive_assignment.h`) is the one predicate,
+and `reactive_assignment_for` the one place the bucket and anchor are decided,
+so clue-time selection and reaction-time resolution cannot drift apart.
+
 #### It stands down at 50% (v11.0.0 at 60%, moved in v11.4.0)
 
 **Once `score >= 0.5 * variant maximum`, a clue to Bob is STABLE again.** Clues

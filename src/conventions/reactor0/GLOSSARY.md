@@ -60,7 +60,10 @@ deliberately keeping the call. Replay 1972716 T5.
 The rule, in **Alternating Clues** and **Synesthesia** only, that a clue's
 reactive parity comes from **who is clued** rather than from the clue's kind:
 a clue to Bob is odd (exactly one play), a clue to Cathy is even (double play
-or double discard). Both families take the choice of clue kind away from the
+or double discard) — except in a variant with only **two clue colours**, where a
+COLOUR clue to Bob is even as well and carries its own anchor (Red 2 / Blue 5
+against Cathy's 1 / 4), so that two colour anchors become four.
+`bob_colour_joins_even`; CONVENTION.md §1f. Both families take the choice of clue kind away from the
 giver — Synesthesia offers colour only, Alternating Clues forces the kind to
 alternate — so the kind cannot carry a signal. `variants::uses_target_parity`
 (`conventions/variants/predicates.h`); `reactive_assignment_for` is the
