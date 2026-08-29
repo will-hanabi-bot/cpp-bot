@@ -279,7 +279,7 @@ bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
   //
   // Asked as `bob_clue_is_reactive` rather than `uses_target_parity` since
   // v11.0.0. The question is about a clue from BOB to CATHY, and Cathy is Bob's
-  // own "Bob" -- so past the 60% threshold that clue is stable again and this
+  // own "Bob" -- so past the 50% threshold that clue is stable again and this
   // has a real answer to give. Gating on the variant alone would keep both arms
   // vacuous for the rest of the game.
   if (bob_clue_is_reactive(s)) return false;

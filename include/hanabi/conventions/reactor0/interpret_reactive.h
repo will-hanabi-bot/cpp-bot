@@ -33,8 +33,9 @@ namespace hanabi::reactor0 {
 // Does a clue to BOB still read as reactive?
 //
 // Under target parity (Alternating Clues, Synesthesia) every clue is reactive, a
-// clue to Bob included -- but only while the score is below **60% of the variant
-// maximum**. Past that a clue to Bob is STABLE again (v11.0.0).
+// clue to Bob included -- but only while the score is below **50% of the variant
+// maximum**. Past that a clue to Bob is STABLE again (v11.0.0 at 60%, moved to
+// 50% in v11.4.0).
 //
 // Why the switch exists. The reactive reading of a clue to Bob is the ODD
 // bucket, which is a reactive DISCARD. Late in a game that is actively harmful:
@@ -45,8 +46,9 @@ namespace hanabi::reactor0 {
 // The cap is the VARIANT maximum, a constant 5 per suit, deliberately not
 // `State::max_score()`. A shrinking cap would move the switch point mid-game as
 // criticals died, and both seats must agree on which side of it every past clue
-// was given. Compared in integers -- `5 * score >= 3 * cap` -- so there is no
-// float rounding for two seats to disagree about.
+// was given. Compared in integers -- `2 * score >= cap` -- so there is no float
+// rounding for two seats to disagree about. Half of an odd cap is not a whole
+// number, so the switch lands on the first score at or above it: 13 of 25.
 //
 // FALSE outside a target-parity variant, where a clue to Bob was never reactive
 // in the first place.

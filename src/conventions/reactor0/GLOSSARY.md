@@ -68,10 +68,11 @@ target-aware lookup. While it binds there are **no stable clues**: Bob is
 always the reacter and Cathy always the receiver, so a clue to Bob touches the
 reacter's own hand while identifying a slot in Cathy's.
 
-**It stands down at 60%** (v11.0.0): once `score >= 0.6 * variant maximum` — a
-constant 5 per suit, not `max_score()` — a clue to Bob is STABLE again, because
-the odd bucket is a reactive discard and forcing one late costs more than it
-buys. **And at 8 clues** (v11.2.0), whatever the score: a discard is illegal
+**It stands down at 50%** (v11.0.0 at 60%, moved in v11.4.0): once
+`score >= 0.5 * variant maximum` — a constant 5 per suit, not `max_score()` — a
+clue to Bob is STABLE again, because the odd bucket is a reactive discard and
+forcing one late costs more than it buys. Half of an odd cap is not a whole
+number, so the switch is the first score at or above it: 13 of 25, 8 of 15. **And at 8 clues** (v11.2.0), whatever the score: a discard is illegal
 there, so the turn must produce a clue, and every reactive candidate reading as a
 MISTAKE leaves the bot with no legal action at all (replay 1977786 T35). Both
 arms read the PRE-CLUE token count — `on_clue` spends it before `interpret_clue`
@@ -89,7 +90,7 @@ MISTAKE.
 
 ### synesthesia table
 The fixed lookup a **stable** Synesthesia clue is read with, once *target parity*
-has stood down at 60%: each clue colour names one button and one slot in Bob's
+has stood down at 50%: each clue colour names one button and one slot in Bob's
 hand. Red 1 *pitch*, Yellow 2 pitch, Green 3 *chuck*, Blue 2 chuck, Purple 5
 pitch, Orange 1 chuck, any other colour 4 pitch. Keyed on the colour NAME, and
 deliberately **not** the `colour_clue_value` table, which gives Blue 4.

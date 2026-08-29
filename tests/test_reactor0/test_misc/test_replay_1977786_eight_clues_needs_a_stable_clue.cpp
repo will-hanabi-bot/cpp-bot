@@ -1599,8 +1599,16 @@ TEST(MiscReplay1977786, EightCluesNeedsAStableClueToBob) {
   const hanabi::State& s = game.state;
   ASSERT_EQ(s.clue_tokens, 8)
       << "guard: at 8 tokens a discard is illegal, so the turn is forced";
-  ASSERT_LT(5 * s.score(), 3 * 5 * static_cast<int>(s.variant->suits.size()))
-      << "guard: below the 60% switch, so only the token rule can help here";
+  // 15 of 30 -- EXACTLY the v11.4.0 score switch, so from that release the score
+  // rule covers this position too and this test no longer isolates the 8-clue
+  // rule. It stays as a regression on the position itself: whatever gets Alice
+  // there, she must not answer a forced turn with an illegal discard. The
+  // 8-clue rule keeps its own isolated coverage in
+  // `Reactor0TargetParity.AtEightCluesAClueToBobIsStableWhateverTheScore`,
+  // which sits at score 0 and so is untouched by where the score switch lands.
+  ASSERT_EQ(2 * s.score(), 5 * static_cast<int>(s.variant->suits.size()))
+      << "guard: the fixture is exactly on the switch, which is why the note "
+         "above matters";
 
   hanabi::PerformAction action = game.take_action();
   EXPECT_FALSE(std::holds_alternative<hanabi::PerformDiscard>(action))

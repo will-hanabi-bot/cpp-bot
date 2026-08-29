@@ -43,10 +43,10 @@ giver, Bob the next player, Cathy the one after.
   call (reactor's §2.6/§2.7).
   **v10.0.0** adds a second exception, in the other direction: in the 102
   **Alternating Clues** and **Synesthesia** variants reactor0 takes a clue's
-  reactive parity from its TARGET rather than its kind, and below 60% of the
+  reactive parity from its TARGET rather than its kind, and below 50% of the
   variant maximum gives no stable clues at all. **v11.0.0** stands that down
-  past 60%, where a clue to Bob is stable again — and in Synesthesia reads off
-  a fixed colour table. Reactor is unchanged throughout and would read every one
+  past the halfway mark, where a clue to Bob is stable again — and in Synesthesia
+  reads off a fixed colour table. Reactor is unchanged throughout and would read every one
   of these clues differently. See §1f, *Alternating Clues and Synesthesia*.
 - **Not shared**: WHEN the reactive negative inference runs. Whenever the
   receiver is called to **chuck**, the elim reasons "the slots before the target
@@ -118,8 +118,8 @@ that reactor's `ref_discard` already honours.
 
 **One family of variants overrides all of this**: under
 `variants::uses_target_parity` the target picks the parity and the clued seat is
-**not** the receiver — and below 60% of the variant maximum there are no stable
-clues at all. Past 60% a clue to Bob is stable again, read in Synesthesia off a
+**not** the receiver — and below 50% of the variant maximum there are no stable
+clues at all. Past half a clue to Bob is stable again, read in Synesthesia off a
 fixed colour table rather than the ladders above. See §1f,
 *Alternating Clues and Synesthesia*. The dispatch reads
 `clue_is_reactive` / `reactive_receiver`
@@ -1178,10 +1178,15 @@ who is clued**:
 | to **Bob** | **odd** — exactly one play | Bob | **Cathy** |
 | to **Cathy** | **even** — double play / double discard | Bob | **Cathy** |
 
-#### It stands down at 60% (v11.0.0)
+#### It stands down at 50% (v11.0.0 at 60%, moved in v11.4.0)
 
-**Once `score >= 0.6 * variant maximum`, a clue to Bob is STABLE again.** Clues
+**Once `score >= 0.5 * variant maximum`, a clue to Bob is STABLE again.** Clues
 to Cathy are untouched and keep the even bucket.
+
+60% of the usual caps landed on whole numbers (0.6 × 25 = 15, 0.6 × 15 = 9); half
+does not. The switch is therefore the first score **at or above** the half —
+**13** of 25, **8** of 15, **15** of 30 — which is exactly what the integer form
+below gives.
 
 The odd bucket is a reactive DISCARD, and late in a game that is actively
 harmful: it forces a discard nobody needed, and it crowds out the two things
@@ -1191,8 +1196,8 @@ time.
 The **cap is the variant maximum**, a constant 5 per suit, deliberately not
 `State::max_score()`. A shrinking cap would move the switch point mid-game as
 criticals died, and every seat must agree on which side of it a past clue was
-given. It is compared in integers, `5 * score >= 3 * cap`, so no two seats can
-round differently. `bob_clue_is_reactive`
+given. It is compared in integers, `2 * score >= cap`, so no two seats can round
+differently. `bob_clue_is_reactive`
 (`reactor0/interpret_reactive.cpp:967-976`) owns the whole rule.
 
 **This is a cross-version break**, which is what makes v11 a major bump: a
@@ -1210,13 +1215,18 @@ phase answers with a discard the server will not accept. That is a **deadlock**,
 not a bad choice.
 
 Replay 1977786 T35, `Alternating Clues & Brown (6 Suits)`: 8 tokens, 15 of 30 so
-the 60% rule had not yet fired, and the previous clue was a colour one so
+the score rule had not yet fired (15 of 30 was below the 60% line then in
+force), and the previous clue was a colour one so
 Alternating Clues left only RANK clues legal. Every one read as a MISTAKE, zero
 candidates reached `choose_clue`, and will-bot69 tried to discard order 5.
 
 A stable clue names a card outright, so it reads cleanly and survives to be
-offered — which is exactly what a forced turn needs. Same hatch as the 60% rule,
-opened for a different reason, and it applies to **both** families.
+offered — which is exactly what a forced turn needs. Same hatch as the score
+rule, opened for a different reason, and it applies to **both** families.
+
+Note that v11.4.0's move to 50% puts that very position exactly *on* the score
+switch, so from that release either rule would carry it. The 8-clue rule is not
+redundant: it fires at any score, and the score rule does nothing below half.
 
 **The token count is the PRE-CLUE one.** `Game::on_clue` spends the token before
 `interpret_clue` runs (`basics/game.cpp`), so the interpreting seat sees 7 where
@@ -1663,7 +1673,7 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
-| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it; plus the 60% switch — the 14/15/16 boundary, a 3-suit cap of 15, plain variants inert, and a clue to Cathy staying reactive AND even on both sides |
+| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it; plus the 50% switch — the 12/13/14 boundary, a 3-suit cap of 15 switching at 8, plain variants inert, and a clue to Cathy staying reactive AND even on both sides; and the 8-clue arm, which holds at score 0 and so is independent of where the score switch lands |
 | `tests/test_reactor0/test_synesthesia_stable.cpp` | §1f — Synesthesia's stable table: every row incl. Blue→chuck slot 2 and Dark Orange taking the Orange row, the catch-all, the no-collision property asserted over all 36 variants, and the three readings (a stamp, a common-knowledge stall, a giver-only MISTAKE) each separated from what `stable_colour` would have done |
 | `tests/test_reactor0/test_orange_chop_and_pitch.cpp` | §1f — a playable orange chop reads expendable in all three chop predicates, with a dead orange, a plain playable, a plain useful and an unplayable orange as controls; and `slot_is_pitchable` on a known orange, a plain card and Dark Orange |
 | `tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp` | Replay 1973976 T12 end to end — the pitch needed BOTH the vet and the stamp; reverting either puts it back |

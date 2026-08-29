@@ -2,10 +2,10 @@
 //
 // Synesthesia can never give a rank clue -- it carries `clueRanks: []` -- so the
 // ordinary `stable_colour` / `stable_rank` ladders have nothing to work with.
-// Once target parity stands down (v11.0.0: the score reaches 60% of the variant
-// maximum, `bob_clue_is_reactive`) a clue to Bob is stable again, and there its
-// meaning comes from a FIXED TABLE that names an action outright: each clue
-// colour is one button and one slot in Bob's hand.
+// Once target parity stands down (the score reaches 50% of the variant maximum,
+// or the team is at 8 clues -- `bob_clue_is_reactive`) a clue to Bob is stable
+// again, and there its meaning comes from a FIXED TABLE that names an action
+// outright: each clue colour is one button and one slot in Bob's hand.
 #pragma once
 
 #include <optional>

@@ -1,7 +1,7 @@
 // Synesthesia's stable clue convention (CONVENTION.md §1f, v11.0.0).
 //
 // Synesthesia can never give a rank clue -- it carries `clueRanks: []` -- so
-// once target parity stands down at 60% and a clue to Bob is stable again, the
+// once target parity stands down at 50% and a clue to Bob is stable again, the
 // ordinary colour/rank ladders have nothing to express it with. Its clue colours
 // instead name an action outright, from a fixed table:
 //
@@ -140,7 +140,7 @@ SetupOptions syn_opts() {
   opts.variant_name = "Synesthesia (5 Suits)";
   opts.play_stacks = {3, 3, 3, 3, 3};
   // 7, not the harness default of 8: at 8 tokens a clue to Bob is STABLE
-  // whatever the score (v11.2.0), which would mask the 60% switch these
+  // whatever the score (v11.2.0), which would mask the score switch these
   // fixtures are built around.
   opts.clue_tokens = 7;
   opts.starting = TestPlayer::ALICE;
@@ -202,9 +202,9 @@ TEST(Reactor0Synesthesia, GreenChucksSlotThree) {
 
 TEST(Reactor0Synesthesia, BelowTheThresholdTheSameClueIsStillReactive) {
   SetupOptions opts = syn_opts();
-  opts.play_stacks = {3, 3, 3, 3, 2};  // 14 of 25
+  opts.play_stacks = {3, 3, 2, 2, 2};  // 12 of 25, below the switch at 13
   Game g = setup(std::move(opts));
-  ASSERT_EQ(g.state.score(), 14);
+  ASSERT_EQ(g.state.score(), 12);
   ASSERT_TRUE(hanabi::reactor0::bob_clue_is_reactive(g.state));
 
   Game h = clued(g, "Red", TestPlayer::BOB);

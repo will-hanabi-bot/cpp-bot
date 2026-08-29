@@ -413,21 +413,22 @@ TEST(Reactor0TargetParity, SettingsIsUnchangedForOrdinaryVariants) {
   EXPECT_EQ(s.find("to Bob = odd"), std::string::npos) << s;
 }
 
-// --- the 60% switch (v11.0.0) --------------------------------------------
+// --- the 50% switch (v11.0.0 at 60%, moved in v11.4.0) --------------------
 //
 // Target parity is a mid-game rule. The reactive reading of a clue to Bob is the
 // ODD bucket -- a reactive DISCARD -- and late in a game that forces a discard
 // nobody needed while crowding out the two things that matter near the end:
 // saving a good card, and getting a play clue out in time.
 //
-// So once the score reaches 60% of the VARIANT maximum, a clue to Bob is stable
+// So once the score reaches 50% of the VARIANT maximum, a clue to Bob is stable
 // again. Clues to Cathy are untouched and keep the even bucket -- the kind still
 // cannot carry parity, so nothing else about target parity moves.
 
 namespace {
 
 // `target_parity_opts` with the stacks dialled to a chosen score. Five suits, so
-// the cap is 25 and the threshold is 15.
+// the cap is 25 and the switch is at 13 -- half of 25 is 12.5, and the rule is
+// "at or above", which `2 * score >= cap` gives exactly.
 SetupOptions scored_opts(std::string variant_name, std::vector<int> stacks) {
   SetupOptions opts = target_parity_opts(std::move(variant_name));
   opts.play_stacks = std::move(stacks);
@@ -436,15 +437,16 @@ SetupOptions scored_opts(std::string variant_name, std::vector<int> stacks) {
 
 }  // namespace
 
-TEST(Reactor0TargetParity, BobClueGoesStableAtSixtyPercent) {
-  // 0.6 * 25 = 15 exactly, so 15 is the first score that switches. Asserted with
-  // 14 either side of it, because an off-by-one here means two builds disagree
-  // about what a clue meant -- which is the whole reason v11 is a major bump.
+TEST(Reactor0TargetParity, BobClueGoesStableAtHalfTheMaximum) {
+  // 0.5 * 25 = 12.5, and the rule is "at or above", so 13 is the first score
+  // that switches. Bracketed from both sides, because an off-by-one here means
+  // two builds disagree about what a past clue meant -- the one failure this
+  // convention cannot survive.
   struct Row { std::vector<int> stacks; int score; bool reactive; };
   const Row rows[] = {
-      {{3, 3, 3, 3, 2}, 14, true},
-      {{3, 3, 3, 3, 3}, 15, false},
-      {{4, 3, 3, 3, 3}, 16, false},
+      {{3, 3, 2, 2, 2}, 12, true},
+      {{3, 3, 3, 2, 2}, 13, false},
+      {{3, 3, 3, 3, 2}, 14, false},
   };
   for (const Row& r : rows) {
     Game g = setup(scored_opts("Alternating Clues (5 Suits)", r.stacks));
@@ -456,7 +458,8 @@ TEST(Reactor0TargetParity, BobClueGoesStableAtSixtyPercent) {
 }
 
 TEST(Reactor0TargetParity, TheCapIsTheVariantMaximumNotMaxScore) {
-  // Three suits -> cap 15 -> threshold 9. If the cap were `max_score()` it would
+  // Three suits -> cap 15 -> switch at 8 (half is 7.5). If the cap were
+  // `max_score()` it would
   // shrink as criticals died and the switch point would move mid-game, so two
   // seats could place the same past clue on different sides of it.
   // Its own hands: r/g/b only, so the five-suit fixture's purples do not exist.
@@ -474,15 +477,16 @@ TEST(Reactor0TargetParity, TheCapIsTheVariantMaximumNotMaxScore) {
     use_reactor0(opts);
     return setup(std::move(opts));
   };
-  Game g = three_suit({3, 3, 2});
-  ASSERT_EQ(g.state.score(), 8);
+  Game g = three_suit({3, 3, 1});
+  ASSERT_EQ(g.state.score(), 7);
   EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(g.state))
-      << "8 of 15 is below 60%";
+      << "7 of 15 is below half";
 
-  Game h = three_suit({3, 3, 3});
-  ASSERT_EQ(h.state.score(), 9);
+  Game h = three_suit({3, 3, 2});
+  ASSERT_EQ(h.state.score(), 8);
   EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(h.state))
-      << "9 of 15 is exactly 60%, so a clue to Bob is stable";
+      << "8 of 15 is the first score at or above half, so a clue to Bob is "
+         "stable";
 }
 
 TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedAtEveryScore) {
@@ -500,8 +504,8 @@ TEST(Reactor0TargetParity, OnlyBobsClueCrossesTheThreshold) {
   const auto probe = [](const std::vector<int>& stacks) {
     return setup(scored_opts("Alternating Clues (5 Suits)", stacks));
   };
-  Game below = probe({3, 3, 3, 3, 2});   // 14
-  Game above = probe({3, 3, 3, 3, 3});   // 15
+  Game below = probe({3, 3, 2, 2, 2});   // 12
+  Game above = probe({3, 3, 3, 2, 2});   // 13
 
   const int alice = below.state.our_player_index;
   const int bob = below.state.next_player_index(alice);
@@ -543,12 +547,13 @@ TEST(Reactor0TargetParity, OnlyBobsClueCrossesTheThreshold) {
 // needs. Replay 1977786 T35 is the deadlock this closes.
 
 TEST(Reactor0TargetParity, AtEightCluesAClueToBobIsStableWhateverTheScore) {
-  // Score 0 of 25 -- as far below the 60% switch as it gets, so the ONLY thing
-  // that can make this stable is the token count.
+  // Score 0 of 25 -- as far below the score switch as it gets, so the ONLY thing
+  // that can make this stable is the token count. That is what keeps this test
+  // isolating the 8-clue rule even as the score threshold moves.
   SetupOptions opts = target_parity_opts("Alternating Clues (5 Suits)");
   opts.clue_tokens = 8;
   Game g = setup(std::move(opts));
-  ASSERT_EQ(g.state.score(), 0) << "guard: nowhere near the 60% switch";
+  ASSERT_EQ(g.state.score(), 0) << "guard: nowhere near the score switch";
 
   EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
       << "at 8 tokens the turn is forced, so a clue to Bob must be readable "

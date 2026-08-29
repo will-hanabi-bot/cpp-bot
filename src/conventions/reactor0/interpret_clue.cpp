@@ -941,7 +941,7 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // clue and so cannot express the ordinary ladders' colour/rank split. Its
   // clue colours name a button and a slot outright, from a fixed table (§1f).
   //
-  // Only reachable once target parity has stood down -- below the 60% threshold
+  // Only reachable once target parity has stood down -- below the score switch
   // `clue_is_reactive` above took every clue -- so this needs no score test of
   // its own. Alternating Clues does NOT come here: it has both kinds available,
   // so its stable clues use the ordinary ladders unchanged.

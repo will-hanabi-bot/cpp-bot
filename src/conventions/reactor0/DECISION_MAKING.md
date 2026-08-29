@@ -65,7 +65,7 @@ Otherwise, a clue tier is HIGH iff **any** of:
       not have a colour stable clue to give to Cathy. In a **target-parity**
       variant (Alternating Clues, Synesthesia) there are no stable clues at all
       *while target parity binds*, so `has_colour_play_clue_for` returns false
-      outright and this arm is vacuously satisfied. Past 60% of the variant
+      outright and this arm is vacuously satisfied. Past 50% of the variant
       maximum it stands down (v11.0.0) and the arm has a real answer again:
       Cathy is Bob's own "Bob", so a clue from him to her is stable there. Asked
       as `bob_clue_is_reactive`, not as the variant flag — see CONVENTION.md §1f.

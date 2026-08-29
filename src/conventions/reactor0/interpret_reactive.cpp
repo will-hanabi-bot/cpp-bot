@@ -982,7 +982,7 @@ bool bob_clue_is_reactive(const State& state) {
   //
   // A stable clue names a card outright, so it is far easier to read cleanly --
   // which is exactly what a forced turn needs. This is the same escape hatch the
-  // 60% rule provides, granted for a different reason.
+  // score rule provides, granted for a different reason.
   //
   // THE TOKEN COUNT IS THE PRE-CLUE ONE. `Game::on_clue` spends the token before
   // `interpret_clue` runs (`basics/game.cpp`), so the interpreting seat would see
@@ -996,8 +996,13 @@ bool bob_clue_is_reactive(const State& state) {
   // mid-game would move the switch point with it. Two seats reading the same
   // past clue must never land on different sides of the threshold.
   const int cap = 5 * static_cast<int>(state.variant->suits.size());
-  // `score() >= 0.6 * cap`, in integers.
-  return 5 * state.score() < 3 * cap;
+  // `score() >= 0.5 * cap`, in integers (v11.4.0; was 60% from v11.0.0).
+  //
+  // 60% of the usual caps landed on whole numbers -- 0.6 * 25 = 15, 0.6 * 15 = 9
+  // -- and 50% does not. So the switch is the first score AT OR ABOVE the half:
+  // 13 of 25, 8 of 15, 15 of 30. `2 * score >= cap` gives exactly that, with no
+  // rounding for two seats to disagree about.
+  return 2 * state.score() < cap;
 }
 
 bool clue_is_reactive(const State& state, const ClueAction& action, int bob) {
