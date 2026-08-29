@@ -926,7 +926,13 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // slot he chose, and the turn order works out.
   // Always reactive, even in stall contexts -- and under target parity that is
   // EVERY clue, including one to Bob, whose receiver is then Cathy.
-  if (clue_is_reactive(state, action, bob)) {
+  // `prev.state`, NOT `state`. `on_clue` has already spent the token by the time
+  // this runs, so `state.clue_tokens` is one BELOW what the giver saw -- and
+  // `bob_clue_is_reactive`'s 8-token arm would then read 7 here and 8 at every
+  // decision site, so the giver would call a clue stable and the reader reactive.
+  // Nothing else in the predicate moves across a clue (score and variant are
+  // unchanged), so passing the pre-clue state is safe as well as necessary.
+  if (clue_is_reactive(prev.state, action, bob)) {
     return interpret_reactive(prev, game, action, bob,
                               reactive_receiver(state, action, bob));
   }

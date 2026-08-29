@@ -1199,6 +1199,32 @@ round differently. `bob_clue_is_reactive`
 v10 bot reads a clue to Bob at 22/25 as a reactive discard and a v11 bot reads
 it as stable.
 
+#### And at 8 clues, whatever the score (v11.2.0)
+
+**At 8 tokens a clue to Bob is STABLE too**, however low the score. At 8 tokens a
+discard is illegal, so the turn MUST produce a clue — and while target parity
+binds, every clue is reactive, so every candidate has to survive a reactive
+reading or `analyse_clues` drops it as a MISTAKE and no rung may propose it. When
+none survives, the clue phase declines with an empty set and the play/discard
+phase answers with a discard the server will not accept. That is a **deadlock**,
+not a bad choice.
+
+Replay 1977786 T35, `Alternating Clues & Brown (6 Suits)`: 8 tokens, 15 of 30 so
+the 60% rule had not yet fired, and the previous clue was a colour one so
+Alternating Clues left only RANK clues legal. Every one read as a MISTAKE, zero
+candidates reached `choose_clue`, and will-bot69 tried to discard order 5.
+
+A stable clue names a card outright, so it reads cleanly and survives to be
+offered — which is exactly what a forced turn needs. Same hatch as the 60% rule,
+opened for a different reason, and it applies to **both** families.
+
+**The token count is the PRE-CLUE one.** `Game::on_clue` spends the token before
+`interpret_clue` runs (`basics/game.cpp`), so the interpreting seat sees 7 where
+the deciding seat sees 8. Every caller therefore passes the state as it was
+BEFORE the clue; `interpret_clue` passes `prev.state` for exactly this reason. Get
+that wrong and the giver calls a clue stable while the reader calls it reactive,
+which is the one disagreement this convention cannot survive.
+
 Only TWO sites take the gate. `clue_is_reactive` is one. The other is
 `has_colour_play_clue_for` (`state_eval.cpp:273-302`), which models a *stable*
 colour clue and used to return false outright here — the question it answers is

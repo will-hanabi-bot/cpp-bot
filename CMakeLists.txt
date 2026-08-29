@@ -253,6 +253,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1974218_sarcastic_needs_a_known_identity.cpp
   tests/test_reactor0/test_misc/test_replay_1974257_inverted_trash_target_is_pitched.cpp
   tests/test_reactor0/test_misc/test_replay_1974512_reacter_ctp_must_not_erase_receiver_ctp.cpp
+  tests/test_reactor0/test_misc/test_replay_1977786_eight_clues_needs_a_stable_clue.cpp
   tests/test_reactor0/test_misc/test_replay_1974331_a_clued_spare_orange_is_pitchable.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp

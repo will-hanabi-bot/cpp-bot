@@ -71,7 +71,11 @@ reacter's own hand while identifying a slot in Cathy's.
 **It stands down at 60%** (v11.0.0): once `score >= 0.6 * variant maximum` — a
 constant 5 per suit, not `max_score()` — a clue to Bob is STABLE again, because
 the odd bucket is a reactive discard and forcing one late costs more than it
-buys. Clues to Cathy are untouched and stay even. `bob_clue_is_reactive`
+buys. **And at 8 clues** (v11.2.0), whatever the score: a discard is illegal
+there, so the turn must produce a clue, and every reactive candidate reading as a
+MISTAKE leaves the bot with no legal action at all (replay 1977786 T35). Both
+arms read the PRE-CLUE token count — `on_clue` spends it before `interpret_clue`
+runs. Clues to Cathy are untouched and stay even. `bob_clue_is_reactive`
 (`reactor0/interpret_reactive.cpp:967-976`). In **Synesthesia**, which can never
 give a rank clue, those stable clues read off a fixed colour table naming a
 button and a slot — see *synesthesia table*. CONVENTION.md §1f.

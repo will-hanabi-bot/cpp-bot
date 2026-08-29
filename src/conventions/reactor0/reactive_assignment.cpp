@@ -124,10 +124,10 @@ std::string format_settings(const Variant& variant,
     // Synesthesia what it becomes instead.
     const std::string late =
         variant.synesthesia
-            ? ", from 60% of max a clue to Bob is STABLE: Red=pitch1, "
-              "Yellow=pitch2, Green=chuck3, Blue=chuck2, Purple=pitch5, "
-              "Orange=chuck1, other=pitch4"
-            : ", from 60% of max a clue to Bob is STABLE";
+            ? ", from 60% of max OR at 8 clues a clue to Bob is STABLE: "
+              "Red=pitch1, Yellow=pitch2, Green=chuck3, Blue=chuck2, "
+              "Purple=pitch5, Orange=chuck1, other=pitch4"
+            : ", from 60% of max OR at 8 clues a clue to Bob is STABLE";
     return "reactor0 — no stable clues below 60%: to Bob = odd, to Cathy = even"
            ", reactive values: " +
            render(all) + late + ", rlocks: " + (rlocks ? "on" : "off");

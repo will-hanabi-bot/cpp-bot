@@ -966,6 +966,31 @@ std::optional<ClueInterp> stamp_react_discard_button(Game& game,
 
 bool bob_clue_is_reactive(const State& state) {
   if (!variants::uses_target_parity(*state.variant)) return false;
+  // AT 8 CLUES A CLUE TO BOB IS STABLE, whatever the score (v11.2.0).
+  //
+  // At 8 tokens a discard is illegal, so the turn MUST produce a clue -- and
+  // under target parity every clue is reactive, so every one of them has to
+  // survive a reactive reading or it is dropped as a MISTAKE and never offered.
+  // When none does, `analyse_clues` hands back an empty set, the whole clue
+  // phase declines, and the play/discard phase answers with a discard the server
+  // will not accept. That is a DEADLOCK, not a bad choice.
+  //
+  // Replay 1977786 T35, `Alternating Clues & Brown (6 Suits)`: 8 tokens, 15/30
+  // so target parity still binds, and the last clue was a colour one so only
+  // rank clues were even legal. Every one of them read as a MISTAKE, zero
+  // candidates reached `choose_clue`, and will-bot69 tried to discard order 5.
+  //
+  // A stable clue names a card outright, so it is far easier to read cleanly --
+  // which is exactly what a forced turn needs. This is the same escape hatch the
+  // 60% rule provides, granted for a different reason.
+  //
+  // THE TOKEN COUNT IS THE PRE-CLUE ONE. `Game::on_clue` spends the token before
+  // `interpret_clue` runs (`basics/game.cpp`), so the interpreting seat would see
+  // 7 where the deciding seat sees 8 -- and giver and reader would disagree about
+  // what the clue meant, which is the one failure this convention cannot
+  // tolerate. Every caller therefore passes the state as it was BEFORE the clue;
+  // `interpret_clue` passes `prev.state` for exactly this reason.
+  if (state.clue_tokens == 8) return false;
   // 5 points per suit, from the SUIT COUNT rather than `max_ranks`, which is
   // live: `max_score()` shrinks as criticals are discarded, and a cap that moves
   // mid-game would move the switch point with it. Two seats reading the same

@@ -53,6 +53,9 @@ SetupOptions target_parity_opts(std::string variant_name) {
   SetupOptions opts;
   opts.variant_name = std::move(variant_name);
   opts.play_stacks = {0, 0, 0, 0, 0};
+  // 7, not the harness default of 8: at 8 tokens a clue to Bob is STABLE
+  // (v11.2.0), and everything below is about the reactive regime.
+  opts.clue_tokens = 7;
   opts.starting = TestPlayer::ALICE;
   opts.hands = {
       {"p4", "p5", "b4", "b5", "y5"},  // Alice (giver) -- nothing playable
@@ -249,6 +252,9 @@ SetupOptions clued_at_our_seat_opts(std::string variant_name) {
   SetupOptions opts;
   opts.variant_name = std::move(variant_name);
   opts.play_stacks = {0, 0, 0, 0, 0};
+  // 7, not the harness default of 8: at 8 tokens a clue to Bob is STABLE
+  // (v11.2.0), and everything below is about the reactive regime.
+  opts.clue_tokens = 7;
   opts.starting = TestPlayer::CATHY;  // the giver
   opts.hands = {
       // `xx` is the harness's genuinely HIDDEN card (test_harness.cpp:96); a
@@ -373,6 +379,9 @@ TEST(Reactor0TargetParity, N2ReachesAClueToBob) {
   opts.variant_name = "Alternating Clues (5 Suits)";
   opts.starting = TestPlayer::ALICE;
   opts.play_stacks = {0, 0, 0, 0, 0};
+  // 7, not the harness default of 8: at 8 tokens a clue to Bob is STABLE
+  // (v11.2.0), and everything below is about the reactive regime.
+  opts.clue_tokens = 7;
   opts.hands = {
       {"r4", "y4", "g4", "b4", "p4"},  // Alice (giver, us)
       {"r2", "y2", "g2", "b2", "p2"},  // Bob -- nothing playable, chop is safe
@@ -455,6 +464,7 @@ TEST(Reactor0TargetParity, TheCapIsTheVariantMaximumNotMaxScore) {
     SetupOptions opts;
     opts.variant_name = "Alternating Clues (3 Suits)";
     opts.play_stacks = std::move(stacks);
+    opts.clue_tokens = 7;  // see target_parity_opts
     opts.starting = TestPlayer::ALICE;
     opts.hands = {
         {"r5", "g5", "b5", "r4", "g4"},
@@ -517,5 +527,79 @@ TEST(Reactor0TargetParity, OnlyBobsClueCrossesTheThreshold) {
                                         /*target_is_bob=*/false)
                     .even)
         << "a clue to Cathy stays EVEN on both sides of the threshold";
+  }
+}
+
+// --- the 8-token escape hatch (v11.2.0) -----------------------------------
+//
+// At 8 tokens a discard is illegal, so the turn MUST produce a clue. Under
+// target parity every clue is reactive, so every candidate has to survive a
+// reactive reading or it is dropped as a MISTAKE and never offered -- and when
+// none does, the clue phase declines and the play/discard phase answers with a
+// discard the server will not accept. A DEADLOCK, not a bad choice.
+//
+// So at 8 tokens a clue to Bob is STABLE whatever the score. A stable clue names
+// a card outright and is far easier to read cleanly, which is what a forced turn
+// needs. Replay 1977786 T35 is the deadlock this closes.
+
+TEST(Reactor0TargetParity, AtEightCluesAClueToBobIsStableWhateverTheScore) {
+  // Score 0 of 25 -- as far below the 60% switch as it gets, so the ONLY thing
+  // that can make this stable is the token count.
+  SetupOptions opts = target_parity_opts("Alternating Clues (5 Suits)");
+  opts.clue_tokens = 8;
+  Game g = setup(std::move(opts));
+  ASSERT_EQ(g.state.score(), 0) << "guard: nowhere near the 60% switch";
+
+  EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+      << "at 8 tokens the turn is forced, so a clue to Bob must be readable "
+         "as a stable one";
+
+  const int alice = g.state.our_player_index;
+  const int bob = g.state.next_player_index(alice);
+  const int cathy = g.state.next_player_index(bob);
+  ClueAction to_bob{alice, bob, {}, BaseClue{ClueKind::RANK, 1}};
+  ClueAction to_cathy{alice, cathy, {}, BaseClue{ClueKind::RANK, 1}};
+  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(g.state, to_bob, bob));
+  EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, to_cathy, bob))
+      << "a clue to Cathy is untouched -- the rule is about the seat that is "
+         "forced to be readable, not about the parity";
+}
+
+// One token down and the ordinary rule is back, with the score unchanged. This
+// is the pair that shows the 8-token arm is doing the work rather than some
+// other property of the fixture.
+TEST(Reactor0TargetParity, AtSevenCluesTheSameClueIsReactiveAgain) {
+  SetupOptions opts = target_parity_opts("Alternating Clues (5 Suits)");
+  opts.clue_tokens = 7;
+  Game g = setup(std::move(opts));
+  ASSERT_EQ(g.state.score(), 0) << "guard: the same score as the test above";
+
+  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+      << "below 8 the turn is not forced, so target parity binds as before";
+}
+
+// Synesthesia takes the same hatch -- the rule is `uses_target_parity`, not one
+// family. There its stable clues read off the §1f colour table.
+TEST(Reactor0TargetParity, SynesthesiaAlsoGoesStableAtEightClues) {
+  SetupOptions opts = target_parity_opts("Synesthesia (5 Suits)");
+  opts.clue_tokens = 8;
+  Game g = setup(std::move(opts));
+  EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state));
+
+  SetupOptions seven = target_parity_opts("Synesthesia (5 Suits)");
+  seven.clue_tokens = 7;
+  Game h = setup(std::move(seven));
+  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(h.state));
+}
+
+// Plain variants are untouched at any token count: a clue to Bob was never
+// reactive there, so there is no hatch to take.
+TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedByTheTokenRule) {
+  for (int tokens : {8, 7, 1}) {
+    SetupOptions opts = target_parity_opts("No Variant");
+    opts.clue_tokens = tokens;
+    Game g = setup(std::move(opts));
+    EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+        << "tokens " << tokens;
   }
 }

@@ -139,6 +139,10 @@ SetupOptions syn_opts() {
   SetupOptions opts;
   opts.variant_name = "Synesthesia (5 Suits)";
   opts.play_stacks = {3, 3, 3, 3, 3};
+  // 7, not the harness default of 8: at 8 tokens a clue to Bob is STABLE
+  // whatever the score (v11.2.0), which would mask the 60% switch these
+  // fixtures are built around.
+  opts.clue_tokens = 7;
   opts.starting = TestPlayer::ALICE;
   opts.hands = {
       {"r5", "y5", "g5", "b5", "p5"},   // Alice
