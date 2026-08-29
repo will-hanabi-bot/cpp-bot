@@ -446,6 +446,18 @@ opposite (CONVENTION.md §1g):
   dead and will read the play regardless, so a clue whose promise only the giver
   can refute is one the giver must not give. Replay 1973575 T62.
 
+### known-safe discard
+A card the holder can prove is safe to press **Discard** on: *provably trash*
+(above) **and** on a plain suit (`known_safe_discard`,
+`reactor0/state_eval.cpp`). The second half is not redundant. Pressing Discard
+on an INVERTED card is a *play attempt*, and a trash card is by definition not
+playable, so chucking a trash orange **strikes** rather than burning — replay
+1966569 T10. Such a card is provably trash and is *not* a known-safe discard;
+it is pitched, never chucked.
+
+The endgame fork is the caller (DECISION_MAKING.md precedence 0d): it will not
+burn a card it cannot prove is worthless while one it can sits in the same hand.
+
 ### parity promise
 Under Odds and Evens a rank clue names a class, not a rank, so the promise it
 makes about a lock slot is that the card is **odd (1, 3, 5)** or **even (2, 4)**

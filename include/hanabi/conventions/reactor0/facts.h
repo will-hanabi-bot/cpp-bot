@@ -118,4 +118,15 @@ IdentitySet sight_narrowed(const Game& game, int order);
 // can PROVE the card is worthless, even though common knowledge cannot.
 bool provably_trash(const Game& game, int order);
 
+// True when the holder can PROVE that pressing DISCARD on this card is a safe
+// burn: `provably_trash`, and additionally on a PLAIN suit.
+//
+// The non-inverted half is load-bearing, not decoration. Pressing Discard on an
+// inverted card is a PLAY attempt, and a trash card is by definition not
+// playable, so chucking a trash orange STRIKES -- replay 1966569 T10 did
+// exactly that. Such a card is pitched, never chucked. This is `is_chuckable`'s
+// plain-trash arm (conventions/reactor0/calls.cpp), lifted out so the endgame
+// fork can ask the same question without walking the whole ladder.
+bool known_safe_discard(const Game& game, int order);
+
 }  // namespace hanabi::reactor0

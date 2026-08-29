@@ -24,6 +24,7 @@
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/calls.h"
+#include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/endgame/helper.h"
 #include "hanabi/logging/decide_trace.h"
 #include "hanabi/conventions/reactor0/decision.h"
@@ -1165,12 +1166,83 @@ PerformAction Game::take_action() const {
       return *better;
     };
 
+    // A KNOWN-SAFE discard outranks a speculative one (v11.6.0, replay
+    // 1977971 T22).
+    //
+    // The endgame has no model of PRIVATE SIGHT. reactor0's ladder does --
+    // `is_chuckable` narrows our own hand by `sight_narrowed`
+    // (conventions/reactor0/calls.cpp:94) -- but the fork never reaches the
+    // ladder, and the solver reasons from common-knowledge empathy alone. That
+    // ranks the candidates BACKWARDS whenever the last copy of something sits
+    // face-up in a partner's hand. At 1977971 T22 will-bot69's slot 5 read
+    // {b1, b5} and so looked like a coin-flip on the critical b5, while its
+    // slot 3 read {r1, r5, b1, b3, b5} and looked the safer burn. But the last
+    // b5 was visible in a partner's hand, so slot 5 was PROVABLY the b1 -- and
+    // slot 3, which the solver discarded, might have been the r5 the team still
+    // needed.
+    //
+    // So: never burn a card we cannot prove is worthless while one we CAN sits
+    // in the same hand. The swap is weakly dominant -- it both spends the worse
+    // card and keeps the better one -- so it needs no proven-win carve-out.
+    //
+    // It rewrites the TARGET of a discard and nothing else. Plays, clues, and
+    // the fork's other returns (a standing call, an urgent call, a VERY HIGH
+    // clue) are deliberate and are left alone.
+    auto known_safe_discard = [&](int o) {
+      return hanabi::reactor0::known_safe_discard(*this, o);
+    };
+    auto prefer_known_discard = [&](std::optional<PerformAction> chosen)
+        -> std::optional<PerformAction> {
+      if (convention != Convention::REACTOR0 || !chosen) return chosen;
+      auto* d = std::get_if<PerformDiscard>(&*chosen);
+      if (!d) return chosen;
+      if (s.holder_of(d->target) != s.our_player_index) return chosen;
+      // A STANDING CALL is deliberate. The stamp is the instruction, and the
+      // fork already honours it against its own search (replay 1966757); a rule
+      // about what we can prove has no business overruling what we were told.
+      if (meta[d->target].status == CardStatus::CALLED_TO_DISCARD ||
+          meta[d->target].status == CardStatus::CALLED_TO_PLAY) {
+        return chosen;
+      }
+      // Pressing Discard on an INVERTED card is a play attempt, not a burn --
+      // the chuck reaches its stack. `prefer_certain_play` draws the same line
+      // a few lines above, and replay 1957936 wins its endgame on a chain of
+      // orange chucks that this rule must not unpick.
+      const IdentitySet live = me().thoughts[d->target].possibilities();
+      if (live.exists([&](Identity i) {
+            return s.variant->suits[i.suit_index].suit_type.inverted &&
+                   s.is_playable(i);
+          })) {
+        return chosen;
+      }
+      if (known_safe_discard(d->target)) return chosen;
+      // Break the tie the way the CONVENTION would rather than by hand order:
+      // the chuck list is already in Actionable Card Priority order. It also
+      // carries CTD-stamped cards that are not provably trash, which the filter
+      // drops -- this rule is about what we can PROVE, not what we were told.
+      const auto lists =
+          hanabi::reactor0::action_lists(*this, s.our_player_index);
+      for (int o : lists.chuck) {
+        if (o == d->target) continue;
+        // Spoken for: a card called to play is not a burn candidate.
+        if (meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+        if (!known_safe_discard(o)) continue;
+        hanabi::logging::log_branch("endgame.prefer_known_discard",
+                                    {{"was", d->target}, {"now", o}});
+        return PerformAction{PerformDiscard{o}};
+      }
+      return chosen;
+    };
+
     // Forced-endgame layer: mechanical rules that override the search
     // when the correct action is hardcoded. See
     // `src/endgame/forced_endgame.cpp` for the rule list. Cheap enough
     // (O(n × hand × suits)) to check before the solver kicks in.
     if (auto forced = hanabi::endgame::forced_endgame_action(*this); forced) {
-      if (auto a = prefer_stall_clue(prefer_certain_play(*forced))) return *a;
+      if (auto a = prefer_known_discard(
+              prefer_stall_clue(prefer_certain_play(*forced)))) {
+        return *a;
+      }
       // The forced rule wanted a clue and none is legal -- fall through to the
       // solver, and past it to the ordinary ladder.
     }
@@ -1320,7 +1392,8 @@ PerformAction Game::take_action() const {
         }
       }
       if (result.ok() && result.winrate >= hanabi::endgame::Fraction(1, 100)) {
-        if (auto a = prefer_stall_clue(prefer_certain_play(result.action))) {
+        if (auto a = prefer_known_discard(
+                prefer_stall_clue(prefer_certain_play(result.action)))) {
           return *a;
         }
         // The solver's winning line was a clue and none is legal. Leave the

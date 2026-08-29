@@ -929,3 +929,27 @@ attempted blind — it wants its own ruling and its own replay.
 `tests/test_reactor0/test_orange_chop_and_pitch.cpp` documents the asymmetry:
 its `pitch_pair_opts` fixture has to run from BOB's seat, because from the
 giver's chair the clue is rejected before the stamp is reached.
+
+---
+
+## 35. `[endgame]` The solver still has no model of private sight
+
+v11.6.0 gave the endgame fork `prefer_known_discard` (DECISION_MAKING.md
+precedence 0d), which stops it burning a card it cannot prove is worthless while
+one it can sits in the same hand. That is a correction applied to the fork's
+ANSWER. The search underneath still reasons from common-knowledge empathy, and
+the same blind spot shows up on the play side.
+
+Replay 1977971 T22 is the worked example for both halves. The discard half is
+fixed. The play half: will-bot69's slot 1 read `{r4, l5}` and both were
+playable, but the only l5 was face-up in will-bot67's hand — so the card was a
+*known* r4. `hanabi::endgame::certain_plays` is built on empathy, so it does not
+report it, and `prefer_certain_play` therefore cannot offer it.
+
+The principled fix is to narrow the solver's own hypotheses for OUR hand by
+`sight_narrowed` (`conventions/reactor0/facts.h`) before the search runs, which
+would price the lines correctly rather than patching the answer afterwards. It
+was not attempted with v11.6.0 because it changes every hypothesis the search
+enumerates — a far larger blast radius than one report justified, and it wants
+its own sweep. Note it is reactor0-only machinery today: `sight_narrowed` lives
+under `conventions/reactor0/`, though nothing in it is convention-specific.

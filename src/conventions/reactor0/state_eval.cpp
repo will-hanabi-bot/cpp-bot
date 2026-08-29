@@ -477,6 +477,15 @@ bool provably_trash(const Game& game, int order) {
   return live.forall([&s](Identity i) { return s.is_basic_trash(i); });
 }
 
+bool known_safe_discard(const Game& game, int order) {
+  const IdentitySet live = sight_narrowed(game, order);
+  if (live.is_empty()) return false;  // no information, not a proof
+  const State& s = game.state;
+  return live.forall([&s](Identity i) {
+    return s.is_basic_trash(i) && !variants::is_inverted_id(s, i);
+  });
+}
+
 bool clue_is_vh1(const Game& game, const Game& hypo, const ClueAction& action) {
   const State& s = game.state;
   const int alice = s.our_player_index;

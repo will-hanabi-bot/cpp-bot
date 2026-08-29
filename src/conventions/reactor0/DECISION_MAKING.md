@@ -270,6 +270,35 @@ Two things outrank the phases below, and one thing sits between them:
     HIGH rules were written for mid-game value and do not transfer to a pace-0
     position; VERY HIGH is the only tier that should out-rank a certain play.
 
+0d. **A KNOWN-SAFE discard outranks a speculative one** (v11.6.0, replay
+    1977971 T22). When step 0's answer is a plain discard of one of our own
+    cards, `prefer_known_discard` (`src/basics/decide.cpp`) rewrites its TARGET
+    to the first card on the chuck list that `known_safe_discard`
+    (`conventions/reactor0/facts.h`) accepts — every identity **private sight**
+    leaves is basic trash, and on a plain suit. A stamped card is never a swap
+    destination, and a chosen discard that is itself known-safe is left alone.
+
+    **Three things are exempt, because they are not burns at all.** A discard
+    stamped CTD or CTP is a STANDING CALL — the stamp is the instruction, and
+    the fork already honours it against its own search (replay 1966757). A
+    discard whose card could be a playable INVERTED one is a *chuck*, which
+    reaches its stack rather than the discard pile (replay 1957936 wins its
+    endgame on a chain of them); `prefer_certain_play` draws the same line.
+    And a discard of somebody else's card is not ours to move. Only the target
+    of a genuine burn moves; plays, clues and the fork's other returns are
+    untouched.
+
+    **Why the fork needs its own rule.** The endgame has no model of private
+    sight, while phase 2 does — `is_chuckable` narrows our own hand by
+    `sight_narrowed` (`conventions/reactor0/calls.cpp`). Reasoning from common
+    knowledge alone ranks burn candidates *backwards* whenever the last copy of
+    something sits face-up in a partner's hand. At 1977971 T22 slot 5 read
+    `{b1, b5}` and so looked like a coin-flip on the critical b5, while slot 3
+    read `{r1, r5, b1, b3, b5}` and looked the safer burn — but the last b5 was
+    visible across the table, so slot 5 was provably the b1, and slot 3 might
+    have been the r5 the team still needed. The swap is weakly dominant, so
+    unlike 0c it needs no carve-out for a solve that finished.
+
 1.  **A VERY HIGH tier clue**, if one is available.
 
 2.  **A pending REACTION.**  If Alice holds a reacter-CTP — or, in a variant
