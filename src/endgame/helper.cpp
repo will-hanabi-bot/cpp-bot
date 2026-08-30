@@ -285,7 +285,10 @@ std::pair<std::vector<GameArr>, std::vector<GameArr>> gen_arrs(const Game& game,
 
   int rem_total = remaining_total(remaining);
   if (rem_total != state.cards_left) {
-    throw std::logic_error("gen_arrs: remaining_total does not match cards_left");
+    throw std::logic_error(
+        "gen_arrs: remaining_total does not match cards_left (remaining_total=" +
+        std::to_string(rem_total) + " cards_left=" +
+        std::to_string(state.cards_left) + ")");
   }
 
   std::vector<GameArr> drawn;

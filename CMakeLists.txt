@@ -133,6 +133,7 @@ add_executable(hanabi_tests
   tests/test_endgame/test_solver_smoke.cpp
   tests/test_logging/test_game_logger_rename.cpp
   tests/test_logging/test_game_logger_finalize.cpp
+  tests/test_logging/test_game_logger_shared_lifetime.cpp
   tests/test_net/test_allplays_scope.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp
@@ -261,6 +262,8 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1978041_deferred_reaction_is_remembered.cpp
   tests/test_reactor0/test_misc/test_replay_1978081_superseded_call_drops_the_reaction.cpp
   tests/test_reactor0/test_misc/test_replay_1974194_stale_reading_is_not_acted_on.cpp
+  tests/test_reactor0/test_misc/test_replay_1973410_inconsistent_accounting_declines.cpp
+  tests/test_reactor0/test_misc/test_replay_1973413_partner_cards_count_by_sight.cpp
   tests/test_reactor0/test_misc/test_replay_1974331_a_clued_spare_orange_is_pitchable.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp

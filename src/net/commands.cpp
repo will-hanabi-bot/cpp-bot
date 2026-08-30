@@ -414,7 +414,7 @@ void BotClient::on_init(const json& data) {
                 << " reused before its database id arrived; closing old log\n";
       game_loggers_.erase(stale);
     }
-    auto logger = std::make_unique<hanabi::logging::GameLogger>(
+    auto logger = std::make_shared<hanabi::logging::GameLogger>(
         username_, tid, "logs");
     logger->emit_lifecycle(
         "game_init",
@@ -644,18 +644,26 @@ void BotClient::maybe_take_turn(int table_id) {
   // gameActionList that re-fires maybe_take_turn) won't post a second job.
   action_time_[table_id] = false;
 
-  // Pass the per-game logger raw pointer (lifetime owned by game_loggers_).
-  // game_loggers_ entries are only erased in on_game_over which runs on
-  // the network thread, and we clear them after the compute completes —
-  // but the worker captures the pointer by value; if a game ends before
-  // the worker runs, the pointer is dangling. We guard by deferring the
-  // erase until after the worker confirms.
-  auto* glog = game_loggers_.count(table_id) ? game_loggers_[table_id].get() : nullptr;
+  // THE WORKER OWNS A REFERENCE, not a raw pointer (v13.1.0).
+  //
+  // This job outlives the turn whenever a solve is slow, and the network thread
+  // erases `game_loggers_[table_id]` the moment the game ends -- `on_database_id`
+  // on the normal path, `on_init` for a reused table id. While the map held a
+  // `unique_ptr` that erase FREED the logger under a running solve, and the job
+  // wrote through the dangling pointer as soon as `take_action` returned. That
+  // is what killed will-bot69 at table 5055: it timed out, so it alone still had
+  // a solve in flight when the game ended; will-bot67 had none and survived.
+  //
+  // A `shared_ptr` copy captured by value keeps the logger alive for exactly as
+  // long as the job needs it. A record emitted after `finalize_with_database_id`
+  // is harmless: that call takes the logger's own mutex and reopens at the new
+  // path, so the record lands in the finalised file.
+  auto glog = game_loggers_.count(table_id) ? game_loggers_[table_id] : nullptr;
 
   boost::asio::post(compute_ioc_,
                     [this, table_id, glog, snapshot = std::move(snapshot)]() mutable {
                       using namespace hanabi::logging;
-                      CurrentLoggerGuard guard(glog);
+                      CurrentLoggerGuard guard(glog.get());
                       if (glog) {
                         glog->mark_turn_start();
                         emit_state_snapshot(*glog, snapshot, snapshot.state.turn_count);

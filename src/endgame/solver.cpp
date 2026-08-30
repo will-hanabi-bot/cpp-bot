@@ -690,7 +690,25 @@ SolveResult EndgameSolver::solve(const Game& game,
   std::vector<std::pair<int, std::optional<Identity>>> own_ids;
   for (int i = 0; i < state.num_players; ++i) {
     for (int order : state.hands[i]) {
-      auto id = game.me().thoughts[order].id();
+      // WHAT THIS SEAT CAN PLACE (v13.1.0). `remaining_ids` below is subtracted
+      // from the physical card counts, and it is checked against the physical
+      // `cards_left` -- so a card must count as SEEN exactly when we can point
+      // at it. We can point at every card in somebody ELSE's hand, so their
+      // ground truth is the right answer; only our own hand needs inference.
+      //
+      // This used to ask `game.me().thoughts[order].id()` for every hand. That
+      // layer is common-derived, so a partner's card that common knowledge has
+      // not pinned came back nullopt and was counted as still in the DECK --
+      // while `cards_left` knew better. `remaining_total` then exceeded
+      // `cards_left` by exactly the number of unpinned partner cards, and
+      // `gen_arrs` threw "remaining_total does not match cards_left", dropping
+      // the turn. Replays 1973410 T66 (2 unpinned) and 1973413 T69 (3).
+      //
+      // `total_unknown` below counts only OUR unknowns, so it could never have
+      // absorbed the partner ones either: the two quantities were describing
+      // different populations.
+      auto id = (i == state.our_player_index) ? game.me().thoughts[order].id()
+                                              : state.deck[order].id();
       if (id) {
         ++seen_ids[id->to_ord()];
         if (i == state.our_player_index) own_ids.insert(own_ids.begin(), {order, *id});
@@ -732,6 +750,29 @@ SolveResult EndgameSolver::solve(const Game& game,
   }
 
   int total_unknown = state.cards_left + static_cast<int>(unknown_own.size());
+
+  // THE ACCOUNTING MUST ADD UP, OR THE SOLVER DECLINES (v13.1.0).
+  //
+  // `remaining_ids` is "cards this seat cannot point at" -- the deck, plus our
+  // own hand where empathy has not pinned an identity. `gen_arrs` checks that
+  // against the physical `cards_left` and THROWS when they disagree, which
+  // drops the turn and stalls the game (`take_action_error`).
+  //
+  // The disagreement has two sources. One is fixed above, by counting partners'
+  // cards by sight. The other cannot be fixed here: our own empathy can pin an
+  // identity we do not actually hold, and then `seen_ids` counts the wrong
+  // ordinal and leaves a real card unaccounted. Replay 1973410 T66 is that
+  // case -- empathy pins all five of our cards (t2, t3, b1, r2, b1) while the
+  // hand really contains a y4 and a p1, so two identities are left over with an
+  // empty deck.
+  //
+  // Whatever the cause, an endgame solve is an optimisation. Declining it costs
+  // one search; throwing costs the turn. So check once, here, where both
+  // quantities are in hand, and let the ordinary ladder answer.
+  if (hanabi::endgame::remaining_total(remaining_ids) != total_unknown) {
+    return done(SolveResult{PerformPlay{0}, Fraction(0),
+                             "inconsistent card accounting"});
+  }
   if (total_unknown == 0) {
     auto result = winnable(assumed_game, state.our_player_index, remaining_ids, deadline);
     if (!result.ok()) return done(SolveResult{PerformPlay{0}, Fraction(0), "no winning strategy"});
@@ -858,7 +899,27 @@ SolveResult EndgameSolver::solve(const Game& game,
 
   std::sort(arrs.begin(), arrs.end(),
              [](const Arrangement& a, const Arrangement& b) { return a.prob > b.prob; });
-  if (arrs.empty()) arrs = {{{}, Fraction(1), remaining_ids}};
+  // NO CONSISTENT ARRANGEMENT -- give up rather than fabricate one (v13.1.0).
+  //
+  // This used to substitute `{{}, 1, remaining_ids}`: an arrangement that
+  // assigns NO identity to any of our unknown cards while keeping the full
+  // remaining map. That is not a weaker answer, it is an inconsistent one, and
+  // `gen_arrs` rejects it outright -- `remaining_total` counts the deck PLUS our
+  // own unidentified cards, so it can equal `cards_left` only when every one of
+  // them has been assigned. The fallback is reachable only when `unknown_own` is
+  // non-empty (with none the expansion loop never runs and `arrs_iter` keeps its
+  // initial entry), so it threw EVERY time it fired:
+  //   "gen_arrs: remaining_total does not match cards_left"
+  // took the turn down at 1973410 T66 and 1973413 T69, both with an empty deck
+  // and a slot whose `possible` set no remaining identity satisfied.
+  //
+  // Bail out the way the solver already bails for a timeout and for too many
+  // missing useful identities: the fork falls through and the ordinary ladder
+  // answers the turn.
+  if (arrs.empty()) {
+    return done(SolveResult{PerformPlay{0}, Fraction(0),
+                             "no consistent arrangement"});
+  }
 
   // Build hypos.
   struct Hypo {

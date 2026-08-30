@@ -84,9 +84,17 @@ class BotClient {
   // game.notes). compute_note_segments returns deltas; we append to the
   // full string here and re-send it on each change.
   std::unordered_map<int, std::unordered_map<int, std::string>> notes_;
-  // Per-table structured JSONL logger. Created in on_init, closed in
-  // on_game_over. See include/hanabi/logging/game_logger.h.
-  std::unordered_map<int, std::unique_ptr<hanabi::logging::GameLogger>>
+  // Per-table structured JSONL logger. Created in on_init, finalised and
+  // erased in on_database_id. See include/hanabi/logging/game_logger.h.
+  //
+  // SHARED, not unique (v13.1.0). The compute thread's `take_action` job holds
+  // its own reference for the length of the job, so erasing the map entry --
+  // which happens on the NETWORK thread the moment a game ends -- drops only
+  // the map's reference and cannot free a logger a solve is still writing to.
+  // As a `unique_ptr` this was a use-after-free that killed the process
+  // whenever a game ended mid-solve; the bot that timed out was the one that
+  // died. `GameLogger` carries its own mutex, so the two threads serialise.
+  std::unordered_map<int, std::shared_ptr<hanabi::logging::GameLogger>>
       game_loggers_;
 
   // Reactor /allplays toggle. Defaults to false (standard convention). When

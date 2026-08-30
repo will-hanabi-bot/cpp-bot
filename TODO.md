@@ -421,35 +421,6 @@ corpus is the gate. Fix entry 13 first — the two share the same call sites.
 
 ---
 
-## 17. `[engine]` `hanabi_decision_tests` segfaults intermittently
-
-`build/hanabi_decision_tests.exe` crashes with SIGSEGV roughly **1 run in 3-5**,
-always at the same point — the last line written is
-`[ RUN ] Reactor0PaceClueGate.SilentBelowPaceThree`. Every run that does not
-crash passes 47/47 (the five `HighValueClueGate` failures this entry used to
-mention were fixture bugs, fixed in v6.5.0/v6.6.0).
-
-Not a regression: reproduced at **v4.1.0** (commit 013580b, before the v5/v6
-orange work) in a clean worktree build, 1 crash in 12 runs, at the identical
-test. It survives at v6.1.0 and v6.6.0 at the same rate.
-
-Note for the v7.0.0 overhaul: `test_pace_clue_gate.cpp` is rewritten by that
-change, so the crash's *landmark* may be renamed or removed. The underlying bug
-is state left by an earlier test in the binary, not that test — expect it to
-resurface under a new name rather than to disappear.
-
-Notes for whoever picks it up:
-- `Reactor0PaceClueGate.*` run **alone** passed 8/8 and never crashed, so it is
-  state left by an earlier test in the binary rather than that test's own
-  fixture — or a stack depth issue that only the full run reaches.
-- No `gdb` in this MSYS2 environment; the build is RelWithDebInfo, so a trace
-  needs one installed (`pacman -S mingw-w64-ucrt-x86_64-gdb`) or a WER dump.
-- `SilentBelowPaceThree` sets `pace() < 3`, which also makes `in_endgame()`
-  true (`pace() < num_players - 1`, `decide.cpp:428`) — the endgame solver and
-  the deepest `advance` recursion are both in reach there.
-
----
-
 ## 18. `[engine]` Other consumers still read an inverted CTD as "throw this away"
 
 v6.3.0 taught the reaction-resolution helper that a `CALLED_TO_DISCARD` on an
@@ -944,3 +915,26 @@ A `--trace-catchup` flag that arms the sink before reconstruction would make
 interpretation directly observable and is probably a few lines. It was not done
 alongside v12.0.0 because changing the binary mid-measurement is precisely what
 the sweep hygiene rules forbid.
+
+---
+
+## 37. `[engine]` Our own empathy can pin an identity we do not hold
+
+At replay 1973410 T66 (`Color Blind (6 Suits)`, reactor0) the bot's own five
+cards are each PINNED by `game.me().thoughts[order].id()` -- t2, t3, b1, r2, b1
+-- while the hand really contains a y4 and a p1. Empathy does not merely fail to
+narrow; it narrows to the wrong answer, and to a *contradiction*: with the deck
+empty, the identities it claims cannot all exist alongside what is visible
+elsewhere.
+
+Found while fixing the endgame solver's card accounting in v13.1.0. The solver
+now DECLINES when the totals disagree rather than throwing, so this no longer
+drops a turn -- but declining is a symptom guard, not a fix. Anything that trusts
+`me().thoughts[].id()` for our own hand is being lied to in this position, which
+includes every "we know what we hold" shortcut in the ladder.
+
+Where to start: `Color Blind` gives colour clues no information, so the colour
+half of every elimination is inert and the rank half does all the work. A
+mis-cued `card_elim` / link resolution there would produce exactly this. The
+position is reproducible from the log, and the accounting guard makes a good
+tripwire: log when it fires and every instance is a live contradiction.
