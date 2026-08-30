@@ -1,17 +1,22 @@
 // Low pace changes what §3 is for, and takes double discards off the table.
 //
 // "Low pace" is `pace() <= 2` throughout — the same boundary §2a's tier gate
-// draws (see `test_pace_clue_gate.cpp`).
+// draws (see `test_pace_clue_gate.cpp`), and still the boundary rungs 3.2/3.4
+// use for the double discard.
 //
-// §3 normally fires only for a Bob who is STUCK: his chop is worth something
-// AND he has nothing else to do. At low pace the second half is waived. With
-// the deck nearly out there are few turns left to collect that chop in, and
-// spending one of them on a discard Bob could have made anyway is how a
-// playable card ends up buried.
+// §3 fires only for a Bob who is STUCK: his chop is worth something AND he has
+// nothing else to do. That is now true at EVERY pace (v13.2.0).
 //
-// Only that half is waived. A locked Bob, and a chop that is neither endangered
-// nor playable, both still skip §3 — those guards ask whether the clue is worth
-// giving at all, which low pace does not change.
+// Through v13.1.0 a `pace() <= 2` arm waived the safe-action half, on the
+// grounds that late there are few turns left to collect the chop in. It was
+// removed because it acted on BOB's behalf even when he had something safe to
+// do; the late aggression it was reaching for now lives in §4, which opens at
+// `pace() <= 1` when ALICE is stuck. So the file keeps its low-pace fixtures and
+// its name, but §3's precondition no longer moves with pace at all.
+//
+// The other two guards never moved: a locked Bob, and a chop that is neither
+// endangered nor playable, skip §3 at any pace — they ask whether the clue is
+// worth giving at all.
 //
 // The double discard goes the other way. It spends a clue to clear two cards
 // the team could have thrown anyway, so when turns are the scarce resource it
@@ -91,20 +96,31 @@ TEST(Reactor0LowPaceClues, SafeActionStopsSectionThreeAtNormalPace) {
   ASSERT_TRUE(hanabi::reactor0::has_playable_chop(g, (int)TestPlayer::BOB))
       << "guard: Bob's chop is worth collecting";
   ASSERT_FALSE(g.common.thinks_trash(g, (int)TestPlayer::BOB).empty())
-      << "guard: and he has a safe discard, which is what low pace waives";
+      << "guard: and he has a safe discard, which is what stops §3";
 
   // Bob's chop is worth a clue, but he is not stuck.
   EXPECT_FALSE(hanabi::reactor0::priority_3_applies(g))
       << "at pace 3 a Bob with something safe to do does not earn §3";
 }
 
-TEST(Reactor0LowPaceClues, LowPaceWaivesTheSafeActionRequirement) {
+// v13.2.0 INVERTED this. Through v13.1.0 low pace waived the safe-action half
+// of §3's precondition, and this asserted the waiver. §3 is now the same rule at
+// every pace: a Bob with something safe to do does not earn a clue, however few
+// turns are left. The late aggression the waiver was reaching for moved to §4,
+// which asks whether ALICE is stuck rather than acting on Bob's behalf.
+//
+// The fixture is unchanged, so this is the same position the waiver used to
+// fire on -- only the expectation moved.
+TEST(Reactor0LowPaceClues, LowPaceNoLongerWaivesTheSafeActionRequirement) {
   for (int pace : {1, 2}) {
     Game g = bob_has_a_safe_action(pace);
     ASSERT_EQ(g.state.pace(), pace);
-    EXPECT_TRUE(hanabi::reactor0::priority_3_applies(g))
+    ASSERT_TRUE(hanabi::reactor0::has_playable_chop(g, (int)TestPlayer::BOB))
+        << "guard: the chop is still worth collecting at pace " << pace
+        << ", so it is the SAFE-ACTION half being tested and nothing else";
+    EXPECT_FALSE(hanabi::reactor0::priority_3_applies(g))
         << "at pace " << pace
-        << " the chop is worth collecting even though Bob is not stuck";
+        << " a Bob who is not stuck still does not earn §3";
   }
 }
 
@@ -122,7 +138,7 @@ TEST(Reactor0LowPaceClues, AWorthlessChopStillSkipsSectionThreeAtLowPace) {
 
   ASSERT_EQ(g.state.pace(), 1) << "guard: low pace";
   EXPECT_FALSE(hanabi::reactor0::priority_3_applies(g))
-      << "low pace waives the safe-action test, not the worth-a-clue test";
+      << "the worth-a-clue test is what fails here, independently of pace";
 }
 
 // A locked Bob is out of §3's scope at any pace — there is no chop to save.

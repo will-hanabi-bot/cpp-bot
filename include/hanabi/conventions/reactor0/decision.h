@@ -124,6 +124,7 @@ bool has_safe_discard(const Game& game, int player);
 // T5). Exported so the rung fixtures can pin it directly.
 bool priority_3_applies(const Game& game);
 
+
 // Priority 2's admissibility condition, and the rung-3.3 / 3.5 / 4.7 test: can
 // the team afford to have `order` thrown away? True when it is basic trash, a
 // same-hand-dupe, or a good card Alice can see a second copy of in some other
@@ -166,6 +167,17 @@ struct ClueCandidate {
   // own view. NEGATIVE information counts -- a colour clue that strips the last
   // trash candidates off a card it did NOT touch says as much as one that did.
   bool newly_useful = false;
+  // How many cards this clue's reading calls to play -- `NewPlayFacts::count`
+  // (`facts.h`), the same measure H3 uses for "two new plays". Section 4's
+  // rung 4c reads it. Recorded here because `analyse_clues` already holds the
+  // hypo the count needs and has already paid for the `simulate`.
+  int new_plays = 0;
+  // Does this clue call BOB to play a card that really is playable, now?
+  // Rung 4b's third conjunct. Judged from what Alice can SEE of Bob's hand, and
+  // from the button the stamp names -- a chuck on an inverted suit reaches the
+  // stack just as a pitch does on a plain one, which is why this does not
+  // simply read `new_plays`.
+  bool bob_plays_now = false;
 };
 
 // One `Game::simulate` per candidate — the same cost the deleted `eval_action`
@@ -186,6 +198,20 @@ std::vector<ClueCandidate> analyse_clues(
 // gate. At 8 tokens neither window applies, which is what lets section 4 rank
 // clues the gate would otherwise flatten.
 bool clue_is_admissible(const Game& game, const ClueCandidate& c);
+
+// Section 4's gate — THREE SEPARATE TRIGGERS (v13.2.0):
+//   1. Alice is locked
+//   2. Alice is at 8 clues
+//   3. `pace() <= 1` AND any of
+//        4a  Alice has no known playable card
+//        4b  Bob holds a playable he does not know about, and Cathy has none
+//        4c  some candidate gets TWO cards playing (`ClueCandidate::new_plays`)
+//
+// The first two are unqualified: in both, every alternative to cluing burns a
+// card. Only the pace arm carries 4a-4c. Exported for the same reason
+// `priority_3_applies` is — so the three alternatives can be asserted apart
+// from the rung's own ordering.
+bool priority_4_applies(const Game& game, const std::vector<ClueCandidate>& cands);
 
 // Precedence step 1 — the best VERY HIGH clue, or nullopt.
 //

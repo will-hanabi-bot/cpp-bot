@@ -642,12 +642,12 @@ is judged from Alice's own inference, not common knowledge.
    discard can reach sits below rung 3.1.
 
 3. **Bob's chop is worth a clue** (so in particular he is not locked) **and he
-   has no safe play or discard — or `pace() <= 2`.** The pace arm waives only
-   the safe-action half: at low pace there are few turns left to collect that
-   chop in, and spending one on a discard Bob could have made anyway is how a
-   playable card ends up buried. A locked Bob, and a chop that is neither
-   endangered nor playable, still skip §3 — those ask whether the clue is worth
-   giving at all, which low pace does not change.
+   has no safe play or discard.**
+   The same rule at every pace: `priority_3_applies`
+   (`reactor0/decision.cpp`). Through v13.1.0 a `pace() <= 2` arm waived the
+   safe-action half; it was removed in v13.2.0 because it acted on BOB's behalf
+   even when he had something safe to do. The late aggression it was reaching
+   for now lives in §4, which asks whether ALICE is stuck.
 
    Worth a clue means either of two things, and
    "non-trash" — which is what this said until v7.22.0 — was too weak to
@@ -707,7 +707,23 @@ is judged from Alice's own inference, not common knowledge.
    visible → 3; `g4` needs `g1 g2 g3`, and `g3` is in Bob's hand → 2; `r4` needs
    `r1 r2 r3`, and `r2` is in Bob's hand and `r3` in Cathy's → 1. So `b4` wins.
 
-4. **Alice is locked, at 8 clues, or at pace 0 and is forced to clue or pitch.** Tiebreak by the following:
+4. **Alice is locked, or at 8 clues, or at pace <= 1 and any of 4a-4c:**
+   The first two are unqualified -- in both, every alternative to cluing burns a
+   card -- and 4a-4c gate the pace arm alone. `priority_4_applies`
+   (`reactor0/decision.h`, `decision.cpp`), exported so each alternative can be
+   asserted apart from the rung's ordering, the way `priority_3_applies` is.
+   4a. Alice does not have a known playable card.
+   4b. Bob has a playable but unknown card in his hand, Cathy has no playable
+       cards in her hand, **and Alice can actually give a clue that gets Bob to
+       play a playable card immediately**. That last clause is what stops 4b
+       trading a certain point for nothing: whenever 4b is the sole opener 4a is
+       false, so Alice is giving up a play of her own, and a clue that leaves Bob
+       where he was buys her nothing for it. Read off
+       `ClueCandidate::bob_plays_now`, which counts BOTH buttons -- a
+       `CALLED_TO_DISCARD` on an inverted suit is a chuck and reaches the stack,
+       so it moves him too.
+   4c. Alice can give a clue that gets two cards to play (stamps two cards which would advance both stacks).
+   Tiebreak by the following:
     1. Same as 3.1
     2. Same as 3.3
     3. Same as 3.5

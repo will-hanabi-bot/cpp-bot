@@ -566,6 +566,42 @@ std::vector<ClueCandidate> analyse_clues(
     }
     c.default_score = 1.99 * useful - trash;
 
+    // Rung 4c's subject: does this clue get TWO cards playing? Counted off the
+    // same hypo the tier already walked.
+    c.new_plays = new_play_facts(game, hypo).count;
+
+    // Rung 4b's third conjunct: does this clue get BOB playing immediately?
+    //
+    // The same stamp transition `new_play_facts` walks -- no call before, a call
+    // in the hypo -- but restricted to Bob's hand and checked against what Alice
+    // can SEE, so a call on a card that is not really playable does not count.
+    //
+    // Both buttons are read, which is where this differs from `new_plays`: a
+    // CALLED_TO_DISCARD on an INVERTED suit is a chuck and reaches the stack, so
+    // it makes Bob play. `new_play_facts` counts only CALLED_TO_PLAY and misses
+    // exactly that (TODO 4); 4b must not inherit the blind spot, or an orange
+    // play call would read as "no clue delivers" and shut the arm wrongly.
+    {
+      const int bob_seat = s.next_player_index(s.our_player_index);
+      for (int o : s.hands[bob_seat]) {
+        const CardStatus before = game.meta[o].status;
+        if (before == CardStatus::CALLED_TO_PLAY ||
+            before == CardStatus::CALLED_TO_DISCARD) {
+          continue;  // already called -- this clue is not what does it
+        }
+        auto bid = s.deck[o].id();
+        if (!bid || !s.is_playable(*bid)) continue;
+        const CardStatus after = hypo.meta[o].status;
+        const bool plays = variants::is_inverted_id(s, *bid)
+                               ? after == CardStatus::CALLED_TO_DISCARD
+                               : after == CardStatus::CALLED_TO_PLAY;
+        if (plays) {
+          c.bob_plays_now = true;
+          break;
+        }
+      }
+    }
+
     // Fill-ins, for rung 4.5. "Narrows" is judged from the TARGET's own view --
     // he is the one who learns something -- and counts both positive and
     // negative information, since a clue that misses a card tells him about it
@@ -1011,17 +1047,16 @@ bool priority_3_applies(const Game& g) {
   if (!at_risk_chop(g, alice_of(g), bob) && !has_playable_chop(g, bob)) {
     return false;
   }
-  // Normally §3 is for a Bob who is STUCK -- his chop is worth something and he
-  // has nothing else to do. At low pace it fires even when he does have a safe
-  // action: with the deck nearly out there are few turns left to collect that
-  // chop in, and spending one of them on a discard he could have made anyway is
-  // how a playable card ends up buried.
+  // §3 is for a Bob who is STUCK: his chop is worth something AND he has
+  // nothing else to do. No pace waiver (v13.2.0).
   //
-  // Only the safe-action requirement is waived. A locked Bob and a chop that is
-  // neither endangered nor playable both still skip §3 -- the guards above are
-  // about whether the clue is worth giving at all, which low pace does not
-  // change.
-  return has_no_safe_action(g, bob) || g.state.pace() <= 2;
+  // Through v13.1.0 a `pace() <= 2` arm waived the safe-action half, on the
+  // grounds that late there are few turns left to collect the chop in. That
+  // fired on BOB's behalf even when he had something safe to do, and the late
+  // aggression it was reaching for now lives in §4, which fires when ALICE is
+  // stuck -- a narrower and better-aimed trigger. See the General Clue
+  // Evaluation List, §3 and §4.
+  return has_no_safe_action(g, bob);
 }
 
 namespace {
@@ -1202,6 +1237,77 @@ const ClueCandidate* rung_safe_stall(const Game& g,
 }
 
 // --- priority 4: Alice is at 8 clues and must clue or pitch ---------------
+}  // namespace
+
+bool priority_4_applies(const Game& g, const std::vector<ClueCandidate>& cs) {
+  // THREE SEPARATE TRIGGERS (v13.2.0). Locked and 8-clues are unqualified, as
+  // they always were: in both, cluing is the only thing Alice can do that is not
+  // burning a card. The PACE arm is the one that carries a qualifier, and it
+  // widened from `pace() == 0` to `pace() <= 1` -- with 4a-4c naming the three
+  // positions where opening section 4 that early is worth it.
+  const bool locked = g.common.thinks_locked(g, alice_of(g));
+
+  // 4a -- Alice has no known playable. This is the old "and is forced to clue
+  // or pitch" unchanged, and it is what keeps section 4 from out-ranking a card
+  // Alice can already see: section 4 sits in decision phase 1, ABOVE the play
+  // phase, and its floor returns SOME clue regardless of tier. Swept at pace 0,
+  // opening the arm without this moved 272 of 1187 turns and 133 of those were
+  // `play -> clue` -- backwards where only a play scores. Replay 1943094 T19
+  // pins it. Asked of Alice's OWN view, since that is what the play phase reads.
+  const bool a4 = g.me().thinks_playables(g, alice_of(g)).empty();
+
+  // 4b -- Bob holds a playable he does not KNOW about, and Cathy has nothing to
+  // play. Then the turn does no work unless Alice spends it: Bob will not find
+  // the card by himself and Cathy cannot cover for him. Playability is read
+  // from what ALICE can see (`state.deck`), and "unknown" from what BOB thinks,
+  // which is exactly the asymmetry that makes the clue worth giving.
+  const bool a4b = [&]() {
+    const State& s = g.state;
+    const int bob = bob_of(g);
+    const int cathy = cathy_of(g);
+    if (cathy == alice_of(g)) return false;  // two seats: no Cathy to cover
+    const std::vector<int> bob_knows = g.players[bob].thinks_playables(g, bob);
+    bool bob_has_hidden_playable = false;
+    for (int o : s.hands[bob]) {
+      auto id = s.deck[o].id();
+      if (!id || !s.is_playable(*id)) continue;
+      if (std::find(bob_knows.begin(), bob_knows.end(), o) != bob_knows.end()) {
+        continue;  // he already knows -- he does not need the clue
+      }
+      bob_has_hidden_playable = true;
+      break;
+    }
+    if (!bob_has_hidden_playable) return false;
+    for (int o : s.hands[cathy]) {
+      auto id = s.deck[o].id();
+      if (id && s.is_playable(*id)) return false;  // Cathy can cover the turn
+    }
+    // AND A CLUE MUST ACTUALLY DELIVER. Knowing Bob sits on a playable is not a
+    // reason to spend the turn unless Alice can get him to play it NOW --
+    // otherwise she gives up a play of her own (4a is false whenever 4b is the
+    // sole opener) for a clue that does not move him. Swept over 800 low-pace
+    // turns, the unqualified rule abandoned a SCORING play three times out of
+    // three, at pace 0, 0 and -1: replays 1972664 T17, 1971981 T18, 1972704 T17.
+    return std::any_of(cs.begin(), cs.end(), [](const ClueCandidate& c) {
+      return c.bob_plays_now;
+    });
+  }();
+
+  // 4c -- some candidate gets TWO cards playing. Two plays for one clue is worth
+  // the turn at any pace, so it opens the arm even when Alice has a play of her
+  // own to make. `new_plays` is `NewPlayFacts::count`, recorded per candidate by
+  // `analyse_clues`; it inherits that struct's blind spot (TODO 4), where an
+  // inverted-suit play call is stamped CTD and reads as zero.
+  const bool a4c = std::any_of(cs.begin(), cs.end(), [](const ClueCandidate& c) {
+    return c.new_plays >= 2;
+  });
+
+  const bool low_pace_opens = g.state.pace() <= 1 && (a4 || a4b || a4c);
+  return g.state.clue_tokens == 8 || locked || low_pace_opens;
+}
+
+namespace {
+
 const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs) {
   // "Alice is LOCKED or at 8 clues and is forced to clue or pitch." Both are
   // positions where the ordinary list has run out and she still has to do
@@ -1235,13 +1341,8 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // Asked of her OWN view rather than `common`: whether she will play this turn
   // is decided by what she knows, which is also what the play phase below will
   // read.
-  const bool locked = g.common.thinks_locked(g, alice_of(g));
-  const bool forced_at_pace_zero =
-      g.state.pace() == 0 &&
-      g.me().thinks_playables(g, alice_of(g)).empty();
-  if (g.state.clue_tokens != 8 && !locked && !forced_at_pace_zero) {
-    return nullptr;
-  }
+  if (!priority_4_applies(g, cs)) return nullptr;
+
   // 4.1 is "same as 3.1", which carries 3.1's own clue-count condition.
   if (clues_at_least(g, 2)) {
     if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;       // 4.1
@@ -1504,7 +1605,7 @@ std::optional<PerformAction> choose_clue(
   } else if ((pick = rung_3(game, ok))) {
     rung = "3.bob_chop";
   } else if ((pick = rung_4(game, ok))) {
-    rung = "4.locked_or_eight_clues";
+    rung = "4.locked_eight_clues_or_low_pace";
   }
   if (!pick) {
     hanabi::logging::log_branch("reactor0.choose_clue",
