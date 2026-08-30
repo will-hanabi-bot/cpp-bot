@@ -226,6 +226,34 @@ what lets the dead-call rules notice that somebody else advanced a stack past
 every identity a call could still be (replay 1971981). See CONVENTION.md §1h;
 `include/hanabi/conventions/reactor0/call_invariants.h`.
 
+### pending reaction
+What a RECEIVER is still owed when the reacter DEFERRED -- gave a clue instead of
+reacting. `Game::pending_reactions`, one entry per receiver seat, written beside
+the `waiting` push at clue time and resolved by the reacter's next NON-CLUE
+action (`resolve_deferred_reaction`, `reactor0/interpret_reaction.cpp`).
+
+It exists because `waiting` is cleared on a deferral, which is right for the
+reacter -- a deferring clue is itself reactive and carries the intent forward --
+and until v12.0.0 meant the receiver forgot the clue outright. Per seat rather
+than one slot, because the deferring clue owes a second receiver a reaction while
+the first is still outstanding.
+
+**Five ways it is dropped rather than resolved**: a fresh reactive clue reaches
+the same receiver; the named card has left the receiver's hand; the reacter
+successfully advances a stack with a card that was dead at clue time; the
+decoded reading holds nothing still playable against the LIVE stacks (a *stale
+reading*); or the reacter acts on a card carrying a call stamped LATER than the
+clue we are owed, which means a *superseding call* -- typically the receiver's
+own subsequent clue -- explains the action better than we do.
+
+Otherwise the target is read out of the clue-time hand and against the clue-time
+stacks (`ReactorWC::clue_play_stacks`). CONVENTION.md §1d.2; replay 1975464 for
+the feature, 1978041 for a deferral it recovers, 1969792 for a superseding call.
+
+Not to be confused with `Game::PendingReactionElim`, the *deferred reaction
+negative* below -- that is the negative inference waiting on the receiver's own
+action, a different thing that happens to wait as well.
+
 ### deferred reaction negative
 The inference a reaction makes about the receiver's OTHER slots — "the slots the
 walk passed over were not playable". Captured when the reacter acts
@@ -352,7 +380,7 @@ press Discard on this slot at all? *Some* reading is a playable inverted card,
 or *some* reading is a non-critical plain one. Existential, not universal, and
 it is the union of the two arms of `stamp_react_discard_button`.
 
-**`stamp_react_discard_button`** (`interpret_reactive.cpp:956-964`) is the
+**`stamp_react_discard_button`** (`interpret_reactive.cpp:955-964`) is the
 shared ladder every Discard-button reacter call goes through — rank Phase A's
 and Phase B's inverted-target arms, Phase C's plain arm, and both colour modes.
 It tries `stamp_orange_chuck` first (narrowing `inferred` to the identities the

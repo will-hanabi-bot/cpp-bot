@@ -44,6 +44,24 @@ A clue tier (`clue_tier`, `state_eval.cpp:485-582`) is VERY HIGH iff:
 VERY HIGH is the tier that out-ranks a **pending reaction** (Precedence step 1),
 and VH1 is deliberately its only member.
 
+**And the reaction survives being out-ranked** (v12.0.0). Deferring used to cost
+the RECEIVER the clue outright: `Game::waiting` is cleared the moment the reacter
+clues instead of reacting, so by the time they came back to it there was nobody
+left who could decode it. This step was therefore licensing a deferral and
+destroying what the deferral was meant to preserve. The receiver now keeps a
+durable copy -- `Game::pending_reactions`, resolved by the reacter's next
+non-clue action -- so a VERY HIGH clue costs a turn of tempo and nothing else.
+CONVENTION.md §1d.2; replay 1975464.
+
+**Surviving is not the same as being owed forever.** Two of §1d.2's six rules
+exist to throw the memory away when acting on it would be worse than forgetting
+it: a reading with nothing still playable against the LIVE stacks is dropped
+(rule 5), and so is one whose reacter acted on a card some LATER call already
+explains (rule 6). Measured over the corpus's 305 replayable deferrals, rule 6
+saves one strike at the cost of two coincidental plays and rule 5 fires once,
+neutrally: 20/6 un-amended becomes 18/5. CONVENTION.md §1d.2 carries the
+reading.
+
 **A note on the name.** Through v9.2.0 this rule was itself called **H4**, and
 Precedence step 1 singled it out by name. v9.3.0 named the tier instead, which
 freed "H4" for the unrelated rule now listed fourth under HIGH below. An "H4" in
@@ -228,7 +246,7 @@ The priority of evaluation on a given player (Alice)'s turn is:
 Two things outrank the phases below, and one thing sits between them:
 
 0.  Endgame.  The forced-endgame rules and the exact solver run first
-    (`decide.cpp:892`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
+    (`decide.cpp:1077`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
     additionally needs `pace() <= num_players` (`:990`); the forced rules do
     not.  They are unchanged by this spec, with one guard on top: a CERTAIN
     play outranks a speculative one — see below.  The endgame decides
@@ -329,7 +347,7 @@ Two things outrank the phases below, and one thing sits between them:
 num_suits + 1` counts the points still missing, not how close the deck is to
 empty, so on a 6-suit variant it opens around the halfway mark and stays open;
 303 turns in the log corpus sat inside it with 8–16 cards left. The second gate
-is `pace() <= num_players` (`decide.cpp:990`), which scales with the seat count
+is `pace() <= num_players` (`decide.cpp:1226`), which scales with the seat count
 because pace already does — at 3 seats it is exactly `pace() <= 3`. The
 forced-endgame rules sit ABOVE it and keep running on the points condition
 alone; a closed gate falls through to the phases below.
@@ -1123,7 +1141,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:212-231` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:201-210` |
-| chop | `Game::chop` | `src/basics/decide.cpp:432-461` |
+| chop | `Game::chop` | `src/basics/decide.cpp:673-702` |
 | safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:938-958` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:115-132` |
 

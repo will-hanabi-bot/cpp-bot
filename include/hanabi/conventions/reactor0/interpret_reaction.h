@@ -21,6 +21,30 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
 bool react_discard(const Game& prev, Game& game, int player_index, int order,
                    const ReactorWC& wc);
 
+// Resolve a reaction the reacter DEFERRED (v12.0.0, §1e).
+//
+// `waiting` is cleared the moment the reacter clues instead of reacting, so a
+// lawful deferral -- a VERY HIGH clue out-ranking the reaction, Precedence
+// step 1 -- used to destroy the signal for the receiver too. `pending_reactions`
+// keeps a durable copy; this consumes it when the reacter finally plays or
+// discards.
+//
+// Call AFTER the ordinary `waiting` path has had its turn, and only when that
+// path did not already handle this actor: the two never both apply, because a
+// second reactive clue from the same giver replaces its own pending entry.
+//
+// `was_play` is the HOOK, not the outcome -- the button, as everywhere else in
+// this file. Returns true if a pending reaction was consumed (either resolved or
+// deliberately dropped), so callers can log it; the action itself is unaffected.
+bool resolve_deferred_reaction(const Game& prev, Game& game, int player_index,
+                               int order, bool was_play);
+
+// Retire what `player_index` owed without resolving it, because the live
+// `waiting` path is about to resolve the very same reaction. Undeferred
+// reactions set BOTH records at clue time; this keeps the durable one from
+// firing a second time on a later turn.
+void retire_pending_reaction(Game& game, int player_index);
+
 // Stamp every still-held order of wc.receiver_hand CHOP_MOVED (the
 // reactive lock). Game::chop then returns nullopt for the receiver, which
 // is what makes the hand play as locked.

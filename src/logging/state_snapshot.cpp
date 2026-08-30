@@ -372,9 +372,30 @@ json build_debug_section(const Game& game) {
                               {"turn", wc.turn},
                               {"all_plays", wc.all_plays},
                               {"rlocks", wc.rlocks},
-                              {"react_order", wc.react_order}});
+                              {"react_order", wc.react_order},
+                              {"clue_play_stacks", wc.clue_play_stacks}});
   }
   dbg["waiting"] = std::move(waiting);
+
+  // Reactions a reacter DEFERRED and still owes (reactor0, v12.0.0). Purely
+  // diagnostic, like `waiting` above: `apply_snapshot` rebuilds a game by
+  // replaying the action list, so these are re-derived rather than restored.
+  // They are dumped because "why did the receiver not act?" is exactly the
+  // question this state answers, and replay 1975464 could not be triaged
+  // without it.
+  json pending = json::array();
+  for (size_t i = 0; i < game.pending_reactions.size(); ++i) {
+    const auto& p = game.pending_reactions[i];
+    if (!p) continue;
+    pending.push_back(json{{"receiver", static_cast<int>(i)},
+                           {"giver", p->giver},
+                           {"reacter", p->reacter},
+                           {"receiver_hand", p->receiver_hand},
+                           {"focus_slot", p->focus_slot},
+                           {"turn", p->turn},
+                           {"clue_play_stacks", p->clue_play_stacks}});
+  }
+  dbg["pending_reactions"] = std::move(pending);
 
   // Move history.
   json moves = json::array();

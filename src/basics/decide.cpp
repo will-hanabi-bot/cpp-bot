@@ -463,6 +463,20 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
                     !(prev.common.thinks_locked(prev, action.player_index_v) &&
                       prev.state.clue_tokens == 0);
 
+  // v12.0.0: a reaction the reacter DEFERRED lives in `pending_reactions`,
+  // because `waiting` was cleared the moment they clued instead. The live path
+  // just below owns the undeferred case -- when it covers this actor, retire the
+  // durable copy so the same reaction cannot fire twice.
+  if (convention == Convention::REACTOR0) {
+    if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
+      hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
+    } else if (hanabi::reactor0::resolve_deferred_reaction(
+                   prev, *this, action.player_index_v, action.order,
+                   /*was_play=*/false)) {
+      hanabi::reactor0::enforce_call_invariants(*this);
+    }
+  }
+
   if (!waiting.empty()) {
     bool rewound =
         convention == Convention::REACTOR0
@@ -529,6 +543,20 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   using namespace hanabi::reactor;
   // reinterp_play (gentleman's-discard reinterp) isn't ported; skip it for now.
   check_missed(action.player_index_v, action.order);
+  // v12.0.0: a reaction the reacter DEFERRED lives in `pending_reactions`,
+  // because `waiting` was cleared the moment they clued instead. The live path
+  // just below owns the undeferred case -- when it covers this actor, retire the
+  // durable copy so the same reaction cannot fire twice.
+  if (convention == Convention::REACTOR0) {
+    if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
+      hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
+    } else if (hanabi::reactor0::resolve_deferred_reaction(
+                   prev, *this, action.player_index_v, action.order,
+                   /*was_play=*/true)) {
+      hanabi::reactor0::enforce_call_invariants(*this);
+    }
+  }
+
   if (!waiting.empty()) {
     bool rewound =
         convention == Convention::REACTOR0

@@ -319,6 +319,30 @@ void drop_call(Game& game, int order) {
 // would EXPAND the set -- illegal under Rule 1. `target_i_play` additionally
 // pins `info_lock` to a set built the wrong way, and an `info_lock` survives
 // every reset, so a wrapper could not undo it.
+// A copy of `live` with the play stacks wound back to `stacks`.
+//
+// Only the two caches that are derived from `play_stacks` are repaired --
+// `playable_set` and `trash_set`, both maintained incrementally by
+// `State::with_play` and therefore stale the moment the stacks are replaced.
+// Everything else a rewind must not touch anyway: discard piles, `max_ranks`
+// and hands are all still whatever they are NOW, which is deliberate (see
+// `stamp_receiver_call`).
+//
+// Scoped to the allowed-set computation. `base_count` is knowingly left as-is:
+// it counts cards actually played, nothing in that computation reads it, and
+// making it agree would mean inventing a history rather than a frame.
+State with_stacks(const State& live, const std::vector<int>& stacks) {
+  if (stacks.size() != live.play_stacks.size()) return live;
+  State out = live;
+  out.play_stacks = stacks;
+  const int n = static_cast<int>(live.variant->suits.size()) * 5;
+  out.playable_set =
+      IdentitySet::create([&out](Identity i) { return out.playable_away(i) == 0; }, n);
+  out.trash_set =
+      IdentitySet::create([&out](Identity i) { return out.is_basic_trash(i); }, n);
+  return out;
+}
+
 void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
                          int target_slot, CardStatus button, int react_order) {
   if (target_slot - 1 < 0 ||
@@ -329,11 +353,52 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   const auto& cur = game.state.hands[wc.receiver];
   if (std::find(cur.begin(), cur.end(), order) == cur.end()) return;
 
-  const State& old_s = prev.state;
-  const State& new_s = game.state;
+  // THE FRAME. A reaction the reacter DEFERRED resolves turns later, and by then
+  // other seats have played -- so reading the target against the live stacks
+  // asks a question the giver never posed. `wc.clue_play_stacks` winds both
+  // states back to the frame the clue was chosen in, and the reacter's own
+  // advance is re-applied on top so "the stacks the reacter leaves behind"
+  // still means what it says (§1e, v12.0.0).
+  //
+  // Criticality deliberately still reads the CURRENT discard piles: a card
+  // discarded since the clue really is gone, and the ruling was about the
+  // stacks. Empty `clue_play_stacks` -- an old snapshot, or a reactor WC --
+  // falls back to the live states, which is exactly the pre-v12 behaviour.
+  State rewound_old = prev.state;
+  State rewound_new = game.state;
+  if (!wc.clue_play_stacks.empty()) {
+    rewound_old = with_stacks(prev.state, wc.clue_play_stacks);
+    std::vector<int> after = wc.clue_play_stacks;
+    for (size_t k = 0; k < after.size() && k < game.state.play_stacks.size(); ++k) {
+      after[k] += game.state.play_stacks[k] - prev.state.play_stacks[k];
+    }
+    rewound_new = with_stacks(game.state, after);
+  }
+  const State& old_s = rewound_old;
+  const State& new_s = rewound_new;
   const IdentitySet allowed = button == CardStatus::CALLED_TO_DISCARD
                                   ? receiver_ctd_set(old_s, new_s)
                                   : receiver_ctp_set(old_s, new_s);
+
+  // RULE 5 (v12.0.0). THE FRAME MEETS THE PRESENT. Rule 4 reads the PROMISE in
+  // the frame the giver chose it in, which is what makes 1975464's "slot 2
+  // then, slot 3 now" decodable at all. But a promise nothing can satisfy today
+  // is not a promise: while the reacter deferred, somebody else may have played
+  // the very identity this card was called as, and the clue-time frame cannot
+  // see that. The deferral sweep found four such plays -- each a card that was
+  // genuinely playable when the clue was given and genuinely trash by the time
+  // the reaction resolved, stamped CTP and bombed.
+  //
+  // So the reading is also vetted against the LIVE stacks, and a call nothing
+  // in it can still satisfy is dropped rather than stamped.
+  //
+  // This is inert on the undeferred path, and deliberately so rather than by a
+  // flag: when the reacter answers immediately no other seat has moved, so the
+  // rewound states ARE `prev.state` / `game.state`, `live` equals `allowed`, and
+  // the test cannot fire. It costs one set intersection to say so.
+  const IdentitySet live = button == CardStatus::CALLED_TO_DISCARD
+                               ? receiver_ctd_set(prev.state, game.state)
+                               : receiver_ctp_set(prev.state, game.state);
 
   auto stamp = [&](int o) {
     int turn = game.state.turn_count;
@@ -348,7 +413,17 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
 
   // The ordinary case. `narrow_thought` intersects with any inference already
   // on the card (Rule 1) and runs the escalation ladder if that empties.
-  if (game.common.thoughts[order].possible.intersect(allowed).non_empty()) {
+  const IdentitySet narrowed =
+      game.common.thoughts[order].possible.intersect(allowed);
+  if (narrowed.non_empty()) {
+    // Rule 5: the clue-time reading survives, but nothing in it is still
+    // actionable. Forget the reaction rather than bomb on it.
+    if (narrowed.intersect(live).is_empty()) {
+      hanabi::logging::log_branch(
+          "reactor0.deferred_reaction",
+          {{"dropped", "stale_reading"}, {"order", order}});
+      return;
+    }
     if (game.narrow_thought(order, allowed)) stamp(order);
     return;
   }
@@ -531,6 +606,113 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
                    order);
   game.with_move(DiscardInterp::NONE);
   return false;
+}
+
+
+// --- deferred reactions (v12.0.0, section 1e) ----------------------------
+
+void retire_pending_reaction(Game& game, int player_index) {
+  for (auto& p : game.pending_reactions) {
+    if (p && p->reacter == player_index) p.reset();
+  }
+}
+
+bool resolve_deferred_reaction(const Game& prev, Game& game, int player_index,
+                               int order, bool was_play) {
+  if (game.convention != Convention::REACTOR0) return false;
+  // Find what this seat owes. Indexed by receiver, so scan for the entry whose
+  // REACTER just acted. At most one can match: reacter = giver + 1, and a giver's
+  // reactive clue always has the same receiver, so two entries cannot share a
+  // reacter.
+  int slot = -1;
+  for (size_t i = 0; i < game.pending_reactions.size(); ++i) {
+    const auto& p = game.pending_reactions[i];
+    if (p && p->reacter == player_index) {
+      slot = static_cast<int>(i);
+      break;
+    }
+  }
+  if (slot < 0) return false;
+  const ReactorWC wc = *game.pending_reactions[slot];
+  // Consumed either way: rule 1 says the reacter's next non-clue action settles
+  // it, whether that action resolves the reaction or kills it.
+  game.pending_reactions[slot].reset();
+
+  hanabi::logging::LogScope ls("reactor0.deferred_reaction",
+                               {{"reacter", wc.reacter},
+                                {"receiver", wc.receiver},
+                                {"order", order}});
+
+  // RULE 6 (v12.0.0). A SUPERSEDING CALL CLAIMS THE ACTION.
+  //
+  // Rule 1 says the reacter's next non-clue action settles the reaction. That is
+  // too blunt when the action has a better explanation. At 1969792 the reacter
+  // was discharging a DIFFERENT reaction -- one in which THEY were the receiver
+  // -- so rule 1 decoded a slot from an action that had nothing to do with us,
+  // and the deferral sweep counted four such plays.
+  //
+  // The ruling: if the receiver clued the reacter after this reaction was owed,
+  // and the reacter then acts on the card that clue called, the receiver drops
+  // the pending reaction. They cannot tell whether they are being answered or
+  // merely watching their own clue being obeyed, and guessing costs a strike.
+  //
+  // The test is the card's own stamp, which is common knowledge -- a call laid
+  // down LATER than the clue we are owed. That is exactly the superseding case
+  // at three players, which is all reactor0 supports (TODO 3): the reacter is
+  // always `giver + 1` and the receiver `giver + 2`, so the only seat that can
+  // make our reacter somebody's RECEIVER is us. A later clue that made them a
+  // reacter again would share our receiver, and rule 2 would already have
+  // replaced this entry before we got here.
+  if (order >= 0 && order < static_cast<int>(prev.meta.size())) {
+    const ConvData& m = prev.meta[order];
+    const bool called = m.status == CardStatus::CALLED_TO_PLAY ||
+                        m.status == CardStatus::CALLED_TO_DISCARD;
+    if (called && m.signal_turn && *m.signal_turn > wc.turn) {
+      hanabi::logging::log_branch(
+          "reactor0.deferred_reaction",
+          {{"dropped", "superseded"}, {"called_on", *m.signal_turn}});
+      return true;
+    }
+  }
+
+  // RULE 3. A reacter who SUCCESSFULLY ADVANCES A STACK with a card that was
+  // dead at clue time was not answering this reaction: the giver would not have
+  // built one around a card they could see could not be played. The card only
+  // became playable because somebody else moved the stack in between, so the
+  // play is opportunism, not a signal.
+  //
+  // Only successful advances. A discard, a pitch, or a misplay says nothing
+  // about what was playable back then, and those still resolve normally.
+  if (!wc.clue_play_stacks.empty()) {
+    for (size_t k = 0; k < wc.clue_play_stacks.size() &&
+                       k < game.state.play_stacks.size(); ++k) {
+      if (game.state.play_stacks[k] == prev.state.play_stacks[k]) continue;
+      auto id = game.state.deck[order].id();
+      if (!id) continue;
+      State at_clue = with_stacks(prev.state, wc.clue_play_stacks);
+      if (!at_clue.is_playable(*id)) {
+        hanabi::logging::log_branch("reactor0.deferred_reaction",
+                                    {{"dropped", "not_playable_at_clue_time"}});
+        return true;
+      }
+      break;
+    }
+  }
+
+  // RULE 4. Everything else is the ordinary resolution -- `calc_target_slot`
+  // already reads the target out of `wc.receiver_hand`, the CLUE-TIME hand, and
+  // declines when that card has left. The only difference from an undeferred
+  // reaction is the frame `stamp_receiver_call` builds the reading in, which
+  // `wc.clue_play_stacks` supplies.
+  auto slots = hanabi::reactor::calc_target_slot(prev, game, order, wc);
+  if (!slots) {
+    hanabi::logging::log_branch("reactor0.deferred_reaction",
+                                {{"dropped", "no_target"}});
+    return true;
+  }
+  resolve_reaction(prev, game, wc, slots->second,
+                   reacter_button_pressed(prev, game, order, was_play), order);
+  return true;
 }
 
 }  // namespace hanabi::reactor0

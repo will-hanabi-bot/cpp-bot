@@ -77,6 +77,21 @@ struct ReactorWC {
   // so the reading must bind at clue time. Reactor never reads it. Kept
   // LAST — reactor aggregate-initializes the struct positionally.
   bool rlocks = false;
+  // `State::play_stacks` at clue time (reactor0 only, v12.0.0).
+  //
+  // A reaction the reacter DEFERRED resolves turns later, by which point other
+  // seats have played and the stacks have moved. The receiver's target must
+  // still be read in the frame the giver chose it in -- "what was playable when
+  // the clue was given" -- so `stamp_receiver_call` rewinds to these stacks
+  // rather than using the live ones. It is also what rule 3 tests: a reacter who
+  // successfully plays a card that was DEAD at clue time was not answering this
+  // reaction, so the pending one is dropped.
+  //
+  // Empty for a WC built before this existed (an old snapshot, or a reactor WC),
+  // where resolution falls back to the live stacks -- exactly the pre-v12
+  // behaviour. After `rlocks` for the same reason `rlocks` is last: reactor
+  // aggregate-initializes this struct positionally and must not be disturbed.
+  std::vector<int> clue_play_stacks;
 
   bool operator==(const ReactorWC&) const = default;
 };
@@ -209,6 +224,32 @@ class Game {
 
   // Reactive-family state (shared by reactor and reactor0).
   std::vector<ReactorWC> waiting;
+
+  // The reaction each RECEIVER is still owed, indexed by seat (reactor0 only,
+  // v12.0.0). Empty vector means "none anywhere".
+  //
+  // `waiting` is deliberately short-lived: it is cleared the moment the reacter
+  // does anything else (decide.cpp, the deferral path), because a deferring
+  // clue is itself reactive and carries the intent forward. That is right for
+  // the reacter and wrong for the receiver -- a reacter may lawfully defer to
+  // give a VERY HIGH clue (DECISION_MAKING.md Precedence step 1), and until
+  // v12.0.0 the receiver simply forgot what they had been told. Replay 1975464:
+  // yagami_black clued rank 5, will-bot69 deferred to give a finesse, and by the
+  // time it finally reacted three turns later the signal was gone.
+  //
+  // These are the durable copies, carried across the deferral and resolved by
+  // the reacter's next NON-CLUE action.
+  //
+  // PER SEAT, not one global slot, and the same replay is why: the deferring
+  // clue is itself reactive, so it creates a SECOND pending reaction owed to a
+  // different receiver, and both are live at once (1975464 resolves the
+  // deferral's at turn 20 and the original at turn 22). One slot would clobber
+  // one of them. Within a seat there is only ever one -- "each player never
+  // tracks more than one" -- which is well defined because reacter = giver + 1
+  // and a giver's reactive clue always has the same receiver, so a repeat from
+  // the same giver simply replaces its own entry.
+  std::vector<std::optional<ReactorWC>> pending_reactions;
+
   int zcs_turn = -1;
 
   // --- Factory ---

@@ -628,42 +628,6 @@ same machinery entry 12 (an unpinned playable orange is still pitched) and entry
 
 ---
 
-## 25. `[reactor0]` A deferral keeps the call but loses the waiting connection
-
-**Convention.** From v7.22.0 a reacter may defer — give a clue instead of
-reacting — and the reacter call survives it, to be actioned on a later turn
-(`CONVENTION.md` §1d.1). The receiver still has to be able to decode that
-reaction when it finally happens.
-
-**Today.** Only the *stamp* survives. `Game::interpret_clue`
-(`src/basics/decide.cpp`) still runs
-`if (!waiting.empty() && waiting.front().reacter == action.giver) waiting.clear();`
-a few lines below the `check_missed` guard, so the waiting connection the call
-came from is destroyed. When the deferring reacter eventually chucks or pitches,
-`react_play` / `react_discard` see an empty (or replaced) `waiting` and decode
-nothing — so the receiver may never learn the target the reaction was meant to
-reveal.
-
-**Why it was not fixed with the call.** reactor0 stores at most one waiting
-connection (`reactor0/interpret_reactive.cpp` clears then pushes), so keeping the
-old one is not simply additive. Leaving it in place newly exposes the five
-`if (!game.waiting.empty()) game.waiting.front().react_order = react_order;`
-writes in `reactor0/interpret_reactive.cpp`, which today are skipped because
-`waiting` is empty by the time they run, and would start mutating a connection
-that is about to be discarded anyway. Getting this right means deciding what a
-reactor0 seat should hold when two reactives are live at once, which is a
-convention question and not a code tidy.
-
-**Touchpoints.**
-- the `waiting.clear()` in `Game::interpret_clue` (`src/basics/decide.cpp`).
-- `reactor0/interpret_reactive.cpp` — the single-WC install and the
-  `react_order` writes above it.
-- `react_play` / `react_discard` (`reactor0/interpret_reaction.cpp`), which take
-  `waiting.front()` rather than searching for the connection whose `reacter`
-  matches the acting player.
-
----
-
 ## 26. `[endgame]` The search prunes a winning gamble it can see, because partners' unclued plays are invisible
 
 Replay 1970943 T24 (stacks `[3,5,5]`, deck empty, three turns left). The solver
@@ -953,3 +917,30 @@ was not attempted with v11.6.0 because it changes every hypothesis the search
 enumerates — a far larger blast radius than one report justified, and it wants
 its own sweep. Note it is reactor0-only machinery today: `sight_narrowed` lives
 under `conventions/reactor0/`, though nothing in it is convention-specific.
+
+---
+
+## 36. `[tooling]` `replay_log` cannot trace catch-up interpretation
+
+`--trace` covers `take_action` only. Everything the engine infers while
+RECONSTRUCTING the game from a snapshot -- every `interpret_clue`, every
+reaction resolution -- happens before the trace sink exists, so it is invisible.
+
+This is not cosmetic. A deferred reaction resolves during catch-up, so
+`reactor0.deferred_reaction` NEVER appears in a trace for a real resolution;
+the only records that show up come from hypothetical clue evaluation inside the
+lookahead. Selecting sweep candidates by grepping the trace for that branch
+therefore selects games whose LOOKAHEAD simulated a deferral, which is a
+different population entirely -- v12.0.0's first sweep did exactly this and had
+to be thrown away, having missed both 1978041 and 1975464, the two games the
+feature was known to help.
+
+The workaround used instead is to select from `debug.move_history`, which labels
+each move (`{"k":"clue","v":"Reactive"}`) and so lets a deferral -- a reactive
+clue answered by a clue -- be found structurally, with no replaying at all. That
+works, but it only covers what the log records.
+
+A `--trace-catchup` flag that arms the sink before reconstruction would make
+interpretation directly observable and is probably a few lines. It was not done
+alongside v12.0.0 because changing the binary mid-measurement is precisely what
+the sweep hygiene rules forbid.

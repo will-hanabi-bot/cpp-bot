@@ -1058,8 +1058,25 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                /*all_plays=*/false};
   wc.even_parity = assign.even;
   wc.rlocks = game.allow_reactive_locks;
+  // The frame the giver chose this clue in. A DEFERRED reaction resolves turns
+  // later, against stacks that have moved, and the receiver must still read the
+  // target as it was meant (§1e).
+  wc.clue_play_stacks = state.play_stacks;
   game.waiting.clear();
-  game.waiting.push_back(std::move(wc));
+  game.waiting.push_back(wc);
+
+  // Rule 2: at most one pending reaction per receiver, so a fresh reactive clue
+  // to this seat replaces whatever they were still owed and "the reacter's next
+  // non-clue action" is never ambiguous.
+  //
+  // Indexed by receiver rather than held in one slot because a clue to a
+  // DIFFERENT receiver must leave the old one standing -- which is exactly what
+  // replay 1975464 turns on. There the deferring clue is itself reactive, so it
+  // owes yagami_black a reaction while will-bot67 is still owed the original.
+  if (static_cast<int>(game.pending_reactions.size()) != state.num_players) {
+    game.pending_reactions.assign(state.num_players, std::nullopt);
+  }
+  game.pending_reactions[receiver] = std::move(wc);
 
   // The receiver decodes positionally at reaction time — never at clue
   // time (POV invariance: selection reads deck ids of the receiver's own

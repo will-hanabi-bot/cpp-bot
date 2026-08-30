@@ -101,7 +101,7 @@ giver, Bob the next player, Cathy the one after.
   meaning here. It is never set on a reactor0 game
   (`src/net/commands.cpp:292-302`), `chat_allplays` skips reactor0 games when
   retro-applying (`:914-933`), and a reactor0 waiting connection always stores
-  `all_plays = false` (`interpret_reactive.cpp:1029`).
+  `all_plays = false` (`interpret_reactive.cpp:1028`).
 
 ## §1a Dispatch — purely positional
 
@@ -390,7 +390,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
 
 ## §1d Reactive — the clue value is the anchor
 
-`reactor0::interpret_reactive` (`interpret_reactive.cpp:990-1056`). There is
+`reactor0::interpret_reactive` (`interpret_reactive.cpp:989-1056`). There is
 no reactive focus. The anchor is:
 
 > **react_slot + target_slot ≡ anchor (mod hand size)** where
@@ -739,9 +739,96 @@ orange stack on 0, deferred at T2 to give a finesse, and lost the call. At T5
 admitted a non-HIGH clue instead of the chuck, and the team struck on that same
 card at T16.
 
-**Known gap.** The waiting connection is still cleared on a deferral
-(`decide.cpp`), so the receiver may never learn the target its reaction was meant
-to reveal. See `TODO.md`.
+### §1d.2 The RECEIVER keeps it too (v12.0.0)
+
+Until v12.0.0 the paragraph above was only half the rule. `Game::waiting` is
+cleared on a deferral, so while the reacter kept their call, **the receiver
+forgot the clue entirely** -- and then either needed a second clue or went on to
+do something unsafe. The convention was licensing a deferral (Precedence step 1
+puts a VERY HIGH clue above the urgent return) and then throwing away the signal
+the deferral was supposed to preserve.
+
+So the receiver now keeps a durable copy: `Game::pending_reactions`, **one per
+receiver**, filled at clue time beside the `waiting` push
+(`interpret_reactive.cpp`) and resolved by
+`resolve_deferred_reaction` (`interpret_reaction.cpp`) when the reacter finally
+acts. Per seat rather than one slot, because a deferring clue is itself reactive
+and therefore owes a SECOND receiver a reaction while the first is still
+outstanding -- both are live at once.
+
+**Replay 1975464.** yagami_black clued rank 5 to will-bot67 (anchor 5, reacter
+will-bot69). will-bot69 deferred to give a finesse; will-bot67 blind-played it
+and drew; yagami_black played the card it set up; and only then did will-bot69
+react, playing its slot 3. `3 + 2 = 5`, so the target was will-bot67's CLUE-TIME
+slot 2 -- order 13, which his own draw had pushed to slot 3. He discarded
+instead, losing a playable b4.
+
+Six rules govern it:
+
+1. **The reacter's next NON-CLUE action resolves it.** Clues do not; that is what
+   a deferral is. The receiver also records the stacks as they stood at clue
+   time (`ReactorWC::clue_play_stacks`).
+2. **One per receiver.** A fresh reactive clue to the same seat replaces what
+   they were owed, so "the next non-clue action" is never ambiguous. A clue to a
+   *different* receiver leaves theirs standing.
+3. **A reacter who SUCCESSFULLY ADVANCES A STACK with a card that was dead at
+   clue time drops it.** The giver cannot have built a reaction around a card
+   they could see was unplayable; it only came alive because somebody else moved
+   the stack in between, so the play is opportunism rather than an answer.
+   Discards, pitches and misplays say nothing about the old frame and still
+   resolve normally.
+4. **Otherwise the ordinary resolution**, with one difference: the reading is
+   built in the CLUE-TIME FRAME. `calc_target_slot` already took the target from
+   `wc.receiver_hand` -- the clue-time hand, which is what lets "slot 2 then,
+   slot 3 now" work -- and already declined when that card had left. What is new
+   is that `stamp_receiver_call` winds `play_stacks` back to
+   `clue_play_stacks` before building the allowed set, so the promise is read in
+   the frame the giver chose it in. Criticality still reads the CURRENT discard
+   piles: a card discarded since really is gone.
+5. **A reading nothing can still satisfy is DROPPED, not stamped.** Rule 4 reads
+   the *promise* in the giver's frame, which is what makes "slot 2 then, slot 3
+   now" decodable at all. But while the reacter deferred, somebody else may have
+   played the very identity the card was called as -- and the clue-time frame
+   cannot see that. So the reading is vetted a second time against the LIVE
+   stacks, and a call with no surviving identity that is playable *now* is
+   forgotten rather than bombed on. Inert on the undeferred path by
+   construction: when the reacter answers immediately no other seat has moved,
+   so the two frames coincide.
+6. **A SUPERSEDING CALL claims the action.** If the receiver clued the reacter
+   after this reaction was owed, and the reacter then acts on the card that clue
+   called, the receiver drops the pending reaction. They cannot tell whether
+   they are being answered or merely watching their own clue obeyed, and
+   guessing costs a strike. The test is the card's own stamp -- common
+   knowledge -- carrying a `signal_turn` LATER than the clue we are owed.
+
+   This is the whole of the superseding case at three players, which is all
+   reactor0 supports (TODO 3). The reacter is always `giver + 1` and the
+   receiver `giver + 2`, so the only seat that can make our reacter somebody's
+   RECEIVER is us; and a later clue that made them a reacter again would share
+   our receiver, so rule 2 would already have replaced the entry.
+
+**What the two amendments actually buy.** Measured over the corpus -- 891
+deferrals, of which 305 resolve to a receiver turn this seat logged and so can be
+replayed -- the UN-amended feature is already positive: **20 new plays that score
+against 6 that strike**. Rule 6 does nearly all the amendment's work, suppressing
+four turns: it saves one strike (1978081 T10, a b1 onto a blue stack already on
+1) and costs two plays that would have scored (1941718 T18, 1973259 T11). Those
+two were coincidences rather than reads -- the stack had advanced under a reading
+that was genuinely stale, and the card happened to be playable anyway. Rule 5
+fires exactly once, and neutrally (1974194 T21, a change of which card is
+burned). The amended figure is **18 score / 5 strike**.
+
+So rule 5 is a safety net rather than a measured win, and is documented as one.
+The 4-score/8-strike figure quoted when this branch was parked does NOT reproduce
+on a sound candidate set; it came from a selection that cannot be verified now.
+
+The undeferred case is untouched. Both records are written at clue time; when the
+reacter answers immediately the live `waiting` path resolves it exactly as
+before and `retire_pending_reaction` retires the durable copy so it cannot fire
+again on a later turn.
+
+**Cross-version break.** A v11 receiver drops a deferred reaction and a v12
+receiver acts on it, which is why this is a major bump.
 
 **The endgame solver breaks ties toward a standing call.** Precedence step 0 is
 the endgame fork, which sits above the urgent return, so in the endgame the
@@ -769,7 +856,7 @@ Narrowing after the fact is not enough on its own, because `target_discard`
 Orange is always — and the whole clue then reads as a `MISTAKE`. So the chuck is
 reached by the stamp rather than by the narrowing: as of v10.9.0 every
 Discard-button site goes through `stamp_react_discard_button`
-(`interpret_reactive.cpp:956-964`), which tries `stamp_orange_chuck` — the same
+(`interpret_reactive.cpp:955-964`), which tries `stamp_orange_chuck` — the same
 stamp the stable orange ladder uses (`interpret_clue.cpp:286-311`) — and falls
 back to `target_discard`. See §1f for why the ladder replaced the v7.30.0
 either/or gate.
@@ -1096,7 +1183,7 @@ throw, and `reactor::target_discard` — which narrows `inferred` to the
 NON-critical ids, the plain-suit reading — cannot describe one.
 
 **The stamp asks two questions in order** (`stamp_react_discard_button`,
-`interpret_reactive.cpp:956-964`), shared by **all five** sites that issue a
+`interpret_reactive.cpp:955-964`), shared by **all five** sites that issue a
 Discard-button call — rank Phase A's and Phase B's inverted-target arms, Phase
 C's plain arm, and both colour modes — so they cannot drift:
 
