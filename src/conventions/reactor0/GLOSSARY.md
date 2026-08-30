@@ -79,7 +79,18 @@ number, so the switch is the first score at or above it: 13 of 25, 8 of 15. **An
 there, so the turn must produce a clue, and every reactive candidate reading as a
 MISTAKE leaves the bot with no legal action at all (replay 1977786 T35). Both
 arms read the PRE-CLUE token count — `on_clue` spends it before `interpret_clue`
-runs. Clues to Cathy are untouched and stay even. `bob_clue_is_reactive`
+runs. Clues to Cathy are untouched and stay even.
+
+**Neither arm reaches a COLOUR clue where there are only two clue colours**
+(v13.0.0). Two colours leave two colour anchors, which is exactly why a colour
+clue to Bob became even there in the first place; standing that second bucket
+down at 8 clues or past half the maximum cut across it. So in those nine
+variants a colour clue is reactive whatever the score and whatever the token
+count — `colour_is_never_stable`, which delegates to `bob_colour_joins_even` so
+the family has one definition. Rank clues keep both arms, which is what leaves
+the six Alternating Clues variants a stable channel; the three **Synesthesia**
+ones carry `clueRanks: []` and so have **no stable clue of any kind**, making
+the *synesthesia table* below unreachable there. `bob_clue_is_reactive`
 (`reactor0/interpret_reactive.cpp:967-976`). In **Synesthesia**, which can never
 give a rank clue, those stable clues read off a fixed colour table naming a
 button and a slot — see *synesthesia table*. CONVENTION.md §1f.

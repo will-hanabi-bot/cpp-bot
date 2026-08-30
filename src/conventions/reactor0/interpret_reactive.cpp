@@ -1005,8 +1005,27 @@ bool bob_clue_is_reactive(const State& state) {
   return 2 * state.score() < cap;
 }
 
+bool colour_is_never_stable(const Variant& variant) {
+  return bob_colour_joins_even(variant);
+}
+
 bool clue_is_reactive(const State& state, const ClueAction& action, int bob) {
-  return action.target != bob || bob_clue_is_reactive(state);
+  if (action.target != bob) return true;
+  // WITH ONLY TWO CLUE COLOURS A COLOUR CLUE IS NEVER STABLE (v13.0.0).
+  //
+  // Two colours leave two colour anchors, so v11.5.0 gave a colour clue to Bob
+  // an EVEN bucket of its own (Red 2, Blue 5). The stable exemptions below cut
+  // straight across that second bucket, standing it down at 8 clues or once the
+  // score passes half -- exactly where the extra bucket is worth having.
+  //
+  // Unlike the token arm this depends on the VARIANT alone, so it cannot read
+  // differently either side of `on_clue` spending the token: giver and reader
+  // agree by construction, with no `prev.state` discipline needed.
+  if (action.clue.kind == ClueKind::COLOUR &&
+      colour_is_never_stable(*state.variant)) {
+    return true;
+  }
+  return bob_clue_is_reactive(state);
 }
 
 int reactive_receiver(const State& state, const ClueAction& action, int reacter) {

@@ -758,4 +758,132 @@ TEST(Reactor0TwoColours, SettingsSpellsOutBothTables) {
   EXPECT_NE(syn.find("no rank clues"), std::string::npos) << syn;
   EXPECT_EQ(syn.find("rank values"), std::string::npos) << syn;
   EXPECT_NE(syn.find("Red=2"), std::string::npos) << "Bob's table: " << syn;
+
+  // v13.0.0. `/settings` is the convention as a human reads it, so it must not
+  // still promise a stable clue that these variants no longer have.
+  EXPECT_NE(s.find("a COLOUR clue is NEVER stable"), std::string::npos)
+      << "Alternating Clues keeps a rank channel, so the line has to say which "
+         "kind stands down and which does not: " << s;
+  EXPECT_NE(s.find("RANK clue to Bob is STABLE"), std::string::npos) << s;
+  EXPECT_NE(syn.find("NO clue is ever stable"), std::string::npos)
+      << "Synesthesia has no ranks, so here the stable channel is gone "
+         "entirely and a reader must be told outright: " << syn;
+  EXPECT_EQ(syn.find("RANK clue to Bob is STABLE"), std::string::npos)
+      << "and must NOT be offered a rank fallback that cannot be clued: " << syn;
+}
+
+// --- v13.0.0: with two clue colours, a COLOUR clue is never stable ----------
+//
+// Two colours leave only two colour anchors, which is why a colour clue to Bob
+// became an EVEN-bucket clue with its own anchor (above). The stable exemptions
+// -- 8 clues (v11.2.0) and 50% of the maximum (v11.4.0) -- cut straight across
+// that second bucket, so in these nine variants a colour clue stays reactive
+// whatever the score and whatever the clue count.
+//
+// RANK clues are untouched, which is what leaves the six Alternating Clues
+// variants a stable channel. The three Synesthesia ones carry `clueRanks: []`,
+// so they have none at all -- see the last test.
+
+namespace {
+
+// Three suits, so the cap is 15 and the score switch is at 8 (2 * 8 >= 15).
+SetupOptions two_colour_opts(std::string variant_name, std::vector<int> stacks,
+                             int clue_tokens) {
+  SetupOptions opts;
+  opts.variant_name = std::move(variant_name);
+  opts.play_stacks = std::move(stacks);
+  opts.clue_tokens = clue_tokens;
+  opts.starting = TestPlayer::ALICE;
+  opts.hands = {
+      {"r4", "b4", "r3", "b3", "r2"},  // Alice (giver)
+      {"r1", "b1", "r5", "b5", "r4"},  // Bob
+      {"b2", "r2", "b3", "r3", "b4"},  // Cathy
+  };
+  use_reactor0(opts);
+  return opts;
+}
+
+// The two clue kinds aimed at Bob, ready for `clue_is_reactive`.
+struct BobClues { ClueAction colour; ClueAction rank; int bob; };
+
+BobClues bob_clues(const Game& g) {
+  const int alice = g.state.our_player_index;
+  const int bob = g.state.next_player_index(alice);
+  return BobClues{ClueAction{alice, bob, {}, BaseClue{ClueKind::COLOUR, 0}},
+                  ClueAction{alice, bob, {}, BaseClue{ClueKind::RANK, 1}}, bob};
+}
+
+}  // namespace
+
+// At 8 tokens the turn is forced, which is the whole reason v11.2.0 granted a
+// stable clue there. With two colours the colour half of that grant is revoked.
+TEST(Reactor0TwoColours, ColourToBobIsNeverStableAtEightClues) {
+  Game g = setup(two_colour_opts("Alternating Clues & Rainbow (3 Suits)",
+                                 {0, 0, 0}, /*clue_tokens=*/8));
+  ASSERT_EQ(g.state.score(), 0) << "guard: nowhere near the score switch, so "
+                                   "only the token rule could stand this down";
+  ASSERT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+      << "guard: the general rule DOES stand down here -- that is what the "
+         "colour rule has to override";
+
+  const BobClues c = bob_clues(g);
+  EXPECT_TRUE(hanabi::reactor0::colour_is_never_stable(*g.state.variant));
+  EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, c.colour, c.bob))
+      << "a COLOUR clue to Bob stays reactive at 8 clues";
+  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(g.state, c.rank, c.bob))
+      << "but a RANK clue to Bob is still stable -- the rule is about colour "
+         "only, and ranks are what leave Alternating Clues a stable channel";
+}
+
+// The other exemption, in the same variant. Asserted separately so a regression
+// names which of the two arms it broke.
+TEST(Reactor0TwoColours, ColourToBobIsNeverStableAboveTheScoreSwitch) {
+  // 3 suits -> cap 15, switch at 8. {3, 3, 3} is 9, comfortably past it.
+  Game g = setup(two_colour_opts("Alternating Clues & Rainbow (3 Suits)",
+                                 {3, 3, 3}, /*clue_tokens=*/7));
+  ASSERT_EQ(g.state.score(), 9) << "guard: 9 of 15, past the 8-point switch";
+  ASSERT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+      << "guard: the score has stood the general rule down";
+
+  const BobClues c = bob_clues(g);
+  EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, c.colour, c.bob))
+      << "a COLOUR clue to Bob stays reactive however high the score";
+  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(g.state, c.rank, c.bob))
+      << "and a RANK clue to Bob is stable again, exactly as before v13.0.0";
+}
+
+// The negative that pins the rule to the COLOUR COUNT rather than to target
+// parity generally: three colours and the stable switch works as it always did.
+TEST(Reactor0TwoColours, ThreeColoursKeepsColourToBobStableAboveTheSwitch) {
+  Game g = setup(two_colour_opts("Alternating Clues (3 Suits)", {3, 3, 3},
+                                 /*clue_tokens=*/7));
+  ASSERT_EQ(g.state.variant->clue_colour_names.size(), 3u)
+      << "guard: Red/Green/Blue, so the two-colour rule must not fire";
+  EXPECT_FALSE(hanabi::reactor0::colour_is_never_stable(*g.state.variant));
+
+  const BobClues c = bob_clues(g);
+  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(g.state, c.colour, c.bob))
+      << "with three colours a colour clue to Bob goes stable past the switch, "
+         "unchanged by v13.0.0";
+}
+
+// SYNESTHESIA has no rank clues, so in its two-colour variants this leaves NO
+// stable clue of any kind -- at any score, at any token count. That is the
+// consequence the rule was accepted with, and `synesthesia_stable` is
+// unreachable there as a result.
+TEST(Reactor0TwoColours, TwoColourSynesthesiaHasNoStableClueAtAll) {
+  for (int tokens : {7, 8}) {
+    for (const std::vector<int>& stacks :
+         {std::vector<int>{0, 0, 0}, std::vector<int>{3, 3, 3}}) {
+      Game g = setup(two_colour_opts("Synesthesia & Null (3 Suits)", stacks,
+                                     tokens));
+      ASSERT_TRUE(g.state.variant->clue_ranks.empty())
+          << "guard: Synesthesia carries clueRanks: [], so colour is the only "
+             "kind and there is nothing else to fall back on";
+      const BobClues c = bob_clues(g);
+      EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, c.colour, c.bob))
+          << "tokens=" << tokens << " score=" << g.state.score()
+          << ": every clue here is reactive, so nothing is ever stable";
+    }
+  }
 }

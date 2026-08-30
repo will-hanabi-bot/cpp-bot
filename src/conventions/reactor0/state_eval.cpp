@@ -282,7 +282,10 @@ bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
   // own "Bob" -- so past the 50% threshold that clue is stable again and this
   // has a real answer to give. Gating on the variant alone would keep both arms
   // vacuous for the rest of the game.
-  if (bob_clue_is_reactive(s)) return false;
+  // ...and never at all where a COLOUR clue is never stable (v13.0.0), whatever
+  // the score has reached. This models a stable COLOUR clue specifically, so the
+  // two-colour rule silences it outright rather than only below the threshold.
+  if (bob_clue_is_reactive(s) || colour_is_never_stable(*s.variant)) return false;
   for (const Clue& c : s.all_colour_clues(receiver)) {
     auto touched = s.clue_touched(s.hands[receiver], c.kind, c.value);
     if (touched.empty()) continue;

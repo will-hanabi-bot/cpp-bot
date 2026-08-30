@@ -6,6 +6,13 @@
 // or the team is at 8 clues -- `bob_clue_is_reactive`) a clue to Bob is stable
 // again, and there its meaning comes from a FIXED TABLE that names an action
 // outright: each clue colour is one button and one slot in Bob's hand.
+//
+// UNREACHABLE IN THREE VARIANTS (v13.0.0). Where the variant offers only two
+// clue colours a COLOUR clue is never stable -- `colour_is_never_stable`,
+// `interpret_reactive.h` -- and Synesthesia has no other kind, so in
+// `Synesthesia & Rainbow / White / Null (3 Suits)` nothing ever reaches this
+// table. It still governs the other 33 Synesthesia variants; the three are
+// purely reactive by design, not by omission.
 #pragma once
 
 #include <optional>

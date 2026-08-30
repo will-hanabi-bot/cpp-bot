@@ -87,6 +87,10 @@ Otherwise, a clue tier is HIGH iff **any** of:
       maximum it stands down (v11.0.0) and the arm has a real answer again:
       Cathy is Bob's own "Bob", so a clue from him to her is stable there. Asked
       as `bob_clue_is_reactive`, not as the variant flag — see CONVENTION.md §1f.
+      **Except where there are only two clue colours** (v13.0.0): a colour clue
+      is never stable there, so this arm stays vacuously satisfied for the whole
+      game and `has_colour_play_clue_for` takes `colour_is_never_stable` as a
+      second gate.
 2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed suit,
    via `variants::is_first_or_second_rank`). `:481`.
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank

@@ -201,11 +201,23 @@ std::string format_settings(const Variant& variant,
       }
       const std::string rank_part =
           ranks.empty() ? ", no rank clues" : ", rank values: " + render(ranks);
+      // NOT `late`. With two colours a COLOUR clue is never stable (v13.0.0),
+      // so the shared line would tell a reader the opposite of the rule. Where
+      // ranks exist the stable switch still applies to them; in Synesthesia,
+      // which has none, nothing is ever stable and the reader needs to be told
+      // so outright rather than left to infer it from an absent rank table.
+      const std::string late2 =
+          ranks.empty()
+              ? ", a COLOUR clue is NEVER stable, and colour is the only kind "
+                "here — so NO clue is ever stable in this variant"
+              : ", a COLOUR clue is NEVER stable whatever the score or clue "
+                "count; from 50% of max OR at 8 clues a RANK clue to Bob is "
+                "STABLE";
       return "reactor0 — no stable clues below 50%: two colours, so a COLOUR "
              "clue to Bob is EVEN too (rank to Bob stays odd), colour values to "
              "Cathy: " +
              render(to_cathy) + ", to Bob: " + render(to_bob) + rank_part +
-             late + ", rlocks: " + (rlocks ? "on" : "off");
+             late2 + ", rlocks: " + (rlocks ? "on" : "off");
     }
     return "reactor0 — no stable clues below 50%: to Bob = odd, to Cathy = even"
            ", reactive values: " +

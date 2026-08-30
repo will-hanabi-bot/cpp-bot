@@ -1285,10 +1285,10 @@ what leaves only two clueable colours.
 
 **Colour only.** A rank clue to Bob is still odd, so Alternating Clues keeps a
 one-play bucket through its ranks. **Synesthesia has no rank clues, so its three
-two-colour variants have no odd bucket at all** while target parity binds —
-every clue there is a double play or double discard, and single-play signalling
-waits for the stable channel the 50% switch and the 8-clue rule open. That is
-intended, not an oversight.
+two-colour variants have no odd bucket at all** — every clue there is a double
+play or double discard. Since v13.0.0 they have no STABLE channel either (below),
+so that is the whole of their convention, permanently. Intended, not an
+oversight.
 
 Bob's anchor **defaults** to Cathy's + 1, which is where 2 and 5 come from. It is
 a default and not a derivation imposed on the player: a `/set` override is used
@@ -1300,10 +1300,39 @@ command rather than of this rule.
 and `reactive_assignment_for` the one place the bucket and anchor are decided,
 so clue-time selection and reaction-time resolution cannot drift apart.
 
+#### ...and with two colours, a COLOUR clue NEVER stands down (v13.0.0)
+
+**In these nine variants a colour clue is reactive whatever the score and
+whatever the clue count.** Neither of the two exemptions below reaches it.
+
+The reason is the table above. Two clue colours are why a colour clue to Bob
+took an even bucket of its own; standing that second bucket down — at 8 clues,
+or once the score passes half — cuts across the very thing this section adds,
+and does so exactly where the extra anchors are worth having. **Rank clues are
+untouched** and keep both exemptions, which is what leaves the six Alternating
+Clues variants a stable channel at all.
+
+**Synesthesia has none.** Its `clueRanks: []` means colour is the only kind it
+can clue, so in `Synesthesia & Rainbow / White / Null (3 Suits)` **no clue is
+ever stable** and §1f's Synesthesia table is unreachable there. It still governs
+the other 33 Synesthesia variants. The consequence was accepted deliberately:
+a forced turn in those three can no longer reach for a stable clue. It can
+always still ACT — `calls.cpp` empties the chuck list at 8 tokens and rung 13
+pitches the chop — so the 1977786 deadlock cannot return; what is lost is the
+readable clue, not the legal move.
+
+`colour_is_never_stable` (`reactor0/interpret_reactive.h`) is the predicate, and
+it **delegates to `bob_colour_joins_even`** rather than restating the condition,
+so the family has a single definition and the two rules about it cannot drift
+apart. Note it depends on the VARIANT alone: unlike the 8-clue arm it cannot
+read differently either side of `on_clue` spending the token, so giver and
+reader agree by construction.
+
 #### It stands down at 50% (v11.0.0 at 60%, moved in v11.4.0)
 
-**Once `score >= 0.5 * variant maximum`, a clue to Bob is STABLE again.** Clues
-to Cathy are untouched and keep the even bucket.
+**Once `score >= 0.5 * variant maximum`, a clue to Bob is STABLE again** — a
+RANK one, at least, since v13.0.0 exempts colour wherever there are only two
+clue colours (above). Clues to Cathy are untouched and keep the even bucket.
 
 60% of the usual caps landed on whole numbers (0.6 × 25 = 15, 0.6 × 15 = 9); half
 does not. The switch is therefore the first score **at or above** the half —
@@ -1328,7 +1357,9 @@ it as stable.
 
 #### And at 8 clues, whatever the score (v11.2.0)
 
-**At 8 tokens a clue to Bob is STABLE too**, however low the score. At 8 tokens a
+**At 8 tokens a clue to Bob is STABLE too**, however low the score — again a
+RANK one where the variant has only two clue colours, since v13.0.0 exempts
+colour there (above), and in two-colour Synesthesia not at all. At 8 tokens a
 discard is illegal, so the turn MUST produce a clue — and while target parity
 binds, every clue is reactive, so every candidate has to survive a reactive
 reading or `analyse_clues` drops it as a MISTAKE and no rung may propose it. When
@@ -1795,7 +1826,7 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
-| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it; plus the 50% switch — the 12/13/14 boundary, a 3-suit cap of 15 switching at 8, plain variants inert, and a clue to Cathy staying reactive AND even on both sides; and the 8-clue arm, which holds at score 0 and so is independent of where the score switch lands |
+| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it; plus the 50% switch — the 12/13/14 boundary, a 3-suit cap of 15 switching at 8, plain variants inert, and a clue to Cathy staying reactive AND even on both sides; and the 8-clue arm, which holds at score 0 and so is independent of where the score switch lands; and v13.0.0's two-colour rule — a COLOUR clue to Bob reactive at 8 clues AND past the switch, asserted separately, with a rank clue still stable beside it, a three-colour variant as the negative that pins it to the colour count, and two-colour Synesthesia having no stable clue at any score or token count |
 | `tests/test_reactor0/test_synesthesia_stable.cpp` | §1f — Synesthesia's stable table: every row incl. Blue→chuck slot 2 and Dark Orange taking the Orange row, the catch-all, the no-collision property asserted over all 36 variants, and the three readings (a stamp, a common-knowledge stall, a giver-only MISTAKE) each separated from what `stable_colour` would have done |
 | `tests/test_reactor0/test_orange_chop_and_pitch.cpp` | §1f — a playable orange chop reads expendable in all three chop predicates, with a dead orange, a plain playable, a plain useful and an unplayable orange as controls; and `slot_is_pitchable` on a known orange, a plain card and Dark Orange |
 | `tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp` | Replay 1973976 T12 end to end — the pitch needed BOTH the vet and the stamp; reverting either puts it back |

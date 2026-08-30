@@ -54,6 +54,30 @@ namespace hanabi::reactor0 {
 // in the first place.
 bool bob_clue_is_reactive(const State& state);
 
+// Is a COLOUR clue in this variant never stable? (v13.0.0)
+//
+// True in the nine target-parity variants that offer only TWO clue colours --
+// every one of them Red + Blue: six Alternating Clues (Rainbow, White, Omni,
+// Null, Muddy Rainbow, Light Pink) and three Synesthesia (Rainbow, White, Null).
+// There a colour clue to Bob stays reactive whatever `bob_clue_is_reactive`
+// says, so neither the 8-clue arm nor the score threshold can stand it down.
+//
+// Two colours leave only two colour anchors, which is why v11.5.0 made a colour
+// clue to Bob an EVEN-bucket clue with its own anchor (Red 2, Blue 5). The
+// stable exemption cut across that second bucket; this closes it.
+//
+// SYNESTHESIA HAS NO RANK CLUES (`clueRanks: []`), so in its three two-colour
+// variants this leaves no stable channel at all and `synesthesia_stable` is
+// unreachable. Deliberate. A forced turn there can no longer reach for a stable
+// clue, but it can always act: `calls.cpp` empties the chuck list at 8 tokens
+// and pitches the chop instead.
+//
+// Deliberately the SAME condition as `bob_colour_joins_even`
+// (`reactive_assignment.h`), which it delegates to rather than restating -- one
+// source of truth for the family, two names so each call site says which of the
+// two rules about it is meant.
+bool colour_is_never_stable(const Variant& variant);
+
 // Is this clue REACTIVE?
 //
 // Positional everywhere except a target-parity variant (Alternating Clues,
