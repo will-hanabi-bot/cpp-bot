@@ -161,11 +161,18 @@ std::string format_settings(const Variant& variant,
     // The score switch belongs here too: a human reading /settings needs to know
     // that a clue to Bob stops being reactive partway through the game, and in
     // Synesthesia what it becomes instead.
+    //
+    // The Synesthesia table is ABBREVIATED -- `fN` for a pitch, `dN` for a chuck
+    // (v13.5.0). Spelled out as `pitchN`/`chuckN` the line ran past hanab.live's
+    // chat limit and the tail that fell off included `rlocks`, which is the one
+    // part of it a reader most needs after the v13.5.0 default flip. No legend is
+    // printed: "f = pitch, d = chuck" costs more than the abbreviation saves,
+    // which is the whole point. GLOSSARY.md *synesthesia table* has the mapping.
     const std::string late =
         variant.synesthesia
             ? ", from 50% of max OR at 8 clues a clue to Bob is STABLE: "
-              "Red=pitch1, Yellow=pitch2, Green=chuck3, Blue=chuck2, "
-              "Purple=pitch5, Orange=chuck1, other=pitch4"
+              "Red=f1, Yellow=f2, Green=d3, Blue=d2, Purple=f5, Orange=d1, "
+              "other=f4"
             : ", from 50% of max OR at 8 clues a clue to Bob is STABLE";
     // With only two clue colours a COLOUR clue to Bob is EVEN too, with its own
     // anchor, so "to Bob = odd" would misdescribe half the clues available.

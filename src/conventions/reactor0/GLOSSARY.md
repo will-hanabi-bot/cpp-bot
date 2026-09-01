@@ -137,6 +137,13 @@ pitch, Orange 1 chuck, any other colour 4 pitch. Keyed on the colour NAME, and
 deliberately **not** the `colour_clue_value` table, which gives Blue 4.
 `synesthesia_call` (`reactor0/synesthesia_stable.cpp:18-31`).
 
+`/settings` prints this table **abbreviated** — `fN` for a pitch, `dN` for a chuck,
+so Red reads `f1` and Green `d3` (v13.5.0, `format_settings` in
+`reactor0/reactive_assignment.cpp`). Spelled out it pushed the line past
+hanab.live's chat limit and the truncated tail took *rlocks* with it. The chat line
+carries no legend, deliberately — one would cost more than the abbreviation saves —
+so this entry is where it is written down.
+
 It exists because Synesthesia carries `clueRanks: []`, so the ordinary
 colour/rank ladders have no split to express. Alternating Clues keeps those
 ladders. A named action that is bad by COMMON knowledge stamps nothing and the
@@ -368,8 +375,12 @@ at resolution, the giver predicts the reading at clue time instead, via
 `predicts_reactive_lock` (`:31-49`).
 
 ### rlocks (`allow_reactive_locks`)
-The flag enabling the reactive lock. Default per variant: on iff
-*starting required efficiency* ≤ 1.42. Overridden process-wide by the
+The flag enabling the reactive lock. Default per variant: **off** in four families
+— 3 suits, Odds and Evens, Alternating Clues, Synesthesia — and otherwise on iff
+*starting required efficiency* ≤ 1.42. The four vetoes are unconditional and are
+not derived from the formula: all four score under 1.42 and defaulted ON until
+v13.5.0 (`default_allow_reactive_locks`, `reactor0/efficiency.cpp`; CONVENTION.md
+§1e). Overridden process-wide by the
 `/rlocks on|off` chat command (retro-applies to running games; in-flight
 reactives keep their clue-time snapshot). `Game::allow_reactive_locks`;
 `src/net/commands.cpp` (`chat_rlocks`).

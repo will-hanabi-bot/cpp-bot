@@ -48,6 +48,41 @@ TEST(Reactor0ReactiveAssignment, OddsAndEvensSettingsLine) {
             "odd reactive values: {Odd=3, Even=4}, rlocks: on");
 }
 
+// --- target-parity variants -----------------------------------------------
+//
+// Neither of these was covered until v13.5.0, which is exactly how README's
+// sample of this line came to drift from what the code emits. The line is what a
+// human reads in chat to know the convention in play, and hanab.live truncates
+// it, so its LENGTH is part of the contract -- see the Synesthesia case.
+
+TEST(Reactor0ReactiveAssignment, AlternatingCluesSettingsLine) {
+  const Variant& v = get_variant("Alternating Clues (5 Suits)");
+  EXPECT_EQ(format_settings(v, kNone, /*rlocks=*/false),
+            "reactor0 — no stable clues below 50%: to Bob = odd, to Cathy = even, "
+            "reactive values: {1=1, 2=2, 3=3, 4=4, 5=5, Red=1, Yellow=2, "
+            "Green=3, Blue=4, Purple=5}, from 50% of max OR at 8 clues a clue "
+            "to Bob is STABLE, rlocks: off");
+}
+
+// Synesthesia carries `clueRanks: []`, so the stable clues it falls back to at
+// 50% read off a fixed colour table instead of the usual ladders. It is rendered
+// ABBREVIATED -- `fN` for a pitch, `dN` for a chuck -- because the full
+// `pitchN`/`chuckN` words pushed the line past hanab.live's chat limit and the
+// tail that fell off included `rlocks`. GLOSSARY.md *synesthesia table* carries
+// the mapping in full words.
+TEST(Reactor0ReactiveAssignment, SynesthesiaSettingsLineIsAbbreviated) {
+  const Variant& v = get_variant("Synesthesia & Black (6 Suits)");
+  const std::string line = format_settings(v, kNone, /*rlocks=*/false);
+  EXPECT_EQ(line, "reactor0 — no stable clues below 50%: to Bob = odd, to Cathy = even, "
+      "reactive values: {Red=1, Yellow=2, Green=3, Blue=4, Purple=5, Black=1}, "
+      "from 50% of max OR at 8 clues a clue to Bob is STABLE: Red=f1, "
+      "Yellow=f2, Green=d3, Blue=d2, Purple=f5, Orange=d1, other=f4, "
+      "rlocks: off");
+  EXPECT_EQ(line.find("pitch"), std::string::npos)
+      << "the long spelling is what overflowed the chat limit";
+  EXPECT_EQ(line.find("chuck"), std::string::npos);
+}
+
 // --- /set -----------------------------------------------------------------
 
 // `/set Yellow even 4`: Yellow leaves the odd bucket and joins the even one at

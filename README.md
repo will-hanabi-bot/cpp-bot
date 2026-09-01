@@ -479,10 +479,27 @@ target rule instead of the two parity buckets, because there the bucket a clue
 falls into is decided by who is clued rather than by the clue itself:
 
 ```
-reactor0 — no stable clues: to Bob = odd, to Cathy = even, reactive values:
-{1=1, 2=2, 3=3, 4=4, 5=5, Red=1, Yellow=2, Green=3, Blue=4, Purple=5},
-rlocks: on
+reactor0 — no stable clues below 50%: to Bob = odd, to Cathy = even, reactive
+values: {1=1, 2=2, 3=3, 4=4, 5=5, Red=1, Yellow=2, Green=3, Blue=4, Purple=5},
+from 50% of max OR at 8 clues a clue to Bob is STABLE, rlocks: off
 ```
+
+Synesthesia has no rank clues, so once a clue to Bob is stable again it reads off
+a fixed colour table, which the line appends. It is **abbreviated** — `fN` is a
+pitch, `dN` a chuck — because spelling out `pitchN`/`chuckN` pushed the line past
+hanab.live's chat limit and truncated the tail, `rlocks` included:
+
+```
+reactor0 — no stable clues below 50%: to Bob = odd, to Cathy = even, reactive
+values: {Red=1, Yellow=2, Green=3, Blue=4, Purple=5, Black=1}, from 50% of max
+OR at 8 clues a clue to Bob is STABLE: Red=f1, Yellow=f2, Green=d3, Blue=d2,
+Purple=f5, Orange=d1, other=f4, rlocks: off
+```
+
+Both samples show `rlocks: off`, which is the default in these families from
+v13.5.0. Both lines are pinned verbatim by
+`tests/test_reactor0/test_reactive_assignment.cpp`, so they cannot drift from what
+the bot actually says.
 
 `/set` still moves an individual clue's value. See
 `src/conventions/reactor0/CONVENTION.md` §1f.

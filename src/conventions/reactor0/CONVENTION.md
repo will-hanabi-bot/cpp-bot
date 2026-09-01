@@ -1035,13 +1035,27 @@ play→dc and rank dc→dc), and **conservatively**: even when the oldest slot
 actually holds trash, the receiver cannot tell the two cases apart and must
 lock (pinned by `tests/test_reactor0/test_reactive_lock.cpp`).
 
-**The flag**: `Game::allow_reactive_locks` defaults per variant —
-`starting_required_efficiency(variant, num_players) <= 1.42`
-(`src/conventions/reactor0/efficiency.cpp:7-26`; the formula is
-`max_score / (8 + starting_pace + num_suits)`, the regain pool halved under
-Clue Starved). `/rlocks on|off` overrides process-wide and retro-applies to
-running games (`src/net/commands.cpp`, `chat_rlocks`); in-flight reactives
-are insulated because the reading binds at clue time via `ReactorWC::rlocks`.
+**The flag**: `Game::allow_reactive_locks` defaults per variant, on five tests
+in order (`src/conventions/reactor0/efficiency.cpp`, `default_allow_reactive_locks`).
+Four are unconditional **family vetoes** — locks default OFF in
+
+* any variant with **3 suits** — a lock commits five cards out of a fifteen-card
+  score;
+* every **Odds and Evens** variant — two rank clues, so the even bucket carries
+  the whole rank channel;
+* every **Alternating Clues** and every **Synesthesia** variant — §1f leaves them
+  no stable clues at all, so a lock costs the only channel there is.
+
+Otherwise the efficiency test decides: on iff
+`starting_required_efficiency(variant, num_players) <= 1.42` (the formula is
+`max_score / (8 + starting_pace + num_suits)`, the regain pool halved under Clue
+Starved). All four vetoed families score *under* 1.42 and so defaulted ON until
+v13.5.0 — the vetoes are a judgement about what a lock costs, not a consequence of
+the formula.
+
+`/rlocks on|off` overrides process-wide and retro-applies to running games
+(`src/net/commands.cpp`, `chat_rlocks`); in-flight reactives are insulated because
+the reading binds at clue time via `ReactorWC::rlocks`.
 
 ## §1f Variant layers
 
