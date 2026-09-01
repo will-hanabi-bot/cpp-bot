@@ -370,6 +370,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp
+  tests/test_reactor0/test_decision_making/test_replay_1981749_reactive_discard_prefers_trash.cpp
 )
 target_include_directories(hanabi_decision_tests PRIVATE tests)
 target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)

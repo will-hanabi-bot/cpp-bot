@@ -143,6 +143,21 @@ bool discard_is_affordable(const Game& game, int holder, int order);
 // Cathy `r3 r3 b5 g5 p5`: b4 -> 3, g4 -> 2, r4 -> 1.
 int missing_connectors(const Game& game, int order);
 
+// Basic trash scores 999 here, and `missing_connectors` otherwise. The DISPOSAL
+// question -- which of Bob's cards should a clue make him throw? -- is the only
+// one that wants a card nobody can ever need ranked ahead of everything else;
+// `missing_connectors` itself keeps the plain metric, because rung 4.4's fill-in
+// and rung 3.7's "close to playing" count both read it with the opposite
+// polarity, and a trash card really does sit zero connectors from its stack.
+int ditch_connectors(const Game& game, int order);
+
+// Is `a_order` the better card for `holder` to throw than `b_order`? The one
+// ditch-target rule, asked wherever the bot chooses WHICH of Bob's cards a clue
+// will make him throw (rungs 3.8 / 4.8, rung 3.9, and section 4's floor). Best
+// first: the largest `ditch_connectors`, then the highest rank, then the
+// leftmost card. Both orders must be in `holder`'s hand.
+bool better_ditch_target(const Game& game, int holder, int a_order, int b_order);
+
 // One candidate clue, analysed. Building this is the ONLY place a candidate is
 // simulated: `Game::simulate` is the expensive call, and both entry points below
 // read this struct rather than re-deriving from a hypo.

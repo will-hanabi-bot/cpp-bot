@@ -387,6 +387,78 @@ int missing_connectors(const Game& g, int order) {
   return missing;
 }
 
+// --- the ditch-target rule -----------------------------------------------
+//
+// ONE ordering, asked wherever the bot chooses WHICH of Bob's cards a clue will
+// make him throw -- rungs 3.8 / 4.8, rung 3.9, and section 4's floor. Best
+// first: the largest `ditch_connectors`, then the highest rank, then the
+// leftmost card.
+//
+// "Throw" is OUTCOME-oriented, not button-oriented: the callers select on
+// `Outcome::DISCARD` as `outcome_of` computes it, so a PITCH -- pressing Play on
+// an inverted suit, which sends the card to the discard pile -- is ranked by this
+// same rule, while a CHUCK (Discard on an inverted suit) is a play attempt onto
+// the stack, reads as `Outcome::PLAY`, and is not.
+//
+// The 999 lives here and not in `missing_connectors` deliberately: that metric
+// has two other callers whose polarity is the opposite of this one --
+// `rung_fill_in`'s `Key::connectors` (lower is better: fill in the card the team
+// is CLOSEST to playing) and rung 3.7's count of Bob's cards "close to playing"
+// -- and a trash card really does sit zero connectors from its stack for both.
+// Only the disposal question wants it ranked ahead of everything else.
+//
+// Replay 1981749 T17: Bob's b3 was basic trash with blue on 3, so it scored ZERO
+// missing connectors and sorted BELOW an r3 and a y4 the team still wanted.
+constexpr int kTrashConnectors = 999;
+
+int ditch_connectors(const Game& game, int order) {
+  auto id = order >= 0 ? game.state.deck[order].id() : std::nullopt;
+  if (id && game.state.is_basic_trash(*id)) return kTrashConnectors;
+  return missing_connectors(game, order);
+}
+
+namespace {
+
+// Lower sorts BETTER, so the two "largest/highest wins" terms are negated. The
+// leftmost term is the hand index as-is, which makes the key a strict total
+// order over one hand -- no two cards can tie on all three.
+struct DitchKey {
+  int neg_connectors = 0;
+  int neg_rank = 0;
+  int index = 0;
+  bool operator<(const DitchKey& o) const {
+    if (neg_connectors != o.neg_connectors) return neg_connectors < o.neg_connectors;
+    if (neg_rank != o.neg_rank) return neg_rank < o.neg_rank;
+    return index < o.index;
+  }
+};
+
+DitchKey ditch_key(const Game& g, int holder, int order) {
+  DitchKey k;
+  k.neg_connectors = -ditch_connectors(g, order);
+  if (order >= 0) {
+    if (auto id = g.state.deck[order].id()) {
+      k.neg_rank = -variants::direction_rank(g.state, *id);
+    }
+  }
+  const auto& hand = g.state.hands[holder];
+  k.index = static_cast<int>(hand.size());  // not in the hand: sorts last
+  for (size_t i = 0; i < hand.size(); ++i) {
+    if (hand[i] == order) {
+      k.index = static_cast<int>(i);
+      break;
+    }
+  }
+  return k;
+}
+
+}  // namespace
+
+bool better_ditch_target(const Game& game, int holder, int a_order,
+                         int b_order) {
+  return ditch_key(game, holder, a_order) < ditch_key(game, holder, b_order);
+}
+
 namespace {
 
 
@@ -426,8 +498,27 @@ bool predicts_a_strike(const ClueReading& r) {
          r.stable_outcome == Outcome::STRIKE;
 }
 
+// Is this a STABLE clue to Bob? Both halves are load-bearing, and the second one
+// was missing until v13.4.0.
+//
+// Under TARGET PARITY (Alternating Clues, Synesthesia) a clue to Bob is
+// REACTIVE -- he is the reacter and Cathy the receiver -- so the seat test alone
+// answers "yes" to a clue that is nothing of the kind. The five shape-gated
+// callers (`pool_stable_play`, `pool_stable_ditch_trash`, `pool_stable_ditch_dupe`,
+// `rung_stable_ditch`, rung 4.7) were unharmed by that, since `read_clue` routes
+// on `clue_is_reactive` and a reactive clue can never carry a STABLE_* shape.
+// `rung_fill_in` has no shape gate, so it was the one that let a reactive
+// discard in -- and 4.4 sits ABOVE 4.8, the rung that refuses to make Bob throw
+// a critical card. Replay 1981749 T17: locked Alice, Synesthesia, five reactive
+// discard candidates; three of them "filled in" the same r3 of Bob's, the strict
+// `<` kept the first, and yellow made him discard the last y3.
+//
+// `clue_is_reactive` is reactor0's single definition of the dispatch, the same
+// one `read_clue` asks -- so this tracks the 50%-score / 8-token stand-down for
+// free, and 4.4 is live again once a clue to Bob really is stable.
 bool is_stable_to_bob(const Game& g, const ClueCandidate& c) {
-  return c.action.target == bob_of(g);
+  const int bob = bob_of(g);
+  return c.action.target == bob && !clue_is_reactive(g.state, c.action, bob);
 }
 
 // The card a reactive throws away, on whichever side is doing the throwing.
@@ -445,6 +536,23 @@ std::vector<std::pair<int, int>> discarded_sides(const Game& g,
     out.emplace_back(cathy_of(g), r.receiver_side.order);
   }
   return out;
+}
+
+// The best candidate in `pool` by the ditch rule, where `order_of` names the
+// card each candidate would have Bob throw. Shared by rungs 3.8/4.8, 3.9 and the
+// §4 floor so the rule has one definition and the three cannot drift.
+const ClueCandidate* best_ditch(
+    const Game& g, const std::vector<const ClueCandidate*>& pool,
+    const std::function<int(const ClueCandidate&)>& order_of) {
+  const ClueCandidate* best = nullptr;
+  for (const ClueCandidate* c : pool) {
+    if (!best ||
+        better_ditch_target(g, bob_of(g), order_of(*c),
+                            order_of(*best))) {
+      best = c;
+    }
+  }
+  return best;
 }
 
 }  // namespace
@@ -554,6 +662,24 @@ std::vector<ClueCandidate> analyse_clues(
     if (calls_two_copies_to_play(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), 0.0};
+    // An undecodable REACTIVE is not a stall -- drop it, as a MISTAKE is dropped,
+    // and for the same reason: no rung can reason about it.
+    //
+    // `read_clue` hands back a default reading (shape OTHER, every order -1) when
+    // a reactive clue's reading cannot be predicted -- a stale waiting connection,
+    // no predictable receiver order, or a reacter left with no CTP/CTD stamp. But
+    // the INTERP is still REACTIVE, so Bob really will react to it, and the giver
+    // has no idea to what. That default reading is indistinguishable from the one
+    // a genuinely empty clue produces, which is what rung 4.5 selects on -- so it
+    // was reachable as a "safe stall" that cannot be misread. Replay 1981749 T17:
+    // red to Bob read OTHER because the react slot narrowed to a single playable
+    // p1 and kept no discard stamp; 4.5 took it as harmless, and it would have had
+    // Bob throw his r5. A LOCK is unaffected -- `predicts_reactive_lock` fills in
+    // the reacter side before this point.
+    if (clue_is_reactive(s, ca, bob_of(game)) &&
+        c.reading.reacter_side.order < 0) {
+      continue;
+    }
     int useful = 0, trash = 0;
     for (int o : ca.list_) {
       if (s.deck[o].clued) continue;  // not a NEW touch
@@ -929,9 +1055,15 @@ Pool pool_double_discard(const Game& g, const std::vector<ClueCandidate>& cs) {
   });
 }
 
-// 3.8 / 4.8 -- throw away a non-critical card of Bob's through a REACTIVE,
-// preferring the card with the most connectors Alice cannot see (so the one the
-// team is least likely to ever play).
+// 3.8 / 4.8 -- throw away a non-critical card of Bob's through a REACTIVE.
+// WHICH card is the shared ditch rule above (`best_ditch`): trash first, then the
+// most connectors Alice cannot see, then the highest rank, then the leftmost.
+// The `is_critical` filter below stays: the ordering picks among the cards Bob
+// can afford to lose, it does not by itself decide he can afford one.
+//
+// The two arms are the two ways a card gets thrown, which is why they share one
+// pool and one ordering -- pressing Discard on a plain suit, and pressing Play on
+// an inverted one, which is a PITCH. `outcome_of` calls both `Outcome::DISCARD`.
 //
 // The spec pairs a shape set with a BUTTON on each of its two arms, and the
 // pairing differs between the two rungs, so both sets are passed in rather than
@@ -967,27 +1099,18 @@ const ClueCandidate* rung_reactive_ditch(const Game& g,
     }
     return false;
   });
-  if (p.empty()) return nullptr;
-  const ClueCandidate* best = p.front();
-  int best_missing = missing_connectors(g, best->reading.reacter_side.order);
-  for (const ClueCandidate* c : p) {
-    const int m = missing_connectors(g, c->reading.reacter_side.order);
-    if (m > best_missing ||
-        (m == best_missing && c->default_score > best->default_score)) {
-      best = c;
-      best_missing = m;
-    }
-  }
-  return best;
+  return best_ditch(g, p, [](const ClueCandidate& c) {
+    return c.reading.reacter_side.order;
+  });
 }
 
 // 3.9 -- the STABLE counterpart of `rung_reactive_ditch`.
 //
-// "Give a stable discard that stamps CTD on a non-critical card in Bob's hand,
-// tiebreak by the largest number of missing connectors Alice can see leading up
-// to that card." Same tiebreak as the reactive rung above, deliberately sharing
-// its shape so the two cannot drift: the card least likely ever to matter is the
-// one to spend.
+// "Give a stable discard that stamps CTD on a non-critical card in Bob's hand."
+// WHICH card is `best_ditch`, the same shared rule 3.8 / 4.8 use -- deliberately
+// sharing its shape so the two cannot drift: the card least likely ever to matter
+// is the one to spend. `STABLE_DISCARD` is assigned by OUTCOME (`read_stable`),
+// so a stable clue that has Bob pitch an inverted card is in scope here too.
 //
 // Reads `reading.stable_subject` rather than `reacter_side.order`, since on a
 // stable clue Bob is the TARGET and not a reacter -- the idiom the other stable
@@ -1000,18 +1123,9 @@ const ClueCandidate* rung_stable_ditch(const Game& g,
     auto id = id_of(g.state, c.reading.stable_subject);
     return id && !g.state.is_critical(*id);
   });
-  if (p.empty()) return nullptr;
-  const ClueCandidate* best = p.front();
-  int best_missing = missing_connectors(g, best->reading.stable_subject);
-  for (const ClueCandidate* c : p) {
-    const int m = missing_connectors(g, c->reading.stable_subject);
-    if (m > best_missing ||
-        (m == best_missing && c->default_score > best->default_score)) {
-      best = c;
-      best_missing = m;
-    }
-  }
-  return best;
+  return best_ditch(g, p, [](const ClueCandidate& c) {
+    return c.reading.stable_subject;
+  });
 }
 
 const ClueCandidate* first_of(const Game& g, Pool p) {
@@ -1393,8 +1507,43 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // something: the default tiebreak, IGNORING tier. Without this an empty clue
   // set walks into take_action's last-resort branch and blind-plays slot 1,
   // which is strictly worse than any decodable clue.
+  //
+  // But the default tiebreak is `default_score` -- how many useful cards the clue
+  // newly TOUCHES -- which knows nothing about what it makes Bob THROW. So before
+  // it runs, the candidates that have Bob throw a card are reduced to their single
+  // best under the shared ditch rule: a visibly critical loss is dropped while a
+  // non-critical one is on the table, and `best_ditch` picks among the rest. The
+  // floor still chooses which CLASS of clue to give exactly as it did; it just can
+  // no longer take a worse Bob-discard clue than the best one available.
+  //
+  // Outcome-keyed, so a pitch counts and a chuck does not -- see `best_ditch`.
+  Pool ditches;
+  for (const ClueCandidate& c : cs) {
+    if (c.reading.reacter_side.outcome != Outcome::DISCARD) continue;
+    if (c.reading.reacter_side.order < 0) continue;
+    ditches.push_back(&c);
+  }
+  const ClueCandidate* best_ditcher = nullptr;
+  if (!ditches.empty()) {
+    Pool affordable;
+    for (const ClueCandidate* c : ditches) {
+      auto id = id_of(g.state, c->reading.reacter_side.order);
+      if (id && g.state.is_critical(*id)) continue;
+      affordable.push_back(c);
+    }
+    best_ditcher = best_ditch(g, affordable.empty() ? ditches : affordable,
+                              [](const ClueCandidate& c) {
+                                return c.reading.reacter_side.order;
+                              });
+  }
   Pool all;
-  for (const ClueCandidate& c : cs) all.push_back(&c);
+  for (const ClueCandidate& c : cs) {
+    if (c.reading.reacter_side.outcome == Outcome::DISCARD &&
+        c.reading.reacter_side.order >= 0 && &c != best_ditcher) {
+      continue;  // superseded by the best ditch of the same kind
+    }
+    all.push_back(&c);
+  }
   return first_of(g, std::move(all));
 }
 

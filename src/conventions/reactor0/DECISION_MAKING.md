@@ -133,7 +133,7 @@ NOT-LOW iff any of VH1, H2, H3, H4, or:
 6. **N3** — the clue gets two new plays. `:509`.
 7. **N2** — the clue is **reactive** and Bob has no stable color play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
-   since dispatch is positional (§1a, `interpret_clue.cpp:620-631`). `:514-517`.
+   since dispatch is positional (§1a, `interpret_clue.cpp:935-938`). `:514-517`.
    In a **target-parity** variant the second arm is vacuously true (no stable
    clues exist) while the first still asks who was clued, so only a clue to
    Cathy reaches N2 there.
@@ -152,8 +152,8 @@ uses.
 **"Gets a finesse"** (VH1) means the clue's interpretation is reactive rank
 **Phase B**, and *only* Phase B — the blind-play phase that walks one-away
 targets and calls the reacter onto the prerequisite
-(`interpret_reactive.cpp:485-575`). Phase A (double play, `:487-573`) and Phase C
-(double discard, `:667-721`) are not finesses. A reactive lock has to be excluded
+(`interpret_reactive.cpp:485-575`). Phase A (double play, `:397-483`) and Phase C
+(double discard, `:577-631`) are not finesses. A reactive lock has to be excluded
 explicitly (`predicts_reactive_lock`): it stamps CHOP_MOVED a turn later, so at
 clue time the receiver's predicted slot carries no status and looks exactly like
 an un-stamped Phase B target. Since VERY HIGH is the one thing that outranks a
@@ -703,14 +703,12 @@ is judged from Alice's own inference, not common knowledge.
        give a lock clue to Bob. Both Cathy clauses are **vacuous at two seats**,
        as H1b/H1c's are.
     8. If Bob's chop is critical, give a reactive discard that stamps CTD on a non-critical card in Bob's
-       hand, tiebreak by the largest number of **missing connectors** Alice can
-       see leading up to that card, or a reactive play that stamps CTP on a
-       non-critical inverted card in Bob's hand, tiebreak by the same criteria.
+       hand, or a reactive play that stamps CTP on a non-critical inverted card
+       in Bob's hand. WHICH card is the **ditch-target rule** below.
        Bob's chop is its **only** condition: there is no clue-count condition
        here, and the `**` relaxation has nothing to reach.
     9. If Bob's chop is critical, give a stable discard that stamps CTD on a non-critical card in Bob's
-       hand, tiebreak by the largest number of **missing connectors** Alice can
-       see leading up to that card.
+       hand. Same **ditch-target rule**.
 
    **Missing connectors** of a card `X` = the number of identities strictly
    between the top of `X`'s stack and `X` that are **not** visible to Alice in any
@@ -718,6 +716,33 @@ is judged from Alice's own inference, not common knowledge.
    `r2 g3 r4 g4 b4` and Cathy as `r3 r3 b5 g5 p5`: `b4` needs `b1 b2 b3`, none
    visible → 3; `g4` needs `g1 g2 g3`, and `g3` is in Bob's hand → 2; `r4` needs
    `r1 r2 r3`, and `r2` is in Bob's hand and `r3` in Cathy's → 1. So `b4` wins.
+
+   **The ditch-target rule** (v13.4.0). ONE ordering answers "which of Bob's cards
+   should this clue make him throw?", wherever the question is asked — §3.8, §3.9,
+   §4.8, and §4's floor. Best first:
+
+   1. the largest number of **missing connectors**, where **basic trash scores
+      999** — a card nobody can ever need is spent ahead of any card the team
+      might still play;
+   2. then the **highest rank**;
+   3. then the **leftmost** card.
+
+   `ditch_connectors` / `better_ditch_target` (`reactor0/decision.h`,
+   `decision.cpp`), exported so the three keys can be asserted directly. The 999
+   lives in `ditch_connectors` and **not** in `missing_connectors`: §4.4's fill-in
+   and §3.7's "close to playing" count both read the plain metric with the
+   opposite polarity, and a trash card really does sit zero connectors from its
+   stack for both of them.
+
+   "Throw" here is **outcome-oriented**, in the sense §2's preamble gives the
+   word: a **pitch** — pressing Play on an inverted suit — is a discard and is
+   ranked by this rule, while a **chuck** — pressing Discard on an inverted suit —
+   reaches the stack and is not. Every call site selects on `Outcome::DISCARD`.
+
+   Replay 1981749 T17 is what the rule was written for. Synesthesia, blue on 3, so
+   Bob's `b3` was basic trash — and `missing_connectors` alone scored it **zero**,
+   the worst score, because its walk terminates below the stack top. It sorted
+   below an `r3` and a `y4` the team still wanted.
 
 4. **Alice is locked, or at 8 clues, or at pace <= 1 and any of 4a-4c:**
    The first two are unqualified -- in both, every alternative to cluing burns a
@@ -739,13 +764,26 @@ is judged from Alice's own inference, not common knowledge.
     1. Same as 3.1
     2. Same as 3.3
     3. Same as 3.5
-    4. Give a fill-in clue (which is a stable clue that narrows down the identity
-       of existing unplayable clued cards in Bob's hand). Prioritize cards that
-       are duplicated in either Cathy's hand or Alice's own hand, followed by
-       cards ranked by lowest number of connectors and lowest stack rank.
+    4. Give a fill-in clue (which is a **stable** clue that narrows down the
+       identity of existing unplayable clued cards in Bob's hand). Prioritize
+       cards that are duplicated in either Cathy's hand or Alice's own hand,
+       followed by cards ranked by lowest number of connectors and lowest stack
+       rank. **Stable is a real condition, not decoration** (v13.4.0): while
+       *target parity* binds there are no stable clues at all, so 4.4 is
+       unreachable in Alternating Clues and Synesthesia until parity stands down
+       at 50% score or 8 tokens. `is_stable_to_bob` used to test only the SEAT,
+       which let a reactive discard in — and 4.4 sits above 4.8, the rung that
+       refuses to make Bob throw a critical card. Replay 1981749 T17: three
+       reactive discards all "filled in" the same `r3` of Bob's, first-wins kept
+       the lowest colour index, and it made him throw the last `y3`.
     5. Give any other stall clue that cannot be misinterpreted by Bob as some
        other type of stable clue that would cause a strike or a discard of a
-       critical card.
+       critical card. A clue whose interp is **REACTIVE** is never one of these,
+       however little of it can be read: Bob will react regardless. An
+       undecodable reactive is dropped from the candidate set outright, the way a
+       MISTAKE is (`analyse_clues`), because no rung can reason about it — at
+       1981749 T17 red to Bob read as shape `OTHER` with no reacter side, and 4.5
+       took it as a harmless stall that would have had Bob throw his `r5`.
     6. Give a lock clue to Bob.
     7. Below 2 strikes, give a stable clue — play or discard — whose subject is a
        card Bob can afford to lose: trash, a same-hand-dupe, or a card Alice can
@@ -754,8 +792,7 @@ is judged from Alice's own inference, not common knowledge.
        a card, and it is only worth paying while a strike is still survivable.
     8. Give a reactive discard that stamps CTD on a non-critical card in Bob's
        hand, or a reactive play that stamps CTP on a non-critical **inverted**
-       card in Bob's hand; tiebreak by the largest number of **missing
-       connectors** Alice can see leading up to that card. Wider than 3.8 on
+       card in Bob's hand; WHICH card is the **ditch-target rule** in §3. Wider than 3.8 on
        both arms — the CTD arm also accepts a double discard and the CTP arm
        also accepts a reactive discard — and it carries **no condition at all**,
        neither a clue count nor 3.8's critical-chop gate, because §4 must
@@ -766,6 +803,15 @@ is judged from Alice's own inference, not common knowledge.
    §4 has to hand back something; without the floor an empty result falls into
    the last-resort branch and blind-plays slot 1, which is worse than any
    decodable clue.
+
+   The default tiebreak counts how many useful cards a clue newly **touches**,
+   which says nothing about what it makes Bob **throw**. So before it runs
+   (v13.4.0), the candidates on which Bob throws a card are reduced to their
+   single best: one that costs a card Alice can see is critical is dropped while a
+   non-critical one is on the table, and the **ditch-target rule** in §3 picks
+   among the rest. The floor still chooses which *kind* of clue to give exactly as
+   it did — it simply can no longer take a worse Bob-discard clue than the best
+   one available.
 
    **When §4 is reachable at all.** §3 sits above §4, and before the 3.7–3.9
    amendment it always terminated: its last rung was a lock carrying the same
@@ -1153,7 +1199,9 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | the pitch and chuck lists | `action_lists` |
 | Actionable Card Priority, rungs 2-13 | `choose_action` |
 | rung 1 (action a pending reaction) | `take_action`'s urgent return, above the clue phase |
-| §3.7's "close to playing" count, and the §3.8 / §3.9 / §4.8 tiebreak | `missing_connectors` |
+| §3.7's "close to playing" count, and §4.4's fill-in ranking | `missing_connectors` |
+| the ditch-target rule (§3.8 / §3.9 / §4.8 / §4's floor) | `better_ditch_target` / `ditch_connectors` |
+| "is this a STABLE clue to Bob?" (§3.1/3.3/3.5/3.9, §4.1-4.4, §4.7) | `is_stable_to_bob`, which asks `clue_is_reactive` |
 | §3.7's veto on Bob cluing Cathy | `has_colour_play_clue_for` |
 | §3.7 / §3.8 / §3.9's chop test | `chop_is_critical` (`facts.h`) |
 | the §3.8 / §4.8 reactive ditch | `rung_reactive_ditch` |
@@ -1161,7 +1209,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 
 | Rule | Existing machinery | Where |
 |---|---|---|
-| reactive vs stable | positional compare `action.target != bob` | `interpret_clue.cpp:620-631` |
+| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1012`, dispatched at `interpret_clue.cpp:935-938` |
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:214-266` |
 | finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:485-575` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:577-631` |

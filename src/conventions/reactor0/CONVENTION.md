@@ -1639,6 +1639,27 @@ only: two cards called to be *discarded* that happen to match is not a bomb, and
 throwing a spare copy is often right.
 
 
+**An UNDECODABLE reactive is never offered either** (v13.4.0, `analyse_clues`,
+`reactor0/decision.cpp`). A clue whose interp is `REACTIVE` installs a waiting
+connection and Bob will answer it, but `read_clue` hands the decision layer a
+default reading -- shape `OTHER`, every order `-1` -- whenever it cannot predict
+what that answer will be: a stale waiting connection, no predictable receiver
+order, or a reacter left carrying no CTP/CTD stamp. A giver who cannot say what a
+clue will cause should not give it, so the candidate is dropped beside the
+MISTAKE drop, for the same reason: no rung can reason about it.
+
+The default reading is also indistinguishable from the one an empty clue
+produces, which is what the decision layer's "safe stall" rung selects on, so
+before the drop such a clue could be given precisely *because* it looked
+harmless. Replay 1981749 T17 (Synesthesia, so every clue to Bob is reactive): red
+to Bob narrowed the react slot to a single playable `p1` and kept no discard
+stamp, so it read `OTHER` -- and it would have had yagami_black throw his `r5`.
+
+This is a giver-side FILTER and not a reading, exactly as the two-copies rule
+above is: an observer interpreting an already-given clue runs the unchanged
+pipeline and still reads `REACTIVE`.
+
+
 Selection inputs are (a) common thoughts, and (b) deck identities invisible
 only to the receiver, who never runs selection. The line that matters is
 whether the **reacter** shares the knowledge:

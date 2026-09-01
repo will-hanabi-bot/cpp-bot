@@ -253,6 +253,89 @@ TEST(Reactor0CluePriority, MissingConnectorsMatchesTheSpecExample) {
       << "r4: r2 is Bob's and r3 is Cathy's, so only r1 is missing";
 }
 
+// --- the ditch-target rule ------------------------------------------------
+//
+// One ordering decides WHICH of Bob's cards a clue makes him throw, wherever the
+// question is asked (rungs 3.8 / 4.8, rung 3.9, section 4's floor): the largest
+// `ditch_connectors`, then the highest rank, then the leftmost card. These pin
+// the three keys in turn.
+
+// Key 1. Basic trash scores 999, so it always outranks a card the team might
+// still play, however many of its connectors are invisible. Replay 1981749 T17
+// is the position that needed it: `missing_connectors` alone scored Bob's trash
+// b3 at ZERO and spent an r3 the team still wanted instead.
+TEST(Reactor0CluePriority, DitchTargetSpendsTrashAheadOfAnythingPlayable) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"b2", "b4", "y3", "g3", "p3"},
+      {"r3", "r4", "y5", "g5", "p5"},
+  };
+  opts.play_stacks = {0, 0, 0, 3, 0};  // blue on 3: b2 is dead, b4 is next
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int trash = order_of(g, TestPlayer::BOB, 1);   // b2, blue already on 3
+  const int wanted = order_of(g, TestPlayer::BOB, 3);  // y3, yellow on 0
+  EXPECT_EQ(hanabi::reactor0::ditch_connectors(g, trash), 999)
+      << "a card nobody can ever need is the one to spend";
+  EXPECT_EQ(hanabi::reactor0::missing_connectors(g, trash), 0)
+      << "the plain metric is unchanged -- rungs 4.4 and 3.7 still read it";
+  EXPECT_TRUE(hanabi::reactor0::better_ditch_target(
+      g, 1 /* Bob */, trash, wanted));
+  EXPECT_FALSE(hanabi::reactor0::better_ditch_target(
+      g, 1 /* Bob */, wanted, trash));
+}
+
+// Key 2. Equal connectors -> the HIGHER rank goes.
+TEST(Reactor0CluePriority, DitchTargetBreaksEqualConnectorsOnRank) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y2", "g4", "b3", "p3", "r3"},
+      {"g3", "g2", "y5", "b5", "p5"},
+  };
+  opts.play_stacks = {0, 1, 2, 0, 0};  // yellow on 1, green on 2
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int y2 = order_of(g, TestPlayer::BOB, 1);  // yellow on 1 -> playable
+  const int g4 = order_of(g, TestPlayer::BOB, 2);  // green on 2, g3 in Cathy's
+  ASSERT_EQ(hanabi::reactor0::ditch_connectors(g, y2),
+            hanabi::reactor0::ditch_connectors(g, g4))
+      << "guard: the fixture only separates these two on rank";
+  EXPECT_TRUE(hanabi::reactor0::better_ditch_target(
+      g, 1 /* Bob */, g4, y2))
+      << "same connectors, so the 4 goes before the 2";
+}
+
+// Key 3. Equal on both -> the LEFTMOST (newest) card goes.
+TEST(Reactor0CluePriority, DitchTargetBreaksAnExactTieOnLeftmost) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y3", "g5", "b5", "p5", "y3"},
+      {"r3", "r4", "g2", "b2", "p2"},
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  const int left = order_of(g, TestPlayer::BOB, 1);
+  const int right = order_of(g, TestPlayer::BOB, 5);
+  ASSERT_EQ(hanabi::reactor0::ditch_connectors(g, left),
+            hanabi::reactor0::ditch_connectors(g, right))
+      << "guard: two copies of the same identity in the same hand";
+  EXPECT_TRUE(hanabi::reactor0::better_ditch_target(
+      g, 1 /* Bob */, left, right))
+      << "nothing else separates them, so slot 1 goes";
+  EXPECT_FALSE(hanabi::reactor0::better_ditch_target(
+      g, 1 /* Bob */, right, left));
+}
+
 // --- the walk itself ------------------------------------------------------
 
 // The whole point of the ordering: a reactive PLAY clue is rung 1, so it is

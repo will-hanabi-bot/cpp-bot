@@ -14,7 +14,7 @@ The right-hand side of the reactive slot arithmetic
 is the **clue value** — the rank for rank clues, the *colour value* for
 colour clues. Stored in `ReactorWC::focus_slot` (the field name is
 reactor's; reactor0 never computes a focus).
-`src/conventions/reactor0/interpret_reactive.cpp:329-340`.
+`src/conventions/reactor0/interpret_reactive.cpp:1058-1061`.
 Not to be confused with *clue tier*, which is how worthwhile **giving** a clue
 is. "Value" in reactor0 always means this anchor.
 
@@ -43,6 +43,25 @@ finesse rule — is its only member. Through v9.2.0 that rule was itself called
 critical-chop rule at HIGH, so an "H4" in an older commit or log means the
 finesse and an "H4" today does not.
 
+### ditch target
+The card a clue makes Bob **throw**, and the one ordering that chooses it
+wherever the question is asked -- §3.8, §3.9, §4.8 and §4's floor
+(DECISION_MAKING.md, *The ditch-target rule*). Best first: the largest
+`ditch_connectors`, then the highest rank, then the leftmost card.
+`better_ditch_target` (`reactor0/decision.h`; `decision.cpp`).
+
+`ditch_connectors` is *missing connectors* with **basic trash scored 999**, so a
+card nobody can ever need is spent ahead of anything the team might still play.
+The sentinel lives there and **not** in `missing_connectors`, which §4.4's
+fill-in and §3.7's "close to playing" count both read with the opposite polarity
+-- a trash card genuinely does sit zero connectors from its stack for them.
+Replay 1981749 T17: blue was on 3, so Bob's b3 scored ZERO on the plain metric
+and sorted below an r3 and a y4 the team still wanted.
+
+"Throw" is **outcome-oriented**: a *pitch* is a discard and is ranked by this
+rule; a *chuck* reaches the stack and is not. Every call site selects on
+`Outcome::DISCARD` (`decision.cpp`, `outcome_of`).
+
 ### spent reaction
 A pending reaction whose *target* — the receiver order the reacter's called slot
 pairs with — has left the receiver's hand. A reaction is urgent because the
@@ -70,6 +89,14 @@ alternate — so the kind cannot carry a signal. `variants::uses_target_parity`
 target-aware lookup. While it binds there are **no stable clues**: Bob is
 always the reacter and Cathy always the receiver, so a clue to Bob touches the
 reacter's own hand while identifying a slot in Cathy's.
+
+The decision layer has to obey that too, and until v13.4.0 it did not:
+`is_stable_to_bob` (`reactor0/decision.cpp`) tested the SEAT alone, so every
+rung written for a stable clue to Bob accepted a reactive one. Four of the five
+were saved by their `ClueShape` gate; §4.4's fill-in has none, and it sits above
+§4.8 -- the rung that refuses to make Bob throw a critical card. It now asks
+`clue_is_reactive`, the same predicate `read_clue` dispatches on, so it tracks
+the 50% / 8-token stand-down for free. Replay 1981749 T17.
 
 **It stands down at 50%** (v11.0.0 at 60%, moved in v11.4.0): once
 `score >= 0.5 * variant maximum` — a constant 5 per suit, not `max_score()` — a
