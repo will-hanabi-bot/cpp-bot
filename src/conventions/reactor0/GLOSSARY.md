@@ -162,7 +162,9 @@ reactor's, fires even when Alice holds no play — the gate keys on the *stamp*,
 not on what she knows.
 
 **Why the pace thresholds differ.** An occupied Alice has her call to fall back
-on at any pace, so a LOW clue is never the better use of the turn — replay
+on at any pace, so a LOW clue is never the better use of the turn — which is why
+only a call she can still ACTION counts as occupying her (v13.3.0; a dead one
+leaves her with nothing to fall back on) — replay
 1966119 T5, where she sat at pace 2 and a LOW reactive discard was admitted
 ahead of the pending call. An unoccupied Alice at low pace has nothing to fall
 back on: holding her to the MEDIUM bar with the deck nearly out just sends her

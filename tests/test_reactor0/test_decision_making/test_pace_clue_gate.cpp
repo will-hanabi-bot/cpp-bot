@@ -29,6 +29,7 @@
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/conventions/reactor/state_eval.h"
+#include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
 #include "test_harness.h"
@@ -314,6 +315,48 @@ TEST(Reactor0PaceClueGate, CtpStampForcesHighTier) {
       CardStatus::CALLED_TO_PLAY;
   EXPECT_TRUE(hanabi::reactor0::requires_high_tier(g))
       << "a CALLED_TO_PLAY stamp in Alice's hand forces the HIGH-only tier.";
+}
+
+// ...but only a call she CAN ACTION counts (v13.3.0).
+//
+// "Occupied" exists to say Alice has something better to do than spend a token
+// on a LOW clue, and 2a's locked exemption is written `!occupied && locked`
+// because "an OCCUPIED Alice holds a call SHE CAN ACTION". A dead call makes
+// that false: she is out of alternatives and still gated to HIGH.
+//
+// Replay 1981703 T19 is the cost. A dupe killed yagami_green's called card, its
+// own sight of the real br4 elsewhere dropped the call from the pitch list, but
+// the STAMP survived -- so it stayed "occupied", the gate flattened every
+// candidate at pace 1, section 4 never got a pool, and phase 2 blind-pitched a
+// br5 into a strike that ended the game.
+//
+// `CtpStampForcesHighTier` above is the control: a LIVE stamp still forces HIGH.
+TEST(Reactor0PaceClueGate, ADeadCtpDoesNotForceHighTier) {
+  SetupOptions opts = inert_position();
+  opts.clue_tokens = 3;
+  Game g = setup(std::move(opts));
+
+  // Alice's slot 5 is the y5 and every stack is on 0, so pitching it could only
+  // strike. `fully_known` pins it -- and `apply_pre_clue` writes COMMON only,
+  // while `call_is_actionable` reads the HOLDER's view, so the pin has to be
+  // mirrored there or the call still looks alive.
+  g = fully_known(std::move(g), TestPlayer::ALICE, /*slot=*/5, "y5");
+  g.elim();
+  const int order = order_at(g, TestPlayer::ALICE, 5);
+  {
+    const Thought& t = g.common.thoughts[order];
+    for (Player& p : g.players) {
+      p.thoughts[order].inferred = t.inferred;
+      p.thoughts[order].possible = t.possible;
+    }
+  }
+  g.meta[order].status = CardStatus::CALLED_TO_PLAY;
+
+  ASSERT_FALSE(hanabi::reactor0::call_is_actionable(g, 0, order))
+      << "guard: the call is dead -- a y5 pitched at stack 0 only strikes";
+  EXPECT_FALSE(hanabi::reactor0::requires_high_tier(g))
+      << "a call she cannot action leaves her out of alternatives, which is "
+         "the one thing 'occupied' is supposed to deny";
 }
 
 // A CALLED_TO_DISCARD stamp only counts where discarding can be a play —

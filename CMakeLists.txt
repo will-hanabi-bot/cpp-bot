@@ -366,6 +366,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_low_pace_clues.cpp
   tests/test_reactor0/test_decision_making/test_section_four_gate.cpp
   tests/test_reactor0/test_decision_making/test_replay_1978799_pace_one_reaches_section_four.cpp
+  tests/test_reactor0/test_decision_making/test_replay_1981703_dead_call_is_not_occupied.cpp
   tests/test_reactor0/test_decision_making/test_double_discard_filter.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp

@@ -19,6 +19,7 @@
 #include "hanabi/conventions/reactor/state_eval.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
+#include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/variants/inverted.h"
@@ -314,8 +315,29 @@ bool requires_high_tier(const Game& game) {
   const bool inverted_variant = variants::includes_inverted(s);
   for (int o : s.hands[alice]) {
     const CardStatus st = game.meta[o].status;
-    if (st == CardStatus::CALLED_TO_PLAY) return true;
-    if (inverted_variant && st == CardStatus::CALLED_TO_DISCARD) return true;
+    const bool is_call = st == CardStatus::CALLED_TO_PLAY ||
+                         (inverted_variant && st == CardStatus::CALLED_TO_DISCARD);
+    if (!is_call) continue;
+    // ONLY A CALL SHE CAN ACTION COUNTS (v13.3.0).
+    //
+    // "Occupied" exists to say Alice has something better to do than spend a
+    // token on a LOW clue -- 2a's locked exemption is written as
+    // `!occupied && locked` precisely because "an OCCUPIED Alice holds a call
+    // SHE CAN ACTION, so she is not out of alternatives". A dead call makes that
+    // sentence false: she is out of alternatives and still gated to HIGH.
+    //
+    // `call_is_actionable` is the pitch/chuck list's own test, so asking it here
+    // makes the gate and the ladder agree about the same card. They disagreed
+    // because they read different layers: `enforce_call_invariants` rule 3
+    // erases a dead CTP off COMMON, while the lists judge it on the HOLDER's
+    // view -- and private sight can kill a call common knowledge still believes.
+    //
+    // Replay 1981703 T19: yagami_blue dupe-played the br3 green was called on,
+    // and green could see the real br4 in blue's hand, so its own view killed
+    // the call. The stamp survived, green stayed "occupied", the gate demanded
+    // HIGH at pace 1 and flattened every candidate ("tier_gate_rejected_all"),
+    // section 4 never got a pool, and phase 2 blind-pitched a br5 into a strike.
+    if (call_is_actionable(game, alice, o)) return true;
   }
   return false;
 }

@@ -506,9 +506,21 @@ making framework.
 
 Alice is **occupied** when she holds ≥1 card stamped `CALLED_TO_PLAY`, *or* — in a
 variant containing an inverted suit — ≥1 stamped `CALLED_TO_DISCARD` that she
-knows is **not** the next card on that inverted suit's stack. This knowledge need
+knows is **not** the next card on that inverted suit's stack, **and that she can
+still action** (`call_is_actionable`, v13.3.0). This knowledge need
 not be global: it is Alice's own inference that counts. Note *occupied* is not the
 same as *loaded*.
+
+**The call has to be live.** *Occupied* means "she has something better to do
+than spend a token on a LOW clue", so a call whose button could now only strike
+does not qualify — she is out of alternatives, not holding one. The stamp alone
+is not enough: `enforce_call_invariants` erases a call COMMON knowledge can see
+is dead, but PRIVATE sight can kill one common knowledge still believes, and the
+pitch and chuck lists already judge it on the holder's own view. Asking
+`call_is_actionable` here makes the gate and the ladder agree about the same
+card. Replay 1981703 T19: a dupe killed yagami_green's called card, its own
+sight dropped the call, the stamp survived, and the gate flattened every
+candidate at pace 1 — leaving phase 2 to blind-pitch into a game-ending strike.
 
 Concretely, `requires_high_tier` (`state_eval.cpp:300-312`) reads the stamp
 literally and counts a `CALLED_TO_DISCARD` **only in a variant that contains an
