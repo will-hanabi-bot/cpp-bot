@@ -240,6 +240,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_deferred_elim.cpp
   tests/test_reactor0/test_reaction_elim_filter.cpp
   tests/test_reactor0/test_reactive_bluff.cpp
+  tests/test_reactor0/test_misc/test_replay_1983205_synesthesia_rank_map_wraps.cpp
   tests/test_reactor0/test_misc/test_replay_1969696_reversed_orange_clue_is_a_chuck.cpp
   tests/test_reactor0/test_misc/test_replay_1967558_dropped_call_keeps_its_inference.cpp
   tests/test_reactor0/test_misc/test_replay_1971788_rank_promise_is_a_parity.cpp

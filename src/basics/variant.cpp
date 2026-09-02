@@ -268,7 +268,25 @@ bool Variant::id_touched(Identity id, ClueKind kind, int value) const {
     //    everything -- rather than being reachable through its rank.
     //
     // Rainbow returned true further up, so it is unaffected.
-    if (synesthesia && !st.brownish && rank - 1 == value) return true;
+    //
+    // THE MAP WRAPS when the variant offers fewer than five clue colours
+    // (v14.1.0). "The Nth colour" has to mean something when there is no fifth
+    // colour to be the 5, and the server counts round: with three colours a rank
+    // 4 answers to the first and a rank 5 to the second. Eighteen of the
+    // thirty-six Synesthesia variants have fewer than five, counting only suits
+    // that CONTRIBUTE a colour -- `noClueColors` (White, Null, Gray, Dark Null)
+    // and `allClueColors` (Rainbow, Dark Rainbow) suits add none, so
+    // `Synesthesia & Null (5 Suits)` offers four and wraps.
+    //
+    // Same wrap as the `prism` branch immediately below, deliberately written the
+    // same way so the two cannot drift. Reading it un-wrapped is what made
+    // will-bot69 discard a red 5 it had narrowed to `{r2}` at replay 1983205 T25:
+    // the server touched it with Green because (5-1) % 3 == 1, and the bot
+    // intersected an empathy set that could not contain the card it was holding.
+    if (synesthesia && !st.brownish && !clue_colour_names.empty() &&
+        (rank - 1) % static_cast<int>(clue_colour_names.size()) == value) {
+      return true;
+    }
     if (st.prism) {
       return ((rank - 1) % clue_colour_names.size()) == static_cast<size_t>(value);
     }

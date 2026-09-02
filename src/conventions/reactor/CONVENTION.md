@@ -830,7 +830,7 @@ the clue value for a pinkish variant. Odds and Evens overrides it the same way.
 
 ### 1b.6 Clue-touch rules
 
-`Variant::id_touched` (`src/basics/variant.cpp:199-246`) determines which
+`Variant::id_touched` (`src/basics/variant.cpp:246-330`) determines which
 cards a clue touches, which upstream of everything else changes what "newly
 touched" means:
 

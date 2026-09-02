@@ -1241,6 +1241,16 @@ lives in `src/conventions/reactor0/decision.cpp`:
 
 ## Not yet implemented
 
-Nothing. Every rule above is in the build as of v8.9.0. `TODO.md` carries the
-gaps that remain, which are about how the engine executes a decision rather than
-about which decision reactor0 makes.
+Every rule above is in the build as of v8.9.0. `TODO.md` carries the gaps that
+remain, which are about how the engine executes a decision rather than about which
+decision reactor0 makes. One open question about a rule's THRESHOLD, though:
+
+**Rule 1a's occupied gate may want `pace() >= 2`, not `>= 1`** (raised v14.1.0, not
+acted on). The two tier rules take different pace windows on purpose — 1a
+(occupied) bites from pace 1, 2a (unoccupied) only from pace 3 — and the mismatch
+is what replay 1981703 T19 turned on. But at **pace exactly 1** the arms §4 leans
+on go vacuous: 4b and 4c are only reachable when §4 is reached at all, and an Alice
+who *does* hold a known playable at pace 1 plays it rather than getting there. So
+1a's window has a one-wide sliver where it can only cost something. Moving the gate
+to pace 2 is the candidate fix; it is deferred to its own change, since it moves
+every occupied Alice at pace 1 and wants its own before/after.

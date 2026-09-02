@@ -173,11 +173,23 @@ MISTAKE (§1g). CONVENTION.md §1f.
 ### Synesthesia colour
 The second colour a card answers to in a Synesthesia variant: a card of rank N
 is touched by the **Nth** colour clue on top of its own colour
-(`Variant::id_touched`, `rank - 1 == value` since the clue value is 0-indexed).
+(`Variant::id_touched`, `(rank - 1) % clue_colour_names.size() == value` since the
+clue value is 0-indexed).
 Brown suits are exempt by the rule; whitish suits are exempt because the rule
 sits below the whitish early-return, which makes White indistinguishable from
 Null there. Not to be confused with *colour value*, which is a clue's reactive
 anchor and is unchanged in these variants.
+
+**The map WRAPS** below five clue colours (v14.1.0; read un-wrapped before that).
+"The Nth colour" needs a reading when there is no Nth colour, and the server counts
+round: with three colours a rank 4 answers to the first and a rank 5 to the second.
+**Eighteen of the thirty-six** Synesthesia variants are affected — every one
+offering fewer than five clue colours, counting only suits that CONTRIBUTE one.
+`noClueColors` (White, Null, Gray, Dark Null) and `allClueColors` (Rainbow, Dark
+Rainbow) suits add none, so `Synesthesia & Null (5 Suits)` offers four and wraps:
+the variant's NAME is no guide. It is the same wrap the `prism` branch beside it
+uses. Replay 1983205 T25 is what reading it un-wrapped cost — a Red 5 narrowed to
+`{r2}` and burned as trash.
 
 ### alternating clue
 A clue in an **Alternating Clues** variant, where the server rejects a clue of
