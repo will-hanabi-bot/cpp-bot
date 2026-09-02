@@ -24,6 +24,18 @@ std::string format_ids(IdentitySet ids, const State& state) {
   return id_str;
 }
 
+// The effective belief: `inferred` once a reading has narrowed it, `possible`
+// while none has. The idiom the decision layer uses throughout (`set_size` in
+// reactor0/decision.cpp, `has_safe_discard`, `all_useful`) -- "empathy plus
+// inferences" is that combined view, not either half alone.
+IdentitySet effective_set(const Thought& t) {
+  return t.inferred.non_empty() ? t.inferred : t.possible;
+}
+
+bool contains(const std::vector<int>& v, int x) {
+  return std::find(v.begin(), v.end(), x) != v.end();
+}
+
 }  // namespace
 
 std::string format_play_segment(int turn, IdentitySet ids, const State& state) {
@@ -46,6 +58,14 @@ std::string format_reset_segment(int turn) {
 
 std::string format_unknown_segment(int turn) {
   return "turn " + std::to_string(turn) + ": [?]";
+}
+
+// No tag, deliberately: the four segments above all announce a CALL, and their
+// bracket says which. This one announces only what the holder now knows, so a
+// bracket would imply an instruction that was never given.
+std::string format_empathy_segment(int turn, IdentitySet ids,
+                                    const State& state) {
+  return "turn " + std::to_string(turn) + ": " + format_ids(ids, state);
 }
 
 std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
@@ -93,6 +113,27 @@ std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
                   (prev_status == CardStatus::CALLED_TO_PLAY ||
                   prev_status == CardStatus::CALLED_TO_DISCARD)) {
         out.emplace_back(order, format_reset_segment(state.turn_count));
+      }
+      continue;
+    }
+
+    // An UNSTAMPED card of OUR OWN, narrowed to something small enough to read:
+    // note the candidates themselves. Nothing else records this -- the four
+    // segments above all wait for a call -- so without it a replay reader cannot
+    // reconstruct what we knew about a card we were never told anything about.
+    //
+    // OURS ONLY. `me_new` is our genuine belief about our own card; for another
+    // seat's card it would be our SIGHT of it, which is not that seat's empathy
+    // and would be noise on a card the reader can already see. It also keeps the
+    // note traffic to a third: every clue narrows several cards at once, and
+    // `commands.cpp` still carries the scar of a note burst stalling a table.
+    if (new_status == CardStatus::NONE) {
+      if (order >= prev_thought_len) continue;
+      if (!contains(state.hands[me_idx], order)) continue;  // ours, still held
+      const IdentitySet now = effective_set(me_new.thoughts[order]);
+      const IdentitySet before = effective_set(me_prev.thoughts[order]);
+      if (now != before && !now.is_empty() && now.length() <= kEmpathyNoteMax) {
+        out.emplace_back(order, format_empathy_segment(state.turn_count, now, state));
       }
       continue;
     }

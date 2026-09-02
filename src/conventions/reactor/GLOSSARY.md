@@ -411,6 +411,20 @@ new CTP, `turn N: [d] <ids>` on a new CTD, `[reset]` when one clears, and
 inferred set out in full, and both re-emit whenever it narrows. Card order 0
 carries the bot version. `src/net/notes.cpp`.
 
+A fifth kind carries **no bracket**: `turn N: <ids>` on an **unstamped card of
+our own** whose candidate set changes and is down to `kEmpathyNoteMax` = **six or
+fewer** (v14.2.0). The four above all announce a CALL, and their bracket says
+which; this one announces only what we now know, so a bracket would imply an
+instruction nobody gave. It is the only record of empathy on a card no clue ever
+designated — which is precisely the hand a replay reader cannot see for
+themselves. The set is `inferred` when non-empty and `possible` otherwise.
+
+**Ours only**, for two reasons. `players[me].thoughts` for a PARTNER's card is
+our sight of it rather than that seat's empathy, so the note would be mislabelled
+as well as redundant beside a card the reader can already see; and it holds the
+added traffic to about 0.4 notes per turn we act on — measured over ten games,
+4.5 per game, worst 13 — against a queue that has stalled a table before.
+
 `[reset]` and `[?]` are also set explicitly, via `ConvData::note_mark`. The
 status transition alone is not enough under reactor0: a call can be withdrawn
 from a card that was never stamped (the reactive bluff, its `CONVENTION.md`

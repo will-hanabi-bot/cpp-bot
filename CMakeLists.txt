@@ -135,6 +135,7 @@ add_executable(hanabi_tests
   tests/test_logging/test_game_logger_finalize.cpp
   tests/test_logging/test_game_logger_shared_lifetime.cpp
   tests/test_net/test_allplays_scope.cpp
+  tests/test_net/test_notes.cpp
   tests/test_net/test_codec.cpp
   tests/test_net/test_commands.cpp
   tests/test_net/test_finish_ongoing_game.cpp
