@@ -168,12 +168,16 @@ std::string format_settings(const Variant& variant,
     // part of it a reader most needs after the v13.5.0 default flip. No legend is
     // printed: "f = pitch, d = chuck" costs more than the abbreviation saves,
     // which is the whole point. GLOSSARY.md *synesthesia table* has the mapping.
+    //
+    // The v14.0.0 INVERTED FLIP is not printed either. It is state-dependent --
+    // every `f` row reads as `d` while the only playable cards Bob could hold are
+    // inverted -- so it would have to be recomputed per game and would cost more
+    // width than the abbreviation bought. GLOSSARY carries that too.
     const std::string late =
         variant.synesthesia
-            ? ", from 50% of max OR at 8 clues a clue to Bob is STABLE: "
-              "Red=f1, Yellow=f2, Green=d3, Blue=d2, Purple=f5, Orange=d1, "
-              "other=f4"
-            : ", from 50% of max OR at 8 clues a clue to Bob is STABLE";
+            ? ", at pace <= 1 a clue to Bob is STABLE: Red=f1, Yellow=f2, "
+              "Green=f3, Blue=f4, Purple=f5, Orange=d1, other=d4"
+            : ", at pace <= 1 a clue to Bob is STABLE";
     // With only two clue colours a COLOUR clue to Bob is EVEN too, with its own
     // anchor, so "to Bob = odd" would misdescribe half the clues available.
     // Spell the four-way table out instead -- this string is what a human reads
@@ -218,15 +222,14 @@ std::string format_settings(const Variant& variant,
               ? ", a COLOUR clue is NEVER stable, and colour is the only kind "
                 "here — so NO clue is ever stable in this variant"
               : ", a COLOUR clue is NEVER stable whatever the score or clue "
-                "count; from 50% of max OR at 8 clues a RANK clue to Bob is "
-                "STABLE";
-      return "reactor0 — no stable clues below 50%: two colours, so a COLOUR "
+                "count; at pace <= 1 a RANK clue to Bob is STABLE";
+      return "reactor0 — no stable clues above pace 1: two colours, so a COLOUR "
              "clue to Bob is EVEN too (rank to Bob stays odd), colour values to "
              "Cathy: " +
              render(to_cathy) + ", to Bob: " + render(to_bob) + rank_part +
              late2 + ", rlocks: " + (rlocks ? "on" : "off");
     }
-    return "reactor0 — no stable clues below 50%: to Bob = odd, to Cathy = even"
+    return "reactor0 — no stable clues above pace 1: to Bob = odd, to Cathy = even"
            ", reactive values: " +
            render(all) + late + ", rlocks: " + (rlocks ? "on" : "off");
   }

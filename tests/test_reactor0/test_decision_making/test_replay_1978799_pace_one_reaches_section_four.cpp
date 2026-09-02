@@ -1053,7 +1053,9 @@ TEST(DecisionMaking1978799, T18PaceOneCluesRatherThanBurningATurn) {
   ASSERT_NE(colour, nullptr)
       << "she must clue rather than burn a turn at pace 1";
   EXPECT_EQ(colour->target, 0) << "to yagami_black, her Bob";
-  EXPECT_EQ(colour->value, 2)
-      << "Brown -- the third clue colour of r/b/br, which Synesthesia's table "
-         "sends to the catch-all: pitch slot 4";
+  EXPECT_EQ(colour->value, 1)
+      << "Blue, of r/b/br -- which v14.0.0's Synesthesia table makes the PITCH "
+         "of slot 4. The turn is unchanged in substance: through v13.5.0 the "
+         "same slot-4 pitch was spelled Brown (the old catch-all), and the "
+         "rewrite moved that meaning onto Blue while sending Brown to a chuck";
 }

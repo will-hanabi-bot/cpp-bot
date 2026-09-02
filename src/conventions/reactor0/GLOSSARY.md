@@ -96,22 +96,27 @@ rung written for a stable clue to Bob accepted a reactive one. Four of the five
 were saved by their `ClueShape` gate; §4.4's fill-in has none, and it sits above
 §4.8 -- the rung that refuses to make Bob throw a critical card. It now asks
 `clue_is_reactive`, the same predicate `read_clue` dispatches on, so it tracks
-the 50% / 8-token stand-down for free. Replay 1981749 T17.
+the pace stand-down for free. Replay 1981749 T17.
 
-**It stands down at 50%** (v11.0.0 at 60%, moved in v11.4.0): once
-`score >= 0.5 * variant maximum` — a constant 5 per suit, not `max_score()` — a
-clue to Bob is STABLE again, because the odd bucket is a reactive discard and
-forcing one late costs more than it buys. Half of an odd cap is not a whole
-number, so the switch is the first score at or above it: 13 of 25, 8 of 15. **And at 8 clues** (v11.2.0), whatever the score: a discard is illegal
-there, so the turn must produce a clue, and every reactive candidate reading as a
-MISTAKE leaves the bot with no legal action at all (replay 1977786 T35). Both
-arms read the PRE-CLUE token count — `on_clue` spends it before `interpret_clue`
-runs. Clues to Cathy are untouched and stay even.
+**It stands down at pace 1** (v14.0.0; a score fraction from v11.0.0 to
+v13.5.0): once `pace() <= 1` a clue to Bob is STABLE again, because the odd
+bucket is a reactive discard and forcing one late costs more than it buys. Pace
+counts the turns still available, where the old rule counted points already
+banked — and it is turns running out that makes the co-ordination too expensive.
+Clues to Cathy are untouched and stay even.
+
+The trade is that `pace()` reads the LIVE `max_score()`, where the score rule
+used a constant `5 * suits` cap precisely so the switch could not move mid-game.
+Capping a suit at rank `k` costs one card but `5 - k` points, so pace RISES by
+`4 - k` — losing a low critical makes the team less pressed, not more. Safe
+because a clue's reading is fixed when `interpret_clue` runs and never
+recomputed. **The 8-clue arm is gone** in the same release; it was a deadlock
+guard (replay 1977786 T35), and CONVENTION.md §1f says what removing it re-opens.
 
 **Neither arm reaches a COLOUR clue where there are only two clue colours**
 (v13.0.0). Two colours leave two colour anchors, which is exactly why a colour
 clue to Bob became even there in the first place; standing that second bucket
-down at 8 clues or past half the maximum cut across it. So in those nine
+down at pace 1 cut across it. So in those nine
 variants a colour clue is reactive whatever the score and whatever the token
 count — `colour_is_never_stable`, which delegates to `bob_colour_joins_even` so
 the family has one definition. Rank clues keep both arms, which is what leaves
@@ -131,11 +136,26 @@ MISTAKE.
 
 ### synesthesia table
 The fixed lookup a **stable** Synesthesia clue is read with, once *target parity*
-has stood down at 50%: each clue colour names one button and one slot in Bob's
-hand. Red 1 *pitch*, Yellow 2 pitch, Green 3 *chuck*, Blue 2 chuck, Purple 5
-pitch, Orange 1 chuck, any other colour 4 pitch. Keyed on the colour NAME, and
-deliberately **not** the `colour_clue_value` table, which gives Blue 4.
-`synesthesia_call` (`reactor0/synesthesia_stable.cpp:18-31`).
+has stood down at pace 1: each clue colour names one button and one slot in Bob's
+hand. Red 1 *pitch*, Yellow 2 pitch, Green 3 pitch, Blue 4 pitch, Purple 5 pitch,
+Orange 1 *chuck*, any other colour 4 chuck (v14.0.0; Green, Blue and the
+catch-all all moved). Keyed on the colour NAME. The five named colours now agree
+with `colour_clue_value` on their slots, which is a coincidence rather than a
+shared definition — the two still differ on Orange and on the catch-all, and
+`colour_clue_value` names no button at all.
+`synesthesia_call` (`reactor0/synesthesia_stable.cpp`).
+
+**The inverted flip** (v14.0.0): while every playable card Bob could still be
+holding is on an INVERTED suit, every *pitch* row reads as a *chuck* at the same
+slot — Red d1, Yellow d2, Green d3, Blue d4, Purple d5. Pressing Play on an
+orange throws it away and pressing Discard stacks it, so an unflipped pitch call
+would be unobeyable there. It is **non-vacuous**: at least one playable reading
+must exist and all of them be inverted, which is what keeps it out of the thirty
+Synesthesia variants that have no inverted suit. Where Bob has no playable
+reading at all the clue is simply a stall. While it fires, Red (d1) collides with
+Orange (d1) — deliberate and harmless: nothing is ambiguous, the giver just has
+one fewer distinct call. `synesthesia_pitch_flips`, read off
+*effective_possible_for*.
 
 `/settings` prints this table **abbreviated** — `fN` for a pitch, `dN` for a chuck,
 so Red reads `f1` and Green `d3` (v13.5.0, `format_settings` in

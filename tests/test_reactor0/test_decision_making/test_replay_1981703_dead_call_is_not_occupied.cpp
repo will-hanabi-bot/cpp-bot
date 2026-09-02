@@ -1099,7 +1099,8 @@ TEST(DecisionMaking1981703, T19ADeadCallDoesNotGateTheClueAway) {
   auto* colour = std::get_if<hanabi::PerformColour>(&action);
   ASSERT_NE(colour, nullptr) << "the turn is a colour clue";
   EXPECT_EQ(colour->target, 1) << "to yagami_black";
-  EXPECT_EQ(colour->value, 2)
-      << "Brown, of r/b/br -- Synesthesia's catch-all, so pitch slot 4, and his "
-         "slot 4 is the br4";
+  EXPECT_EQ(colour->value, 1)
+      << "Blue, of r/b/br -- v14.0.0's pitch of slot 4, and his slot 4 is the "
+         "br4. Through v13.5.0 the same call was spelled Brown, the old "
+         "catch-all; the table rewrite moved slot-4-pitch onto Blue";
 }

@@ -966,43 +966,39 @@ std::optional<ClueInterp> stamp_react_discard_button(Game& game,
 
 bool bob_clue_is_reactive(const State& state) {
   if (!variants::uses_target_parity(*state.variant)) return false;
-  // AT 8 CLUES A CLUE TO BOB IS STABLE, whatever the score (v11.2.0).
+  // A CLUE TO BOB IS STABLE AT PACE 1 OR LESS (v14.0.0).
   //
-  // At 8 tokens a discard is illegal, so the turn MUST produce a clue -- and
-  // under target parity every clue is reactive, so every one of them has to
-  // survive a reactive reading or it is dropped as a MISTAKE and never offered.
-  // When none does, `analyse_clues` hands back an empty set, the whole clue
-  // phase declines, and the play/discard phase answers with a discard the server
-  // will not accept. That is a DEADLOCK, not a bad choice.
+  // Replaces the score rule -- reactive below half the variant maximum, stable at
+  // or above -- which shipped at 60% in v11.0.0 and moved to 50% in v11.4.0. Pace
+  // is the better trigger for the same reason it gates section 4 of the clue list:
+  // it counts the turns still available rather than the points already banked, and
+  // it is turns running out that makes a reactive's two-seat co-ordination too
+  // expensive to spend one on.
   //
-  // Replay 1977786 T35, `Alternating Clues & Brown (6 Suits)`: 8 tokens, 15/30
-  // so target parity still binds, and the last clue was a colour one so only
-  // rank clues were even legal. Every one of them read as a MISTAKE, zero
-  // candidates reached `choose_clue`, and will-bot69 tried to discard order 5.
+  // THE 8-CLUE ARM IS GONE (also v14.0.0). Through v13.5.0 a clue to Bob was also
+  // stable at 8 tokens, whatever the score -- a deadlock guard, not a tuning knob:
+  // at 8 tokens a discard is illegal, so the turn must produce a clue, and under
+  // target parity every clue is reactive, so if every reactive candidate reads
+  // MISTAKE the clue phase declines with an empty set (replay 1977786 T35).
+  // Removing it does NOT bring that deadlock back: phase 2 closed the same hole
+  // variant-independently -- `choose_action` empties the chuck list at 8 tokens
+  // and rungs 12/13 answer with a PITCH, legal at any token count. What is lost
+  // is the readable clue, not the legal move. CONVENTION.md §1f spells it out.
   //
-  // A stable clue names a card outright, so it is far easier to read cleanly --
-  // which is exactly what a forced turn needs. This is the same escape hatch the
-  // score rule provides, granted for a different reason.
+  // NO `prev.state` DISCIPLINE IS NEEDED for this arm, unlike the token one it
+  // replaces. `pace()` reads score, cards_left, num_players and max_score, and a
+  // clue touches none of them -- so the interpreting seat and the deciding seat
+  // agree whether or not `on_clue` has already run. Callers still pass
+  // `prev.state`, which is harmless and keeps one discipline for every arm.
   //
-  // THE TOKEN COUNT IS THE PRE-CLUE ONE. `Game::on_clue` spends the token before
-  // `interpret_clue` runs (`basics/game.cpp`), so the interpreting seat would see
-  // 7 where the deciding seat sees 8 -- and giver and reader would disagree about
-  // what the clue meant, which is the one failure this convention cannot
-  // tolerate. Every caller therefore passes the state as it was BEFORE the clue;
-  // `interpret_clue` passes `prev.state` for exactly this reason.
-  if (state.clue_tokens == 8) return false;
-  // 5 points per suit, from the SUIT COUNT rather than `max_ranks`, which is
-  // live: `max_score()` shrinks as criticals are discarded, and a cap that moves
-  // mid-game would move the switch point with it. Two seats reading the same
-  // past clue must never land on different sides of the threshold.
-  const int cap = 5 * static_cast<int>(state.variant->suits.size());
-  // `score() >= 0.5 * cap`, in integers (v11.4.0; was 60% from v11.0.0).
-  //
-  // 60% of the usual caps landed on whole numbers -- 0.6 * 25 = 15, 0.6 * 15 = 9
-  // -- and 50% does not. So the switch is the first score AT OR ABOVE the half:
-  // 13 of 25, 8 of 15, 15 of 30. `2 * score >= cap` gives exactly that, with no
-  // rounding for two seats to disagree about.
-  return 2 * state.score() < cap;
+  // `pace()` DOES use `max_score()`, which is live: it shrinks as criticals are
+  // discarded, so unlike the old constant `5 * suits` cap the threshold can move
+  // mid-game. That is safe because a clue's reading is fixed when `interpret_clue`
+  // runs and is never recomputed -- a later shift cannot retroactively change what
+  // a past clue meant. The old comment's worry was two seats reading the same past
+  // clue differently, and they still cannot: they read it at the same moment, off
+  // the same state.
+  return state.pace() > 1;
 }
 
 bool colour_is_never_stable(const Variant& variant) {

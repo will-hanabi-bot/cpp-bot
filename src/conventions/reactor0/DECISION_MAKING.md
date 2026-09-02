@@ -83,8 +83,8 @@ Otherwise, a clue tier is HIGH iff **any** of:
       not have a colour stable clue to give to Cathy. In a **target-parity**
       variant (Alternating Clues, Synesthesia) there are no stable clues at all
       *while target parity binds*, so `has_colour_play_clue_for` returns false
-      outright and this arm is vacuously satisfied. Past 50% of the variant
-      maximum it stands down (v11.0.0) and the arm has a real answer again:
+      outright and this arm is vacuously satisfied. At `pace() <= 1` it stands
+      down (v14.0.0) and the arm has a real answer again:
       Cathy is Bob's own "Bob", so a clue from him to her is stable there. Asked
       as `bob_clue_is_reactive`, not as the variant flag — see CONVENTION.md §1f.
       **Except where there are only two clue colours** (v13.0.0): a colour clue
@@ -293,12 +293,26 @@ Two things outrank the phases below, and one thing sits between them:
     position; VERY HIGH is the only tier that should out-rank a certain play.
 
 0d. **A KNOWN-SAFE discard outranks a speculative one** (v11.6.0, replay
-    1977971 T22). When step 0's answer is a plain discard of one of our own
+    1977971 T22 — **no longer under test**, see below). When step 0's answer is a plain discard of one of our own
     cards, `prefer_known_discard` (`src/basics/decide.cpp`) rewrites its TARGET
     to the first card on the chuck list that `known_safe_discard`
     (`conventions/reactor0/facts.h`) accepts — every identity **private sight**
     leaves is basic trash, and on a plain suit. A stamped card is never a swap
     destination, and a chosen discard that is itself known-safe is left alone.
+
+    **The end-to-end test for this rule was deleted in v14.0.0.**
+    `tests/test_reactor0/test_misc/test_replay_1977971_*.cpp` replayed a recorded
+    Alternating Clues game, and v14.0.0 changed what the clues in that recording
+    mean: re-read under the pace threshold the bot reaches a different position
+    and burns a card it now believes is trash. The snapshot is a v13 artifact and
+    the position is unreachable under v14, so re-baselining it would have pinned
+    a misreading rather than this rule.
+
+    What survives is `tests/test_reactor0/test_known_safe_discard.cpp`, which
+    pins the PREDICATE — private sight, and the plain-suit requirement — in full.
+    What is no longer covered is the **caller**: that the endgame fork actually
+    rewrites the discard target. Rebuilding that as a `setup()` fixture,
+    independent of any recorded history, is the way to close it.
 
     **Three things are exempt, because they are not burns at all.** A discard
     stamped CTD or CTP is a STANDING CALL — the stamp is the instruction, and
@@ -771,7 +785,7 @@ is judged from Alice's own inference, not common knowledge.
        rank. **Stable is a real condition, not decoration** (v13.4.0): while
        *target parity* binds there are no stable clues at all, so 4.4 is
        unreachable in Alternating Clues and Synesthesia until parity stands down
-       at 50% score or 8 tokens. `is_stable_to_bob` used to test only the SEAT,
+       at `pace() <= 1`. `is_stable_to_bob` used to test only the SEAT,
        which let a reactive discard in — and 4.4 sits above 4.8, the rung that
        refuses to make Bob throw a critical card. Replay 1981749 T17: three
        reactive discards all "filled in" the same `r3` of Bob's, first-wins kept

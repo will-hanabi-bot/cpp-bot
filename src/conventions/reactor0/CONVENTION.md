@@ -43,11 +43,11 @@ giver, Bob the next player, Cathy the one after.
   call (reactor's §2.6/§2.7).
   **v10.0.0** adds a second exception, in the other direction: in the 102
   **Alternating Clues** and **Synesthesia** variants reactor0 takes a clue's
-  reactive parity from its TARGET rather than its kind, and below 50% of the
-  variant maximum gives no stable clues at all. **v11.0.0** stands that down
-  past the halfway mark, where a clue to Bob is stable again — and in Synesthesia
-  reads off a fixed colour table. Reactor is unchanged throughout and would read every one
-  of these clues differently. See §1f, *Alternating Clues and Synesthesia*.
+  reactive parity from its TARGET rather than its kind, which gives no stable
+  clues at all. **v14.0.0** stands that down at `pace() <= 1`, where a clue to
+  Bob is stable again — and in Synesthesia reads off a fixed colour table.
+  Reactor is unchanged throughout and would read every one of these clues
+  differently. See §1f, *Alternating Clues and Synesthesia*.
 - **Not shared**: WHEN the reactive negative inference runs. Whenever the
   receiver is called to **chuck**, the elim reasons "the slots before the target
   were passed over, so they are not playable". That is true only if the chuck is
@@ -118,9 +118,9 @@ that reactor's `ref_discard` already honours.
 
 **One family of variants overrides all of this**: under
 `variants::uses_target_parity` the target picks the parity and the clued seat is
-**not** the receiver — and below 50% of the variant maximum there are no stable
-clues at all. Past half a clue to Bob is stable again, read in Synesthesia off a
-fixed colour table rather than the ladders above. See §1f,
+**not** the receiver — and above pace 1 there are no stable
+clues at all. At `pace() <= 1` a clue to Bob is stable again, read in Synesthesia
+off a fixed colour table rather than the ladders above. See §1f,
 *Alternating Clues and Synesthesia*. The dispatch reads
 `clue_is_reactive` / `reactive_receiver`
 (`reactor0/interpret_reactive.h`) rather than testing `action.target == bob`
@@ -1342,65 +1342,75 @@ apart. Note it depends on the VARIANT alone: unlike the 8-clue arm it cannot
 read differently either side of `on_clue` spending the token, so giver and
 reader agree by construction.
 
-#### It stands down at 50% (v11.0.0 at 60%, moved in v11.4.0)
+#### It stands down at pace 1 (v14.0.0; was a score fraction from v11.0.0)
 
-**Once `score >= 0.5 * variant maximum`, a clue to Bob is STABLE again** — a
-RANK one, at least, since v13.0.0 exempts colour wherever there are only two
-clue colours (above). Clues to Cathy are untouched and keep the even bucket.
-
-60% of the usual caps landed on whole numbers (0.6 × 25 = 15, 0.6 × 15 = 9); half
-does not. The switch is therefore the first score **at or above** the half —
-**13** of 25, **8** of 15, **15** of 30 — which is exactly what the integer form
-below gives.
+**Once `pace() <= 1`, a clue to Bob is STABLE again** — a RANK one, at least,
+since v13.0.0 exempts colour wherever there are only two clue colours (above).
+Clues to Cathy are untouched and keep the even bucket.
+`bob_clue_is_reactive` (`reactor0/interpret_reactive.cpp`) owns the whole rule,
+and after v14.0.0 that is all it is: the variant test, then the pace test.
 
 The odd bucket is a reactive DISCARD, and late in a game that is actively
 harmful: it forces a discard nobody needed, and it crowds out the two things
 that matter near the end — saving a good card, and getting a play clue out in
-time.
+time. What changed in v14.0.0 is how "late" is measured. **Pace counts the turns
+still available; a score fraction counts the points already banked**, and it is
+turns running out that makes a reactive's two-seat co-ordination too expensive.
+A team sitting on a high score with plenty of deck left is not late.
 
-The **cap is the variant maximum**, a constant 5 per suit, deliberately not
-`State::max_score()`. A shrinking cap would move the switch point mid-game as
-criticals died, and every seat must agree on which side of it a past clue was
-given. It is compared in integers, `2 * score >= cap`, so no two seats can round
-differently. `bob_clue_is_reactive`
-(`reactor0/interpret_reactive.cpp:967-976`) owns the whole rule.
+**What the pace rule gives up.** The score rule read a CONSTANT cap — 5 per suit,
+deliberately not `State::max_score()` — so that a shrinking maximum could not move
+the switch as criticals died. `pace()` reads `max_score()`, so v14.0.0 gives that
+property up. The direction is counter-intuitive: capping a suit at rank `k`
+removes one card from the deck but `5 - k` points from the target, so pace RISES
+by `4 - k`. Losing a low critical makes the team *less* pressed for turns; only
+losing a 5 is neutral.
 
-**This is a cross-version break**, which is what makes v11 a major bump: a
-v10 bot reads a clue to Bob at 22/25 as a reactive discard and a v11 bot reads
-it as stable.
+It is safe because a clue's reading is fixed when `interpret_clue` runs and is
+never recomputed. Two seats read the same clue at the same moment off the same
+state, so they cannot land on different sides of a threshold that later moves.
+`tests/test_reactor0/test_target_parity.cpp` pins both halves.
 
-#### And at 8 clues, whatever the score (v11.2.0)
+**No `prev.state` discipline is needed** for this arm, unlike the token one it
+replaces. `pace()` reads score, cards_left, num_players and max_score, and a clue
+touches none of them, so the interpreting seat and the deciding seat agree
+whether or not `on_clue` has already run. Callers still pass `prev.state`, which
+is harmless and keeps one discipline for every arm.
 
-**At 8 tokens a clue to Bob is STABLE too**, however low the score — again a
-RANK one where the variant has only two clue colours, since v13.0.0 exempts
-colour there (above), and in two-colour Synesthesia not at all. At 8 tokens a
-discard is illegal, so the turn MUST produce a clue — and while target parity
-binds, every clue is reactive, so every candidate has to survive a reactive
-reading or `analyse_clues` drops it as a MISTAKE and no rung may propose it. When
-none survives, the clue phase declines with an empty set and the play/discard
-phase answers with a discard the server will not accept. That is a **deadlock**,
-not a bad choice.
+**This is a cross-version break**, which is what makes v14 a major bump: a v13
+bot reads a clue to Bob at 20/25 with a full deck as stable, and a v14 bot reads
+it as a reactive discard.
 
-Replay 1977786 T35, `Alternating Clues & Brown (6 Suits)`: 8 tokens, 15 of 30 so
-the score rule had not yet fired (15 of 30 was below the 60% line then in
-force), and the previous clue was a colour one so
-Alternating Clues left only RANK clues legal. Every one read as a MISTAKE, zero
-candidates reached `choose_clue`, and will-bot69 tried to discard order 5.
+#### The 8-clue arm is GONE (v14.0.0; added v11.2.0)
 
-A stable clue names a card outright, so it reads cleanly and survives to be
-offered — which is exactly what a forced turn needs. Same hatch as the score
-rule, opened for a different reason, and it applies to **both** families.
+Through v13.5.0 a clue to Bob was **also** stable at 8 tokens, whatever the score.
+That was a **deadlock guard**, not a tuning knob. At 8 tokens a discard is
+illegal, so the turn MUST produce a clue — and while target parity binds every
+clue is reactive, so every candidate has to survive a reactive reading or
+`analyse_clues` drops it as a MISTAKE and no rung may propose it. When none
+survives, the clue phase declines with an empty set and the play/discard phase
+answers with a discard the server will not accept. Section 4's floor cannot save
+it either: the floor picks FROM the candidate set, and the set is empty.
 
-Note that v11.4.0's move to 50% puts that very position exactly *on* the score
-switch, so from that release either rule would carry it. The 8-clue rule is not
-redundant: it fires at any score, and the score rule does nothing below half.
+Replay 1977786 T35, `Alternating Clues & Brown (6 Suits)`, is that position: 8
+tokens, and the previous clue was a colour one so Alternating Clues left only RANK
+clues legal. Every one read as a MISTAKE, zero candidates reached `choose_clue`,
+and will-bot69 tried to discard order 5.
 
-**The token count is the PRE-CLUE one.** `Game::on_clue` spends the token before
-`interpret_clue` runs (`basics/game.cpp`), so the interpreting seat sees 7 where
-the deciding seat sees 8. Every caller therefore passes the state as it was
-BEFORE the clue; `interpret_clue` passes `prev.state` for exactly this reason. Get
-that wrong and the giver calls a clue stable while the reader calls it reactive,
-which is the one disagreement this convention cannot survive.
+**Removing the arm does NOT re-open the deadlock**, and that is worth being
+precise about rather than assuming either way. The hole was closed a second time,
+variant-independently, in decision phase 2: `choose_action` empties the chuck
+list at 8 tokens (`reactor0/calls.cpp`) and rungs 12/13 answer a forced turn with
+a PITCH, which is a legal action at any token count (DECISION_MAKING.md, rung 13).
+The same fix is what lets `Synesthesia & Rainbow / White / Null (3 Suits)` have no
+stable clue at all without deadlocking — see the two-colour section above, which
+already relies on it.
+
+So what the arm's removal costs is the READABLE CLUE, not the legal move: at 8
+tokens in a target-parity variant Alice may now find every clue candidate reads
+as a MISTAKE and answer by pitching instead of cluing. That is a worse turn, not
+an illegal one. `Reactor0TargetParity.EightCluesNoLongerMakesAClueToBobStable`
+records the rule change and points here.
 
 Only TWO sites take the gate. `clue_is_reactive` is one. The other is
 `has_colour_play_clue_for` (`state_eval.cpp:273-302`), which models a *stable*
@@ -1861,7 +1871,7 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |
-| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it; plus the 50% switch — the 12/13/14 boundary, a 3-suit cap of 15 switching at 8, plain variants inert, and a clue to Cathy staying reactive AND even on both sides; and the 8-clue arm, which holds at score 0 and so is independent of where the score switch lands; and v13.0.0's two-colour rule — a COLOUR clue to Bob reactive at 8 clues AND past the switch, asserted separately, with a rank clue still stable beside it, a three-colour variant as the negative that pins it to the colour count, and two-colour Synesthesia having no stable clue at any score or token count |
+| `tests/test_reactor0/test_target_parity.cpp` | §1f Alternating Clues / Synesthesia — the parity follows the target and not the kind, a clue to Bob is odd reactive with Cathy still the receiver, the WC records the clued seat, no stable interpretation is ever produced, `has_colour_play_clue_for` is false, the `/settings` line; and that the clued seat and the receiver come apart — the dispatch predicates, a clue to OUR seat designating the third seat, `read_clue` classifying it reactive, and N2 reaching it; plus the pace switch (v14.0.0) — the 3/2/1/0 boundary, that the threshold now MOVES with `max_score()` where the old constant cap could not, plain variants inert, and a clue to Cathy staying reactive AND even on both sides; that 8 tokens no longer confers stability, with the deadlock that re-opens named beside it; and v13.0.0's two-colour rule — a COLOUR clue to Bob reactive below pace 2, with a rank clue still stable beside it, a three-colour variant as the negative that pins it to the colour count, and two-colour Synesthesia having no stable clue at any pace |
 | `tests/test_reactor0/test_synesthesia_stable.cpp` | §1f — Synesthesia's stable table: every row incl. Blue→chuck slot 2 and Dark Orange taking the Orange row, the catch-all, the no-collision property asserted over all 36 variants, and the three readings (a stamp, a common-knowledge stall, a giver-only MISTAKE) each separated from what `stable_colour` would have done |
 | `tests/test_reactor0/test_orange_chop_and_pitch.cpp` | §1f — a playable orange chop reads expendable in all three chop predicates, with a dead orange, a plain playable, a plain useful and an unplayable orange as controls; and `slot_is_pitchable` on a known orange, a plain card and Dark Orange |
 | `tests/test_reactor0/test_misc/test_replay_1973976_known_orange_is_pitchable.cpp` | Replay 1973976 T12 end to end — the pitch needed BOTH the vet and the stamp; reverting either puts it back |

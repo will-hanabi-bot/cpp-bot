@@ -514,7 +514,7 @@ bool predicts_a_strike(const ClueReading& r) {
 // `<` kept the first, and yellow made him discard the last y3.
 //
 // `clue_is_reactive` is reactor0's single definition of the dispatch, the same
-// one `read_clue` asks -- so this tracks the 50%-score / 8-token stand-down for
+// one `read_clue` asks -- so this tracks the pace stand-down for
 // free, and 4.4 is live again once a clue to Bob really is stable.
 bool is_stable_to_bob(const Game& g, const ClueCandidate& c) {
   const int bob = bob_of(g);

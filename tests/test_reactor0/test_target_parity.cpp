@@ -413,86 +413,114 @@ TEST(Reactor0TargetParity, SettingsIsUnchangedForOrdinaryVariants) {
   EXPECT_EQ(s.find("to Bob = odd"), std::string::npos) << s;
 }
 
-// --- the 50% switch (v11.0.0 at 60%, moved in v11.4.0) --------------------
+// --- the pace switch (v14.0.0; was a score fraction from v11.0.0) ---------
 //
 // Target parity is a mid-game rule. The reactive reading of a clue to Bob is the
 // ODD bucket -- a reactive DISCARD -- and late in a game that forces a discard
 // nobody needed while crowding out the two things that matter near the end:
 // saving a good card, and getting a play clue out in time.
 //
-// So once the score reaches 50% of the VARIANT maximum, a clue to Bob is stable
-// again. Clues to Cathy are untouched and keep the even bucket -- the kind still
-// cannot carry parity, so nothing else about target parity moves.
+// "Late" is now counted in PACE rather than in points banked: at `pace() <= 1` a
+// clue to Bob is stable again. Clues to Cathy are untouched and keep the even
+// bucket -- the kind still cannot carry parity, so nothing else moves.
 
 namespace {
 
-// `target_parity_opts` with the stacks dialled to a chosen score. Five suits, so
-// the cap is 25 and the switch is at 13 -- half of 25 is 12.5, and the rule is
-// "at or above", which `2 * score >= cap` gives exactly.
-SetupOptions scored_opts(std::string variant_name, std::vector<int> stacks) {
+// `target_parity_opts` dialled to a chosen pace. With empty stacks and no
+// discards a five-suit fixture sits at pace 13, and every discard costs exactly
+// one: `score + cards_left` is `35 - discards`, so the score cancels out. All
+// the pool entries are spare copies of a rank-1 or rank-2, so `max_score` --
+// which pace also reads -- never moves.
+constexpr int kBasePace = 13;
+
+SetupOptions paced_opts(std::string variant_name, int target_pace) {
+  static const std::vector<std::string> kPool = {
+      "r1", "r1", "y1", "y1", "g1", "g1", "b1", "b1", "p1", "p1",
+      "y2", "g2", "b2", "p2"};
   SetupOptions opts = target_parity_opts(std::move(variant_name));
-  opts.play_stacks = std::move(stacks);
+  for (int i = 0; i < kBasePace - target_pace && i < (int)kPool.size(); ++i) {
+    opts.discarded.push_back(kPool[i]);
+  }
   return opts;
 }
 
 }  // namespace
 
-TEST(Reactor0TargetParity, BobClueGoesStableAtHalfTheMaximum) {
-  // 0.5 * 25 = 12.5, and the rule is "at or above", so 13 is the first score
-  // that switches. Bracketed from both sides, because an off-by-one here means
-  // two builds disagree about what a past clue meant -- the one failure this
-  // convention cannot survive.
-  struct Row { std::vector<int> stacks; int score; bool reactive; };
-  const Row rows[] = {
-      {{3, 3, 2, 2, 2}, 12, true},
-      {{3, 3, 3, 2, 2}, 13, false},
-      {{3, 3, 3, 3, 2}, 14, false},
-  };
+TEST(Reactor0TargetParity, BobClueGoesStableAtPaceOne) {
+  // Bracketed from both sides. An off-by-one here means two builds disagree
+  // about what a past clue meant -- the one failure this convention cannot
+  // survive.
+  struct Row { int pace; bool reactive; };
+  const Row rows[] = {{3, true}, {2, true}, {1, false}, {0, false}};
   for (const Row& r : rows) {
-    Game g = setup(scored_opts("Alternating Clues (5 Suits)", r.stacks));
-    ASSERT_EQ(g.state.score(), r.score) << "guard: fixture scores what it claims";
+    Game g = setup(paced_opts("Alternating Clues (5 Suits)", r.pace));
+    ASSERT_EQ(g.state.pace(), r.pace) << "guard: fixture paces what it claims";
     EXPECT_EQ(hanabi::reactor0::bob_clue_is_reactive(g.state), r.reactive)
-        << "score " << r.score << " of 25: a clue to Bob should be "
+        << "pace " << r.pace << ": a clue to Bob should be "
         << (r.reactive ? "reactive" : "STABLE");
   }
 }
 
-TEST(Reactor0TargetParity, TheCapIsTheVariantMaximumNotMaxScore) {
-  // Three suits -> cap 15 -> switch at 8 (half is 7.5). If the cap were
-  // `max_score()` it would
-  // shrink as criticals died and the switch point would move mid-game, so two
-  // seats could place the same past clue on different sides of it.
-  // Its own hands: r/g/b only, so the five-suit fixture's purples do not exist.
-  const auto three_suit = [](std::vector<int> stacks) {
-    SetupOptions opts;
-    opts.variant_name = "Alternating Clues (3 Suits)";
-    opts.play_stacks = std::move(stacks);
-    opts.clue_tokens = 7;  // see target_parity_opts
-    opts.starting = TestPlayer::ALICE;
-    opts.hands = {
-        {"r5", "g5", "b5", "r4", "g4"},
-        {"b4", "r3", "g3", "b3", "r2"},
-        {"g2", "b2", "r1", "g1", "b1"},
-    };
-    use_reactor0(opts);
-    return setup(std::move(opts));
-  };
-  Game g = three_suit({3, 3, 1});
-  ASSERT_EQ(g.state.score(), 7);
-  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(g.state))
-      << "7 of 15 is below half";
+// The v11.4.0 rule went out of its way to read a CONSTANT `5 * suits` cap rather
+// than `max_score()`, so that discarding a critical could not move the switch
+// mid-game. `pace()` reads `max_score()`, so v14.0.0 gives that property up --
+// deliberately, and this pins it so the trade is recorded rather than discovered.
+//
+// The direction is the counter-intuitive part. Capping a suit at rank k removes
+// ONE card from the deck but `5 - k` points from the target, so
+// `pace = score + cards_left + n - max_score` RISES by `4 - k`: losing a low
+// critical makes the team less pressed for turns, not more. Only a 5 is neutral.
+//
+// It is safe because a clue's reading is fixed when `interpret_clue` runs and is
+// never recomputed: two seats read the same clue at the same moment off the same
+// state, so they cannot land on different sides of a threshold that later moves.
+TEST(Reactor0TargetParity, TheThresholdMovesWithMaxScore) {
+  SetupOptions opts = paced_opts("Alternating Clues (5 Suits)", 1);
+  Game before = setup(opts);
+  ASSERT_EQ(before.state.pace(), 1);
+  EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(before.state))
+      << "guard: pace 1 is the stable side";
 
-  Game h = three_suit({3, 3, 2});
-  ASSERT_EQ(h.state.score(), 8);
-  EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(h.state))
-      << "8 of 15 is the first score at or above half, so a clue to Bob is "
-         "stable";
+  // Both r3s: red caps at 2, so max_score loses r3, r4 and r5 for two cards.
+  opts.discarded.push_back("r3");
+  opts.discarded.push_back("r3");
+  Game after = setup(std::move(opts));
+  ASSERT_EQ(after.state.max_score(), before.state.max_score() - 3)
+      << "guard: the discards must actually cap red at 2";
+  EXPECT_EQ(after.state.pace(), 2) << "-2 cards_left, -3 max_score";
+  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(after.state))
+      << "losing red's 3s put the switch back on the reactive side -- movement "
+         "the constant-cap score rule could not have produced";
 }
 
-TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedAtEveryScore) {
-  for (const std::vector<int>& stacks :
-       {std::vector<int>{0, 0, 0, 0, 0}, std::vector<int>{5, 5, 5, 5, 5}}) {
-    Game g = setup(scored_opts("No Variant", stacks));
+// v14.0.0 DELETED the 8-clue arm, and this is the direct consequence: eight
+// tokens no longer confer stability.
+//
+// The arm was added as a DEADLOCK GUARD (replay 1977786 T35): at 8 tokens a
+// discard is illegal, so the turn must produce a clue, and under target parity
+// every clue is reactive -- so if every candidate reads MISTAKE the clue phase
+// declines with an empty set. Removing it does NOT bring the deadlock back,
+// because phase 2 closed the same hole variant-independently: `choose_action`
+// empties the chuck list at 8 tokens (`calls.cpp`) and rungs 12/13 answer with a
+// PITCH, which is legal at any token count. The three two-colour Synesthesia
+// variants have relied on exactly that since v13.0.0, having no stable clue at
+// all.
+//
+// What is lost is the READABLE CLUE, not the legal move: Alice may now pitch
+// where she would have clued. A worse turn, not an illegal one.
+TEST(Reactor0TargetParity, EightCluesNoLongerMakesAClueToBobStable) {
+  SetupOptions opts = paced_opts("Alternating Clues (5 Suits)", 3);
+  opts.clue_tokens = 8;
+  Game g = setup(std::move(opts));
+  ASSERT_EQ(g.state.clue_tokens, 8);
+  ASSERT_EQ(g.state.pace(), 3) << "guard: well clear of the pace switch";
+  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(g.state))
+      << "through v13.5.0 eight tokens made this STABLE whatever the score";
+}
+
+TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedAtEveryPace) {
+  for (int pace : {13, 2, 1, 0}) {
+    Game g = setup(paced_opts("No Variant", pace));
     EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
         << "outside a target-parity variant a clue to Bob was never reactive";
   }
@@ -501,11 +529,11 @@ TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedAtEveryScore) {
 // The dispatch either side of the switch, and -- the load-bearing half -- that
 // a clue to CATHY does not move with it.
 TEST(Reactor0TargetParity, OnlyBobsClueCrossesTheThreshold) {
-  const auto probe = [](const std::vector<int>& stacks) {
-    return setup(scored_opts("Alternating Clues (5 Suits)", stacks));
+  const auto probe = [](int pace) {
+    return setup(paced_opts("Alternating Clues (5 Suits)", pace));
   };
-  Game below = probe({3, 3, 2, 2, 2});   // 12
-  Game above = probe({3, 3, 3, 2, 2});   // 13
+  Game below = probe(2);   // still reactive
+  Game above = probe(1);   // stable
 
   const int alice = below.state.our_player_index;
   const int bob = below.state.next_player_index(alice);
@@ -545,69 +573,6 @@ TEST(Reactor0TargetParity, OnlyBobsClueCrossesTheThreshold) {
 // So at 8 tokens a clue to Bob is STABLE whatever the score. A stable clue names
 // a card outright and is far easier to read cleanly, which is what a forced turn
 // needs. Replay 1977786 T35 is the deadlock this closes.
-
-TEST(Reactor0TargetParity, AtEightCluesAClueToBobIsStableWhateverTheScore) {
-  // Score 0 of 25 -- as far below the score switch as it gets, so the ONLY thing
-  // that can make this stable is the token count. That is what keeps this test
-  // isolating the 8-clue rule even as the score threshold moves.
-  SetupOptions opts = target_parity_opts("Alternating Clues (5 Suits)");
-  opts.clue_tokens = 8;
-  Game g = setup(std::move(opts));
-  ASSERT_EQ(g.state.score(), 0) << "guard: nowhere near the score switch";
-
-  EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
-      << "at 8 tokens the turn is forced, so a clue to Bob must be readable "
-         "as a stable one";
-
-  const int alice = g.state.our_player_index;
-  const int bob = g.state.next_player_index(alice);
-  const int cathy = g.state.next_player_index(bob);
-  ClueAction to_bob{alice, bob, {}, BaseClue{ClueKind::RANK, 1}};
-  ClueAction to_cathy{alice, cathy, {}, BaseClue{ClueKind::RANK, 1}};
-  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(g.state, to_bob, bob));
-  EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, to_cathy, bob))
-      << "a clue to Cathy is untouched -- the rule is about the seat that is "
-         "forced to be readable, not about the parity";
-}
-
-// One token down and the ordinary rule is back, with the score unchanged. This
-// is the pair that shows the 8-token arm is doing the work rather than some
-// other property of the fixture.
-TEST(Reactor0TargetParity, AtSevenCluesTheSameClueIsReactiveAgain) {
-  SetupOptions opts = target_parity_opts("Alternating Clues (5 Suits)");
-  opts.clue_tokens = 7;
-  Game g = setup(std::move(opts));
-  ASSERT_EQ(g.state.score(), 0) << "guard: the same score as the test above";
-
-  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(g.state))
-      << "below 8 the turn is not forced, so target parity binds as before";
-}
-
-// Synesthesia takes the same hatch -- the rule is `uses_target_parity`, not one
-// family. There its stable clues read off the §1f colour table.
-TEST(Reactor0TargetParity, SynesthesiaAlsoGoesStableAtEightClues) {
-  SetupOptions opts = target_parity_opts("Synesthesia (5 Suits)");
-  opts.clue_tokens = 8;
-  Game g = setup(std::move(opts));
-  EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state));
-
-  SetupOptions seven = target_parity_opts("Synesthesia (5 Suits)");
-  seven.clue_tokens = 7;
-  Game h = setup(std::move(seven));
-  EXPECT_TRUE(hanabi::reactor0::bob_clue_is_reactive(h.state));
-}
-
-// Plain variants are untouched at any token count: a clue to Bob was never
-// reactive there, so there is no hatch to take.
-TEST(Reactor0TargetParity, PlainVariantsAreUnaffectedByTheTokenRule) {
-  for (int tokens : {8, 7, 1}) {
-    SetupOptions opts = target_parity_opts("No Variant");
-    opts.clue_tokens = tokens;
-    Game g = setup(std::move(opts));
-    EXPECT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
-        << "tokens " << tokens;
-  }
-}
 
 // --- two clue colours: a COLOUR clue to Bob joins the even bucket (v11.5.0) --
 //
@@ -776,9 +741,8 @@ TEST(Reactor0TwoColours, SettingsSpellsOutBothTables) {
 //
 // Two colours leave only two colour anchors, which is why a colour clue to Bob
 // became an EVEN-bucket clue with its own anchor (above). The stable exemptions
-// -- 8 clues (v11.2.0) and 50% of the maximum (v11.4.0) -- cut straight across
-// that second bucket, so in these nine variants a colour clue stays reactive
-// whatever the score and whatever the clue count.
+// -- now `pace() <= 1` (v14.0.0) -- cut straight across that second bucket, so
+// in these nine variants a colour clue stays reactive whatever the pace.
 //
 // RANK clues are untouched, which is what leaves the six Alternating Clues
 // variants a stable channel. The three Synesthesia ones carry `clueRanks: []`,
@@ -786,13 +750,19 @@ TEST(Reactor0TwoColours, SettingsSpellsOutBothTables) {
 
 namespace {
 
-// Three suits, so the cap is 15 and the score switch is at 8 (2 * 8 >= 15).
+// Three suits: 30 cards, 15 dealt, so with stacks of 3 the fixture sits at
+// pace 3 and each discard costs one. Both entries in the pool are spare 1s --
+// three copies, one on the stack and one in Bob's hand.
 SetupOptions two_colour_opts(std::string variant_name, std::vector<int> stacks,
-                             int clue_tokens) {
+                             int clue_tokens, int discards = 0) {
+  static const std::vector<std::string> kPool = {"r1", "b1"};
   SetupOptions opts;
   opts.variant_name = std::move(variant_name);
   opts.play_stacks = std::move(stacks);
   opts.clue_tokens = clue_tokens;
+  for (int i = 0; i < discards && i < (int)kPool.size(); ++i) {
+    opts.discarded.push_back(kPool[i]);
+  }
   opts.starting = TestPlayer::ALICE;
   opts.hands = {
       {"r4", "b4", "r3", "b3", "r2"},  // Alice (giver)
@@ -815,48 +785,28 @@ BobClues bob_clues(const Game& g) {
 
 }  // namespace
 
-// At 8 tokens the turn is forced, which is the whole reason v11.2.0 granted a
-// stable clue there. With two colours the colour half of that grant is revoked.
-TEST(Reactor0TwoColours, ColourToBobIsNeverStableAtEightClues) {
-  Game g = setup(two_colour_opts("Alternating Clues & Rainbow (3 Suits)",
-                                 {0, 0, 0}, /*clue_tokens=*/8));
-  ASSERT_EQ(g.state.score(), 0) << "guard: nowhere near the score switch, so "
-                                   "only the token rule could stand this down";
-  ASSERT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
-      << "guard: the general rule DOES stand down here -- that is what the "
-         "colour rule has to override";
-
-  const BobClues c = bob_clues(g);
-  EXPECT_TRUE(hanabi::reactor0::colour_is_never_stable(*g.state.variant));
-  EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, c.colour, c.bob))
-      << "a COLOUR clue to Bob stays reactive at 8 clues";
-  EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(g.state, c.rank, c.bob))
-      << "but a RANK clue to Bob is still stable -- the rule is about colour "
-         "only, and ranks are what leave Alternating Clues a stable channel";
-}
-
 // The other exemption, in the same variant. Asserted separately so a regression
 // names which of the two arms it broke.
-TEST(Reactor0TwoColours, ColourToBobIsNeverStableAboveTheScoreSwitch) {
-  // 3 suits -> cap 15, switch at 8. {3, 3, 3} is 9, comfortably past it.
+TEST(Reactor0TwoColours, ColourToBobIsNeverStableBelowPaceTwo) {
   Game g = setup(two_colour_opts("Alternating Clues & Rainbow (3 Suits)",
-                                 {3, 3, 3}, /*clue_tokens=*/7));
-  ASSERT_EQ(g.state.score(), 9) << "guard: 9 of 15, past the 8-point switch";
+                                 {3, 3, 3}, /*clue_tokens=*/7, /*discards=*/2));
+  ASSERT_EQ(g.state.pace(), 1) << "guard: on the stable side of the switch";
   ASSERT_FALSE(hanabi::reactor0::bob_clue_is_reactive(g.state))
-      << "guard: the score has stood the general rule down";
+      << "guard: the pace has stood the general rule down";
 
   const BobClues c = bob_clues(g);
   EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, c.colour, c.bob))
-      << "a COLOUR clue to Bob stays reactive however high the score";
+      << "a COLOUR clue to Bob stays reactive however low the pace";
   EXPECT_FALSE(hanabi::reactor0::clue_is_reactive(g.state, c.rank, c.bob))
       << "and a RANK clue to Bob is stable again, exactly as before v13.0.0";
 }
 
 // The negative that pins the rule to the COLOUR COUNT rather than to target
 // parity generally: three colours and the stable switch works as it always did.
-TEST(Reactor0TwoColours, ThreeColoursKeepsColourToBobStableAboveTheSwitch) {
+TEST(Reactor0TwoColours, ThreeColoursKeepsColourToBobStableBelowPaceTwo) {
   Game g = setup(two_colour_opts("Alternating Clues (3 Suits)", {3, 3, 3},
-                                 /*clue_tokens=*/7));
+                                 /*clue_tokens=*/7, /*discards=*/2));
+  ASSERT_EQ(g.state.pace(), 1) << "guard: on the stable side of the switch";
   ASSERT_EQ(g.state.variant->clue_colour_names.size(), 3u)
       << "guard: Red/Green/Blue, so the two-colour rule must not fire";
   EXPECT_FALSE(hanabi::reactor0::colour_is_never_stable(*g.state.variant));
@@ -868,21 +818,20 @@ TEST(Reactor0TwoColours, ThreeColoursKeepsColourToBobStableAboveTheSwitch) {
 }
 
 // SYNESTHESIA has no rank clues, so in its two-colour variants this leaves NO
-// stable clue of any kind -- at any score, at any token count. That is the
-// consequence the rule was accepted with, and `synesthesia_stable` is
-// unreachable there as a result.
+// stable clue of any kind -- at any pace. That is the consequence the rule was
+// accepted with, and `synesthesia_stable` is unreachable there as a result.
 TEST(Reactor0TwoColours, TwoColourSynesthesiaHasNoStableClueAtAll) {
-  for (int tokens : {7, 8}) {
+  for (int discards : {0, 2}) {
     for (const std::vector<int>& stacks :
          {std::vector<int>{0, 0, 0}, std::vector<int>{3, 3, 3}}) {
       Game g = setup(two_colour_opts("Synesthesia & Null (3 Suits)", stacks,
-                                     tokens));
+                                     /*clue_tokens=*/7, discards));
       ASSERT_TRUE(g.state.variant->clue_ranks.empty())
           << "guard: Synesthesia carries clueRanks: [], so colour is the only "
              "kind and there is nothing else to fall back on";
       const BobClues c = bob_clues(g);
       EXPECT_TRUE(hanabi::reactor0::clue_is_reactive(g.state, c.colour, c.bob))
-          << "tokens=" << tokens << " score=" << g.state.score()
+          << "pace=" << g.state.pace() << " score=" << g.state.score()
           << ": every clue here is reactive, so nothing is ever stable";
     }
   }

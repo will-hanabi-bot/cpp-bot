@@ -38,8 +38,14 @@ struct SynesthesiaCall {
 // the same key `colour_clue_value` uses, though deliberately NOT the same table
 // (that one gives Blue=4 and lets Orange take the first untaken value).
 //
-//   Red 1 pitch | Yellow 2 pitch | Green 3 chuck | Blue 2 chuck
-//   Purple 5 pitch | Orange 1 chuck | anything else 4 pitch
+//   Red 1 pitch | Yellow 2 pitch | Green 3 pitch | Blue 4 pitch
+//   Purple 5 pitch | Orange 1 chuck | anything else 4 chuck
+//
+// The five named colours are `pitch` at their own *colour value* (Red=1 ...
+// Purple=5), which as of v14.0.0 agrees with `colour_clue_value` on those five.
+// That is a coincidence and not a licence to delete this table: the two still
+// disagree on Orange and on the catch-all, and `colour_clue_value` has no notion
+// of a button at all.
 //
 // COLLISIONS ARE IMPOSSIBLE, which is what makes a fixed table safe here rather
 // than the "first untaken" dance `colour_clue_value` needs. Across all 36
@@ -58,6 +64,32 @@ struct SynesthesiaCall {
 // A 3-suit variant offers only three colours, so some slots are simply
 // unreachable there. That is a limit of the variant, not of the table.
 SynesthesiaCall synesthesia_call(const Variant& variant, int colour_index);
+
+// Does every PITCH row of the table read as a CHUCK instead (v14.0.0)? True when
+// the only playable cards Bob could be holding are on INVERTED suits.
+//
+// Pressing Play on an inverted card throws it away and pressing Discard stacks
+// it, so where every reachable play is inverted, "play this" can only be spelled
+// with the Discard button -- an unflipped pitch call would be unobeyable. When it
+// fires, Red reads d1, Yellow d2, Green d3, Blue d4, Purple d5; Orange and the
+// catch-all are already chucks and do not move.
+//
+// NON-VACUOUS: at least one playable reading must exist AND all of them must be
+// inverted. Thirty of the thirty-six Synesthesia variants have no inverted suit,
+// so a vacuously-true rule would fire there whenever Bob's empathy admitted
+// nothing playable and rewrite a table the flip was never meant to reach. Where
+// Bob has no playable reading at all the clue simply degrades to a STALL, which
+// `slot_is_pitchable` already delivers with no help from this.
+//
+// While it fires, Red (d1) carries the same call as Orange (d1). That collision
+// is deliberate and harmless: nothing is ambiguous for Bob, the giver merely has
+// one fewer distinct call for as long as the flip holds. `synesthesia_call`
+// itself stays a pure function of the variant, so the UNFLIPPED table keeps its
+// no-collision guarantee above.
+//
+// Read off `effective_possible_for` -- see the definition for what that does and
+// does not guarantee across seats.
+bool synesthesia_pitch_flips(const Game& game, int bob);
 
 // Read a stable Synesthesia clue. `action.target` is Bob, since a stable clue
 // under target parity is only ever one to Bob.

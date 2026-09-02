@@ -18,22 +18,50 @@ using hanabi::reactor::effective_possible_for;
 SynesthesiaCall synesthesia_call(const Variant& variant, int colour_index) {
   const auto& names = variant.clue_colour_names;
   if (colour_index < 0 || colour_index >= static_cast<int>(names.size())) {
-    return SynesthesiaCall{CardStatus::CALLED_TO_PLAY, 4};
+    return SynesthesiaCall{CardStatus::CALLED_TO_DISCARD, 4};  // the catch-all
   }
   const std::string& name = names[colour_index];
   if (name == "Red") return {CardStatus::CALLED_TO_PLAY, 1};
   if (name == "Yellow") return {CardStatus::CALLED_TO_PLAY, 2};
-  if (name == "Green") return {CardStatus::CALLED_TO_DISCARD, 3};
-  if (name == "Blue") return {CardStatus::CALLED_TO_DISCARD, 2};
+  if (name == "Green") return {CardStatus::CALLED_TO_PLAY, 3};
+  if (name == "Blue") return {CardStatus::CALLED_TO_PLAY, 4};
   if (name == "Purple") return {CardStatus::CALLED_TO_PLAY, 5};
   if (name == "Orange") return {CardStatus::CALLED_TO_DISCARD, 1};
-  return {CardStatus::CALLED_TO_PLAY, 4};
+  return {CardStatus::CALLED_TO_DISCARD, 4};
+}
+
+bool synesthesia_pitch_flips(const Game& game, int bob) {
+  const State& s = game.state;
+  // NON-VACUOUS on purpose -- see the header. `saw_playable` is what stops the
+  // rule firing in the thirty variants that have no inverted suit at all, where
+  // "every playable reading is inverted" would otherwise be true of a hand with
+  // no playable reading at all.
+  bool saw_playable = false;
+  for (int o : s.hands[bob]) {
+    for (Identity i : effective_possible_for(game, o)) {
+      if (!s.is_playable(i)) continue;
+      // One plain play Bob could still be holding is enough: the pitch button
+      // remains obeyable, so the table stands.
+      if (!variants::is_inverted_id(s, i)) return false;
+      saw_playable = true;
+    }
+  }
+  return saw_playable;
 }
 
 std::optional<ClueInterp> synesthesia_stable(Game& game,
                                              const ClueAction& action) {
   const State& s = game.state;
-  const SynesthesiaCall call = synesthesia_call(*s.variant, action.clue.value);
+  SynesthesiaCall call = synesthesia_call(*s.variant, action.clue.value);
+  // The flip is applied HERE rather than inside `synesthesia_call` so the table
+  // stays a pure function of the variant for `/settings` and for the collision
+  // guarantee -- and so that everything downstream follows it for free: the
+  // existential vet, the giver-only reject and the stamp ladder all read
+  // `pitch`.
+  if (call.button == CardStatus::CALLED_TO_PLAY &&
+      synesthesia_pitch_flips(game, action.target)) {
+    call.button = CardStatus::CALLED_TO_DISCARD;
+  }
   const bool pitch = call.button == CardStatus::CALLED_TO_PLAY;
 
   // The slot may simply not be there: a 4-card hand cannot answer Purple, and a
@@ -44,8 +72,9 @@ std::optional<ClueInterp> synesthesia_stable(Game& game,
   const int order = hand[call.slot - 1];
 
   // Vet on COMMON knowledge, so giver and receiver reach the same verdict about
-  // whether a call was made at all. `effective_possible_for` is the empathy set
-  // every seat reconstructs identically, which is what makes that true.
+  // whether a call was made at all. `effective_possible_for` is the shared
+  // empathy set -- see its definition for the seat-visibility caveat, which the
+  // flip above inherits.
   //
   // Both predicates are EXISTENTIAL (interpret_reaction.h): the button is
   // acceptable if ANY reading the slot still admits makes it so.
