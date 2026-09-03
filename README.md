@@ -504,6 +504,22 @@ the bot actually says.
 `/set` still moves an individual clue's value. See
 `src/conventions/reactor0/CONVENTION.md` §1f.
 
+In the twelve **Blind** variants a clue of one or both kinds is legal but touches
+no card, so its whole meaning is a fixed table. The reactive buckets are unchanged
+— the sum rule never read touches — and `/settings` appends whichever stable table
+applies, abbreviated the same way:
+
+```
+reactor0 — even reactive values: {1=1, 2=2, 3=3, 4=4, 5=5}, odd reactive
+values: {Red=1, Yellow=2, Green=3, Blue=4, Purple=5}, COLOUR touches nothing;
+stable: Red=f1, Yellow=f2, Green=f3, Blue=f4, Purple=f5, other=lock, RANK
+touches nothing; stable: 1=d1, 2=d2, 3=d3, 4=d4, 5=lock, rlocks: off
+```
+
+Color Blind shows only the COLOUR line and Number Blind only the RANK line; the
+sample above is Totally Blind, which has both. `reactor` has no convention for
+these variants — see its `CONVENTION.md` §1b.8.
+
 At the start of every game the bot writes its version **and the convention
 that game resolved to** as a note on card order 0 (e.g. `bot v2.0.0
 reactor0`), so observers can confirm which build is running and what its

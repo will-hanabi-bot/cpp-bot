@@ -233,8 +233,20 @@ std::string format_settings(const Variant& variant,
            ", reactive values: " +
            render(all) + late + ", rlocks: " + (rlocks ? "on" : "off");
   }
+  // The BLIND families keep the reactive buckets above unchanged -- a blind clue
+  // touches nothing, and the sum rule never read touches -- so the line reports
+  // them as usual and appends whichever stable table applies. Abbreviated `fN`
+  // (pitch) / `dN` (chuck) as the Synesthesia line is, for the same width reason.
+  std::string blind;
+  if (variant.colour_clues_touch_nothing) {
+    blind += ", COLOUR touches nothing; stable: Red=f1, Yellow=f2, Green=f3, "
+             "Blue=f4, Purple=f5, other=lock";
+  }
+  if (variant.rank_clues_touch_nothing) {
+    blind += ", RANK touches nothing; stable: 1=d1, 2=d2, 3=d3, 4=d4, 5=lock";
+  }
   return "reactor0 — even reactive values: " + render(table.even) +
-         ", odd reactive values: " + render(table.odd) +
+         ", odd reactive values: " + render(table.odd) + blind +
          ", rlocks: " + (rlocks ? "on" : "off");
 }
 

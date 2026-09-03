@@ -856,17 +856,28 @@ touched" means:
 
 ### 1b.8 Unsupported variants
 
-`variant_from_json` (`src/basics/variant.cpp:300-324`) reads only the flags
+`variant_from_json` (`src/basics/variant.cpp:406-441`) reads only the flags
 listed above. The following fields present in `data/variants.json` are
 **never read**, so those variants will load and be played with **incorrect
 rules**:
 
-`upOrDown`, `sudoku`, `synesthesia`, `alternatingClues`, `oddsAndEvens`,
-`throwItInAHole`, `cowAndPig`, `duck`, `colorCluesTouchNothing`,
-`rankCluesTouchNothing`, `stackSize`, `clueRanks`.
+`upOrDown`, `sudoku`, `throwItInAHole`, `cowAndPig`, `duck`, `stackSize`.
 
 Note in particular that **"Up or Down" is not supported**; the separate
 `Reversed` suit family (§1b.3) is.
+
+**Read, but only reactor0 acts on them**: `oddsAndEvens`, `alternatingClues`,
+`synesthesia`, `clueRanks`, and — since v15.0.0 — `colorCluesTouchNothing` /
+`rankCluesTouchNothing`. The engine half is convention-neutral, so reactor loads
+these variants with the RIGHT rules: it knows a blind clue touches nothing, and
+does not mis-infer from one.
+
+What it lacks is a convention for them. Reactor's stable ladder is referential and
+keys off newly-touched cards, so in the twelve **Blind** variants — where a clue of
+that kind touches nothing by definition — every clue reads STALL and the bot has no
+clue channel at all. Since 4+ player games force reactor, those games are played
+without one. reactor0 has the tables (`reactor0/CONVENTION.md` §1f, *The BLIND
+families*); porting them here is unstarted work, not an oversight.
 
 ---
 

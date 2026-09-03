@@ -134,6 +134,26 @@ T15: five sites derived the receiver as `action.target`, walked the reacter's
 own hand — invisible from his own seat — and a reactive discard clue read as a
 MISTAKE.
 
+### blind table
+The fixed lookup a **stable** clue is read with in the BLIND families —
+`Color Blind`, `Number Blind`, `Totally Blind`, twelve variants where a clue of
+that kind is legal but touches **no card**. Colour: Red 1 *pitch*, Yellow 2 pitch,
+Green 3 pitch, Blue 4 pitch, Purple 5 pitch, any other colour **lock**. Rank: 1
+*chuck* slot 1, 2 chuck 2, 3 chuck 3, 4 chuck 4, 5 **lock**. `blind_call`
+(`reactor0/blind_stable.cpp`); CONVENTION.md §1f.
+
+Keyed on the clue's own KIND rather than on the variant, which is what leaves a
+RANK clue in Color Blind on the ordinary `stable_rank` ladder and makes Totally
+Blind just both tables at once. Colour names a pitch and rank a chuck — the one
+place the kind carries meaning here, and what gives Totally Blind a play call and
+a discard call for the same slot. **Reactive meanings do not change**: the sum rule
+never read touches. Not implemented in reactor, where a blind clue reads STALL.
+
+Distinct from a *Mute* family, which removes the clue kind outright; here the clue
+is still given and still means something. And distinct from an EMPTY clue: the
+`emptyClues` table option makes a zero-touch clue say nothing, which is why
+`interpret_clue`'s guard for it stands down on a blind kind.
+
 ### synesthesia table
 The fixed lookup a **stable** Synesthesia clue is read with, once *target parity*
 has stood down at pace 1: each clue colour names one button and one slot in Bob's

@@ -235,14 +235,21 @@ std::vector<Clue> State::all_valid_clues(int target) const {
         v.clue_ranks.end()) {
       continue;
     }
-    if (!clue_touched(hands[target], ClueKind::RANK, rank).empty()) {
+    // A clue must touch something -- EXCEPT in a BLIND family, where no clue of
+    // that kind ever touches anything and the server allows it anyway. Without
+    // the exception the bot enumerates zero clues in Number Blind and Totally
+    // Blind and can never clue at all.
+    if (v.rank_clues_touch_nothing ||
+        !clue_touched(hands[target], ClueKind::RANK, rank).empty()) {
       clues.emplace_back(ClueKind::RANK, rank, target);
     }
   }
   const int num_colours =
       block_colour ? 0 : static_cast<int>(v.colourable_suit_indices.size());
   for (int suit_index = 0; suit_index < num_colours; ++suit_index) {
-    if (!clue_touched(hands[target], ClueKind::COLOUR, suit_index).empty()) {
+    // The colour half of the same exception -- Color Blind and Totally Blind.
+    if (v.colour_clues_touch_nothing ||
+        !clue_touched(hands[target], ClueKind::COLOUR, suit_index).empty()) {
       clues.emplace_back(ClueKind::COLOUR, suit_index, target);
     }
   }

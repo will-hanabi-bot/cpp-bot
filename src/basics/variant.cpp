@@ -104,6 +104,8 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
                      bool pink_s, bool brown_s, bool deceptive_s, bool scarce_ones,
                      bool funnels, bool chimneys, bool odds_and_evens,
                      bool alternating_clues, bool synesthesia,
+                     bool colour_clues_touch_nothing,
+                     bool rank_clues_touch_nothing,
                      std::vector<int> clue_ranks) {
   const auto& catalog = load_suit_catalog();
   Variant v;
@@ -121,6 +123,8 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
   v.funnels = funnels;
   v.chimneys = chimneys;
   v.alternating_clues = alternating_clues;
+  v.colour_clues_touch_nothing = colour_clues_touch_nothing;
+  v.rank_clues_touch_nothing = rank_clues_touch_nothing;
   v.synesthesia = synesthesia;
   v.odds_and_evens = odds_and_evens;
   v.clue_ranks = std::move(clue_ranks);
@@ -247,6 +251,24 @@ bool Variant::id_touched(Identity id, ClueKind kind, int value) const {
   const Suit& suit = suits[id.suit_index];
   const SuitType& st = suit.suit_type;
   const int rank = id.rank;
+
+  // THE BLIND FAMILIES touch nothing at all, and this has to come FIRST: a
+  // rainbowish suit returns true two lines below, and every other rule under
+  // both kinds can only add touches. Color Blind, Number Blind, Totally Blind.
+  //
+  // The clue is still LEGAL -- that is the whole point of the variant, and
+  // `all_valid_clues` offers it -- so this is not the Mute families' "no such
+  // clue". What it means instead is positional, from a fixed table
+  // (reactor0/CONVENTION.md 1f).
+  //
+  // Returning false here is also the entire empathy story. `Game::on_clue`
+  // builds its narrowing set from this predicate, so the set comes back empty:
+  // the touched loop never runs (the server's list is empty too) and the
+  // untouched branch differences out nothing. A blind clue therefore teaches
+  // nothing POSITIVE and nothing NEGATIVE -- "not touched by Red" must not imply
+  // "not red" when no card is ever touched by Red.
+  if (kind == ClueKind::COLOUR && colour_clues_touch_nothing) return false;
+  if (kind == ClueKind::RANK && rank_clues_touch_nothing) return false;
 
   if (kind == ClueKind::COLOUR) {
     if (st.rainbowish) return true;
@@ -408,6 +430,8 @@ Variant variant_from_json(const nlohmann::json& entry) {
       entry.value("oddsAndEvens", false),
       entry.value("alternatingClues", false),
       entry.value("synesthesia", false),
+      entry.value("colorCluesTouchNothing", false),
+      entry.value("rankCluesTouchNothing", false),
       // Absent `clueRanks` means the full 1-5. Present-but-empty is the Number
       // Mute family, which offers no rank clues at all -- so `value()` with a
       // 1-5 default would be wrong, and the key has to be probed explicitly.

@@ -104,6 +104,16 @@ struct Variant {
   // These variants carry `clueRanks: []` as well, so colour is the only clue
   // kind there at all, which likewise costs the giver the choice of kind.
   bool synesthesia = false;
+  // The BLIND families: a clue of this kind is LEGAL but touches no card at all
+  // (`colorCluesTouchNothing` / `rankCluesTouchNothing`). Color Blind sets the
+  // first, Number Blind the second, Totally Blind both -- twelve variants.
+  //
+  // Not the same as a MUTE family, which removes the clue kind outright: here the
+  // clue can still be given, and under reactor0 it carries its whole meaning
+  // positionally, from a fixed table (CONVENTION.md 1f). The two are also
+  // independent, which is what makes Totally Blind need no rule of its own.
+  bool colour_clues_touch_nothing = false;
+  bool rank_clues_touch_nothing = false;
   // The rank clue values this variant actually offers, from `clueRanks`.
   // Defaults to {1,2,3,4,5}. Odds and Evens gives {1,2}; the Number Mute
   // family gives {} (no rank clues at all).

@@ -45,6 +45,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor0/call_invariants.cpp
   src/conventions/reactor0/efficiency.cpp
   src/conventions/reactor0/interpret_clue.cpp
+  src/conventions/reactor0/blind_stable.cpp
   src/conventions/reactor0/synesthesia_stable.cpp
   src/conventions/reactor0/decision.cpp
   src/conventions/reactor0/calls.cpp
@@ -109,6 +110,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_clue.cpp
   tests/test_basics/test_action.cpp
   tests/test_basics/test_odds_and_evens.cpp
+  tests/test_basics/test_blind.cpp
   tests/test_basics/test_synesthesia.cpp
   tests/test_basics/test_alternating_clues.cpp
   tests/test_basics/test_variants.cpp
@@ -295,6 +297,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_finesse_parity.cpp
   tests/test_reactor0/test_target_parity.cpp
   tests/test_reactor0/test_deferred_reaction.cpp
+  tests/test_reactor0/test_blind_stable.cpp
   tests/test_reactor0/test_synesthesia_stable.cpp
   tests/test_reactor0/test_giver_sight_reject.cpp
   tests/test_reactor0/test_orange_chop_and_pitch.cpp

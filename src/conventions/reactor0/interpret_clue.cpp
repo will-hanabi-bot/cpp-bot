@@ -16,6 +16,7 @@
 #include "hanabi/conventions/reactor/interpret_clue.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
+#include "hanabi/conventions/reactor0/blind_stable.h"
 #include "hanabi/conventions/reactor0/synesthesia_stable.h"
 #include "hanabi/conventions/variants/brownish.h"
 #include "hanabi/conventions/variants/inverted.h"
@@ -907,7 +908,16 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     // fall through to positional dispatch for any other forced value.
   }
 
-  if (state.options.empty_clues && action.list_.empty()) {
+  // The `emptyClues` TABLE OPTION lets a clue touching nothing be given anywhere,
+  // and such a clue says nothing. A BLIND variant is not that case: there no clue
+  // of that kind ever touches anything, and the meaning is positional. Without
+  // the second condition, enabling the option at a Blind table would make every
+  // clue in the game read USELESS.
+  const bool blind_kind =
+      action.clue.kind == ClueKind::COLOUR
+          ? state.variant->colour_clues_touch_nothing
+          : state.variant->rank_clues_touch_nothing;
+  if (state.options.empty_clues && action.list_.empty() && !blind_kind) {
     return ClueInterp::USELESS;
   }
 
@@ -946,6 +956,19 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // its own. Alternating Clues does NOT come here: it has both kinds available,
   // so its stable clues use the ordinary ladders unchanged.
   if (state.variant->synesthesia) return synesthesia_stable(game, action);
+
+  // THE BLIND FAMILIES, per KIND rather than per variant. A blind clue touches
+  // nothing, so it can say nothing about WHICH cards it reached and its whole
+  // meaning is a fixed table (blind_stable.h). Keyed on the kind because Color
+  // Blind blinds only colour: a RANK clue there still touches normally and still
+  // belongs on the ordinary ladder below. Totally Blind takes both arms and needs
+  // no rule of its own.
+  //
+  // No variant is both Synesthesia and Blind, so the order against the line above
+  // is free.
+  if (clue_kind_is_blind(*state.variant, action.clue.kind)) {
+    return blind_stable(game, action);
+  }
 
   bool stall_ctx = prev.common.obvious_locked(prev, action.giver) ||
                    game.in_endgame() || prev.state.clue_tokens == 8;

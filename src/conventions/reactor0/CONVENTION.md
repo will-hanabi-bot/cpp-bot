@@ -1561,6 +1561,73 @@ The bot plays legally and reads clues correctly, but does **not** yet reason
 about the fact that its own clue constrains what its partner may clue next.
 `TODO.md`.
 
+### The BLIND families — the clue touches nothing (v15.0.0)
+
+Twelve variants where a clue of one or both kinds is **legal but touches no
+card**: `Color Blind (3-6 Suits)` (`colorCluesTouchNothing`), `Number Blind
+(3-6 Suits)` (`rankCluesTouchNothing`) and `Totally Blind (3-6 Suits)` (both).
+`Variant::colour_clues_touch_nothing` / `rank_clues_touch_nothing`.
+
+These are **not** the Mute families, which remove the clue kind outright. Here the
+clue can still be given — that is the point of the variant — it simply reaches
+nothing. So it can say nothing about WHICH cards it found, and its whole meaning
+is which clue was given.
+
+**The stable tables** (`blind_call`, `reactor0/blind_stable.cpp`). As with
+Synesthesia, a fixed lookup naming one button and one slot in the clued seat's
+hand, plus a LOCK row for the value with no slot to name:
+
+| colour | | rank | |
+|---|---|---|---|
+| Red | pitch slot 1 | 1 | chuck slot 1 |
+| Yellow | pitch slot 2 | 2 | chuck slot 2 |
+| Green | pitch slot 3 | 3 | chuck slot 3 |
+| Blue | pitch slot 4 | 4 | chuck slot 4 |
+| Purple | pitch slot 5 | 5 | **LOCK** |
+| any other colour | **LOCK** | | |
+
+Colour names a **pitch** and rank a **chuck**. That is the one place the clue kind
+carries meaning here, and it is what lets Totally Blind offer both a play call and
+a discard call for the same slot. "Any other colour" is Teal in the 6-suit members
+and anything a future Blind variant adds; in the 3-5 suit members no colour locks
+at all, so there rank 5 is the only lock available.
+
+**The dispatch is per KIND, not per variant**
+(`interpret_clue.cpp`): a clue is read off the table when *that kind* is blind. In
+Color Blind a RANK clue really does touch cards and stays on the ordinary
+`stable_rank` ladder; in Number Blind a colour clue stays on `stable_colour`.
+Totally Blind takes both arms and needs no rule of its own.
+
+**The ladder is `synesthesia_stable`'s**, shared so the two cannot drift: a slot
+the hand does not have is a STALL; a button that is bad by COMMON knowledge
+(`slot_is_pitchable` / `slot_is_chuckable`) is a STALL, so giver and receiver agree
+no call was made; a button bad only by GIVER-ONLY sight is a MISTAKE the giver
+never offers (§1g); otherwise the shared `stamp_react_*_button` ladders stamp it.
+The LOCK row chop-moves the whole hand and refuses as a MISTAKE when the target
+already reads locked — `reactor::ref_discard`'s guard.
+
+**REACTIVE MEANINGS ARE UNCHANGED** from No Variant. The sum rule reads a slot and
+an anchor, neither of which depends on what a clue touched, so nothing there moves:
+`uses_target_parity` is false and the ordinary rank-even / colour-odd buckets and
+anchors apply.
+
+**Two engine facts hold this up**, both convention-neutral:
+
+* `Variant::id_touched` returns false for the blind kind before any other rule.
+  That is the whole empathy story — `Game::on_clue` builds its narrowing set from
+  the predicate, so a blind clue teaches nothing POSITIVE and nothing NEGATIVE.
+  The second half matters: "not touched by Red" implies "not red" everywhere else,
+  and must imply nothing where no card is ever touched by Red.
+* `State::all_valid_clues` normally requires a clue to touch something. It waives
+  that for a blind kind, because the server does. Without the waiver the bot
+  enumerates **zero** clues in Number Blind and Totally Blind and can never clue —
+  silently, for the whole game.
+
+**Reactor does not implement this.** Its stable ladder is referential and needs
+newly-touched cards, so every blind clue there reads STALL. Games at 4+ players
+force reactor, so they play these variants with no clue channel at all. The engine
+half above still applies, so reactor at least does not mis-infer.
+
 ## §1g POV invariance — shared knowledge retargets, giver-only knowledge rejects
 
 **A clue whose reading predicts a strike is not legal to give.** The rules
