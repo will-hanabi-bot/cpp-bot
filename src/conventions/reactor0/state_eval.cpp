@@ -362,6 +362,18 @@ bool chop_is_playable_or_critical(const Game& game, int player) {
   return s.is_playable(*id) || s.is_critical(*id);
 }
 
+// H4b's second arm. "Cathy's chop is a same-hand-duped playable card" — she can
+// pitch it and still play the other copy, so it does not need saving. Same
+// full-visibility view as its neighbours. Replay 2005248 T25.
+bool chop_is_same_hand_duped_playable(const Game& game, int player) {
+  auto chop = game.chop(player);
+  if (!chop) return false;
+  auto id = game.state.deck[*chop].id();
+  if (!id) return false;
+  return game.state.is_playable(*id) &&
+         has_same_hand_dupe(game.state, player, *chop, *id);
+}
+
 // "Cathy's chop is either a trash or a same-hand-dupe" — the expendable-chop
 // half of H1c, and the negated guard of VH1.
 bool chop_is_expendable(const Game& game, int player) {
@@ -542,11 +554,17 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   const bool bob_stuck = !game.common.thinks_locked(game, bob) &&
                          game.common.obvious_playables(game, bob).empty() &&
                          game.common.thinks_trash(game, bob).empty();
-  // H1b, and H4b -- the same clause under two names. Rescuing Bob is only
-  // worth a token when Cathy is not herself about to lose something. Vacuous at
-  // two seats.
+  // H1b. Rescuing Bob is only worth a token when Cathy is not herself about to
+  // lose something. Vacuous at two seats.
   const bool cathy_can_wait =
       !has_cathy || !chop_is_playable_or_critical(game, cathy_seat);
+  // H4b -- H1b, plus one more way for Cathy to wait: her chop is a playable
+  // card she holds a second copy of, so losing it costs nothing. H1b does NOT
+  // take this arm. Replay 2005248 T25: Bob stuck on the last y5, Cathy's chop an
+  // r2 with a second r2 beside it, and every clue read LOW.
+  const bool h4b =
+      cathy_can_wait ||
+      (has_cathy && chop_is_same_hand_duped_playable(game, cathy_seat));
 
   // --- very high --------------------------------------------------------
   //
@@ -593,7 +611,7 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   // over the corpus turns that action a reaction, that moved 171 of 3332 -- 137
   // of them giving up a known play, including replay 1970589 T42's p3. At HIGH
   // it only widens what `clue_is_admissible` will pass, which is the intent.
-  if (bob_stuck && cathy_can_wait) {
+  if (bob_stuck && h4b) {
     auto bob_chop = chop_id_of(game, bob);
     if (bob_chop && s.is_critical(*bob_chop)) return ClueTier::HIGH;
   }

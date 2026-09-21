@@ -262,7 +262,6 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1974512_reacter_ctp_must_not_erase_receiver_ctp.cpp
   tests/test_reactor0/test_misc/test_replay_1977786_eight_clues_needs_a_stable_clue.cpp
   tests/test_reactor0/test_misc/test_replay_1975464_deferred_reaction_survives.cpp
-  tests/test_reactor0/test_misc/test_replay_1978041_deferred_reaction_is_remembered.cpp
   tests/test_reactor0/test_misc/test_replay_1978081_superseded_call_drops_the_reaction.cpp
   tests/test_reactor0/test_misc/test_replay_1974194_stale_reading_is_not_acted_on.cpp
   tests/test_reactor0/test_misc/test_replay_1973410_inconsistent_accounting_declines.cpp
@@ -375,6 +374,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_replay_1942330_playable_chop_lifts_clue_tier.cpp
   tests/test_reactor0/test_decision_making/test_replay_1942181_prefers_stable_play_over_double_discard.cpp
   tests/test_reactor0/test_decision_making/test_replay_1981749_reactive_discard_prefers_trash.cpp
+  tests/test_reactor0/test_decision_making/test_replay_2005248_duped_playable_chop_can_wait.cpp
 )
 target_include_directories(hanabi_decision_tests PRIVATE tests)
 target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)

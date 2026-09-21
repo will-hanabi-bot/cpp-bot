@@ -30,7 +30,7 @@ We will mostly borrow the existing implementations of high/medium/low tier clues
 Note the change to H1 to also require that Cathy's chop be either playable or
 critical.
 
-A clue tier (`clue_tier`, `state_eval.cpp:485-582`) is VERY HIGH iff:
+A clue tier (`clue_tier`, `state_eval.cpp:537-640`) is VERY HIGH iff:
 
 1. **VH1** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
    finesse**. A finesse is reactive Phase B, which belongs to the **even-parity
@@ -38,8 +38,8 @@ A clue tier (`clue_tier`, `state_eval.cpp:485-582`) is VERY HIGH iff:
    Odds and Evens makes it the colour clue and `/set` can move an individual
    one, so the test reads `reactive_assignment(...).even`. Testing the kind
    instead made VH1 unreachable in those variants (replay 1967416 T1). A reactive **lock** is explicitly not a finesse, however its
-   predicted slot looks at clue time (`clue_is_vh1`, `:411-422`, applied at `:458`;
-   the finesse detector itself is `clue_gets_finesse`, `:317-366`).
+   predicted slot looks at clue time (`clue_is_vh1`, `:526-535`, applied at `:577`;
+   the finesse detector itself is `clue_gets_finesse`, `:408-470`).
 
 VERY HIGH is the tier that out-ranks a **pending reaction** (Precedence step 1),
 and VH1 is deliberately its only member.
@@ -73,8 +73,8 @@ Otherwise, a clue tier is HIGH iff **any** of:
     - **H1a — Bob's chop is endangered.** Bob is not locked, and has no safe
       action (no obvious play, no known trash, no CTD — all three are covered by
       `thinks_trash`, `player_game.cpp:115-132`), and his chop is *endangered*
-      (below). `:469-478`. The "no safe action" half is shared with H4a
-      verbatim (`bob_stuck`, `:441-443`); H1a and H4a differ only in how bad the
+      (below). `:588-598`. The "no safe action" half is shared with H4a
+      verbatim (`bob_stuck`, `:554-556`); H1a and H4a differ only in how bad the
       chop is.
     - **H1b** — Cathy's chop is not playable or critical, **judged from Alice's
       full visibility** (the same viewpoint as *endangered chop* below, not
@@ -92,17 +92,29 @@ Otherwise, a clue tier is HIGH iff **any** of:
       game and `has_colour_play_clue_for` takes `colour_is_never_stable` as a
       second gate.
 2. **H2** — the clue gets a **critical 1 or 2** played (5 or 4 on a reversed suit,
-   via `variants::is_first_or_second_rank`). `:481`.
+   via `variants::is_first_or_second_rank`). `:600`.
 3. **H3** — the clue gets **two new plays**, at least one at the clue-regain rank
-   (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:483`.
-4. **H4** — BOTH of the following must hold (`:495-498`, with `cathy_can_wait`
-   at `:447-448`):
+   (5 normally, 1 reversed, `variants::is_clue_regain_rank`). `:602`.
+4. **H4** — BOTH of the following must hold (`:614-617`, with `h4b` at
+   `:565-567`):
     - **H4a — Bob's chop is critical.** Bob is not locked, and has no safe
       action (no obvious play, no known trash, and no CTD). Same predicate as
       H1a's first half; H4a asks for a strictly worse chop.
     - **H4b** — Cathy's chop is not playable or critical, **judged from Alice's
       full visibility** (the same viewpoint as *endangered chop* below, not
-      common knowledge). If Cathy has no chop, this condition is vacuously true.
+      common knowledge), *OR* Cathy's chop is a same-hand-duped playable card.
+      If Cathy has no chop, this condition is vacuously true.
+
+   **H4b's second arm is H4b's alone** (v15.1.0,
+   `chop_is_same_hand_duped_playable`, `:368-375`). Cathy can pitch one copy of
+   a duplicated playable and still play the other, so her chop does not need
+   saving and Bob's critical chop comes first. H1b does not take the arm, so
+   the two clauses, which were one clause until v15.1.0, now differ. Replay
+   2005248 T25: Bob was stuck on the last Yam 5 while Cathy's chop was a Ruby 2
+   with the other Ruby 2 beside it. Every clue read LOW, the gate rejected them
+   all, and will-bot67 discarded a known Yam 1. H4 now lifts the turn, and §3.1
+   gives Green to Bob. It touches only his playable Geas 4, and the card he
+   draws becomes his new chop, so the Yam 5 comes off chop as well.
 
    **H4 is HIGH and not VERY HIGH, deliberately — a pending reaction still
    outranks it.** Like H1 and N5 this is a property of the **position**, not of
@@ -117,7 +129,7 @@ Otherwise, a clue tier is HIGH iff **any** of:
 NOT-LOW iff any of VH1, H2, H3, H4, or:
 
 5. **N5 — Bob's chop is playable** and is not duplicated in his own hand
-   (`has_playable_chop`, `:160-168`; applied at `:505`). Like H1 this is a
+   (`has_playable_chop`, `:198-210`; applied at `:624`). Like H1 this is a
    property of the **position, not of the candidate clue**, so it lifts every
    clue that turn to at least MEDIUM. Deliberately weaker than `at_risk_chop`: it
    asks only "playable, and Bob cannot just pitch a spare copy", and does *not*
@@ -128,12 +140,12 @@ NOT-LOW iff any of VH1, H2, H3, H4, or:
    §3's precondition takes this same predicate as its second arm, for the same
    reason. Tier and priority agree: a safe-but-playable chop is worth a clue.
 
-…or, when **Cathy's** chop is endangered (`:507-518`):
+…or, when **Cathy's** chop is endangered (`:626-638`):
 
-6. **N3** — the clue gets two new plays. `:509`.
+6. **N3** — the clue gets two new plays. `:628`.
 7. **N2** — the clue is **reactive** and Bob has no stable color play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
-   since dispatch is positional (§1a, `interpret_clue.cpp:935-938`). `:514-517`.
+   since dispatch is positional (§1a, `interpret_clue.cpp:935-938`). `:634-637`.
    In a **target-parity** variant the second arm is vacuously true (no stable
    clues exist) while the first still asks who was clued, so only a clue to
    Cathy reaches N2 there.
@@ -146,7 +158,7 @@ as specified is the one a reader should expect.
 
 MEDIUM is NOT-LOW and not HIGH; LOW is everything else. "New plays" are counted as
 CTP-status transitions between the real game and the clue's hypo
-(`new_play_facts`, `:173-224`) — the same walk reactor's `is_high_value_clue`
+(`new_play_facts`, `:215-267`) — the same walk reactor's `is_high_value_clue`
 uses.
 
 **"Gets a finesse"** (VH1) means the clue's interpretation is reactive rank
@@ -167,7 +179,7 @@ arrange, and it is expendable — `chop_is_free_chuck` (`state_eval.cpp`), read 
 H1a, H1c, N5 and §3. Replay 1973974 T10 locked a partner over one. See
 CONVENTION.md §1f.
 
-**Endangered chop** (`at_risk_chop`, `:130-152`), judged from Alice's full
+**Endangered chop** (`at_risk_chop`, `:166-190`), judged from Alice's full
 visibility. All of the following must hold:
 
 1. the identity is known to Alice and not basic trash;
@@ -179,7 +191,7 @@ The first of those is stricter than reactor's `chop_is_nontrash`
 (`reactor/state_eval.cpp:45-50`), which tests only `is_basic_trash` — a chop the
 holder can safely pitch because they hold the other copy is not in danger.
 
-**"Alice provably holds a copy"** (`alice_provably_holds`, `:69-110`) extends
+**"Alice provably holds a copy"** (`alice_provably_holds`, `:71-112`) extends
 reactor's singleton test (`reactor/state_eval.cpp:99-102`) to **group ("sudoku")
 elim**. For any subset S of Alice's hand, let `u` be the union of what those |S|
 cards could be; if fewer than |S| copies of `u \ {id}` are still unaccounted for,
@@ -192,7 +204,7 @@ holds it" would kill a save clue, so the bound deliberately over-counts. A
 `cross_elim` (`src/basics/player_elim.cpp:165-226`) solves the dual problem (it
 strips locked ids from cards *outside* the group) and cannot answer this.
 
-**Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:231-249`) is a
+**Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:274-306`) is a
 structural check, not a simulation: for each colour clue Bob could give Cathy it
 replays `stable_colour`'s target choice (§1b step 5,
 `interpret_clue.cpp:327`) plus its three guards (`:340-345`), then asks whether
@@ -536,7 +548,7 @@ card. Replay 1981703 T19: a dupe killed yagami_green's called card, its own
 sight dropped the call, the stamp survived, and the gate flattened every
 candidate at pace 1 — leaving phase 2 to blind-pitch into a game-ending strike.
 
-Concretely, `requires_high_tier` (`state_eval.cpp:300-312`) reads the stamp
+Concretely, `requires_high_tier` (`state_eval.cpp:310-343`) reads the stamp
 literally and counts a `CALLED_TO_DISCARD` **only in a variant that contains an
 inverted suit** — there, pressing Discard is how an inverted card is played, so
 the call is a deferred play. In a plain variant a reacter-CTD does not occupy

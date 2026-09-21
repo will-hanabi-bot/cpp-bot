@@ -10,7 +10,8 @@
 //     H2  the clue gets a critical 1 or 2 played (5 or 4 reversed).
 //     H3  the clue gets 2 new plays, one at the clue-regain rank.
 //     H4  Bob is unlocked, has no safe action, his chop is CRITICAL, and
-//         Cathy's chop is not playable or critical.
+//         Cathy's chop is not playable or critical, or it is a playable card
+//         duplicated in her own hand.
 //   NOT LOW iff any of: VH1, H1..H4, or
 //     N2  Cathy's chop is endangered, the clue is reactive, and Bob has no
 //         colour stable play clue he could give Cathy.
@@ -426,9 +427,10 @@ TEST(Reactor0ClueTier, BobPlayableButNotCriticalChopIsNotH4) {
          "chop that is not critical. Got " << name_of(t);
 }
 
-// H4b is the Cathy half, and it is the same clause as H1b. Bob's chop is still
-// the last red 5, but Cathy is about to lose a play of her own, so the clue is
-// not owed to Bob and H4 stands down.
+// H4b is the Cathy half: H1b's clause plus one extra arm, a playable chop Cathy
+// holds a second copy of (the two tests below). Bob's chop is still the last
+// red 5, but Cathy is about to lose a play of her own, so the clue is not owed
+// to Bob and H4 stands down.
 TEST(Reactor0ClueTier, CriticalBobChopStandsDownWhenCathysChopIsPlayable) {
   SetupOptions opts;
   opts.hands = {
@@ -447,6 +449,62 @@ TEST(Reactor0ClueTier, CriticalBobChopStandsDownWhenCathysChopIsPlayable) {
   EXPECT_NE(t, ClueTier::HIGH)
       << "Cathy's chop is playable, so H4b fails and H4 must not fire. Got "
       << name_of(t);
+}
+
+// H4b's extra arm. Cathy's chop g1 is playable, but she holds the other g1 in
+// slot 2, so pitching it costs nothing and she can wait after all. H1 is dead
+// here — H1b has no such arm — so a HIGH answer can only come from H4.
+// Replay 2005248 T25.
+TEST(Reactor0ClueTier, CriticalBobChopIsHighWhenCathysPlayableChopIsDupedInHand) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "b1", "p1", "y2", "b2"},
+      {"r5", "y4", "g4", "b4", "p4"},  // chop (slot 1) = the last red 5
+      {"g1", "g1", "p3", "b3", "y3"},  // chop g1 PLAYABLE, duped in slot 2
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(1), order_at(g, TestPlayer::BOB, 1)) << "guard: Bob's chop";
+  ASSERT_EQ(g.chop(2), order_at(g, TestPlayer::CATHY, 1)) << "guard: Cathy's chop";
+  ASSERT_TRUE(g.state.is_critical(Identity{0, 5})) << "guard: r5 is critical";
+
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_EQ(t, ClueTier::HIGH)
+      << "Cathy's playable chop has a same-hand dupe, so H4b holds and Bob's "
+         "critical chop lifts every clue. Got " << name_of(t)
+      << " (LOW means the same-hand-duped-playable arm never fired).";
+}
+
+// ...and that arm belongs to H4b ONLY. The same Cathy with Bob on an r3 that is
+// endangered but NOT critical: H1a and H1c both hold (Cathy's duped chop is
+// expendable), so H1 would read HIGH if H1b had taken the arm too. It did not,
+// and H4 wants a critical chop, so the answer is LOW.
+TEST(Reactor0ClueTier, CathysDupedPlayableChopDoesNotWidenH1) {
+  SetupOptions opts;
+  opts.hands = {
+      {"y1", "b1", "p1", "y2", "b2"},
+      {"r3", "y4", "g4", "b4", "p4"},  // chop r3 — endangered, not critical
+      {"g1", "g1", "p3", "b3", "y3"},  // chop g1 PLAYABLE, duped in slot 2
+  };
+  opts.play_stacks = {0, 0, 0, 0, 0};
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  ASSERT_EQ(g.chop(2), order_at(g, TestPlayer::CATHY, 1)) << "guard: Cathy's chop";
+  ASSERT_TRUE(hanabi::reactor0::at_risk_chop(g, 0, 1))
+      << "guard: H1a holds — Bob's r3 is endangered";
+  ASSERT_FALSE(g.state.is_critical(Identity{0, 3})) << "guard: r3 is not critical";
+  ASSERT_TRUE(hanabi::reactor0::chop_is_expendable(g, 2))
+      << "guard: H1c holds — Cathy's duped chop is expendable";
+
+  ClueTier t = tier_of(g, inert_clue(g));
+  EXPECT_EQ(t, ClueTier::LOW)
+      << "H1b still vetoes a playable Cathy chop, duped or not. Got "
+      << name_of(t) << " (HIGH means H1b took H4b's arm).";
 }
 
 // --- H1b / H1c: the Cathy conditions on H1 -------------------------------

@@ -24,7 +24,7 @@ visibility. All four must hold: Alice knows the identity and it is not basic
 trash; there is **no second copy in the holder's own hand**; no copy is
 visible in the third player's hand; and Alice cannot prove she is holding a
 copy (see *group elim*). Input to H1 and N2/N3 (DECISION_MAKING.md).
-`src/conventions/reactor0/state_eval.cpp:165-196`. Stricter than reactor's
+`src/conventions/reactor0/state_eval.cpp:166-190`. Stricter than reactor's
 `chop_is_nontrash` (`src/conventions/reactor/state_eval.cpp:44-49`), which
 tests basic trash only.
 
@@ -347,7 +347,10 @@ own subsequent clue -- explains the action better than we do.
 
 Otherwise the target is read out of the clue-time hand and against the clue-time
 stacks (`ReactorWC::clue_play_stacks`). CONVENTION.md §1d.2; replay 1975464 for
-the feature, 1978041 for a deferral it recovers, 1969792 for a superseding call.
+the feature, 1969792 for a superseding call. Replay 1978041 (a deferral it
+recovers) was pinned too until v15.1.0, which deleted that test: the game is
+Alternating Clues with only two clue colours, where Blue now reads as a double
+play with reactive value 5, so the recording no longer replays as played.
 
 Not to be confused with `Game::PendingReactionElim`, the *deferred reaction
 negative* below -- that is the negative inference waiting on the receiver's own
