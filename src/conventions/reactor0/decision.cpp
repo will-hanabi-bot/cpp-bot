@@ -942,22 +942,13 @@ const ClueCandidate* rung_1(const Game& g, const std::vector<ClueCandidate>& cs)
   return settle(g, std::move(p), bob_card_chain(g, /*require_bob_plays=*/false));
 }
 
-// --- priority 2: a reactive discard clue Alice can afford ----------------
-const ClueCandidate* rung_2(const Game& g, const std::vector<ClueCandidate>& cs) {
-  Pool p = select(cs, [&g](const ClueCandidate& c) {
-    if (c.reading.shape != ClueShape::REACTIVE_DISCARD) return false;
-    // BOB is the one who plays, and CATHY is the one who discards. A reactive
-    // discard the other way round -- Cathy playing, Bob throwing something away
-    // -- is not priority 2 and falls to the rungs below. The tiebreaks are
-    // written entirely about Bob's played card, which is what makes the
-    // direction load-bearing rather than cosmetic.
-    if (c.reading.reacter_side.outcome != Outcome::PLAY) return false;
-    if (c.reading.receiver_side.outcome != Outcome::DISCARD) return false;
-    // Cathy's discarded card is the one that has to be affordable.
-    return discard_is_affordable(g, cathy_of(g), c.reading.receiver_side.order);
-  });
-  // `require_bob_plays` is now vacuous here -- the rung already demands it --
-  // but it is kept so the chain still reads as the spec writes it, and so
+// Priority 2's tiebreaks, shared with the endgame stall list's rung 4. The
+// Bob-card terms are gated on Bob PLAYING, so they have nothing to say about a
+// reactive discard the other way round; terms 6 and 7 read `discarded_sides`,
+// which names whichever side throws.
+std::vector<Term> reactive_discard_chain(const Game& g) {
+  // `require_bob_plays` is vacuous for priority 2 -- that rung already demands
+  // it -- but it is kept so the chain still reads as the spec writes it, and so
   // priority 1 and priority 2 keep sharing one definition.
   std::vector<Term> chain = bob_card_chain(g, /*require_bob_plays=*/true);
   // 6. Cathy's discarded card is a same-hand-dupe
@@ -976,7 +967,25 @@ const ClueCandidate* rung_2(const Game& g, const std::vector<ClueCandidate>& cs)
     }
     return false;
   });
-  return settle(g, std::move(p), chain);
+  return chain;
+}
+
+// --- priority 2: a reactive discard clue Alice can afford ----------------
+const ClueCandidate* rung_2(const Game& g, const std::vector<ClueCandidate>& cs) {
+  Pool p = select(cs, [&g](const ClueCandidate& c) {
+    if (c.reading.shape != ClueShape::REACTIVE_DISCARD) return false;
+    // BOB is the one who plays, and CATHY is the one who discards. A reactive
+    // discard the other way round -- Cathy playing, Bob throwing something away
+    // -- is not priority 2 and falls to the rungs below. The tiebreaks are
+    // written entirely about Bob's played card, which is what makes the
+    // direction load-bearing rather than cosmetic. The endgame stall list's
+    // rung 4 does NOT carry this restriction -- see `e_rung_reactive_discard`.
+    if (c.reading.reacter_side.outcome != Outcome::PLAY) return false;
+    if (c.reading.receiver_side.outcome != Outcome::DISCARD) return false;
+    // Cathy's discarded card is the one that has to be affordable.
+    return discard_is_affordable(g, cathy_of(g), c.reading.receiver_side.order);
+  });
+  return settle(g, std::move(p), reactive_discard_chain(g));
 }
 
 // --- priority 3's rungs, shared with priority 4 --------------------------
@@ -1645,6 +1654,33 @@ const ClueCandidate* e_rung_newly_useful(const Game& g,
   return settle(g, std::move(p), {});
 }
 
+// 4. A valid reactive discard clue to Cathy -- `REACTIVE_DISCARD` in EITHER
+// direction, with every discarded card affordable. Not `rung_2`: that one is the
+// General Clue Evaluation List's priority 2, which is written about Bob's PLAYED
+// card and so demands that Bob be the one who plays. The stall list's rung has
+// no such clause, and here the other direction is often the whole point -- Bob
+// throws a card he can spare so that Cathy lays a card she could not have found.
+//
+// Replay 2005279 T62: one card left to score, the last Gray Pink 5 in Cathy's
+// slot 1, and Bob holding nothing but trash. Every colour clue to Cathy was
+// colour mode 1 -- Bob discards, Cathy plays the 5 -- and wins the game. Borrowing
+// `rung_2` rejected all five for the direction, and rung 5 gave Bob a rank 1
+// stall that told nobody anything.
+const ClueCandidate* e_rung_reactive_discard(const Game& g,
+                                             const std::vector<ClueCandidate>& cs) {
+  Pool p = select(cs, [&g](const ClueCandidate& c) {
+    if (c.reading.shape != ClueShape::REACTIVE_DISCARD) return false;
+    const auto thrown = discarded_sides(g, c.reading);
+    // The non-playing side read as NONE, not DISCARD: nothing to vet, so no.
+    if (thrown.empty()) return false;
+    for (const auto& [holder, order] : thrown) {
+      if (!discard_is_affordable(g, holder, order)) return false;
+    }
+    return true;
+  });
+  return settle(g, std::move(p), reactive_discard_chain(g));
+}
+
 // 5. Any other legal stall clue to Bob that cannot be misread as a stable play
 // clue -- the ordinary safe-stall test, narrowed to Bob.
 const ClueCandidate* e_rung_safe_stall_bob(const Game& g,
@@ -1693,7 +1729,7 @@ std::optional<PerformAction> choose_endgame_clue(
     rung = "2.stable_play";
   } else if ((pick = e_rung_newly_useful(game, cands))) {
     rung = "3.singles_out_useful";
-  } else if ((pick = rung_2(game, cands))) {
+  } else if ((pick = e_rung_reactive_discard(game, cands))) {
     rung = "4.reactive_discard";
   } else if ((pick = e_rung_safe_stall_bob(game, cands))) {
     rung = "5.safe_stall_bob";

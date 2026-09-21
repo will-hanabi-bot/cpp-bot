@@ -1032,6 +1032,49 @@ TEST(Reactor0CluePriority, EndgameOddRankToBobWhenNoReactiveExists) {
          "be playable -- the r5. Got " << describe(pick);
 }
 
+// Rung 4 takes a reactive discard in EITHER direction. The General Clue
+// Evaluation List's priority 2 is written about Bob's played card and demands
+// that Bob play; the stall list's rung 4 does not, and here the other direction
+// is the only way to score. One card left to get -- Cathy's p5, which she cannot
+// see -- and Bob holds nothing but trash, so a colour clue to Cathy is colour
+// mode 1: Bob throws a trash card, Cathy plays the p5. Replay 2005279 T62, where
+// borrowing priority 2's direction sent this to rung 5 and a useless Bob stall.
+TEST(Reactor0CluePriority, EndgameRungFourTakesAReactiveDiscardWhereCathyPlays) {
+  using hanabi::reactor0::Outcome;
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r1", "y1", "g1", "b1", "r2"},   // Bob: all trash
+      {"p5", "r3", "y3", "g3", "b3"},   // Cathy: the last card, then trash
+  };
+  opts.play_stacks = {5, 5, 5, 5, 4};
+  opts.clue_tokens = 1;
+  opts.starting = TestPlayer::ALICE;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+
+  auto cands = analysed(g);
+  auto cathy_plays = [](const ClueCandidate& c) {
+    return c.reading.shape == ClueShape::REACTIVE_DISCARD &&
+           c.reading.reacter_side.outcome == Outcome::DISCARD &&
+           c.reading.receiver_side.outcome == Outcome::PLAY;
+  };
+  bool offered = false;
+  for (const auto& c : cands) offered = offered || cathy_plays(c);
+  ASSERT_TRUE(offered)
+      << "guard: the fixture must offer a reactive discard where Bob discards "
+         "and Cathy plays";
+
+  auto pick = endgame_chosen(g);
+  ASSERT_TRUE(pick.has_value());
+  const ClueCandidate* won = candidate_for(cands, pick);
+  ASSERT_NE(won, nullptr);
+  EXPECT_TRUE(cathy_plays(*won))
+      << "rung 4 must take the reactive discard where Cathy plays the last "
+         "card; got " << describe(pick);
+  EXPECT_EQ(won->action.target, 2) << "...which is a clue to Cathy";
+}
+
 // --- rung 3.7's Cathy clauses at two seats --------------------------------
 //
 // 3.7 vetoes its lock when "Bob can give a stable colour play clue to Cathy".

@@ -942,6 +942,23 @@ cluing, so a tier threshold has nothing left to decide. It declines only when
 every candidate predicts a strike, in which case the endgame's own answer
 stands.
 
+**Rung 4 takes a reactive discard in either direction** (v15.2.0,
+`e_rung_reactive_discard`). `REACTIVE_DISCARD` is one play and one discard, so
+Bob discarding while Cathy plays counts, as long as every discarded card is
+affordable: trash, a same-hand dupe, or a card Alice can see a dupe of. This is
+where the stall list differs from the General Clue Evaluation List's priority 2,
+which is written about Bob's played card and requires Bob to play. The two rungs
+share priority 2's tiebreaks (`reactive_discard_chain`). The Bob-card terms apply
+only when Bob plays, so a clue where Cathy plays is ranked by the discarded card
+and then the default tiebreak.
+
+**Replay 2005279 T62** is why. One card was left to score, the last Gray Pink 5
+in Cathy's slot 1, which she could not identify, and Bob held nothing but trash.
+Every colour clue to Cathy is colour mode 1: Bob discards, Cathy plays the 5, and
+the game is won. Until v15.2.0 rung 4 reused priority 2 itself, rejected all five
+colour clues for their direction, and rung 5 gave Bob a rank 1 stall that told
+nobody anything.
+
 **Replay 1971808 T59** is why it exists. Stacks `[4,5,4,5,5,5]`, 28 of 30, one
 card left, and both missing cards visible: r5 in Bob's slot 4, g5 in Cathy's
 slot 1. Purple to Cathy is a reactive colour clue — the EVEN parity under Odds
@@ -1217,7 +1234,9 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | Precedence step 1 | `choose_very_high_clue` |
 | Precedence step 3 — the walk | `choose_clue` |
 | shape classification | `read_clue` / `outcome_of` |
-| priority 2's admissibility | `discard_is_affordable` |
+| priority 2's admissibility, and the endgame stall list's rung 4 | `discard_is_affordable` |
+| priority 2's tiebreaks, shared with the endgame stall list's rung 4 | `reactive_discard_chain` |
+| the endgame stall list | `choose_endgame_clue`; rung 4 is `e_rung_reactive_discard` (either direction) |
 | the §3.2 / §3.4 double discard | `pool_double_discard` |
 | §3.2's Cathy-chop gate | `chop_is_expendable` |
 | the four phase-2 call structures | `calls_of` (`calls.h`) |
@@ -1236,7 +1255,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | Rule | Existing machinery | Where |
 |---|---|---|
 | reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1012`, dispatched at `interpret_clue.cpp:935-938` |
-| two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:214-266` |
+| two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:215-267` |
 | finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:485-575` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:577-631` |
 | a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |

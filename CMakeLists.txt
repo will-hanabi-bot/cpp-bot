@@ -290,6 +290,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_endgame/test_replay_1974303_two_criticals_with_a_dead_partner.cpp
   tests/test_reactor0/test_endgame/test_replay_1974119_partner_needs_two_turns.cpp
   tests/test_reactor0/test_endgame/test_replay_1973602_timeout_yields_to_a_finesse.cpp
+  tests/test_reactor0/test_endgame/test_replay_2005279_stall_list_takes_reverse_reactive_discard.cpp
   tests/test_reactor0/test_duplicate_play_veto.cpp
   tests/test_reactor0/test_efficiency.cpp
   tests/test_reactor0/test_giver_filters.cpp
