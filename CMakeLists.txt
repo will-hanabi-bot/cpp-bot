@@ -54,6 +54,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor0/state_eval.cpp
   src/conventions/tiiah/buckets.cpp
   src/conventions/tiiah/interpret_clue.cpp
+  src/conventions/tiiah/superposition.cpp
   src/conventions/variants/brownish.cpp
   src/conventions/variants/inverted.cpp
   src/conventions/variants/pinkish.cpp
@@ -397,6 +398,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_buckets.cpp
   tests/test_tiiah/test_engine_rules.cpp
   tests/test_tiiah/test_gate_and_clues.cpp
+  tests/test_tiiah/test_superposition.cpp
 )
 target_include_directories(hanabi_tiiah_tests PRIVATE tests)
 target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)

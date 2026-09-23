@@ -516,7 +516,11 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
   }
   if (!oranges.empty()) {
     const bool pitch_mode =
-        !variants::includes_dark_inverted(state) && state.pace() > 3;
+        !variants::includes_dark_inverted(state) && state.shared_pace() > 3;
+    // `shared_pace`, which is `pace` everywhere but Throw It in a Hole. There
+    // the stacks are a per-seat belief, and pitch-vs-chuck is part of what the
+    // clue MEANS -- so it has to be settled on the view every seat shares.
+    // TIIAH reaches this ladder by delegating its stable clues here.
     if (pitch_mode) {
       for (int o : oranges) {
         if (holder_knows_critical(game, o)) continue;

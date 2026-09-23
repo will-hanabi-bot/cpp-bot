@@ -154,6 +154,21 @@ struct ConvData {
   // waiting connection while deliberately keeping the call -- which is exactly
   // the position replay 1972716 T5 was in.
   int react_target_order = -1;
+  // THROW IT IN A HOLE: the identities this card could have been, for a card
+  // that went into the hole without its player learning what it was. Empty for
+  // every other card, and in every other variant.
+  //
+  // Kept per ORDER rather than per seat because the order outlives the play --
+  // `on_play` removes it from `state.hands` and nothing else -- and because
+  // every seat tracks every seat's superpositions, which `state.holders[order]`
+  // attributes. Built from `common`, the one view all three seats compute
+  // identically; a seat's own private narrowing is deliberately NOT stored here
+  // (tiiah/CONVENTION.md 1e).
+  //
+  // Survives `cleared()`: like `note_mark` it is knowledge, not a live call.
+  IdentitySet superposition = IdentitySet::empty();
+
+  bool superposed() const { return superposition.non_empty(); }
 
   bool cm() const { return status == CardStatus::CHOP_MOVED; }
 

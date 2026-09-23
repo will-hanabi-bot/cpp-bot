@@ -20,6 +20,15 @@ we watched in a partner's hand (`resolve_hidden_action`,
 our own plays. `score()`, `strikes` and `State::ended()` are beliefs for the same
 reason. A wrong belief is invisible until the game ends.
 
+### common stacks
+`State::common_play_stacks`: the stacks as everyone-knows-everyone-knows them.
+A play advances them only when its identity was common knowledge at the time,
+or when a superposition later collapses on evidence every seat shares. They lag
+the *believed stacks*, which also move on the partners' plays we watched and
+they did not. Read by anything deciding what a clue MEANS, through
+`State::shared_score` / `shared_pace` and `Game::shared_in_endgame`; empty, and
+free, outside TIIAH. CONVENTION.md §1.3.
+
 ### bucket
 One of three groups of suits, used by the reactive clues to say what a card IS
 when the stacks cannot show it. Inverted suits are dropped first, the rest are
@@ -56,15 +65,20 @@ Inverted playables and inverted finesses are otherwise skipped as reactive
 targets. CONVENTION.md §1d.
 
 ### superposition
-The state of a player who has played a card without learning what it was: a map
-of card order → the identities it could have been. A player may hold several at
-once, and everyone tracks everyone's. A superpositioned reacter picks its target
-assuming **none** of the superposed cards were played. Specified; not implemented
-(TODO.md §41). CONVENTION.md §1e.
+The state of a player who has played a card without learning what it was: the
+identities it could have been, stamped on `ConvData::superposition` at the moment
+of the play and built from `common`, so all three seats hold the same set. A
+player may hold several at once, and everyone tracks everyone's. A superpositioned
+reacter picks its target assuming **none** of the superposed cards were played.
+`note_hidden_action`, `src/conventions/tiiah/superposition.cpp`. CONVENTION.md §1e.
 
 ### collapsing
-Removing a candidate from a superposition — when another player plays that
-identity, when another player's clue puts CTP on a playable copy of it, or when
-every copy is accounted for between the discard pile and the other hands. At one
-remaining candidate the card leaves the map and the believed stacks advance.
+Removing a candidate from a superposition. The first two rules — another player
+plays that identity, or a clue puts CTP on a playable copy of it — are **shared**:
+both say the identity was still needed, every seat sees them, and a collapse on
+either moves the *common stacks* as well. The third — every copy accounted for
+between the discard pile and the hands that seat can see — is **private**, so it
+moves that seat's believed stacks alone and never the set partners predict from.
+At one remaining candidate the card leaves the map and the stack it belongs to
+advances. `collapse_superpositions`, `src/conventions/tiiah/superposition.cpp`.
 CONVENTION.md §1e.

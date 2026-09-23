@@ -677,6 +677,13 @@ bool Game::in_endgame() const {
   return state.pace() < state.num_players - 1;
 }
 
+bool Game::shared_in_endgame() const {
+  // A belief every seat holds alike. Under Throw It in a Hole `pace()` is our
+  // own belief and differs seat by seat, so a clue whose reading turned on it
+  // would mean different things at the two ends of the table.
+  return state.shared_pace() < state.num_players - 1;
+}
+
 std::optional<int> Game::chop(int player_index) const {
   // First pass: explicit CalledToDiscard. When several are live, the chop is
   // the one signalled *most recently* by signal_turn rather than the newest

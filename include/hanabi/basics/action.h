@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include "hanabi/basics/clue.h"
+#include "hanabi/basics/identity.h"
 #include "hanabi/basics/interp.h"
 
 namespace hanabi {
@@ -199,7 +200,12 @@ struct State;
 // back. Our OWN card returns unchanged, because `deck[order].id()` is nullopt
 // for our seat: that gap is the genuine one, and the convention calls it a
 // superposition. No-op outside TIIAH and for every non-play/discard action.
-Action resolve_hidden_action(const State& state, Action act);
+// `own_hint` fills the one gap the state cannot: our OWN card, which we never
+// see. When common empathy pins it to a single identity the caller passes that
+// identity here, and the play is accounted for like any other. When it does
+// not, the action is returned untouched and the card becomes a superposition.
+Action resolve_hidden_action(const State& state, Action act,
+                             std::optional<Identity> own_hint = std::nullopt);
 
 // Polymorphic accessors over Action.
 inline int player_index(const Action& a) {

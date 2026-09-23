@@ -24,6 +24,9 @@ State State::create(std::vector<std::string> names, int our_player_index,
   s.cards_total = s.cards_left;
 
   s.play_stacks.assign(num_suits, 0);
+  // The shared view exists only where the two can differ. Leaving it empty in
+  // every other variant is what makes `shared_score` / `shared_pace` free.
+  if (variant.throw_it_in_a_hole) s.common_play_stacks.assign(num_suits, 0);
   s.discard_stacks.assign(num_suits, std::array<std::vector<int>, 5>{});
   s.max_ranks.assign(num_suits, 5);
   s.base_count.assign(num_ids, 0);
@@ -35,6 +38,7 @@ State State::create(std::vector<std::string> names, int our_player_index,
   for (int suit_index = 0; suit_index < num_suits; ++suit_index) {
     if (variant.suits[suit_index].suit_type.reversed) {
       s.play_stacks[suit_index] = 6;
+      if (!s.common_play_stacks.empty()) s.common_play_stacks[suit_index] = 6;
       s.max_ranks[suit_index] = 1;
     }
   }
@@ -122,6 +126,20 @@ State State::with_play(Identity id) const {
   return out;
 }
 
+// Advance the SHARED view only. Throw It in a Hole's second stack vector:
+// the caller has decided that this play's identity was common knowledge, or
+// that a superposition collapsed on evidence every seat shares.
+//
+// Deliberately narrow — it moves `common_play_stacks` and nothing else. The
+// accounting (`base_count`, `playable_set`, the clue refund) belongs to the
+// believed view and is `with_play`'s job.
+State State::with_common_play(Identity id) const {
+  State out = *this;
+  if (out.common_play_stacks.empty()) return out;
+  out.common_play_stacks[id.suit_index] = id.rank;
+  return out;
+}
+
 State State::try_play(Identity id) const {
   return is_playable(id) ? with_play(id) : *this;
 }
@@ -152,6 +170,18 @@ int State::score() const {
   int total = 0;
   for (int s = 0; s < static_cast<int>(play_stacks.size()); ++s) {
     total += played_count(s);
+  }
+  return total;
+}
+
+int State::shared_score() const {
+  // Outside Throw It in a Hole there is no second view: every play is public,
+  // so the shared score IS the score and the vector is never populated.
+  if (common_play_stacks.empty()) return score();
+  int total = 0;
+  for (int s = 0; s < static_cast<int>(common_play_stacks.size()); ++s) {
+    const auto& st = variant->suits[s].suit_type;
+    total += st.reversed ? 6 - common_play_stacks[s] : common_play_stacks[s];
   }
   return total;
 }

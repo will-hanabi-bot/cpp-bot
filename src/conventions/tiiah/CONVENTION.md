@@ -8,7 +8,7 @@ implements it, and every rule that is not says so in the same breath.
 Terminology is in [GLOSSARY.md](GLOSSARY.md); terms not defined there (chop,
 pitch / chuck, CTP / CTD, critical, loaded, …) carry their
 [reactor glossary](../reactor/GLOSSARY.md) meanings. Convention that is legal
-but not yet implemented is tracked in [TODO.md](../../../TODO.md) §39–§42.
+but not yet implemented is tracked in [TODO.md](../../../TODO.md) §39–§41.
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -32,7 +32,7 @@ what this version is for.
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | Reverse-reactive dispatch (§1c) | **specified only** — TODO.md §39 |
 | The bucket-encoded reactive (§1d) | **specified only** — TODO.md §40 |
-| Superposition (§1e) | **specified only** — TODO.md §41 |
+| Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | **specified only** — TODO.md §42 |
 
 Which convention a game runs is `Game::convention`, resolved at game init
@@ -94,13 +94,37 @@ what the wire said and the resolution stays a pure function of the action histor
 plus our own sight, which is what lets `rewind` and `apply_snapshot` reproduce
 it without serialising anything.
 
-**Our own play is the one genuine gap**, and it is what §1e calls a
-superposition. `deck[order].id()` is `nullopt` for our seat, so the action is
-left unresolved: the hand updates, and the stacks do not move.
+**Our own play is the one the state cannot name**, because `deck[order].id()`
+is `nullopt` for our seat. Our own EMPATHY often can, though, and a play we can
+name is a play we can account for: `hidden_own_play_id`
+(`src/basics/game.cpp:547-566`) hands that identity to the resolution. What is
+left when empathy cannot name it is §1e's superposition — the hand updates and
+the stacks wait.
 
 Because of all this, `State::play_stacks` in a TIIAH game is **what we believe**,
 not what is. So are `score()`, `strikes` and therefore `State::ended()`. A wrong
 belief is invisible until the game ends; that is the variant, not a defect.
+
+### §1.3 Two views of the stacks
+
+A seat knows every play but its own, so no two seats hold the same stacks — and
+we know more about a partner's play than they do, having watched the card leave
+their hand. A clue still has to mean ONE thing, so the engine keeps two views:
+
+| | advances on |
+|---|---|
+| `State::play_stacks` | **our belief** — every play we can name, which is every partner's and our own identified ones |
+| `State::common_play_stacks` (`state.h:59`) | **the shared view** — only plays whose identity was common knowledge, plus collapses on evidence every seat shares |
+
+Anything deciding what a clue MEANS reads the shared view, through
+`State::shared_score` / `shared_pace` (`state.h:121-124`) and
+`Game::shared_in_endgame`. Outside TIIAH the second vector is empty and those
+accessors are the ordinary ones, so no other variant pays for this. Anything
+deciding what WE should do reads our belief, which is the better of the two.
+
+Two rules already read the shared view: §1b's stall context
+(`tiiah/interpret_clue.cpp:81-86`) and the stable orange ladder's pitch-vs-chuck
+test (`reactor0/interpret_clue.cpp:519`), which TIIAH reaches by delegating.
 
 ### §1.2 A 5 pays nothing
 
@@ -221,7 +245,7 @@ alike, unless they are **the only playables left in the receiver's hand** — th
 test is over the receiver's hand, not the whole table — in which case the clue
 is a **double chuck** instead.
 
-### §1e Superposition — SPECIFIED, NOT IMPLEMENTED (TODO.md §41)
+### §1e Superposition
 
 A player who played a card without knowing its identity is **superpositioned**:
 they keep a map of card order → the identities it could have been, and so does
@@ -233,17 +257,40 @@ cards were played**. Worked example: Bob played a card he knows is either a
 purple 1 or a teal 1, nothing else has been played, and Cathy holds
 `p2 p1 g1 r1 r5`. Assuming neither landed, Bob chooses her purple 1 on slot 2.
 
-**Collapsing.** A candidate leaves a superposition when:
+The set is stamped on the card's `ConvData` (`include/hanabi/basics/card.h:169`)
+at the moment of the play, by `note_hidden_action`
+(`src/conventions/tiiah/superposition.cpp:121-148`), and is built from
+**`common`** — the one view all three seats compute alike, which is what lets
+everyone hold the same set on the player's behalf. A play whose common empathy
+already names one identity is no superposition at all: the player knew, so the
+SHARED stacks advance with it.
 
-- another player plays a card of that identity;
-- another player's clue, stable or reactive, puts CTP on a playable card of that
-  identity;
-- every copy of it is accounted for in the discard pile and the other hands.
+**Collapsing** (`collapse_superpositions`, `:150-196`). A candidate leaves a
+superposition when:
 
-When one candidate is left the card leaves the map, the player is no longer
-superpositioned for it, and their believed stacks advance accordingly. In the
-example above, Bob sees Alice put CTP on a purple 1, drops `p1`, is left with
-`{t1}`, and knows what he played.
+1. another player plays a card of that identity;
+2. another player's clue, stable or reactive, puts CTP on a playable card of
+   that identity;
+3. every copy of it is accounted for in the discard pile and the other hands.
+
+Rules 1 and 2 say the same thing — that identity was still NEEDED, so the
+superposed card was not it — and both are **shared**: every seat sees them and
+narrows alike, so a collapse on either moves the shared stacks too. Only
+evidence every seat holds counts, which is why a play that was itself a
+superposition is not evidence: the seat that made it does not know what it was.
+
+Rule 3 is **private** — it is `reactor0::sight_narrowed`'s shape, and it reads
+our own eyes. It narrows what WE believe and never the set partners predict
+from, so it may move `play_stacks` and never `common_play_stacks`, and the
+stored set is left as it stands. That split is what keeps a reacter's target
+choice predictable: it is made on the shared rule, not on what one seat can see.
+
+When one candidate is left the card leaves the map and the stack it belongs to
+advances (`settle`, `:99-117`). A card that did not land is gone all the same,
+so it is booked as spent — our accounting has to know, or every count built on
+`base_count` stays wrong for the rest of the game. In the example above, Bob
+sees Alice put CTP on a purple 1, drops `p1`, is left with `{t1}`, and knows
+what he played.
 
 ### §1f Rainbowy variants — SPECIFIED, NOT IMPLEMENTED (TODO.md §42)
 
@@ -268,3 +315,4 @@ purple, the receiver assumes the purple 1 was not played.
 | `tests/test_tiiah/test_buckets.cpp` | §1a's four rows, the inverted re-indexing, and `bucket_of` |
 | `tests/test_tiiah/test_engine_rules.cpp` | §1.1's table and §1.2 — a partner's hidden play advancing our stacks, our own leaving them alone, a hidden misplay striking, a hidden 5 paying nothing, and both sides of the orange mirror |
 | `tests/test_tiiah/test_gate_and_clues.cpp` | §0's refusal, §1b read identically to reactor0 (a differential test), and §1c refusing rather than guessing |
+| `tests/test_tiiah/test_superposition.cpp` | §1e — a set recorded for our own and a partner's ambiguous play, a known play creating none and advancing both views, the two views diverging on a partner's play, a shared collapse, and the shared view staying absent outside the variant |

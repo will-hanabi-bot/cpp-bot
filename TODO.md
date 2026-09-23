@@ -1004,25 +1004,22 @@ implemented and tested; nothing reads them yet.
 
 ---
 
-## 41. `[tiiah]` Superposition
+## 41. `[tiiah]` Superposition — CLOSED in v16.1.0
 
-CONVENTION.md §1e. A seat that played a card without learning its identity keeps
-`order -> candidate identities`, and so does everyone else on its behalf; a
-superpositioned reacter picks its target assuming none of the superposed cards
-were played; candidates collapse on a seen play, on a clue putting CTP on a
-playable copy, or on every copy being accounted for.
+`ConvData::superposition` holds the candidate set, stamped from `common` by
+`note_hidden_action` and narrowed by `collapse_superpositions`
+(`src/conventions/tiiah/superposition.cpp`). `State::common_play_stacks` is the
+shared view the interpretation rules read; `play_stacks` stays our own belief.
+CONVENTION.md §1.3 and §1e.
 
-The engine already leaves the gap this fills: `resolve_hidden_action`
-(`src/basics/action.cpp:82-130`) returns our own hidden play unresolved, because
-`deck[order].id()` is nullopt for our seat.
+The two traps this entry recorded were both avoided by keeping the set on
+`Game::meta`, which `rewind` restores from `base.meta` and `apply_snapshot`
+rebuilds by replay — no new `Game` field, so nothing is carried through a
+rewind stale and nothing needs serialising.
 
-Where it goes: a seat-indexed `Game` field beside `pending_reactions`
-(`include/hanabi/basics/game.h`). It is a pure function of the action history, so
-`apply_snapshot` rebuilds it by replay and it needs no serialisation —
-`Game::PendingReactionElim` is the precedent. Two traps: `Game::base` holds only
-`{state, meta, players, common}`, so a new `Game` field is NOT restored by
-`rewind` and must either join `Base` or stay strictly replay-derivable; and every
-`simulate_clue` in the decision loop deep-copies it, so it must stay small.
+**Still open, and inherited from here:** the reacter's target choice under
+§1e — "assume none of the superposed cards were played" — has nothing to read
+it yet, because TIIAH has no reactive targets until §40 lands.
 
 ---
 

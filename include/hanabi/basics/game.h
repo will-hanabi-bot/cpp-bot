@@ -376,6 +376,10 @@ class Game {
     return move_history.back();
   }
   bool in_endgame() const;  // reactor variant overrides via field; see game.cpp
+  // The same question asked of the SHARED stacks, for rules that decide what a
+  // clue MEANS rather than what we should do about it. Identical to
+  // `in_endgame` outside Throw It in a Hole, where the two views cannot differ.
+  bool shared_in_endgame() const;
 
   // --- Reactor convention helpers (live on Game so state_eval can use them) ---
 

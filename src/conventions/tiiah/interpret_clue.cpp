@@ -78,8 +78,12 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // STABLE (CONVENTION.md §1b) — reactor0's ladders, unchanged. They are
   // exported precisely so a sibling convention can share them rather than fork
   // a copy that drifts.
+  // `shared_in_endgame`, not `in_endgame`: the stacks are a belief here, and a
+  // clue that read as a stall at one seat and a play call at another is the
+  // whole failure this variant invites (CONVENTION.md 1.1).
   const bool stall_ctx = prev.common.obvious_locked(prev, action.giver) ||
-                         game.in_endgame() || prev.state.clue_tokens == 8;
+                         game.shared_in_endgame() ||
+                         prev.state.clue_tokens == 8;
   return action.clue.kind == ClueKind::COLOUR
              ? reactor0::stable_colour(prev, game, action, stall_ctx)
              : reactor0::stable_rank(prev, game, action, stall_ctx);

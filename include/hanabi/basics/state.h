@@ -40,7 +40,23 @@ struct State {
   int cards_left = 0;
   int cards_total = 0;
 
+  // What WE believe has been played. In every ordinary variant that is simply
+  // what has been played; under Throw It in a Hole it is a belief, because our
+  // own plays go into the hole unseen (tiiah/CONVENTION.md 1.1).
   std::vector<int> play_stacks;
+  // THROW IT IN A HOLE: the stacks as everyone-knows-everyone-knows them.
+  //
+  // A play advances these only when its identity was COMMON knowledge at the
+  // time — i.e. the player themselves knew what they were playing — or when a
+  // superposition later collapses on evidence every seat shares. It therefore
+  // lags `play_stacks`, which also advances on the partners' plays that we
+  // watched and they did not.
+  //
+  // It exists because a clue has to mean one thing: any rule that reads the
+  // stacks while INTERPRETING must read a view every seat computes identically,
+  // or two seats read the same clue two ways. Empty outside TIIAH, where the
+  // `shared_*` accessors below fall through to the ordinary ones.
+  std::vector<int> common_play_stacks;
   // discard_stacks[suit][rank-1] = orders of cards discarded for that identity,
   // newest first (matching Scala's `order +: list` cons).
   std::vector<std::array<std::vector<int>, 5>> discard_stacks;
@@ -86,6 +102,8 @@ struct State {
   // --- Mutators (return new State) ---
   State with_discard(Identity id, int order) const;
   State with_play(Identity id) const;
+  // Advance the shared view alone (Throw It in a Hole). See state.cpp.
+  State with_common_play(Identity id) const;
   State try_play(Identity id) const;
   State regain_clue() const;
 
@@ -95,6 +113,15 @@ struct State {
   int max_score() const;
   int rem_score() const { return max_score() - score(); }
   int pace() const { return score() + cards_left + num_players - max_score(); }
+
+  // The same two questions asked of the SHARED view (`common_play_stacks`), for
+  // the rules that decide what a clue MEANS. Identical to the pair above in
+  // every variant but Throw It in a Hole, so a call site can simply prefer them
+  // without a variant test.
+  int shared_score() const;
+  int shared_pace() const {
+    return shared_score() + cards_left + num_players - max_score();
+  }
 
   int last_player_index(int player_index) const {
     return (player_index + num_players - 1) % num_players;

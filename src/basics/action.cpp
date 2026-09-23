@@ -79,7 +79,8 @@ Action orient_action_for_engine(Action act, const Variant& variant) {
   return act;
 }
 
-Action resolve_hidden_action(const State& state, Action act) {
+Action resolve_hidden_action(const State& state, Action act,
+                             std::optional<Identity> own_hint) {
   if (!state.variant->throw_it_in_a_hole) return act;
 
   int order = -1;
@@ -102,7 +103,9 @@ Action resolve_hidden_action(const State& state, Action act) {
 
   if (order < 0 || order >= static_cast<int>(state.deck.size())) return act;
   auto id = state.deck[order].id();
-  if (!id) return act;  // our own card — a superposition, not a gap we can fill
+  // Our own card: we cannot see it, but our empathy may still name it.
+  if (!id) id = own_hint;
+  if (!id) return act;  // genuinely unknown — a superposition (tiiah 1e)
 
   const bool inverted = state.variant->suits[id->suit_index].suit_type.inverted;
   const bool playable = state.is_playable(*id);

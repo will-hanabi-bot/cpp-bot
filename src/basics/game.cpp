@@ -8,6 +8,7 @@
 #include "hanabi/basics/identity_set.h"
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/player_elim.h"
+#include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/instrumentation/timer.h"
 
 namespace hanabi {
@@ -533,6 +534,32 @@ void Game::on_draw(const DrawAction& action) {
 
 // --- Dispatcher ------------------------------------------------------------
 
+namespace {
+
+// Throw It in a Hole: the identity of OUR OWN hidden play, when common empathy
+// names it outright. `state.deck` cannot — we never see our own cards — so
+// without this every play we make would become a superposition, including the
+// ones we were told about.
+//
+// Read from `common` rather than from `me()`: what the rest of the table
+// believes we knew is what they will hold us to, and it is what the shared
+// stacks advance on.
+std::optional<Identity> hidden_own_play_id(const Game& game, const Action& act) {
+  if (!game.state.variant->throw_it_in_a_hole) return std::nullopt;
+  const auto* play = std::get_if<PlayAction>(&act);
+  if (!play || play->suit_index != -1) return std::nullopt;
+  if (play->player_index_v != game.state.our_player_index) return std::nullopt;
+  const int order = play->order;
+  if (order < 0 || order >= static_cast<int>(game.common.thoughts.size())) {
+    return std::nullopt;
+  }
+  const IdentitySet live = game.common.thoughts[order].possibilities();
+  if (live.length() != 1) return std::nullopt;
+  return live.head();
+}
+
+}  // namespace
+
 void Game::handle_action(const Action& action) {
   if (static_cast<int>(state.action_list.size()) < state.turn_count) {
     throw std::runtime_error("turn_count exceeds action_list length");
@@ -553,7 +580,15 @@ void Game::handle_action(const Action& action) {
   // `add_action` above deliberately records the RAW action: the log then says
   // what the wire said, and the resolution stays a pure function of the action
   // history plus our own sight, so `rewind` and `apply_snapshot` reproduce it.
-  const Action effective = resolve_hidden_action(state, action);
+  // Our own card is the one the state cannot name — but our empathy sometimes
+  // can, and a play we can name is a play we can account for.
+  const Action effective = resolve_hidden_action(state, action, hidden_own_play_id(*this, action));
+
+  // ...and record what the player who made it does NOT know. Read from the RAW
+  // action, and before the dispatch: `resolve_hidden_action` has just filled in
+  // a partner's identity from what WE saw, and `on_play` is about to pin their
+  // thought to it, but the seat that played it learned nothing.
+  hanabi::tiiah::note_hidden_action(*this, action);
 
   // Snapshot prev for the convention hooks (which take the pre-handler state).
   Game prev = *this;
@@ -599,6 +634,11 @@ void Game::handle_action(const Action& action) {
         // StatusAction / StrikeAction: action_list recording only.
       },
       effective);
+
+  // Throw It in a Hole: this action may have proved that an identity somebody
+  // is superposed over was still needed. Runs after the interpretation, since
+  // a clue's CALLED_TO_PLAY stamps are half the evidence.
+  hanabi::tiiah::collapse_superpositions(*this, prev, effective);
 }
 
 // --- Empathy elim (port of game.py:613-710) -------------------------------
