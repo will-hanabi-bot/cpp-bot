@@ -140,6 +140,21 @@ State State::with_common_play(Identity id) const {
   return out;
 }
 
+State State::shared_view() const {
+  if (common_play_stacks.empty()) return *this;
+  State out = *this;
+  out.play_stacks = common_play_stacks;
+  // Bound to the variant's own identities, as `receiver_ctp_set` is: `create`
+  // otherwise walks every ordinal and would invent suits this variant lacks.
+  const int n = static_cast<int>(variant->suits.size()) * 5;
+  out.playable_set = IdentitySet::create(
+      [&out](Identity i) { return out.is_playable(i) && !out.is_basic_trash(i); },
+      n);
+  out.trash_set =
+      IdentitySet::create([&out](Identity i) { return out.is_basic_trash(i); }, n);
+  return out;
+}
+
 State State::try_play(Identity id) const {
   return is_playable(id) ? with_play(id) : *this;
 }

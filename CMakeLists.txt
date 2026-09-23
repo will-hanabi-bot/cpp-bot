@@ -404,6 +404,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_reverse_reactive.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_reactions.cpp
+  tests/test_tiiah/test_rainbowy.cpp
 )
 target_include_directories(hanabi_tiiah_tests PRIVATE tests)
 target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)

@@ -106,6 +106,17 @@ struct State {
   State with_common_play(Identity id) const;
   State try_play(Identity id) const;
   State regain_clue() const;
+  // This state with the SHARED stacks in place of our own belief: what every
+  // seat can compute alike, which is what a rule deciding what a clue MEANS has
+  // to run on (Throw It in a Hole, CONVENTION.md §1.3 and §1e). A superposed
+  // play never advanced `common_play_stacks`, so this is also "assuming none of
+  // the superposed cards were played" — the two are the same state.
+  //
+  // `playable_set` and `trash_set` are rebuilt from the swapped stacks; the
+  // discard accounting (`base_count`, `discard_stacks`) is the same in both
+  // views and is left alone. Returns `*this` outside TIIAH, where the shared
+  // vector is empty, so no other variant pays for it.
+  State shared_view() const;
 
   // --- Pure helpers ---
   bool ended() const;

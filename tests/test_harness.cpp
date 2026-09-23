@@ -76,6 +76,12 @@ Game setup(SetupOptions opts) {
     }
     for (Identity id : seeded_ids) ++game.state.base_count[id.to_ord()];
     game.state.play_stacks = ps;
+    // A seeded stack is a play that already happened, and everyone knows it, so
+    // the shared view agrees with our belief (Throw It in a Hole; the vector is
+    // empty and this a no-op in every other variant).
+    if (!game.state.common_play_stacks.empty()) {
+      game.state.common_play_stacks = ps;
+    }
     game.common.hypo_stacks = ps;
     for (auto& p : game.players) p.hypo_stacks = ps;
     for (Identity id : seeded_ids) {

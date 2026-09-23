@@ -25,9 +25,18 @@ reason. A wrong belief is invisible until the game ends.
 A play advances them only when its identity was common knowledge at the time,
 or when a superposition later collapses on evidence every seat shares. They lag
 the *believed stacks*, which also move on the partners' plays we watched and
-they did not. Read by anything deciding what a clue MEANS, through
-`State::shared_score` / `shared_pace` and `Game::shared_in_endgame`; empty, and
-free, outside TIIAH. CONVENTION.md §1.3.
+they did not. Read by everything deciding what a clue MEANS — both stable
+ladders, the reactive target walk and §1f's pin all run on `State::shared_view`,
+and `State::shared_score` / `shared_pace` / `Game::shared_in_endgame` answer the
+same questions of it. Empty, and free, outside TIIAH. CONVENTION.md §1.3.
+
+### shared view
+`State::shared_view()` (`src/basics/state.cpp:143-156`): this state with the
+*common stacks* in place of `play_stacks`, and `playable_set` / `trash_set`
+rebuilt to match. Since a superposed play never advanced the common stacks, it
+is also the state "assuming none of the superposed cards were played" — §1e's
+rule and §1.3's shared reading are one thing. Returns the state unchanged
+outside TIIAH.
 
 ### bucket
 One of three groups of suits, used by the reactive clues to say what a card IS
@@ -42,7 +51,7 @@ A card stamped `CALLED_TO_PLAY` whose inference still holds at least one good
 playable identity, **or** a card whose global empathy is entirely playable
 identities. Read from `common`, so every seat agrees. It is what the
 reverse-reactive dispatch keys on. `has_known_play`,
-`src/conventions/tiiah/interpret_clue.cpp:20-32`. CONVENTION.md §1c.
+`src/conventions/tiiah/interpret_clue.cpp:24-36`. CONVENTION.md §1c.
 
 ### reverse reactive
 TIIAH's dispatch, and the reverse of reactor0's: when Bob holds a known play and
@@ -50,7 +59,7 @@ Cathy does not, a clue to **Bob** is reactive — with **Cathy** reacting and Bo
 receiving — and a clue to **Cathy** is stable. Not the same as reactor's rule,
 where a clue to Bob makes Bob both reacter and receiver, a degenerate reading
 reactor scores as a MISTAKE. `tiiah::interpret_clue`
-(`src/conventions/tiiah/interpret_clue.cpp:60-72`). CONVENTION.md §1c.
+(`src/conventions/tiiah/interpret_clue.cpp:180-184`). CONVENTION.md §1c.
 
 ### double pitch
 A reactive clue on which both named cards are played — both players press the

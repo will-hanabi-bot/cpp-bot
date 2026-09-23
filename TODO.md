@@ -1034,7 +1034,7 @@ read, and it reads the wrong view.
 
 ---
 
-## 42. `[tiiah]` Rainbowy colour pinning, and stable clues from a superpositioned giver
+## 42. `[tiiah]` Rainbowy colour pinning, and stable clues from a superpositioned giver — CLOSED in v16.4.0
 
 CONVENTION.md §1f. In a rainbowy variant a non-orange colour stable clue pins the
 CTP to the next playable of that colour's OWN suit rather than a superposition of
@@ -1046,9 +1046,16 @@ cards were played.
 16 of the 44 TIIAH variants carry a rainbowy suit (Rainbow, Omni, Prism, Muddy,
 Cocoa).
 
+`pin_rainbowy_colour` (`src/conventions/tiiah/interpret_clue.cpp`) narrows the
+new call to one identity once reactor0's ladder has chosen which card it sits
+on, re-pinning to the rainbowy suit when the clued colour's own suit has no next
+playable. The superpositioned-giver half needed no rule of its own: the whole
+stable reading now runs on the shared view (§43), and a superposed play never
+advanced it.
+
 ---
 
-## 43. `[tiiah]` The reactive target walk runs on the wrong stack view
+## 43. `[tiiah]` The reactive target walk runs on the wrong stack view — CLOSED in v16.4.0
 
 CONVENTION.md §1d/§1e. `receiver_targets` simulates the receiver's queued plays
 on top of `play_stacks` -- OUR belief, which a partner's superposed play has
@@ -1062,6 +1069,15 @@ is to run the walk on it: a `State` whose `play_stacks` are the shared ones,
 with `playable_set` rebuilt to match (`with_play` maintains it; a bare
 assignment would leave it stale, and `pitch_candidates` reads it).
 
-Inherited from §41, unblocked by §40, and held for v16.4.0 so it lands with
-§42's other half of the same rule -- a stable colour clue from a superpositioned
-giver is read under exactly the same assumption.
+Inherited from §41, unblocked by §40, and closed in v16.4.0 with §42's other
+half of the same rule.
+
+`State::shared_view` (`src/basics/state.cpp`) is that state, with `playable_set`
+and `trash_set` rebuilt to match. `stacks_after_queued_plays` starts there, so
+the walk is the same at every seat; the stable ladders reach it through
+`SharedStacks`, a scoped swap around the delegation in `tiiah::interpret_clue`
+that costs nothing until the two views actually differ.
+
+Still on our belief, and left there deliberately: `common.hypo_stacks` and
+`Player::hypo_stacks`, which the elim layer rebuilds from `play_stacks` outside
+the swap's reach. They feed delayed-play chains rather than the call itself.

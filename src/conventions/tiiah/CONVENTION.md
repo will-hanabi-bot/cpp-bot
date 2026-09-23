@@ -8,7 +8,8 @@ implements it, and every rule that is not says so in the same breath.
 Terminology is in [GLOSSARY.md](GLOSSARY.md); terms not defined there (chop,
 pitch / chuck, CTP / CTD, critical, loaded, …) carry their
 [reactor glossary](../reactor/GLOSSARY.md) meanings. Convention that is legal
-but not yet implemented is tracked in [TODO.md](../../../TODO.md) §42–§43.
+but not yet implemented is tracked in [TODO.md](../../../TODO.md); as of v16.4.0
+this convention has no open entry there.
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -21,10 +22,10 @@ Bob the next player, Cathy the one after.
 for a TIIAH game (`src/basics/decide.cpp:909-913`) and the client says so once in
 table chat and then sits still (`src/net/commands.cpp:646-666`). That is
 deliberate: the decision layer the bot would otherwise use is reactor0's, which
-prices clues by *reactor0's* meanings, and §1f below is still specified and
-unimplemented. Before v16.0.0 the flag was not read at all, so these tables were
-played by reactor's rules — reactor's own §1b.8 said so — and stopping that is
-what this version is for.
+prices clues by *reactor0's* meanings. Every rule below it is implemented as of
+v16.4.0; what is left is the decision layer itself. Before v16.0.0 the flag was
+not read at all, so these tables were played by reactor's rules — reactor's own
+§1b.8 said so — and stopping that is what this version is for.
 
 | Part | State |
 |---|---|
@@ -34,7 +35,7 @@ what this version is for.
 | Reverse-reactive dispatch (§1c) | implemented (v16.2.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0) |
 | Superposition (§1e) | implemented (v16.1.0) |
-| Rainbowy colour pinning (§1f) | **specified only** — TODO.md §42 |
+| Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 
 Which convention a game runs is `Game::convention`, resolved at game init
 (`src/net/commands.cpp:378-393`). TIIAH is resolved from the **variant** and
@@ -117,15 +118,33 @@ their hand. A clue still has to mean ONE thing, so the engine keeps two views:
 | `State::play_stacks` | **our belief** — every play we can name, which is every partner's and our own identified ones |
 | `State::common_play_stacks` (`state.h:59`) | **the shared view** — only plays whose identity was common knowledge, plus collapses on evidence every seat shares |
 
-Anything deciding what a clue MEANS reads the shared view, through
-`State::shared_score` / `shared_pace` (`state.h:121-124`) and
-`Game::shared_in_endgame`. Outside TIIAH the second vector is empty and those
-accessors are the ordinary ones, so no other variant pays for this. Anything
-deciding what WE should do reads our belief, which is the better of the two.
+Anything deciding what a clue MEANS reads the shared view — `State::shared_view`
+(`src/basics/state.cpp:143-156`) is that state, with `playable_set` and
+`trash_set` rebuilt to match, and `State::shared_score` / `shared_pace`
+(`state.h:121-124`) and `Game::shared_in_endgame` are the questions asked of it.
+Outside TIIAH the second vector is empty, `shared_view` returns the state
+unchanged and the accessors are the ordinary ones, so no other variant pays for
+any of this.
 
-Two rules already read the shared view: §1b's stall context
-(`tiiah/interpret_clue.cpp:81-86`) and the stable orange ladder's pitch-vs-chuck
-test (`reactor0/interpret_clue.cpp:519`), which TIIAH reaches by delegating.
+As of v16.4.0 the whole interpretation runs on it, not a rule here and there:
+
+| What | How it gets the shared view |
+|---|---|
+| both stable ladders (§1b) | `SharedStacks`, a scoped swap of `play_stacks` / `playable_set` / `trash_set` around the delegation (`tiiah/interpret_clue.cpp:48-76`), plus a `prev` whose state is `shared_view()` |
+| the reactive target walk (§1c, §1d) | `stacks_after_queued_plays` starts from `shared_view()` (`variants/hole.cpp:12-17`) |
+| the §1f pin | `shared_view()` directly (`tiiah/interpret_clue.cpp:119`) |
+| §1b's stall context | `Game::shared_in_endgame` (`tiiah/interpret_clue.cpp:189-193`) |
+| the stable orange ladder's pitch-vs-chuck test | `State::shared_pace` (`reactor0/interpret_clue.cpp:519`), reached by delegating |
+
+The swap costs nothing until the two views actually differ — `SharedStacks::needed`
+— which is every game until somebody plays into the hole without knowing what
+they played. What a seat DECIDES still reads its own belief, which is the better
+of the two: the shared view is for meanings only.
+
+Two things still read our belief where they arguably should not, both inside
+reactor0 and both out of reach of the swap: `common.hypo_stacks`, rebuilt from
+`play_stacks` by the elim layer, and `Player::hypo_stacks`. They matter for
+delayed-play chains rather than for the call itself.
 
 ### §1.2 A 5 pays nothing
 
@@ -156,7 +175,7 @@ Three buckets is what makes the ±1 of §1d unambiguous.
 
 A stable clue means exactly what it means under reactor0, and the code delegates
 rather than forking a copy that would drift: `tiiah::interpret_clue`
-(`src/conventions/tiiah/interpret_clue.cpp:36-86`) calls
+(`src/conventions/tiiah/interpret_clue.cpp:148-216`) calls
 `reactor0::stable_colour` / `reactor0::stable_rank`. Read
 [reactor0's §1b and §1c](../reactor0/CONVENTION.md) for what they do.
 
@@ -169,7 +188,7 @@ blind-family arm (no TIIAH variant is a Blind one — all 44 carry
 A **known play** is a card stamped `CALLED_TO_PLAY` whose inference still
 contains at least one good playable identity, *or* a card whose global empathy is
 entirely playable identities. Read from `common`, so every seat answers it the
-same way (`has_known_play`, `src/conventions/tiiah/interpret_clue.cpp:20-32`).
+same way (`has_known_play`, `src/conventions/tiiah/interpret_clue.cpp:24-36`).
 
 When **Bob has a known play and Cathy does not**, dispatch reverses:
 
@@ -199,9 +218,11 @@ installs the waiting connection, stamps the reacter's blind play and leaves the
 receiver's own call for reaction time — the resolution machinery is reactor0's,
 shared.
 
-**The target walk** (`receiver_targets`, `:92-121`) runs over the stacks as they
-will stand once the receiver's known plays are done (`simulate_known_plays`,
-`:43-48`, a fixpoint so a chain advances in order). Two kinds of card qualify,
+**The target walk** (`receiver_targets`, `:92-121`) runs over the **shared**
+stacks as they will stand once the receiver's known plays are done
+(`simulate_known_plays`, `:43-48`, a fixpoint so a chain advances in order; the
+shared view is §1.3's, and §1e says why the walk has to use it). Two kinds of
+card qualify,
 and they are walked in this order — reactor0's Phase A before Phase B, which is
 the order every seat walks:
 
@@ -342,15 +363,11 @@ cards were played**. Worked example: Bob played a card he knows is either a
 purple 1 or a teal 1, nothing else has been played, and Cathy holds
 `p2 p1 g1 r1 r5`. Assuming neither landed, Bob chooses her purple 1 on slot 2.
 
-**Not implemented (TODO.md §43).** §1d's target walk runs on `play_stacks` — our
-own belief, which a partner's superposed play *has* advanced, because we watched
-the card. Every seat therefore walks a slightly different simulation the moment
-anyone has played into the hole without knowing what it was. The shared view
-`common_play_stacks` is exactly "no superposed play counted", so the fix is to
-walk that instead; it is held for v16.4.0, where the other half of the same rule
-(§1f's stable clue from a superpositioned giver) lands with it. Until then the
-convention is only sound before the first ambiguous play, which is why the gate
-in §0 is still down.
+That rule and §1.3's shared view are **the same rule** (v16.4.0): a superposed
+play never advanced `common_play_stacks`, so a walk that runs on the shared view
+is already assuming none of them were played. `stacks_after_queued_plays` starts
+there (`src/conventions/variants/hole.cpp:12-17`), so every seat walks the same
+simulation however many cards have gone into the hole unnamed.
 
 The set is stamped on the card's `ConvData` (`include/hanabi/basics/card.h:169`)
 at the moment of the play, by `note_hidden_action`
@@ -387,7 +404,7 @@ so it is booked as spent — our accounting has to know, or every count built on
 sees Alice put CTP on a purple 1, drops `p1`, is left with `{t1}`, and knows
 what he played.
 
-### §1f Rainbowy variants — SPECIFIED, NOT IMPLEMENTED (TODO.md §42)
+### §1f Rainbowy variants
 
 In a rainbowy variant a non-orange **colour** stable clue pins the CTP to exactly
 the next playable card of that colour's **own** suit — not a superposition of it
@@ -396,10 +413,28 @@ and the rainbowy suit. Clue red on turn 1 and the receiver writes red 1, and is
 
 The exception is when that is immediately impossible: if red 5 is already played
 and red is clued, the CTP is re-pinned to the rainbowy suit's next playable.
+"Impossible" also covers a suit that is dead above its stack — red on 3 with both
+red 4s discarded re-pins the same way.
 
 A stable colour clue given **by a superpositioned player** is read under §1e's
 rule: if the giver is superpositioned between a purple 1 and a teal 1 and clues
 purple, the receiver assumes the purple 1 was not played.
+
+`pin_rainbowy_colour` (`src/conventions/tiiah/interpret_clue.cpp:103-146`) is a
+post-step over reactor0's ladder rather than a fork of it: the ladder decides
+WHICH card is called and this decides what that card is, by narrowing the new
+call to one identity. It runs on the shared view (§1.3), which is what carries
+the superpositioned-giver rule — there is no separate test for it, because "the
+stacks a clue is read against" and "assume none of the superposed cards were
+played" are the same sentence here.
+
+Only a **new** call is pinned. An older one was pinned by its own clue, and §1i
+forbids widening an inferred set back out.
+
+The rainbowy suit is the one carrying `rainbowish` (Rainbow, Omni), `muddy`
+(Muddy Rainbow, Cocoa Rainbow) or `prism` — 16 of the 44 variants have exactly
+one. The non-orange proviso is defensive: no TIIAH variant pairs an inverted suit
+with a rainbowy one, so the guard has nothing to exclude today.
 
 ## Test coverage
 
@@ -413,4 +448,5 @@ purple, the receiver assumes the purple 1 was not played.
 | `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
 | `tests/test_tiiah/test_bucket_encoding.cpp` | §1d — a rank clue naming the bucket below and a colour clue the bucket above, the spec's `{r4, y1}` worked example, a finesse naming its connector outright, and a pairing that breaks the relation going unread |
 | `tests/test_tiiah/test_reactions.cpp` | §1d — an inverted-only hand making the clue a double chuck, a double chuck over a critical card refused, and both parities resolving: the receiver is called to the button the reacter pressed |
+| `tests/test_tiiah/test_rainbowy.cpp` | §1f — a colour clue naming its own suit rather than the rainbowy one, a rank clue left alone, the re-pin when the own suit is finished, and a superpositioned giver read as though they had not played |
 | `tests/test_tiiah/test_superposition.cpp` | §1e — a set recorded for our own and a partner's ambiguous play, a known play creating none and advancing both views, the two views diverging on a partner's play, a shared collapse, and the shared view staying absent outside the variant |
