@@ -600,9 +600,28 @@ std::optional<ClueInterp> reactive_rank(const Game& prev, Game& game,
     // a known orange, which is why the stamp mirrors Phase A's inverted arm.
     // A plain target keeps the old reading: both press Discard.
     const bool target_inverted = cand.inverted;
-    if (vet_react_slot(prev, game, react_order, conns,
-                       /*reacter_plays=*/target_inverted) != ReactVet::OK) {
-      continue;
+    // §1g's split, as Phase A and colour mode 1 have always applied it: SHARED
+    // knowledge retargets, so every seat walks to the next trash target
+    // together, but giver-only knowledge may only REJECT. Phase C used to
+    // `continue` on both, which walks on a failure the REACTER cannot see --
+    // he stays on this pairing and acts on it, so the two readings part company.
+    //
+    // Replay 2005309 T33 (Dual-Color & Orange): the receiver's leftmost trash
+    // was an orange, which swaps the reacter onto Play, and his slot 1 was a
+    // Violet 4 the giver could see was neither playable nor a connector. The
+    // walk went on to her next trash, whose pairing was the reacter's known
+    // Orange 4 -- a chuck that stacks -- so the clue read as a safe reactive
+    // discard and `predicts_a_strike` had nothing to veto. The reacter blind-
+    // played the Violet 4 and struck.
+    switch (vet_react_slot(prev, game, react_order, conns,
+                           /*reacter_plays=*/target_inverted)) {
+      case ReactVet::RETARGET:
+        continue;
+      case ReactVet::REJECT:
+        rb.undo();
+        return std::nullopt;
+      case ReactVet::OK:
+        break;
     }
     rb.arm();
     game.with_thought(react_order, [](const Thought& t) {

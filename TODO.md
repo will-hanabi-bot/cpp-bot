@@ -938,3 +938,36 @@ half of every elimination is inert and the rank half does all the work. A
 mis-cued `card_elim` / link resolution there would produce exactly this. The
 position is reproducible from the log, and the accounting guard makes a good
 tripwire: log when it fires and every instance is a live contradiction.
+
+---
+
+## 38. `[reactor0]` Rank Phase C never runs the giver-only orange loss guard
+
+Every reactive site that can call the reacter to press a button the giver can
+see is wrong for his card runs `variants::would_lose_inverted_reacter`
+(`variants/inverted.cpp:31-51`): rank Phase A
+(`interpret_reactive.cpp:433-440`), rank Phase B (`:532-540`), colour mode 1
+(`:700-708`) and colour mode 2's plain branch (`:836-841`). **Rank Phase C
+(`:577-647`) does not.**
+
+Two readings slip through as a result, both giver-only, so §1g says the clue
+should be REJECTed rather than walked past:
+
+- an INVERTED dc-target swaps the reacter onto Play, and a react card the giver
+  can see is a USEFUL orange is then pitched — the copy is thrown away for
+  nothing. `can_pitch_for_free` is the exemption Phase A pairs with the guard,
+  and it would carry over unchanged;
+- a PLAIN dc-target leaves the reacter on Discard, and a react card the giver
+  can see is an orange the stack is not waiting for is a chuck that strikes.
+
+The second is caught today by the decision layer rather than by the convention:
+`outcome_of` reads a CTD on an unplayable inverted card as `Outcome::STRIKE`,
+so `predicts_a_strike` drops the candidate from every rung. The first is not
+caught at all — a pitch reads as `Outcome::DISCARD`, which no rung vetoes.
+That makes this a giver-side gap in the CONVENTION, which any seat reading
+somebody else's clue also has.
+
+Found while fixing v15.3.0 (Phase C walking on a giver-only REJECT, replay
+2005309 T33), and deliberately left out of that change: it needs a replay that
+actually exhibits it, and none is known. `test_reactive_inverted_vet.cpp`'s
+`RankPhaseAStillRefusesToPitchAUsefulOrange` is the Phase A fixture to mirror.

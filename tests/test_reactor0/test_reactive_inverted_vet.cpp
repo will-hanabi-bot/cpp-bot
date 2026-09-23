@@ -243,3 +243,37 @@ TEST(Reactor0ReactiveInvertedVet, RankPhaseAStillRefusesToPitchAUsefulOrange) {
   EXPECT_NE(status_at(g, TestPlayer::BOB, 3), CardStatus::CALLED_TO_PLAY)
       << "pitching a useful orange loses the copy for nothing";
 }
+
+// --- rank Phase C ---------------------------------------------------------
+
+// Phase C's walk follows §1g like every other site: SHARED knowledge retargets,
+// giver-only knowledge rejects. Cathy's leftmost trash is the o1, and an
+// inverted dc-target swaps the reacter onto Play -- so the pairing is a blind
+// play of Bob's slot 4, which the giver can see is an unplayable r5. The reacter
+// sees no id there and would play it, so the clue must not be given at all.
+//
+// Until v15.3.0 Phase C walked on instead, landing on Cathy's slot 2 (the r1),
+// whose pairing is Bob's slot 3 -- a discard call that vets fine. Giver and
+// receiver then read a harmless double discard while the reacter blind-played
+// and struck. Replay 2005309 T33.
+//
+// Rank 5 -> anchor 5. Target slot 1 -> react slot (5+5-1)%5 = 4; target slot 2
+// -> react slot 3.
+TEST(Reactor0ReactiveInvertedVet, RankPhaseCRejectsOnGiverOnlyKnowledge) {
+  SetupOptions opts = orange_opts();
+  opts.play_stacks = {2, 2, 2, 1};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r4", "g4", "b4", "r5", "b3"},  // Bob: slot 4 = r5, visibly unplayable
+      // Cathy: no playable and no one-away card, so Phases A and B are dead.
+      // Her leftmost trash is the o1; her r1 at slot 2 is the next candidate.
+      {"o1", "r1", "g5", "b5", "b1"},
+  };
+  Game g = setup(std::move(opts));
+
+  g = take_turn(std::move(g), "Alice clues 5 to Cathy");
+
+  EXPECT_EQ(last_clue_interp(g), ClueInterp::MISTAKE)
+      << "the reacter would blind-play the r5 the giver can see, so Phase C "
+         "must reject rather than walk to the next trash target";
+}

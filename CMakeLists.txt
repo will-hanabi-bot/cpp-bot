@@ -324,6 +324,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_bad_reactive_target/test_replay_1966351_wrong_target_from_early_dc_elim.cpp
   tests/test_reactor0/test_bad_reactive_target/test_replay_1974342_reactive_discard_survives_a_dead_chuck.cpp
   tests/test_reactor0/test_bad_reactive_target/test_replay_1973406_finesse_walks_past_a_dead_connector.cpp
+  tests/test_reactor0/test_bad_reactive_target/test_replay_2005309_phase_c_rejects_on_giver_only_knowledge.cpp
   tests/test_reactor0/test_stable_rank_omni.cpp
   tests/test_reactor0/test_strike_no_reset.cpp
   tests/test_reactor0/test_urgent_skips_known_trash.cpp

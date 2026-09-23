@@ -165,7 +165,7 @@ uses.
 **Phase B**, and *only* Phase B — the blind-play phase that walks one-away
 targets and calls the reacter onto the prerequisite
 (`interpret_reactive.cpp:485-575`). Phase A (double play, `:397-483`) and Phase C
-(double discard, `:577-631`) are not finesses. A reactive lock has to be excluded
+(double discard, `:577-647`) are not finesses. A reactive lock has to be excluded
 explicitly (`predicts_reactive_lock`): it stamps CHOP_MOVED a turn later, so at
 clue time the receiver's predicted slot carries no status and looks exactly like
 an un-stamped Phase B target. Since VERY HIGH is the one thing that outranks a
@@ -1254,12 +1254,12 @@ lives in `src/conventions/reactor0/decision.cpp`:
 
 | Rule | Existing machinery | Where |
 |---|---|---|
-| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1012`, dispatched at `interpret_clue.cpp:935-938` |
+| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1027`, dispatched at `interpret_clue.cpp:935-938` |
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:215-267` |
 | finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:485-575` |
-| double discard clue | reactive rank Phase C | `interpret_reactive.cpp:577-631` |
+| double discard clue | reactive rank Phase C | `interpret_reactive.cpp:577-647` |
 | a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |
-| reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:397-483`; `:651-737`, `:739-837` |
+| reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:397-483`; `:670-756`, `:758-855` |
 | lock clue | `predicts_reactive_lock` | `interpret_reaction.cpp:31-47` |
 | "this clue creates a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |
 | new touches, for the default tiebreak | `elim_result` / `bad_touch_result` | `src/basics/clue_result.cpp` |
