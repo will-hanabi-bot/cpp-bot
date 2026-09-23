@@ -18,11 +18,21 @@ giver, Bob the next player, Cathy the one after.
 ## §0 Status and relationship to reactor
 
 - Reactor0 is a **3-player** convention. Which convention a game runs is
-  `Game::convention`, resolved at game init: reactor0 selected AND exactly 3
-  players → reactor0; otherwise that game runs reactor
-  (`src/net/commands.cpp:292-299`). The choice is recorded in the `game_init`
+  `Game::convention`, resolved at game init (`src/net/commands.cpp:378-390`):
+  a Throw It in a Hole variant runs `Convention::TIIAH` whatever the seat
+  count; otherwise reactor0 selected AND exactly 3 players → reactor0;
+  otherwise that game runs reactor. The choice is recorded in the `game_init`
   log record and in the snapshot (`src/logging/state_snapshot.cpp`), so
   replays rerun under the convention they were played with.
+- **Reactor0 has a sibling** (v16.0.0):
+  [tiiah](../tiiah/CONVENTION.md) forks from it for the Throw It in a Hole
+  variants, sharing its stable ladders by direct call and its BELIEF
+  machinery — the no-widening clamp, the missed-call policy, the
+  no-reset-on-strike rule, call invariants, reaction resolution. Those shared
+  sites ask `is_reactor0_family(convention)` rather than testing reactor0 by
+  name (`include/hanabi/basics/convention.h`); the DECISION layer asks
+  `uses_reactor0_decisions`, which TIIAH does not satisfy, because those
+  routines price clues by reactor0's meanings.
 - **Shared with reactor, unchanged**: most of the decision layer —
   `advance` / `eval_state` / `eval_game`, the `take_action`
   ladder, `chop()`, `has_ptd()`, `find_all_clues`, the endgame solver, and

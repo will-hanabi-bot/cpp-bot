@@ -114,6 +114,19 @@ struct Variant {
   // independent, which is what makes Totally Blind need no rule of its own.
   bool colour_clues_touch_nothing = false;
   bool rank_clues_touch_nothing = false;
+  // Throw It in a Hole (`throwItInAHole`, 44 variants). Pressing Play puts the
+  // card in the HOLE: nobody sees what it was, the player who played it
+  // included, and nobody is told whether it landed. Discards are visible as
+  // usual, a 5 returns no clue token, and the score and strike count are hidden
+  // until the game ends.
+  //
+  // Read by the ENGINE rather than by a convention, and therefore keyed on this
+  // flag rather than on `Game::convention`: a 4+ player TIIAH table falls back
+  // to reactor (`src/net/commands.cpp`) and still needs the right stacks.
+  // `Game::handle_action` resolves each hidden action against what we can see
+  // before the engine ever handles it; `State::with_play` reads it for the
+  // 5-token rule. See `src/conventions/tiiah/CONVENTION.md`.
+  bool throw_it_in_a_hole = false;
   // The rank clue values this variant actually offers, from `clueRanks`.
   // Defaults to {1,2,3,4,5}. Odds and Evens gives {1,2}; the Number Mute
   // family gives {} (no rank clues at all).

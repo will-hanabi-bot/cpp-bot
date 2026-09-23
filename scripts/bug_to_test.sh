@@ -53,7 +53,8 @@ CONVENTION=${CONVENTION:-reactor}
 case "$CONVENTION" in
   reactor0) TARGET=hanabi_reactor0_tests; LABEL='^reactor0$'; DEFAULT_CATEGORY=test_reactor0/test_misc ;;
   reactor)  TARGET=hanabi_reactor_tests;  LABEL='^reactor$';  DEFAULT_CATEGORY=test_reactor/test_misc ;;
-  *) echo "unknown convention '$CONVENTION' (expected reactor or reactor0)" >&2; exit 2 ;;
+  tiiah)    TARGET=hanabi_tiiah_tests;    LABEL='^tiiah$';    DEFAULT_CATEGORY=test_tiiah ;;
+  *) echo "unknown convention '$CONVENTION' (expected reactor, reactor0 or tiiah)" >&2; exit 2 ;;
 esac
 CATEGORY=${CATEGORY:-$DEFAULT_CATEGORY}
 echo "convention: $CONVENTION -> target $TARGET, category $CATEGORY"

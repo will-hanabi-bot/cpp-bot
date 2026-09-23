@@ -650,7 +650,7 @@ SolveResult EndgameSolver::solve(const Game& game,
   //
   // Reactor0 only. Reactor's endgame corpus is out of scope.
   const std::optional<PerformAction> called_action =
-      game.convention == Convention::REACTOR0
+      uses_reactor0_decisions(game.convention)
           ? standing_call_action(game, state.our_player_index)
           : std::nullopt;
   auto honours_call = [&called_action](const PerformAction& p) {

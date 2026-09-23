@@ -174,6 +174,33 @@ std::optional<Action> action_from_json(const nlohmann::json& obj);
 // non-inverted suits and for non-suit actions (Clue / Draw / Turn / etc).
 Action orient_action_for_engine(Action act, const Variant& variant);
 
+struct State;
+
+// Throw It in a Hole: fill in what the server withheld.
+//
+// Every card that reaches the HOLE is reported without its identity, and the
+// team is not told whether it landed — so `orient_action_for_engine` above
+// cannot do its job (it keys on the suit, and there isn't one) and the engine's
+// identity blocks skip the action entirely, leaving the stacks frozen at zero.
+//
+// But we WATCHED a partner's card sit in their hand, so `state.deck[order]`
+// still knows what it was. This rebuilds the button-oriented action the engine
+// would have received in an ordinary variant, deciding the outcome from the
+// identity and the stacks rather than from the wire's claim:
+//
+//   hidden and it reached the hole   plain, playable  -> Play (the stack advances)
+//                                    plain, dead      -> Discard failed (a strike)
+//                                    inverted         -> Discard (a chuck), failed if dead
+//   hidden and it reached the pile   inverted         -> Play (a pitch)
+//                                    plain            -> Discard
+//
+// The result is already button-oriented, so it must NOT be passed through
+// `orient_action_for_engine` afterwards — that would flip the inverted cases
+// back. Our OWN card returns unchanged, because `deck[order].id()` is nullopt
+// for our seat: that gap is the genuine one, and the convention calls it a
+// superposition. No-op outside TIIAH and for every non-play/discard action.
+Action resolve_hidden_action(const State& state, Action act);
+
 // Polymorphic accessors over Action.
 inline int player_index(const Action& a) {
   return std::visit([](const auto& v) { return v.player_index(); }, a);

@@ -619,7 +619,7 @@ void retire_pending_reaction(Game& game, int player_index) {
 
 bool resolve_deferred_reaction(const Game& prev, Game& game, int player_index,
                                int order, bool was_play) {
-  if (game.convention != Convention::REACTOR0) return false;
+  if (!is_reactor0_family(game.convention)) return false;
   // Find what this seat owes. Indexed by receiver, so scan for the entry whose
   // REACTER just acted. At most one can match: reacter = giver + 1, and a giver's
   // reactive clue always has the same receiver, so two entries cannot share a

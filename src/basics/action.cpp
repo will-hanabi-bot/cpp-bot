@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 
 namespace hanabi {
@@ -33,15 +34,22 @@ DrawAction DrawAction::from_json(const nlohmann::json& obj) {
           obj.at("suitIndex").get<int>(), obj.at("rank").get<int>()};
 }
 
+// `suitIndex` / `rank` / `failed` are defaulted rather than required. Throw It
+// in a Hole withholds the identity of every card that reaches the hole, and
+// whether it omits the keys or sends -1 is the server's business: with `.at()`
+// the omission threw, the throw was swallowed at the client's message handler,
+// and the action was dropped — which desyncs the hand. -1 is already the engine's
+// spelling for "unknown" (it is how our own draws arrive), and the internal log
+// reader has always been lenient in the same way.
 PlayAction PlayAction::from_json(const nlohmann::json& obj) {
   return {obj.at("playerIndex").get<int>(), obj.at("order").get<int>(),
-          obj.at("suitIndex").get<int>(), obj.at("rank").get<int>()};
+          obj.value("suitIndex", -1), obj.value("rank", -1)};
 }
 
 DiscardAction DiscardAction::from_json(const nlohmann::json& obj) {
   return {obj.at("playerIndex").get<int>(), obj.at("order").get<int>(),
-          obj.at("suitIndex").get<int>(), obj.at("rank").get<int>(),
-          obj.at("failed").get<bool>()};
+          obj.value("suitIndex", -1), obj.value("rank", -1),
+          obj.value("failed", false)};
 }
 
 StrikeAction StrikeAction::from_json(const nlohmann::json& obj) {
@@ -69,6 +77,56 @@ Action orient_action_for_engine(Action act, const Variant& variant) {
     }
   }
   return act;
+}
+
+Action resolve_hidden_action(const State& state, Action act) {
+  if (!state.variant->throw_it_in_a_hole) return act;
+
+  int order = -1;
+  int player = -1;
+  bool reached_the_hole = false;
+  bool wire_failed = false;
+  if (auto* p = std::get_if<PlayAction>(&act)) {
+    if (p->suit_index != -1) return act;  // the server told us; nothing to fill
+    order = p->order;
+    player = p->player_index_v;
+    reached_the_hole = true;
+  } else if (auto* d = std::get_if<DiscardAction>(&act)) {
+    if (d->suit_index != -1) return act;
+    order = d->order;
+    player = d->player_index_v;
+    wire_failed = d->failed;
+  } else {
+    return act;
+  }
+
+  if (order < 0 || order >= static_cast<int>(state.deck.size())) return act;
+  auto id = state.deck[order].id();
+  if (!id) return act;  // our own card — a superposition, not a gap we can fill
+
+  const bool inverted = state.variant->suits[id->suit_index].suit_type.inverted;
+  const bool playable = state.is_playable(*id);
+
+  if (reached_the_hole) {
+    // An inverted card reaches its stack on the DISCARD button (a chuck), so
+    // that is the action the engine needs to see.
+    if (inverted) {
+      return DiscardAction{player, order, id->suit_index, id->rank,
+                           /*failed=*/!playable};
+    }
+    if (playable) return PlayAction{player, order, id->suit_index, id->rank};
+    // A play that did not land is a strike, and `on_play` has no way to model
+    // one — the engine spells a misplay as a failed discard.
+    return DiscardAction{player, order, id->suit_index, id->rank,
+                         /*failed=*/true};
+  }
+
+  // It reached the discard pile, which is visible even here. Pressing Play on
+  // an inverted card is the pitch that puts it there.
+  if (inverted && !wire_failed) {
+    return PlayAction{player, order, id->suit_index, id->rank};
+  }
+  return DiscardAction{player, order, id->suit_index, id->rank, wire_failed};
 }
 
 std::optional<Action> action_from_json(const nlohmann::json& obj) {

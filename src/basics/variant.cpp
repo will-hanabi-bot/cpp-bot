@@ -105,7 +105,7 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
                      bool funnels, bool chimneys, bool odds_and_evens,
                      bool alternating_clues, bool synesthesia,
                      bool colour_clues_touch_nothing,
-                     bool rank_clues_touch_nothing,
+                     bool rank_clues_touch_nothing, bool throw_it_in_a_hole,
                      std::vector<int> clue_ranks) {
   const auto& catalog = load_suit_catalog();
   Variant v;
@@ -125,6 +125,7 @@ Variant make_variant(int id, std::string name, std::vector<std::string> suit_nam
   v.alternating_clues = alternating_clues;
   v.colour_clues_touch_nothing = colour_clues_touch_nothing;
   v.rank_clues_touch_nothing = rank_clues_touch_nothing;
+  v.throw_it_in_a_hole = throw_it_in_a_hole;
   v.synesthesia = synesthesia;
   v.odds_and_evens = odds_and_evens;
   v.clue_ranks = std::move(clue_ranks);
@@ -432,6 +433,7 @@ Variant variant_from_json(const nlohmann::json& entry) {
       entry.value("synesthesia", false),
       entry.value("colorCluesTouchNothing", false),
       entry.value("rankCluesTouchNothing", false),
+      entry.value("throwItInAHole", false),
       // Absent `clueRanks` means the full 1-5. Present-but-empty is the Number
       // Mute family, which offers no rank clues at all -- so `value()` with a
       // 1-5 default would be wrong, and the key has to be probed explicitly.

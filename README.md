@@ -2,7 +2,8 @@
 
 A C++20 bot that plays [Hanabi](https://hanab.live) on hanab.live using the
 **Reactor** conventions — **reactor0** (the default, a minimalist 3-player
-convention) and **reactor** (the original). It logs in over HTTPS, holds a WebSocket session, joins
+convention) and **reactor** (the original), plus **tiiah** for the Throw It in a
+Hole variants, which it currently reads but does not play. It logs in over HTTPS, holds a WebSocket session, joins
 or creates tables, and plays full games — including an exact-win-probability
 endgame solver.
 
@@ -22,6 +23,8 @@ roughly 50× faster per primitive operation. See
 | [reactor0/GLOSSARY.md](src/conventions/reactor0/GLOSSARY.md) | reactor0 terms, defined, with code references |
 | [reactor/CONVENTION.md](src/conventions/reactor/CONVENTION.md) | **The ruling reference** for the reactor convention |
 | [reactor/GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) | Every domain term, defined, with code references |
+| [tiiah/CONVENTION.md](src/conventions/tiiah/CONVENTION.md) | **The ruling reference** for Throw It in a Hole — the variant's engine rules, and the convention being built on them |
+| [tiiah/GLOSSARY.md](src/conventions/tiiah/GLOSSARY.md) | TIIAH terms: the hole, buckets, superposition |
 | [TODO.md](TODO.md) | Convention that is legal but not yet implemented |
 | [PLAN.md](PLAN.md) | Scoping document for work in flight (currently the reactor0 decision overhaul) |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for agents: version bumps, test policy, the bug-report workflow |
@@ -56,10 +59,16 @@ shared meaning is what the convention specifies — see §2.
 
 ## 2. The conventions in one page
 
-Two conventions ship. Which one a game runs is decided at game start:
-**reactor0** is the default, but only for 3-player games — 4+ players fall
-back to **reactor**. `/setall reactor|reactor0` switches it for new games,
-and the card-order-0 note names the convention actually in use.
+Three conventions ship. Which one a game runs is decided at game start: a
+**Throw It in a Hole** variant runs **tiiah** whatever the seat count;
+otherwise **reactor0** is the default, but only for 3-player games — 4+ players
+fall back to **reactor**. `/setall reactor|reactor0` switches the latter two for
+new games, and the card-order-0 note names the convention actually in use.
+
+**tiiah is not selectable and does not play yet.** It is resolved from the
+variant, and as of v16.0.0 the bot says so once in table chat and then sits
+still rather than play those tables by another convention's rules, which is what
+it did before. See [tiiah/CONVENTION.md](src/conventions/tiiah/CONVENTION.md) §0.
 
 ### Reactor0 (default)
 

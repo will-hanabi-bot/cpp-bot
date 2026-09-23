@@ -971,3 +971,69 @@ Found while fixing v15.3.0 (Phase C walking on a giver-only REJECT, replay
 2005309 T33), and deliberately left out of that change: it needs a replay that
 actually exhibits it, and none is known. `test_reactive_inverted_vet.cpp`'s
 `RankPhaseAStillRefusesToPitchAUsefulOrange` is the Phase A fixture to mirror.
+
+---
+
+## 39. `[tiiah]` Reverse-reactive dispatch
+
+`src/conventions/tiiah/CONVENTION.md` §1c. When Bob holds a **known play** and
+Cathy does not, a clue to Bob is REACTIVE with Cathy reacting and Bob receiving,
+and a clue to Cathy is stable. Bob's target is the next playable in his hand
+under stack simulation with every known play in it assumed already played, and a
+card already stamped CTP is never retargeted.
+
+`has_known_play` (`src/conventions/tiiah/interpret_clue.cpp:20-32`) is written
+and is used today only to RECOGNISE the shape: a clue of it reads MISTAKE,
+installs no waiting connection and stamps nothing (`:70-81`). That is the honest
+answer while the meaning is unimplemented — guessing would call a partner onto a
+card nobody named — but it does mean a legal clue currently reads as nothing.
+
+---
+
+## 40. `[tiiah]` The bucket-encoded reactive
+
+CONVENTION.md §1d. All reactive clues are even parity; the sum rule picks the
+slots as in reactor0 and the clue KIND says what the cards are — rank: a finesse,
+or the receiver's target one bucket higher than the reacter's (wrapping), or both
+players knowing their identity exactly; colour: the same with one bucket lower.
+Inverted playables and inverted finesses are skipped as targets unless they are
+the only playables left, where the clue becomes a double chuck.
+
+`suit_buckets` / `bucket_of` (`src/conventions/tiiah/buckets.cpp`) are
+implemented and tested; nothing reads them yet.
+
+---
+
+## 41. `[tiiah]` Superposition
+
+CONVENTION.md §1e. A seat that played a card without learning its identity keeps
+`order -> candidate identities`, and so does everyone else on its behalf; a
+superpositioned reacter picks its target assuming none of the superposed cards
+were played; candidates collapse on a seen play, on a clue putting CTP on a
+playable copy, or on every copy being accounted for.
+
+The engine already leaves the gap this fills: `resolve_hidden_action`
+(`src/basics/action.cpp:82-130`) returns our own hidden play unresolved, because
+`deck[order].id()` is nullopt for our seat.
+
+Where it goes: a seat-indexed `Game` field beside `pending_reactions`
+(`include/hanabi/basics/game.h`). It is a pure function of the action history, so
+`apply_snapshot` rebuilds it by replay and it needs no serialisation —
+`Game::PendingReactionElim` is the precedent. Two traps: `Game::base` holds only
+`{state, meta, players, common}`, so a new `Game` field is NOT restored by
+`rewind` and must either join `Base` or stay strictly replay-derivable; and every
+`simulate_clue` in the decision loop deep-copies it, so it must stay small.
+
+---
+
+## 42. `[tiiah]` Rainbowy colour pinning, and stable clues from a superpositioned giver
+
+CONVENTION.md §1f. In a rainbowy variant a non-orange colour stable clue pins the
+CTP to the next playable of that colour's OWN suit rather than a superposition of
+it and the rainbowy suit, unless that is immediately impossible, in which case it
+re-pins to the rainbowy suit's next playable. And a stable colour clue from a
+superpositioned giver is read under §1e's assumption that none of the superposed
+cards were played.
+
+16 of the 44 TIIAH variants carry a rainbowy suit (Rainbow, Omni, Prism, Muddy,
+Cocoa).

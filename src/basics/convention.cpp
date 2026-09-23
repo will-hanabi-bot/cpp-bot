@@ -9,9 +9,16 @@ std::string_view convention_name(Convention c) {
   switch (c) {
     case Convention::REACTOR: return "reactor";
     case Convention::REACTOR0: return "reactor0";
+    case Convention::TIIAH: return "tiiah";
   }
   return "reactor";
 }
+
+bool is_reactor0_family(Convention c) {
+  return c == Convention::REACTOR0 || c == Convention::TIIAH;
+}
+
+bool uses_reactor0_decisions(Convention c) { return c == Convention::REACTOR0; }
 
 std::optional<Convention> parse_convention(std::string_view s) {
   std::string lower;
@@ -21,6 +28,11 @@ std::optional<Convention> parse_convention(std::string_view s) {
   }
   if (lower == "reactor" || lower == "reactor1") return Convention::REACTOR;
   if (lower == "reactor0") return Convention::REACTOR0;
+  // Accepted so a TIIAH snapshot round-trips (`state_snapshot.cpp`), NOT so a
+  // human can select it: `/setall tiiah` is refused in `chat_setall`, because
+  // the convention is variant-derived and a stray chat line must not make the
+  // bot stand down at every ordinary table.
+  if (lower == "tiiah") return Convention::TIIAH;
   return std::nullopt;
 }
 

@@ -372,18 +372,27 @@ void BotClient::on_init(const json& data) {
   // convention, so any other seat count falls back to reactor for this
   // game. The resolved value — not convention_mode_ — is what the order-0
   // note and the game_init record report.
+  //
+  // Throw It in a Hole comes FIRST and ignores both the seat count and
+  // `/setall`, because it is a property of the variant: only these variants can
+  // be played under it, and no other convention can be played at them. Until
+  // the convention is finished (v16.0.0 reads clues but does not act) that
+  // resolution is what keeps the bot from playing a TIIAH table by reactor's
+  // rules, which is what it used to do — see `Game::take_action`.
   int np = static_cast<int>(game->state.names.size());
   game->convention =
-      (convention_mode_ == Convention::REACTOR0 && np == 3)
-          ? Convention::REACTOR0
-          : Convention::REACTOR;
+      variant->throw_it_in_a_hole
+          ? Convention::TIIAH
+          : ((convention_mode_ == Convention::REACTOR0 && np == 3)
+                 ? Convention::REACTOR0
+                 : Convention::REACTOR);
   // /allplays is a reactor concept — it promotes colour reactives to
   // play+play. reactor0's parity is fixed by clue kind (colour = one play,
   // rank = even), so the flag has no meaning there and must never be set on
   // a reactor0 game: a set flag would make reaction resolution disagree with
   // clue-time selection.
   game->all_plays =
-      game->convention == Convention::REACTOR0 ? false : all_plays_mode_;
+      is_reactor0_family(game->convention) ? false : all_plays_mode_;
   game->allow_reactive_locks =
       rlocks_mode_ ? *rlocks_mode_
                    : hanabi::reactor0::default_allow_reactive_locks(*variant, np);
@@ -633,6 +642,28 @@ void BotClient::maybe_take_turn(int table_id) {
   bool action_time = action_time_[table_id];
   if (g.catchup || !g.in_progress || !everyone || !action_time) return;
   if (g.state.current_player_index != g.state.our_player_index) return;
+
+  // Throw It in a Hole: say once why we are idle, then stay idle. The engine
+  // refuses too (`Game::take_action`), which is the guarantee that no wrong
+  // action can leave the bot; this early return is so the table is told, and so
+  // we do not spend a turn's compute — an endgame solve included — on a
+  // decision we are going to throw away. The game is still tracked normally:
+  // hands, clue tokens and our believed stacks all stay in step, so the day the
+  // convention lands this same code plays these tables.
+  if (g.convention == Convention::TIIAH) {
+    action_time_[table_id] = false;
+    if (tiiah_notice_sent_.insert(table_id).second) {
+      transport_.queue_send(
+          "chat",
+          json{{"msg", username_ +
+                           ": Throw It in a Hole is not supported yet (" +
+                           std::string(kBotVersion) +
+                           "), so I will not act in this game."},
+               {"recipient", ""},
+               {"room", "table" + std::to_string(table_id)}});
+    }
+    return;
+  }
 
   // Snapshot the game so the worker doesn't observe incremental mutations
   // from the network thread (notes_, lobby chat, etc. can still arrive while
@@ -1018,7 +1049,7 @@ void BotClient::chat_settings(const std::string& room) {
   // so it gets its own line. Reactor's output is left byte-identical
   // (tests/test_reactor/test_reactive_table.cpp pins it verbatim).
   std::string msg =
-      conv == Convention::REACTOR0
+      is_reactor0_family(conv)
           ? hanabi::reactor0::format_settings(*variant, overrides, rlocks)
           : hanabi::reactor::variants::format_reactive_settings(*variant, hand_size,
                                                                 all_plays);
@@ -1063,7 +1094,7 @@ void BotClient::chat_allplays(const std::vector<std::string>& args, const json& 
   int skipped = 0;
   for (auto& [tid, game] : games_) {
     if (!game) continue;
-    if (game->convention == Convention::REACTOR0) {
+    if (is_reactor0_family(game->convention)) {
       ++skipped;
       continue;
     }
@@ -1116,7 +1147,7 @@ void BotClient::chat_set(const std::vector<std::string>& args, const json& data,
   Convention conv = convention_mode_;
   auto game_it = games_.find(*tid);
   if (game_it != games_.end() && game_it->second) conv = game_it->second->convention;
-  if (conv != Convention::REACTOR0) return;  // reactor has no per-clue table
+  if (!is_reactor0_family(conv)) return;  // reactor has no per-clue table
 
   auto clue = hanabi::reactor0::parse_clue_label(*variant, args[1]);
   if (!clue) return;  // not a clue in this variant -- somebody else's command

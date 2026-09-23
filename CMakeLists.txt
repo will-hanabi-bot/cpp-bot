@@ -52,6 +52,8 @@ add_library(hanabi_core STATIC
   src/conventions/reactor0/interpret_reaction.cpp
   src/conventions/reactor0/interpret_reactive.cpp
   src/conventions/reactor0/state_eval.cpp
+  src/conventions/tiiah/buckets.cpp
+  src/conventions/tiiah/interpret_clue.cpp
   src/conventions/variants/brownish.cpp
   src/conventions/variants/inverted.cpp
   src/conventions/variants/pinkish.cpp
@@ -382,6 +384,24 @@ target_include_directories(hanabi_decision_tests PRIVATE tests)
 target_link_libraries(hanabi_decision_tests PRIVATE hanabi_core GTest::gtest_main)
 hanabi_set_warnings(hanabi_decision_tests)
 gtest_discover_tests(hanabi_decision_tests PROPERTIES LABELS "decision_making")
+
+# hanabi_tiiah_tests / label `tiiah`: the Throw It in a Hole convention, plus
+# the engine rules its variants turn on. Those rules key on the VARIANT flag
+# rather than on the convention (a 4+ player TIIAH table runs reactor and still
+# needs them), so a few of these fixtures deliberately sit under another
+# convention.
+add_executable(hanabi_tiiah_tests
+  tests/test_harness.cpp
+  tests/test_tiiah/test_variant_flag.cpp
+  tests/test_tiiah/test_convention_predicates.cpp
+  tests/test_tiiah/test_buckets.cpp
+  tests/test_tiiah/test_engine_rules.cpp
+  tests/test_tiiah/test_gate_and_clues.cpp
+)
+target_include_directories(hanabi_tiiah_tests PRIVATE tests)
+target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)
+hanabi_set_warnings(hanabi_tiiah_tests)
+gtest_discover_tests(hanabi_tiiah_tests PROPERTIES LABELS "tiiah")
 
 # --- Apps ----------------------------------------------------------------
 add_executable(hanabi_bot apps/hanabi_bot.cpp)

@@ -69,6 +69,9 @@ class BotClient {
   // so clearing it made the bot re-announce after every game. See
   // `on_table_gone`. Costs 4 bytes per table ever seen.
   std::unordered_set<int> announced_tables_;
+  // Tables already told that Throw It in a Hole is unsupported. Said once per
+  // table, on the first turn that would have been ours.
+  std::unordered_set<int> tiiah_notice_sent_;
 
   // Tables visible in the lobby (id -> table info from `table` / `tableList`).
   std::unordered_map<int, nlohmann::json> tables_;

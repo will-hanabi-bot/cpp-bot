@@ -98,7 +98,7 @@ bool Game::narrow_thought(int order, IdentitySet keep) {
     });
   };
 
-  if (convention != Convention::REACTOR0) {
+  if (!is_reactor0_family(convention)) {
     // Shared callers keep their existing semantics exactly.
     assign(keep);
     return true;
@@ -181,7 +181,7 @@ void Game::check_missed(int player_index, int action_order) {
   // a promise nothing contradicted -- the static-inferred rule (CONVENTION.md
   // §1i). reactor keeps the revert: there a missed call means the chain that
   // produced it was misread.
-  if (convention != Convention::REACTOR0) {
+  if (!is_reactor0_family(convention)) {
     with_thought(uo, [](const Thought& t) {
       if (!t.old_inferred) {
         throw std::runtime_error("check_missed: no old_inferred on urgent card");
@@ -194,7 +194,7 @@ void Game::check_missed(int player_index, int action_order) {
     });
   }
   int turn = state.turn_count;
-  const bool r0 = convention == Convention::REACTOR0;
+  const bool r0 = is_reactor0_family(convention);
   with_meta(uo, [turn, r0](ConvData& m) {
     m = m.cleared().reason(turn);
     if (r0) {
@@ -539,6 +539,22 @@ void Game::handle_action(const Action& action) {
   }
   add_action(state.action_list, action, state.turn_count);
 
+  // Throw It in a Hole: fill in what the server withheld, BEFORE anything else
+  // looks at the action. Gated on the VARIANT and not on `Game::convention`,
+  // because a 4+ player TIIAH table falls back to reactor and still needs its
+  // stacks to be right.
+  //
+  // This is the one choke point every caller shares — live play, snapshot
+  // replay, `rewind` and `simulate` all arrive here — and it is the only place
+  // the fix can live, because resolving a hidden card can change the action's
+  // TYPE (a hidden play of an inverted card is a chuck; a hidden play that did
+  // not land is a strike) and `on_play` cannot rewrite itself into `on_discard`.
+  //
+  // `add_action` above deliberately records the RAW action: the log then says
+  // what the wire said, and the resolution stays a pure function of the action
+  // history plus our own sight, so `rewind` and `apply_snapshot` reproduce it.
+  const Action effective = resolve_hidden_action(state, action);
+
   // Snapshot prev for the convention hooks (which take the pre-handler state).
   Game prev = *this;
 
@@ -548,15 +564,15 @@ void Game::handle_action(const Action& action) {
         if constexpr (std::is_same_v<T, ClueAction>) {
           on_clue(a);
           interpret_clue(prev, a);
-          last_actions[a.giver] = action;
+          last_actions[a.giver] = effective;
         } else if constexpr (std::is_same_v<T, DiscardAction>) {
           on_discard(a);
           interpret_discard(prev, a);
-          last_actions[a.player_index_v] = action;
+          last_actions[a.player_index_v] = effective;
         } else if constexpr (std::is_same_v<T, PlayAction>) {
           on_play(a);
           interpret_play(prev, a);
-          last_actions[a.player_index_v] = action;
+          last_actions[a.player_index_v] = effective;
         } else if constexpr (std::is_same_v<T, DrawAction>) {
           on_draw(a);
           const int hand_size = kHandSize[state.num_players];
@@ -582,7 +598,7 @@ void Game::handle_action(const Action& action) {
         }
         // StatusAction / StrikeAction: action_list recording only.
       },
-      action);
+      effective);
 }
 
 // --- Empathy elim (port of game.py:613-710) -------------------------------

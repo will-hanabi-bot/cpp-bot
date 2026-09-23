@@ -22,6 +22,7 @@
 #include "hanabi/conventions/reactor/state_eval.h"
 #include "hanabi/conventions/reactor0/call_invariants.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/tiiah/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/facts.h"
@@ -50,7 +51,7 @@ void Game::resolve_deferred_elims() {
 }
 
 void Game::fire_reaction_elim(const Game& prev, int player_index, int order) {
-  if (convention != Convention::REACTOR0) return;
+  if (!is_reactor0_family(convention)) return;
   PendingReactionElim& p = pending_reaction_elim;
   if (!p.active) return;
   if (player_index != p.receiver || order != p.target_order) return;
@@ -153,7 +154,7 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   //
   // The play/discard call sites (`:252`, `:365`) are untouched for both
   // conventions: there the player really did act and skipped their urgent card.
-  if (convention != Convention::REACTOR0) {
+  if (!is_reactor0_family(convention)) {
     check_missed(action.giver, /*sentinel=*/99);
   }
 
@@ -182,6 +183,11 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
     // A hand may now hold several CALLED_TO_PLAY cards. reactor0 keeps them
     // in play order by erasing calls that a newer clue pointed past — see
     // conventions/reactor0/call_invariants.h. Reactor is unaffected.
+    hanabi::reactor0::enforce_call_invariants(*this);
+  } else if (convention == Convention::TIIAH) {
+    // Throw It in a Hole forks from reactor0 and shares its call machinery, so
+    // the invariants run here too — see `is_reactor0_family`.
+    interp = hanabi::tiiah::interpret_clue(prev, *this, action);
     hanabi::reactor0::enforce_call_invariants(*this);
   } else if (next_interp) {
     if (std::holds_alternative<ClueInterp>(*next_interp)) {
@@ -378,7 +384,7 @@ namespace {
 // `enforce_call_invariants` is idempotent, so the in-block call each hook still
 // makes on the reaction path is harmless.
 void enforce_calls_after_action(Game& game) {
-  if (game.convention != Convention::REACTOR0) return;
+  if (!is_reactor0_family(game.convention)) return;
   hanabi::reactor0::enforce_call_invariants(game);
 }
 
@@ -405,7 +411,7 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   //
   // Reactor keeps the reset -- there a strike really does mean a finesse or
   // dupe chain was misread (tests/test_basics/test_strike_preserves_ctp.cpp).
-  if (failed && convention != Convention::REACTOR0) {
+  if (failed && !is_reactor0_family(convention)) {
     // Bombed - clear conv info, except for cards explicitly CALLED_TO_PLAY.
     // A strike (often a dupe-strike on an already-played card or a finesse
     // miscommunication) breaks the convention chain that produced the
@@ -467,7 +473,7 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   // because `waiting` was cleared the moment they clued instead. The live path
   // just below owns the undeferred case -- when it covers this actor, retire the
   // durable copy so the same reaction cannot fire twice.
-  if (convention == Convention::REACTOR0) {
+  if (is_reactor0_family(convention)) {
     if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
       hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
     } else if (hanabi::reactor0::resolve_deferred_reaction(
@@ -479,12 +485,12 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
 
   if (!waiting.empty()) {
     bool rewound =
-        convention == Convention::REACTOR0
+        is_reactor0_family(convention)
             ? hanabi::reactor0::react_discard(prev, *this, action.player_index_v,
                                               action.order, waiting.front())
             : react_discard(prev, *this, action.player_index_v, action.order,
                             waiting.front());
-    if (convention == Convention::REACTOR0) {
+    if (is_reactor0_family(convention)) {
       hanabi::reactor0::enforce_call_invariants(*this);
     }
     if (rewound) {
@@ -547,7 +553,7 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   // because `waiting` was cleared the moment they clued instead. The live path
   // just below owns the undeferred case -- when it covers this actor, retire the
   // durable copy so the same reaction cannot fire twice.
-  if (convention == Convention::REACTOR0) {
+  if (is_reactor0_family(convention)) {
     if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
       hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
     } else if (hanabi::reactor0::resolve_deferred_reaction(
@@ -559,12 +565,12 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
 
   if (!waiting.empty()) {
     bool rewound =
-        convention == Convention::REACTOR0
+        is_reactor0_family(convention)
             ? hanabi::reactor0::react_play(prev, *this, action.player_index_v,
                                            action.order, waiting.front())
             : react_play(prev, *this, action.player_index_v, action.order,
                          waiting.front());
-    if (convention == Convention::REACTOR0) {
+    if (is_reactor0_family(convention)) {
       hanabi::reactor0::enforce_call_invariants(*this);
     }
     if (rewound) {
@@ -620,7 +626,7 @@ void Game::update_turn(const TurnAction& action) {
   //
   // `refresh_play_links` (player_elim.cpp) removed the same mistake in v0.26
   // for resolved play links, with the same reasoning; this site survived.
-  const bool may_renarrow_calls = convention != Convention::REACTOR0;
+  const bool may_renarrow_calls = !is_reactor0_family(convention);
   if (next_queued_playable && may_renarrow_calls) {
     int order = *next_queued_playable;
     IdentitySet new_inferred =
@@ -894,6 +900,17 @@ bool contains_v(const std::vector<int>& v, int x) {
 }  // namespace
 
 PerformAction Game::take_action() const {
+  // Throw It in a Hole is READ but not yet PLAYED (v16.0.0). The convention's
+  // reactive half is unimplemented, and the decision layer below is reactor0's,
+  // which prices clues by reactor0's meanings — so acting here is exactly the
+  // "played with the wrong rules" bug this version exists to stop. Refusing at
+  // the engine means no wrong action can physically leave the bot, whatever the
+  // caller: the live worker catches this, logs it and sends nothing.
+  if (convention == Convention::TIIAH) {
+    throw std::runtime_error(
+        "tiiah: convention not implemented yet (v16.0.0) — the bot does not act "
+        "in Throw It in a Hole games");
+  }
   using namespace hanabi::reactor;
   const State& s = state;
   const Player& m = me();
@@ -918,7 +935,7 @@ PerformAction Game::take_action() const {
   // arriving on the network thread. Our own next turn is both logged and the
   // moment the reaction was owed. `scripts/find_unreadable_reactives.py`
   // sweeps `logs/` for the same signal after the fact.
-  if (convention == Convention::REACTOR0 && !waiting.empty() &&
+  if (is_reactor0_family(convention) && !waiting.empty() &&
       waiting.front().reacter == s.our_player_index &&
       waiting.front().react_order < 0) {
     const ReactorWC& wc = waiting.front();
@@ -1171,7 +1188,7 @@ PerformAction Game::take_action() const {
     // comes straight back -- and that is the path replay 1973575 T62 took.
     auto prefer_stall_clue =
         [&](PerformAction chosen) -> std::optional<PerformAction> {
-      if (convention != Convention::REACTOR0) return chosen;
+      if (!uses_reactor0_decisions(convention)) return chosen;
       if (!hanabi::is_clue(chosen)) return chosen;
       auto all_clues = enumerate_clue_candidates();
       // Cannot clue at all (no tokens, or we are the pending receiver). Nothing
@@ -1221,7 +1238,7 @@ PerformAction Game::take_action() const {
     };
     auto prefer_known_discard = [&](std::optional<PerformAction> chosen)
         -> std::optional<PerformAction> {
-      if (convention != Convention::REACTOR0 || !chosen) return chosen;
+      if (!uses_reactor0_decisions(convention) || !chosen) return chosen;
       auto* d = std::get_if<PerformDiscard>(&*chosen);
       if (!d) return chosen;
       if (s.holder_of(d->target) != s.our_player_index) return chosen;
@@ -1323,7 +1340,7 @@ PerformAction Game::take_action() const {
       // and the solver is the thing that can sequence it. Replay 1957936 T41 is
       // the case -- chucking a pinned Orange 2 starts the chain that wins 20/20,
       // while an urgent CTD of plain trash sits alongside it.
-      if (convention == Convention::REACTOR0 && urgent_call &&
+      if (uses_reactor0_decisions(convention) && urgent_call &&
           hanabi::endgame::certain_plays(*this).empty()) {
         hanabi::logging::log_branch("endgame.honours_reacter_call", {});
         return *urgent_call;
@@ -1392,7 +1409,7 @@ PerformAction Game::take_action() const {
         //
         // Scoped to the TIMED-OUT branch only. A solve that FINISHED still owns
         // the turn -- replays 1966757 and 1969860 pin that.
-        if (convention == Convention::REACTOR0) {
+        if (uses_reactor0_decisions(convention)) {
           auto all_clues = enumerate_clue_candidates();
           if (!all_clues.empty()) {
             auto cands = hanabi::reactor0::analyse_clues(*this, all_clues);
@@ -1453,7 +1470,7 @@ PerformAction Game::take_action() const {
 
 
   std::vector<hanabi::reactor0::ClueCandidate> r0_clues;
-  if (convention == Convention::REACTOR0 && !all_clues.empty()) {
+  if (uses_reactor0_decisions(convention) && !all_clues.empty()) {
     r0_clues = hanabi::reactor0::analyse_clues(*this, all_clues);
     if (auto vh = hanabi::reactor0::choose_very_high_clue(*this, r0_clues)) {
       return *vh;
@@ -1571,7 +1588,7 @@ PerformAction Game::take_action() const {
   // On nullopt the play/discard path runs with `all_clues` EMPTIED: the walk has
   // already declined every candidate, and letting them back into the argmax
   // below would reinstate exactly the scoring this replaces.
-  if (convention == Convention::REACTOR0) {
+  if (uses_reactor0_decisions(convention)) {
     if (auto picked = hanabi::reactor0::choose_clue(*this, r0_clues)) {
       return *picked;
     }

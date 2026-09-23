@@ -861,7 +861,16 @@ listed above. The following fields present in `data/variants.json` are
 **never read**, so those variants will load and be played with **incorrect
 rules**:
 
-`upOrDown`, `sudoku`, `throwItInAHole`, `cowAndPig`, `duck`, `stackSize`.
+`upOrDown`, `sudoku`, `cowAndPig`, `duck`, `stackSize`.
+
+**`throwItInAHole` left this list in v16.0.0.** It is now parsed
+(`Variant::throw_it_in_a_hole`) and the ENGINE acts on it — a played card's
+identity is filled in from what we can see rather than from the wire, and a 5
+returns no clue token. Those rules are convention-neutral, so reactor loads
+those 44 variants with the right rules. What reactor lacks is a CONVENTION for
+them, and it will not get one: TIIAH games resolve to `Convention::TIIAH`
+regardless of seat count, and the bot does not act in them yet
+(`src/conventions/tiiah/CONVENTION.md` §0).
 
 Note in particular that **"Up or Down" is not supported**; the separate
 `Reversed` suit family (§1b.3) is.

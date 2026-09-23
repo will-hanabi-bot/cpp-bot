@@ -113,8 +113,12 @@ State State::with_play(Identity id) const {
   ++out.base_count[id.to_ord()];
   out.playable_set = new_playable;
   out.trash_set = trash_set.union_with(id);
+  // Throw It in a Hole pays nothing for the final rank: a 5 into the hole
+  // returns no clue token. Gated here rather than inside `regain_clue`,
+  // because an ordinary DISCARD still refunds under TIIAH and both callers
+  // share that helper.
   const bool is_final = reversed ? (id.rank == 1) : (id.rank == 5);
-  if (is_final) out = out.regain_clue();
+  if (is_final && !variant->throw_it_in_a_hole) out = out.regain_clue();
   return out;
 }
 
