@@ -362,6 +362,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor/test_decision_making/test_replay_1916933_clue_forces_discard_of_queued_playable.cpp
   tests/test_reactor0/test_decision_making/test_clue_tier.cpp
   tests/test_reactor0/test_decision_making/test_clue_shape.cpp
+  tests/test_reactor0/test_decision_making/test_reading_holders.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966091_lock_must_not_outrank_reaction.cpp

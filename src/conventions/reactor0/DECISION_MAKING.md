@@ -1234,6 +1234,8 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | Precedence step 1 | `choose_very_high_clue` |
 | Precedence step 3 — the walk | `choose_clue` |
 | shape classification | `read_clue` / `outcome_of` |
+| which SEAT each side of a reading belongs to | `Designation::holder`, filled by `read_clue` from the waiting connection |
+| the parity a reading is scored under | `wc.even_parity`, the value bound when the clue was given |
 | priority 2's admissibility, and the endgame stall list's rung 4 | `discard_is_affordable` |
 | priority 2's tiebreaks, shared with the endgame stall list's rung 4 | `reactive_discard_chain` |
 | the endgame stall list | `choose_endgame_clue`; rung 4 is `e_rung_reactive_discard` (either direction) |
@@ -1251,6 +1253,34 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | §3.7 / §3.8 / §3.9's chop test | `chop_is_critical` (`facts.h`) |
 | the §3.8 / §4.8 reactive ditch | `rung_reactive_ditch` |
 | §3.9's stable ditch | `rung_stable_ditch` |
+
+### Whose hand a rung is talking about
+
+Every rung above that says "Bob" or "Cathy" means one of two different things,
+and v16.5.0 separated them:
+
+- **a seat at the table** — "Bob" as the player who acts next, which is what
+  `priority_3_applies`, `cathy_has_relief` and the chop tests mean. These still
+  read `bob_of` / `cathy_of`, because that is exactly what they are asking.
+- **a ROLE in a reactive** — the seat that reacts, and the seat the reaction
+  names a card for. Under reactor0 the reacter is always Bob and the receiver
+  always Cathy, so the two readings coincided and the code took the shorter
+  one. They are not the same question: which seat plays which role is a property
+  of the CONVENTION (Throw It in a Hole swaps them, tiiah/CONVENTION.md §1c).
+
+So `ClueReading`'s two sides each carry a `holder`, filled by `read_clue` from
+`wc.reacter` / `wc.receiver`, and the rungs that ask "can this hand afford the
+loss" (`discarded_sides`, priority 2's `discard_is_affordable`) or "how good a
+ditch is this" (`best_ditch`) ask it of that seat. Under reactor0 the answers are
+unchanged, because `wc.reacter == bob_of` and `wc.receiver == cathy_of` in every
+game it plays — including the target-parity variants, where a clue to Bob is
+reactive but Cathy still receives.
+
+The same rule applies to parity: a reading is scored under `wc.even_parity`, the
+value bound when the clue was given, rather than re-derived from the clue kind.
+The resolution layer has read the WC since v10 (`wc_even_parity`), and clue-time
+prediction now reads the same field, so the two cannot disagree about which
+button the receiver was promised.
 
 | Rule | Existing machinery | Where |
 |---|---|---|

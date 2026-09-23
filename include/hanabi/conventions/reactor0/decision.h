@@ -30,8 +30,16 @@ enum class Outcome : std::uint8_t {
 };
 
 // A card this clue designates, and what actioning it will do.
+//
+// `holder` is the seat whose hand the card is in. It is carried rather than
+// re-derived because WHICH SEAT reacts is a property of the convention, not of
+// the geometry: reactor0's reacter is Bob and its receiver Cathy, and Throw It
+// in a Hole swaps the two (tiiah/CONVENTION.md §1c). Every rung that asks "can
+// this hand afford the loss" or "how good a ditch is this" has to ask it of the
+// hand that will actually act, so the answer travels with the designation.
 struct Designation {
   int order = -1;
+  int holder = -1;                       // the seat this card is in
   CardStatus button = CardStatus::NONE;  // which button the holder presses
   Outcome outcome = Outcome::NONE;
 };
@@ -54,8 +62,11 @@ const char* shape_name(ClueShape s);
 // How a clue reads, in the vocabulary above.
 struct ClueReading {
   ClueShape shape = ClueShape::OTHER;
-  Designation reacter_side;   // Bob's designation, for a reactive
-  Designation receiver_side;  // Cathy's promised designation, for a reactive
+  // For a reactive. Under reactor0 the reacter is Bob and the receiver Cathy;
+  // each designation carries its own `holder` so a convention that assigns the
+  // roles differently needs no change below this struct.
+  Designation reacter_side;
+  Designation receiver_side;  // the promised designation
   // The stable side, flattened. `stable_button` distinguishes the two ways a
   // STABLE_DISCARD arises, which several priority rungs name separately: a CTD
   // on an ordinary card, versus a CTP on an inverted card (a pitch). Kept as

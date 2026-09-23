@@ -250,11 +250,17 @@ NewPlayFacts new_play_facts(const Game& game, const Game& hypo) {
     if (recv_order && reacter_called && !predicts_reactive_lock(hypo) &&
         !(game.meta[*recv_order].status != CardStatus::CALLED_TO_PLAY &&
           hypo.meta[*recv_order].status == CardStatus::CALLED_TO_PLAY)) {
+      // The parity the connection was GIVEN, as `read_clue` and
+      // `wc_even_parity` both read it. Identical to re-deriving it from the
+      // clue kind under reactor0, which binds the one from the other at clue
+      // time; a convention that fixes its own parity needs no case here.
       const CardStatus rb = receiver_button(
-          reactive_assignment_for(*s.variant, game.reactive_overrides,
-                                  wc.clue.kind, wc.clue.value,
-                                  /*target_is_bob=*/wc.clue.target == wc.reacter)
-              .even,
+          wc.even_parity.value_or(
+              reactive_assignment_for(
+                  *s.variant, game.reactive_overrides, wc.clue.kind,
+                  wc.clue.value,
+                  /*target_is_bob=*/wc.clue.target == wc.reacter)
+                  .even),
           reacter_status);
       // Judged against the stacks the reacter leaves behind, and via
       // `outcome_of` rather than the button name -- so an inverted CTD, which
@@ -420,10 +426,14 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   // the kind here made VH1 unreachable in those variants, so a finesse was
   // invisible to the pre-check that outranks everything else (replay 1967416
   // T1: yellow to Cathy was the finesse, and the bot clued yellow to Bob).
-  if (!reactive_assignment_for(*s.variant, game.reactive_overrides,
-                               action.clue.kind, action.clue.value,
-                               /*target_is_bob=*/action.target == bob)
-           .even) {
+  const bool even =
+      (!hypo.waiting.empty() && hypo.waiting.front().even_parity)
+          ? *hypo.waiting.front().even_parity
+          : reactive_assignment_for(*s.variant, game.reactive_overrides,
+                                    action.clue.kind, action.clue.value,
+                                    /*target_is_bob=*/action.target == bob)
+                .even;
+  if (!even) {
     return false;
   }
   // The RECEIVER, not the clued seat -- see `read_clue`.

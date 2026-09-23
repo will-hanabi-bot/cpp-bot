@@ -212,14 +212,15 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   // must be handed the RECEIVER and not the clued seat -- the two differ under
   // target parity, and passing the target made this fail closed for every clue
   // to Bob there.
-  const int receiver = reactive_receiver(s, action, bob);
-  if (!wc_is_fresh(game, hypo, alice, receiver, bob)) return r;
+  const int reacter = bob;
+  const int receiver = reactive_receiver(s, action, reacter);
+  if (!wc_is_fresh(game, hypo, alice, receiver, reacter)) return r;
   const ReactorWC& wc = hypo.waiting.front();
   const CardStatus reacter_status = hypo.meta[wc.react_order].status;
 
   if (predicts_reactive_lock(hypo)) {
     r.shape = ClueShape::REACTIVE_LOCK;
-    r.reacter_side = {wc.react_order, reacter_status,
+    r.reacter_side = {wc.react_order, wc.reacter, reacter_status,
                       outcome_of(s, wc.react_order, reacter_status)};
     return r;
   }
@@ -230,17 +231,26 @@ ClueReading read_clue(const Game& game, const Game& hypo,
       reacter_status != CardStatus::CALLED_TO_DISCARD) {
     return r;
   }
-  r.reacter_side = {wc.react_order, reacter_status,
+  r.reacter_side = {wc.react_order, wc.reacter, reacter_status,
                     outcome_of(s, wc.react_order, reacter_status)};
 
   const State after_bob = state_after_reacter(s, wc.react_order, reacter_status);
+  // The parity the connection was GIVEN, not the one the clue kind implies. The
+  // two agree under reactor0 — `interpret_reactive` binds `wc.even_parity` from
+  // this same assignment — but re-deriving it is how clue-time prediction and
+  // reaction-time stamping drift apart: the resolution has read the WC since
+  // v10 (`wc_even_parity`, interpret_reaction.cpp), and this is the other half
+  // of that rule. A `/set` landing mid-game cannot change what an already-given
+  // clue meant, and a convention that fixes its own parity is read correctly
+  // without a special case here.
   const CardStatus rb = receiver_button(
-      reactive_assignment_for(*s.variant, game.reactive_overrides,
-                              action.clue.kind, action.clue.value,
-                              /*target_is_bob=*/action.target == wc.reacter)
-          .even,
+      wc.even_parity.value_or(
+          reactive_assignment_for(*s.variant, game.reactive_overrides,
+                                  action.clue.kind, action.clue.value,
+                                  /*target_is_bob=*/action.target == wc.reacter)
+              .even),
       reacter_status);
-  r.receiver_side = {*receive_order, rb,
+  r.receiver_side = {*receive_order, wc.receiver, rb,
                      outcome_of(after_bob, *receive_order, rb)};
   r.shape = shape_of(r.reacter_side.outcome, r.receiver_side.outcome);
   return r;
@@ -525,15 +535,16 @@ bool is_stable_to_bob(const Game& g, const ClueCandidate& c) {
 // A DOUBLE_DISCARD has two; both are returned so a rung can require that the
 // team can afford EITHER loss, which is the conservative reading of the spec's
 // singular "the discarded card".
-std::vector<std::pair<int, int>> discarded_sides(const Game& g,
+std::vector<std::pair<int, int>> discarded_sides(const Game& /*g*/,
                                                  const ClueReading& r) {
   std::vector<std::pair<int, int>> out;  // (holder, order)
-  const int bob = bob_of(g);
+  // Each side names the seat it belongs to. Under reactor0 that is Bob for the
+  // reacter and Cathy for the receiver, which is what this used to assume.
   if (r.reacter_side.outcome == Outcome::DISCARD) {
-    out.emplace_back(bob, r.reacter_side.order);
+    out.emplace_back(r.reacter_side.holder, r.reacter_side.order);
   }
   if (r.receiver_side.outcome == Outcome::DISCARD) {
-    out.emplace_back(cathy_of(g), r.receiver_side.order);
+    out.emplace_back(r.receiver_side.holder, r.receiver_side.order);
   }
   return out;
 }
@@ -543,14 +554,23 @@ std::vector<std::pair<int, int>> discarded_sides(const Game& g,
 // §4 floor so the rule has one definition and the three cannot drift.
 const ClueCandidate* best_ditch(
     const Game& g, const std::vector<const ClueCandidate*>& pool,
-    const std::function<int(const ClueCandidate&)>& order_of) {
+    const std::function<std::pair<int, int>(const ClueCandidate&)>& side_of) {
   const ClueCandidate* best = nullptr;
   for (const ClueCandidate* c : pool) {
-    if (!best ||
-        better_ditch_target(g, bob_of(g), order_of(*c),
-                            order_of(*best))) {
+    if (!best) {
       best = c;
+      continue;
     }
+    const auto [holder, order] = side_of(*c);
+    const auto [best_holder, best_order] = side_of(*best);
+    // `better_ditch_target` ranks two cards within ONE hand — its key counts
+    // connectors and slots in that hand — so two candidates that throw from
+    // different hands have no shared ordering. Under reactor0 they never do:
+    // every pool here is either all-reactive (the reacter is Bob) or filtered
+    // by `is_stable_to_bob`. Leaving the incumbent standing is the "first
+    // available" floor that sits under every rung's chain anyway.
+    if (holder != best_holder) continue;
+    if (better_ditch_target(g, holder, order, best_order)) best = c;
   }
   return best;
 }
@@ -982,8 +1002,10 @@ const ClueCandidate* rung_2(const Game& g, const std::vector<ClueCandidate>& cs)
     // rung 4 does NOT carry this restriction -- see `e_rung_reactive_discard`.
     if (c.reading.reacter_side.outcome != Outcome::PLAY) return false;
     if (c.reading.receiver_side.outcome != Outcome::DISCARD) return false;
-    // Cathy's discarded card is the one that has to be affordable.
-    return discard_is_affordable(g, cathy_of(g), c.reading.receiver_side.order);
+    // The RECEIVER's discarded card is the one that has to be affordable --
+    // Cathy under reactor0, which is what the rung's wording above means.
+    return discard_is_affordable(g, c.reading.receiver_side.holder,
+                                 c.reading.receiver_side.order);
   });
   return settle(g, std::move(p), reactive_discard_chain(g));
 }
@@ -1009,7 +1031,7 @@ Pool pool_stable_ditch_trash(const Game& g, const std::vector<ClueCandidate>& cs
     auto id = id_of(g.state, o);
     if (!id) return false;
     return g.state.is_basic_trash(*id) ||
-           has_same_hand_dupe(g.state, bob_of(g), o, *id);
+           has_same_hand_dupe(g.state, c.action.target, o, *id);
   });
 }
 
@@ -1021,7 +1043,7 @@ Pool pool_stable_ditch_dupe(const Game& g, const std::vector<ClueCandidate>& cs)
     if (c.reading.shape != ClueShape::STABLE_DISCARD) return false;
     const int o = c.reading.stable_subject;
     auto id = id_of(g.state, o);
-    return id && dupe_visible_elsewhere(g, bob_of(g), o, *id);
+    return id && dupe_visible_elsewhere(g, c.action.target, o, *id);
   });
 }
 
@@ -1109,7 +1131,8 @@ const ClueCandidate* rung_reactive_ditch(const Game& g,
     return false;
   });
   return best_ditch(g, p, [](const ClueCandidate& c) {
-    return c.reading.reacter_side.order;
+    return std::pair<int, int>{c.reading.reacter_side.holder,
+                               c.reading.reacter_side.order};
   });
 }
 
@@ -1133,7 +1156,8 @@ const ClueCandidate* rung_stable_ditch(const Game& g,
     return id && !g.state.is_critical(*id);
   });
   return best_ditch(g, p, [](const ClueCandidate& c) {
-    return c.reading.stable_subject;
+    // A stable clue's subject is in the hand it was given to.
+    return std::pair<int, int>{c.action.target, c.reading.stable_subject};
   });
 }
 
@@ -1498,9 +1522,10 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
       const int o = c.reading.stable_subject;
       auto id = id_of(g.state, o);
       if (!id) continue;
-      const bool unwanted = g.state.is_basic_trash(*id) ||
-                            has_same_hand_dupe(g.state, bob_of(g), o, *id) ||
-                            dupe_visible_elsewhere(g, bob_of(g), o, *id);
+      const bool unwanted =
+          g.state.is_basic_trash(*id) ||
+          has_same_hand_dupe(g.state, c.action.target, o, *id) ||
+          dupe_visible_elsewhere(g, c.action.target, o, *id);
       if (unwanted) p.push_back(&c);
     }
     if (auto* c = first_of(g, std::move(p))) return c;
@@ -1542,7 +1567,9 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
     }
     best_ditcher = best_ditch(g, affordable.empty() ? ditches : affordable,
                               [](const ClueCandidate& c) {
-                                return c.reading.reacter_side.order;
+                                return std::pair<int, int>{
+                                    c.reading.reacter_side.holder,
+                                    c.reading.reacter_side.order};
                               });
   }
   Pool all;
