@@ -3,6 +3,7 @@
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/tiiah/interpret_reactive.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -52,17 +53,13 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   const int bob = state.next_player_index(action.giver);
   const int cathy = state.next_player_index(bob);
 
-  // REVERSE REACTIVE (CONVENTION.md §1c) — specified, not yet implemented.
+  // REVERSE REACTIVE (CONVENTION.md §1c).
   //
   // When Bob holds a known play and Cathy does not, a clue to BOB is reactive
-  // with CATHY reacting and Bob receiving, and a clue to Cathy is stable. That
-  // is the reverse of reactor0's positional dispatch, and it is the shape the
-  // bucket encoding and superposition are built on.
-  //
-  // Reading it wrongly is worse than not reading it: the clue would install a
-  // reactor0 reaction under TIIAH meanings and call a partner onto a card
-  // nobody named. So it returns nullopt — the caller stamps MISTAKE, no waiting
-  // connection is installed and nothing is stamped.
+  // with CATHY reacting and Bob receiving; a clue to Cathy is stable. That is
+  // the reverse of reactor0's positional dispatch, and it works because Bob
+  // plays what he already knows, Cathy answers, and Bob's target is waiting for
+  // him when he comes round again.
   //
   // Asked of PREV, the position before the clue — as reactor0 asks
   // `clue_is_reactive`. Asking the post-clue game instead makes every play clue
@@ -70,9 +67,8 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // one, and the dispatch would eat its own tail.
   if (cathy != action.giver && action.target == bob &&
       has_known_play(prev, bob) && !has_known_play(prev, cathy)) {
-    hanabi::logging::log_branch("tiiah.reactive_unimplemented",
-                                {{"bob", bob}, {"cathy", cathy}});
-    return std::nullopt;
+    return interpret_reactive(prev, game, action, /*reacter=*/cathy,
+                              /*receiver=*/bob);
   }
 
   // STABLE (CONVENTION.md §1b) — reactor0's ladders, unchanged. They are

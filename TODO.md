@@ -974,7 +974,7 @@ actually exhibits it, and none is known. `test_reactive_inverted_vet.cpp`'s
 
 ---
 
-## 39. `[tiiah]` Reverse-reactive dispatch
+## 39. `[tiiah]` Reverse-reactive dispatch — CLOSED in v16.2.0
 
 `src/conventions/tiiah/CONVENTION.md` §1c. When Bob holds a **known play** and
 Cathy does not, a clue to Bob is REACTIVE with Cathy reacting and Bob receiving,
@@ -982,11 +982,14 @@ and a clue to Cathy is stable. Bob's target is the next playable in his hand
 under stack simulation with every known play in it assumed already played, and a
 card already stamped CTP is never retargeted.
 
-`has_known_play` (`src/conventions/tiiah/interpret_clue.cpp:20-32`) is written
-and is used today only to RECOGNISE the shape: a clue of it reads MISTAKE,
-installs no waiting connection and stamps nothing (`:70-81`). That is the honest
-answer while the meaning is unimplemented — guessing would call a partner onto a
-card nobody named — but it does mean a legal clue currently reads as nothing.
+Implemented in `src/conventions/tiiah/interpret_reactive.cpp`: the target walk
+(direct plays, then one-away finesses, each leftmost-first, over the stacks after
+the receiver's known plays), the sum rule for the reacter's slot, and the §1g
+split between a shared refusal (walk on) and a giver-only one (reject).
+
+**Still open, and inherited by §40:** what the two cards ARE — the bucket
+relation, the finesse inference and the "both know exactly" licence — is not
+read yet, so the clue names slots without narrowing identities.
 
 ---
 

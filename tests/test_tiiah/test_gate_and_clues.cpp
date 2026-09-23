@@ -88,23 +88,32 @@ TEST(TiiahStableClues, ReadExactlyAsReactorZeroReadsThem) {
   }
 }
 
-// The reverse-reactive shape (CONVENTION.md §1c) is specified but not
-// implemented. It must read as nothing at all rather than fall through to
-// reactor0's positional reactive, which would call a partner onto a card nobody
-// named. Bob holds a known play — his empathy-known r1 — and Cathy does not.
-TEST(TiiahStableClues, TheReverseReactiveShapeIsRefusedNotGuessed) {
+// A reverse-reactive clue whose target walk finds nothing is not guessed at.
+//
+// Bob holds a known play, so the dispatch reverses (§1c) — but once his known
+// r1 is assumed played his hand wants nothing that Cathy can bridge to, so
+// there is no pairing to name. The clue reads as nothing and stamps nothing.
+// An unread reactive does leave its waiting connection in place, with
+// `react_order == -1`, exactly as reactor0's does.
+TEST(TiiahStableClues, AReverseReactiveWithNoTargetStampsNothing) {
   SetupOptions opts = stable_opts("Throw It in a Hole (5 Suits)");
+  // Bob: a known r1, and behind it nothing red or close to playable. Cathy
+  // holds no bridge either.
+  opts.hands[1] = {"r1", "y5", "g5", "b5", "p5"};
+  opts.hands[2] = {"y4", "g4", "b4", "p4", "r4"};
   use_tiiah(opts);
   Game g = setup(std::move(opts));
   g = fully_known(std::move(g), TestPlayer::BOB, /*slot=*/1, "r1");
 
   const auto marks_before = hanabi::test::reactor0::hand_marks(g, TestPlayer::CATHY);
-  g = take_turn(std::move(g), "Alice clues 4 to Bob");
+  g = take_turn(std::move(g), "Alice clues 5 to Bob");
 
   EXPECT_EQ(interp_of(g), ClueInterp::MISTAKE)
-      << "a meaning we have not implemented must not be guessed at";
-  EXPECT_TRUE(g.waiting.empty())
-      << "and no reaction may be installed on the strength of it";
+      << "no pairing to name, so no reading at all";
   EXPECT_EQ(hanabi::test::reactor0::hand_marks(g, TestPlayer::CATHY), marks_before)
-      << "nor may anything in the reacter's hand be stamped";
+      << "and nothing in the reacter's hand may be stamped on the strength of it";
+  if (!g.waiting.empty()) {
+    EXPECT_EQ(g.waiting.front().react_order, -1)
+        << "an unread reactive names no reacter slot";
+  }
 }

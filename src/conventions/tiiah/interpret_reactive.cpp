@@ -1,0 +1,184 @@
+#include "hanabi/conventions/tiiah/interpret_reactive.h"
+
+#include <optional>
+#include <vector>
+
+#include "hanabi/basics/game.h"
+#include "hanabi/basics/state.h"
+#include "hanabi/conventions/reactor/interpret_reaction.h"
+#include "hanabi/conventions/reactor/interpret_reactive.h"
+#include "hanabi/conventions/reactor0/colour_value.h"
+#include "hanabi/conventions/reactor0/interpret_reactive.h"
+#include "hanabi/conventions/variants/predicates.h"
+#include "hanabi/conventions/variants/reversed.h"
+#include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
+
+namespace hanabi::tiiah {
+
+namespace {
+
+// The anchor a clue carries, which is reactor0's: the rank value for a rank
+// clue, and the colour's value from the fixed table for a colour one
+// (CONVENTION.md §1d). The PARITY is not read — under TIIAH every reactive clue
+// is even — so this takes the value alone rather than a whole assignment.
+int anchor_of(const State& state, const ClueAction& action) {
+  if (action.clue.kind == ClueKind::RANK) {
+    return hanabi::reactor::variants::rank_reactive_value(*state.variant,
+                                                          action.clue.value);
+  }
+  return reactor0::colour_clue_value(*state.variant, action.clue.value);
+}
+
+// The stacks as they will stand once `player` has played everything they
+// already know about — §1c's "stack simulation". Walks to a fixpoint so a chain
+// of known plays advances in order.
+//
+// Reads `common`, so the giver, the reacter and the receiver all simulate the
+// same thing. Identities come from the deck, which the giver and the reacter can
+// see; the receiver never runs this walk for their own hand (they decode at
+// reaction time), which is the same POV rule reactor0's `play_pool` follows.
+State simulate_known_plays(const Game& game, int player) {
+  State hypo = game.state;
+  bool advanced = true;
+  while (advanced) {
+    advanced = false;
+    for (int o : hypo.hands[player]) {
+      auto id = game.state.deck[o].id();
+      if (!id || !hypo.is_playable(*id)) continue;
+      const bool called = game.meta[o].status == CardStatus::CALLED_TO_PLAY;
+      const IdentitySet live = game.common.thoughts[o].possibilities();
+      const bool empathy_playable =
+          live.non_empty() &&
+          live.forall([&hypo](Identity i) { return hypo.is_playable(i); });
+      if (!called && !empathy_playable) continue;
+      hypo = hypo.with_play(*id);
+      advanced = true;
+    }
+  }
+  return hypo;
+}
+
+}  // namespace
+
+std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver) {
+  const State after = simulate_known_plays(game, receiver);
+  std::vector<ReceiverTarget> direct;
+  std::vector<ReceiverTarget> one_away;
+  for (int o : game.state.hands[receiver]) {
+    // A card already called to play is one of the plays we just simulated, so
+    // it is not waiting on anything: never retargeted (§1c).
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+    auto id = game.state.deck[o].id();
+    if (!id) continue;  // our own hand; the receiver decodes at reaction time
+    const int away = after.playable_away(*id);
+    if (away == 0) direct.push_back({o, *id, 0});
+    if (away == 1) one_away.push_back({o, *id, 1});
+  }
+  // Playables before finesses, each leftmost-first — reactor0's Phase A before
+  // Phase B, which is the order every seat walks.
+  direct.insert(direct.end(), one_away.begin(), one_away.end());
+  return direct;
+}
+
+std::optional<int> receiver_target(const Game& game, int receiver) {
+  const auto targets = receiver_targets(game, receiver);
+  if (targets.empty()) return std::nullopt;
+  return targets.front().order;
+}
+
+std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
+                                             const ClueAction& action,
+                                             int reacter, int receiver) {
+  hanabi::instr::ScopedTimer st("tiiah.interpret_reactive");
+  hanabi::logging::LogScope ls(
+      "tiiah.interpret_reactive",
+      {{"giver", action.giver}, {"reacter", reacter}, {"receiver", receiver}});
+  const State& state = game.state;
+  const int anchor = anchor_of(state, action);
+  const int hand_size = kHandSize[state.num_players];
+
+  // Every TIIAH reactive is EVEN parity: the two named cards are both pitched.
+  ReactorWC wc{action.giver,
+               reacter,
+               receiver,
+               state.hands[receiver],
+               to_clue(action.clue, action.target),
+               /*focus_slot=*/anchor,
+               /*inverted=*/false,
+               state.turn_count,
+               /*all_plays=*/false};
+  wc.even_parity = true;
+  wc.rlocks = false;  // no reactive lock in this convention
+  // The frame the giver chose the target in. A deferral resolves later, against
+  // stacks that have moved, and under TIIAH they may also have moved differently
+  // for different seats — so the SHARED view is what the reading binds to.
+  wc.clue_play_stacks = state.common_play_stacks.empty()
+                            ? state.play_stacks
+                            : state.common_play_stacks;
+  game.waiting.clear();
+  game.waiting.push_back(wc);
+  if (static_cast<int>(game.pending_reactions.size()) != state.num_players) {
+    game.pending_reactions.assign(state.num_players, std::nullopt);
+  }
+  game.pending_reactions[receiver] = wc;
+
+  // The receiver decodes positionally at reaction time, never at clue time:
+  // selection reads the deck ids of their own hand, which they cannot see.
+  if (receiver == state.our_player_index) return ClueInterp::REACTIVE;
+
+  // Walk the targets in the order every seat walks them, and take the first
+  // whose reacter side works. A pairing refused on SHARED knowledge is walked
+  // past — the reacter walks past it too, so nobody is left behind — while one
+  // refused on what only the GIVER can see kills the clue outright (§1g): the
+  // reacter cannot see it and would act on that pairing regardless.
+  const State after = simulate_known_plays(game, receiver);
+  for (const ReceiverTarget& target : receiver_targets(game, receiver)) {
+    int target_slot = 0;
+    for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
+      if (state.hands[receiver][i] == target.order) {
+        target_slot = static_cast<int>(i) + 1;
+      }
+    }
+    const int react_slot =
+        hanabi::reactor::calc_slot(anchor, target_slot, hand_size);
+    if (react_slot < 1 ||
+        react_slot > static_cast<int>(state.hands[reacter].size())) {
+      continue;
+    }
+    const int react_order = state.hands[reacter][react_slot - 1];
+
+    // What the reacter has to be holding. A direct target wants any card that
+    // plays right now; a one-away target is a FINESSE, and wants the one card
+    // that bridges to it.
+    std::optional<Identity> connector;
+    if (target.away == 1) {
+      connector = hanabi::reactor::variants::connector_of(state, target.id);
+      if (!connector) continue;
+    }
+    const IdentitySet react_live =
+        hanabi::reactor::effective_possible_for(game, react_order);
+    const bool shared_ok =
+        connector ? react_live.contains(*connector)
+                  : react_live.exists([&after](Identity i) {
+                      return after.is_playable(i);
+                    });
+    if (!shared_ok) continue;  // shared: walk on, and so does the reacter
+
+    if (auto actual = state.deck[react_order].id()) {
+      const bool giver_ok =
+          connector ? *actual == *connector : after.is_playable(*actual);
+      if (!giver_ok) return std::nullopt;  // giver-only: reject, never retarget
+    }
+
+    if (!reactor0::stamp_react_play_button(game, action, react_order)) continue;
+    if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
+    if (game.pending_reactions[receiver]) {
+      game.pending_reactions[receiver]->react_order = react_order;
+    }
+    return ClueInterp::REACTIVE;
+  }
+  return std::nullopt;
+}
+
+}  // namespace hanabi::tiiah

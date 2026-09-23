@@ -30,7 +30,7 @@ what this version is for.
 | The engine rules (§1) | implemented |
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
-| Reverse-reactive dispatch (§1c) | **specified only** — TODO.md §39 |
+| Reverse-reactive dispatch (§1c) | implemented (v16.2.0) |
 | The bucket-encoded reactive (§1d) | **specified only** — TODO.md §40 |
 | Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | **specified only** — TODO.md §42 |
@@ -163,7 +163,7 @@ The TIIAH dispatcher differs from reactor0's in two ways only: there is no
 blind-family arm (no TIIAH variant is a Blind one — all 44 carry
 `throwItInAHole` and no other behavioural flag) and no target-parity arm.
 
-### §1c Reverse reactive — SPECIFIED, NOT IMPLEMENTED (TODO.md §39)
+### §1c Reverse reactive
 
 A **known play** is a card stamped `CALLED_TO_PLAY` whose inference still
 contains at least one good playable identity, *or* a card whose global empathy is
@@ -193,9 +193,28 @@ Dispatch is decided by the position **before** the clue. Asking the post-clue
 game instead makes every play clue to Bob answer "Bob has a known play", because
 the clue itself just gave him one.
 
-Until this lands, a clue of this shape reads as a MISTAKE, installs no waiting
-connection and stamps nothing (`interpret_clue.cpp:70-81`). Guessing would be
-worse than refusing: it would call a partner onto a card nobody named.
+`interpret_reactive` (`src/conventions/tiiah/interpret_reactive.cpp:90-182`)
+installs the waiting connection, stamps the reacter's blind play and leaves the
+receiver's own call for reaction time — the resolution machinery is reactor0's,
+shared.
+
+**The target walk** (`receiver_targets`, `:64-82`) runs over the stacks as they
+will stand once the receiver's known plays are done (`simulate_known_plays`,
+`:41-60`, a fixpoint so a chain advances in order). Two kinds of card qualify,
+and they are walked in this order — reactor0's Phase A before Phase B, which is
+the order every seat walks:
+
+1. one that plays outright once those known plays are done;
+2. one that is **one away**, which is a finesse: the reacter holds the bridge.
+   §1c's own worked example is this case.
+
+The giver walks the candidates and takes the first whose reacter side works. A
+pairing refused on SHARED knowledge is walked past, because the reacter walks
+past it too; one refused on what only the GIVER can see kills the clue (§1g),
+because the reacter cannot see it and would act on that pairing anyway.
+
+A clue whose walk finds nothing reads as a MISTAKE and stamps nothing. Guessing
+would be worse than refusing: it would call a partner onto a card nobody named.
 
 ### §1d The reactive clue — SPECIFIED, NOT IMPLEMENTED (TODO.md §40)
 
@@ -315,4 +334,5 @@ purple, the receiver assumes the purple 1 was not played.
 | `tests/test_tiiah/test_buckets.cpp` | §1a's four rows, the inverted re-indexing, and `bucket_of` |
 | `tests/test_tiiah/test_engine_rules.cpp` | §1.1's table and §1.2 — a partner's hidden play advancing our stacks, our own leaving them alone, a hidden misplay striking, a hidden 5 paying nothing, and both sides of the orange mirror |
 | `tests/test_tiiah/test_gate_and_clues.cpp` | §0's refusal, §1b read identically to reactor0 (a differential test), and §1c refusing rather than guessing |
+| `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
 | `tests/test_tiiah/test_superposition.cpp` | §1e — a set recorded for our own and a partner's ambiguous play, a known play creating none and advancing both views, the two views diverging on a partner's play, a shared collapse, and the shared view staying absent outside the variant |
