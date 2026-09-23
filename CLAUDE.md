@@ -96,7 +96,7 @@ build/hanabi_reactor0_tests.exe   # reactor0 only         336 tests,  6 s
 build/hanabi_tests.exe            # convention-neutral    387 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
 build/hanabi_decision_tests.exe   # decision quality      147 tests,  0.7 s
-build/hanabi_tiiah_tests.exe      # Throw It in a Hole     38 tests,  0.1 s
+build/hanabi_tiiah_tests.exe      # Throw It in a Hole     46 tests,  0.1 s
 ```
 
 Pick the scope from the report's `Convention:` field:

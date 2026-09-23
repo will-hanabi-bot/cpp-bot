@@ -57,6 +57,7 @@ add_library(hanabi_core STATIC
   src/conventions/tiiah/interpret_reactive.cpp
   src/conventions/tiiah/superposition.cpp
   src/conventions/variants/brownish.cpp
+  src/conventions/variants/hole.cpp
   src/conventions/variants/inverted.cpp
   src/conventions/variants/pinkish.cpp
   src/conventions/variants/predicates.cpp
@@ -401,6 +402,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_gate_and_clues.cpp
   tests/test_tiiah/test_superposition.cpp
   tests/test_tiiah/test_reverse_reactive.cpp
+  tests/test_tiiah/test_bucket_encoding.cpp
+  tests/test_tiiah/test_reactions.cpp
 )
 target_include_directories(hanabi_tiiah_tests PRIVATE tests)
 target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)

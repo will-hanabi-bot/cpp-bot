@@ -987,13 +987,12 @@ Implemented in `src/conventions/tiiah/interpret_reactive.cpp`: the target walk
 the receiver's known plays), the sum rule for the reacter's slot, and the §1g
 split between a shared refusal (walk on) and a giver-only one (reject).
 
-**Still open, and inherited by §40:** what the two cards ARE — the bucket
-relation, the finesse inference and the "both know exactly" licence — is not
-read yet, so the clue names slots without narrowing identities.
+What the two cards ARE — the bucket relation, the finesse inference and the
+"both know exactly" licence — followed in §40, v16.3.0.
 
 ---
 
-## 40. `[tiiah]` The bucket-encoded reactive
+## 40. `[tiiah]` The bucket-encoded reactive — CLOSED in v16.3.0
 
 CONVENTION.md §1d. All reactive clues are even parity; the sum rule picks the
 slots as in reactor0 and the clue KIND says what the cards are — rank: a finesse,
@@ -1002,8 +1001,17 @@ players knowing their identity exactly; colour: the same with one bucket lower.
 Inverted playables and inverted finesses are skipped as targets unless they are
 the only playables left, where the clue becomes a double chuck.
 
-`suit_buckets` / `bucket_of` (`src/conventions/tiiah/buckets.cpp`) are
-implemented and tested; nothing reads them yet.
+Implemented in `src/conventions/tiiah/interpret_reactive.cpp`: the bucket
+relation gates the target walk and narrows the reacter's card to the playables
+of the named bucket (judged after the receiver's queued plays, so a delayed play
+counts); a finesse names its connector outright; a pairing that is neither, and
+that the two players could not name from their own empathy, is walked past. The
+double chuck presses the Discard button on both sides and asks only that the
+reacter's card be affordable to chuck (`safe_to_chuck`).
+
+The resolution side needed no new code: reactor0's `wc_even_parity` reads the
+`even_parity` bound at clue time and `receiver_button` mirrors the button the
+reacter actually pressed, which is what makes a double chuck resolve as a chuck.
 
 ---
 
@@ -1020,9 +1028,9 @@ The two traps this entry recorded were both avoided by keeping the set on
 rebuilds by replay — no new `Game` field, so nothing is carried through a
 rewind stale and nothing needs serialising.
 
-**Still open, and inherited from here:** the reacter's target choice under
-§1e — "assume none of the superposed cards were played" — has nothing to read
-it yet, because TIIAH has no reactive targets until §40 lands.
+**Still open, and inherited by §43:** the reacter's target choice under §1e —
+"assume none of the superposed cards were played". §40 gave it something to
+read, and it reads the wrong view.
 
 ---
 
@@ -1037,3 +1045,23 @@ cards were played.
 
 16 of the 44 TIIAH variants carry a rainbowy suit (Rainbow, Omni, Prism, Muddy,
 Cocoa).
+
+---
+
+## 43. `[tiiah]` The reactive target walk runs on the wrong stack view
+
+CONVENTION.md §1d/§1e. `receiver_targets` simulates the receiver's queued plays
+on top of `play_stacks` -- OUR belief, which a partner's superposed play has
+already advanced because we watched the card go in. Their own view has not
+advanced, and neither has the third seat's if they also could not name it. So
+from the first ambiguous play onwards the three seats can walk to different
+targets, which is a desync in the one thing every seat has to compute alike.
+
+`common_play_stacks` is by construction "no superposed play counted", so the fix
+is to run the walk on it: a `State` whose `play_stacks` are the shared ones,
+with `playable_set` rebuilt to match (`with_play` maintains it; a bare
+assignment would leave it stale, and `pitch_candidates` reads it).
+
+Inherited from §41, unblocked by §40, and held for v16.4.0 so it lands with
+§42's other half of the same rule -- a stable colour clue from a superpositioned
+giver is read under exactly the same assumption.

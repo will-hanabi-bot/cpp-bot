@@ -1847,6 +1847,15 @@ enforcement from inside their `waiting` block.
    oldest slot in exactly play
    order, which is what lets the shared urgent scan pick by slot without
    consulting signal turns.
+   **Throw It in a Hole makes a call's death a later question** (v16.3.0). A
+   reverse-reactive finesse there names the reacter a card that only becomes
+   playable once the *receiver* has played what they already know, so
+   `drop_dead_play_calls` judges the call against the stacks after those queued
+   plays as well as the live ones, and leaves the call under test out of that
+   simulation — counting it would spend its own identity and make it read dead
+   exactly when it is most alive
+   (`src/conventions/reactor0/call_invariants.cpp:144-165`). Gated on
+   `Variant::throw_it_in_a_hole`, so no other variant's calls change.
 2. **At most one discard call.** Unlike play calls, `CALLED_TO_DISCARD` does
    not stack: a new call replaces the standing one. Cards merely *revealed* to
    be basic trash (`meta.trash`) are not calls and are untouched — they

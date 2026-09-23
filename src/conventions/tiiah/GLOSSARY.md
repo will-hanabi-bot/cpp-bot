@@ -49,20 +49,34 @@ TIIAH's dispatch, and the reverse of reactor0's: when Bob holds a known play and
 Cathy does not, a clue to **Bob** is reactive — with **Cathy** reacting and Bob
 receiving — and a clue to **Cathy** is stable. Not the same as reactor's rule,
 where a clue to Bob makes Bob both reacter and receiver, a degenerate reading
-reactor scores as a MISTAKE. Specified; not implemented (TODO.md §39).
+reactor scores as a MISTAKE. `tiiah::interpret_clue`
+(`src/conventions/tiiah/interpret_clue.cpp:60-72`). CONVENTION.md §1c.
 
 ### double pitch
-A reactive clue on which both named cards are played. Every reactive clue in
-TIIAH is one of these or a double chuck, because reactive clues are all even
-parity. What the two cards ARE is carried by the clue kind: rank means the
-receiver's target is one bucket higher than the reacter's, colour one bucket
-lower, either wrapping — or the clue is a finesse, or both players know their own
-identity exactly. CONVENTION.md §1d.
+A reactive clue on which both named cards are played — both players press the
+**Play** button. Every reactive clue in TIIAH is one of these or a double chuck,
+because reactive clues are all even parity. What the two cards ARE is carried by
+the clue kind: rank means the receiver's target is one bucket higher than the
+reacter's, colour one bucket lower, either wrapping — or the clue is a finesse,
+or both players know their own identity exactly. CONVENTION.md §1d.
 
 ### double chuck
-What a reactive clue becomes when the only playables left are on inverted suits.
-Inverted playables and inverted finesses are otherwise skipped as reactive
-targets. CONVENTION.md §1d.
+What a reactive clue becomes when the receiver's only playables are on inverted
+suits: both players press **Discard**, which is the button that stacks an
+inverted card. Inverted playables and inverted finesses are otherwise skipped as
+reactive targets. The reacter's own card has to be **affordable to chuck** —
+inverted and playable, so the button plays it, or simply not critical — and a
+pairing that fails that is refused outright, since the reacter cannot see their
+own hand. `safe_to_chuck`, `src/conventions/tiiah/interpret_reactive.cpp:72-79`.
+CONVENTION.md §1d.
+
+### delayed call
+A `CALLED_TO_PLAY` card that is not playable yet and will be once the *receiver*
+has played what they already know — what a reverse-reactive finesse creates.
+Alive but not actionable: reactor0's dead-call invariant judges it against the
+stacks after those queued plays, and leaves the call itself out of that
+simulation (`src/conventions/reactor0/call_invariants.cpp:144-165`).
+CONVENTION.md §1c.
 
 ### superposition
 The state of a player who has played a card without learning what it was: the

@@ -8,7 +8,7 @@ implements it, and every rule that is not says so in the same breath.
 Terminology is in [GLOSSARY.md](GLOSSARY.md); terms not defined there (chop,
 pitch / chuck, CTP / CTD, critical, loaded, …) carry their
 [reactor glossary](../reactor/GLOSSARY.md) meanings. Convention that is legal
-but not yet implemented is tracked in [TODO.md](../../../TODO.md) §39–§41.
+but not yet implemented is tracked in [TODO.md](../../../TODO.md) §42–§43.
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -16,12 +16,13 @@ Bob the next player, Cathy the one after.
 
 ## §0 Status
 
-**v16.0.0 READS these games but does not PLAY them.** `Game::take_action` throws
+**The bot READS these games but does not PLAY them**, and has since v16.0.0.
+`Game::take_action` throws
 for a TIIAH game (`src/basics/decide.cpp:909-913`) and the client says so once in
 table chat and then sits still (`src/net/commands.cpp:646-666`). That is
-deliberate: §1c below is specified and unimplemented, and the decision layer the
-bot would otherwise use is reactor0's, which prices clues by *reactor0's*
-meanings. Before v16.0.0 the flag was not read at all, so these tables were
+deliberate: the decision layer the bot would otherwise use is reactor0's, which
+prices clues by *reactor0's* meanings, and §1f below is still specified and
+unimplemented. Before v16.0.0 the flag was not read at all, so these tables were
 played by reactor's rules — reactor's own §1b.8 said so — and stopping that is
 what this version is for.
 
@@ -31,7 +32,7 @@ what this version is for.
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | Reverse-reactive dispatch (§1c) | implemented (v16.2.0) |
-| The bucket-encoded reactive (§1d) | **specified only** — TODO.md §40 |
+| The bucket-encoded reactive (§1d) | implemented (v16.3.0) |
 | Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | **specified only** — TODO.md §42 |
 
@@ -193,14 +194,14 @@ Dispatch is decided by the position **before** the clue. Asking the post-clue
 game instead makes every play clue to Bob answer "Bob has a known play", because
 the clue itself just gave him one.
 
-`interpret_reactive` (`src/conventions/tiiah/interpret_reactive.cpp:90-182`)
+`interpret_reactive` (`src/conventions/tiiah/interpret_reactive.cpp:129-277`)
 installs the waiting connection, stamps the reacter's blind play and leaves the
 receiver's own call for reaction time — the resolution machinery is reactor0's,
 shared.
 
-**The target walk** (`receiver_targets`, `:64-82`) runs over the stacks as they
+**The target walk** (`receiver_targets`, `:92-121`) runs over the stacks as they
 will stand once the receiver's known plays are done (`simulate_known_plays`,
-`:41-60`, a fixpoint so a chain advances in order). Two kinds of card qualify,
+`:43-48`, a fixpoint so a chain advances in order). Two kinds of card qualify,
 and they are walked in this order — reactor0's Phase A before Phase B, which is
 the order every seat walks:
 
@@ -216,14 +217,28 @@ because the reacter cannot see it and would act on that pairing anyway.
 A clue whose walk finds nothing reads as a MISTAKE and stamps nothing. Guessing
 would be worse than refusing: it would call a partner onto a card nobody named.
 
-### §1d The reactive clue — SPECIFIED, NOT IMPLEMENTED (TODO.md §40)
+**A call here can be DELAYED.** The finesse arm names the reacter a card that is
+only playable once the receiver has played what they already know, so the call
+stands while being unactionable. Reactor0's dead-call invariant would otherwise
+erase it the moment it was stamped, and under this variant it judges "dead"
+against the stacks after the queued plays as well as the live ones
+(`drop_dead_play_calls`, `src/conventions/reactor0/call_invariants.cpp:144-165`).
+The call under test is **left out** of that simulation: counting it would spend
+its own identity, and it would read dead exactly when it is most alive
+(`stacks_after_queued_plays`'s `except_order`,
+`src/conventions/variants/hole.cpp:9-42`). Nothing follows for the holder's turn
+— the call is alive, not yet actionable.
 
-All reactive clues are **even parity**: the two named cards are both pitched.
-The two slots are picked by the sum rule as in reactor0 —
-`react_slot + target_slot ≡ anchor (mod hand size)` — and **the anchor is
-reactor0's**: the rank value for a rank clue, and the colour's value from the
-fixed table (`include/hanabi/conventions/reactor0/colour_value.h`) for a colour
-clue.
+### §1d The reactive clue
+
+All reactive clues are **even parity**: whichever button the reacter presses, the
+receiver is called to the same one (`wc.even_parity = true`,
+`src/conventions/tiiah/interpret_reactive.cpp:150`). The two slots are picked by
+the sum rule as in reactor0 — `react_slot + target_slot ≡ anchor (mod hand size)`
+(`interpret_reactive.cpp:182`) — and **the anchor is reactor0's**: the rank value
+for a rank clue, and the colour's value from the fixed table
+(`include/hanabi/conventions/reactor0/colour_value.h`) for a colour clue
+(`anchor_of`, `interpret_reactive.cpp:27-33`).
 
 The clue KIND then carries what the two cards ARE, which is the part a hidden
 stack cannot otherwise convey:
@@ -233,7 +248,28 @@ stack cannot otherwise convey:
 - a **colour** clue means a finesse, *or* one bucket **lower** (wrapping).
 
 **The finesse and the bucket relation are disjoint by definition**, so a clue is
-never both and there is no precedence between them to settle.
+never both and there is no precedence between them to settle. `required_target_bucket`
+/ `bucket_relation_holds` (`src/conventions/tiiah/interpret_reactive.cpp:51-68`)
+are the relation; the finesse is a target one away, whose *connector* is the one
+card that bridges to it (`interpret_reactive.cpp:200-204`).
+
+What the reacter writes down is therefore one of three things
+(`interpret_reactive.cpp:249-268`):
+
+| The pairing is | The reacter's card is read as |
+|---|---|
+| a finesse | exactly the connector |
+| a bucket relation | the **playable** identities of the named bucket |
+| neither | whatever the stamp left — the superposition below |
+
+"Playable" in the middle row is judged **after the receiver's queued plays**, the
+same stack simulation §1c's target walk runs on, so a card that only comes live
+once the receiver plays what they already know counts. Worked example: red on 2,
+six suits, the receiver holding a known `r3` and the target a green card under a
+rank clue. Green is bucket 1, so the reacter's bucket is 0 — red and yellow — and
+what they write is `{r4, y1}`: the `r4` because the queued `r3` will have gone in
+first, the `y1` because yellow has not started. They cannot act on the `r4` until
+that `r3` actually plays, which is what makes their call a **delayed** one.
 
 Worked example, six suits, red/yellow/green/blue/purple/teal: a rank clue can get
 a teal 1 to play into a teal 2 (a finesse), or a purple/teal card to play into a
@@ -257,12 +293,42 @@ the clue encoded no identity.
 That fallback is a *reading* rule, so it creates superposed cards with nobody
 having played anything, and §1e's collapsing rules govern them the same way.
 
-#### Inverted targets
+The legality test therefore gates the **walk**, not the stamp
+(`interpret_reactive.cpp:226-233`): a pairing that is neither a finesse nor a
+bucket relation, and which the two players could not each name from their own
+empathy, is walked past and the next target tried. That is the shared half of
+§1g — the reacter walks past it too, so no seat is left behind.
+
+The **giver-only** half keeps its own rule (`interpret_reactive.cpp:216-219`): if
+what the reacter is actually holding does not fit the pairing, the clue is
+refused outright rather than retargeted. The reacter cannot see their own card,
+so they would act on that pairing however wrong it is.
+
+#### Inverted targets, and the double chuck
 
 **Inverted suits are skipped** as reactive targets, playables and finesses
-alike, unless they are **the only playables left in the receiver's hand** — that
-test is over the receiver's hand, not the whole table — in which case the clue
-is a **double chuck** instead.
+alike (`receiver_targets`, `src/conventions/tiiah/interpret_reactive.cpp:92-121`),
+unless they are **the only playables left in the receiver's hand** — that test is
+over the receiver's hand, not the whole table — in which case the clue is a
+**double chuck** instead: both players press **Discard**, which is the button
+that stacks an inverted card.
+
+A double chuck asks something different of the reacter, because they are not
+playing. What they hold has to be **affordable to chuck**
+(`safe_to_chuck`, `interpret_reactive.cpp:72-79`): either the button plays it —
+an inverted card the stack is waiting for — or losing it costs the team nothing,
+which is any card that is not critical (trash included, since trash is never
+critical). Alice may not name a slot that fails this, and the refusal is a
+giver-only one, so it kills the clue rather than moving to the next target.
+
+Nothing else changes. The bucket relation does not apply — an inverted suit is in
+no bucket — and does not need to, since no identity has to reach the reacter for
+them to press Discard; a double chuck over a one-away target still names its
+connector. The receiver's own call comes from the ordinary even-parity mirror at
+resolution time (`receiver_button`, `src/conventions/reactor0/decision.cpp:98`),
+which reads the button the reacter actually pressed
+(`reacter_button_pressed`, `src/conventions/reactor0/interpret_reaction.cpp:514`)
+rather than the hook that fired.
 
 ### §1e Superposition
 
@@ -275,6 +341,16 @@ playable/finessable **by stack simulation assuming that none of the superposed
 cards were played**. Worked example: Bob played a card he knows is either a
 purple 1 or a teal 1, nothing else has been played, and Cathy holds
 `p2 p1 g1 r1 r5`. Assuming neither landed, Bob chooses her purple 1 on slot 2.
+
+**Not implemented (TODO.md §43).** §1d's target walk runs on `play_stacks` — our
+own belief, which a partner's superposed play *has* advanced, because we watched
+the card. Every seat therefore walks a slightly different simulation the moment
+anyone has played into the hole without knowing what it was. The shared view
+`common_play_stacks` is exactly "no superposed play counted", so the fix is to
+walk that instead; it is held for v16.4.0, where the other half of the same rule
+(§1f's stable clue from a superpositioned giver) lands with it. Until then the
+convention is only sound before the first ambiguous play, which is why the gate
+in §0 is still down.
 
 The set is stamped on the card's `ConvData` (`include/hanabi/basics/card.h:169`)
 at the moment of the play, by `note_hidden_action`
@@ -335,4 +411,6 @@ purple, the receiver assumes the purple 1 was not played.
 | `tests/test_tiiah/test_engine_rules.cpp` | §1.1's table and §1.2 — a partner's hidden play advancing our stacks, our own leaving them alone, a hidden misplay striking, a hidden 5 paying nothing, and both sides of the orange mirror |
 | `tests/test_tiiah/test_gate_and_clues.cpp` | §0's refusal, §1b read identically to reactor0 (a differential test), and §1c refusing rather than guessing |
 | `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
+| `tests/test_tiiah/test_bucket_encoding.cpp` | §1d — a rank clue naming the bucket below and a colour clue the bucket above, the spec's `{r4, y1}` worked example, a finesse naming its connector outright, and a pairing that breaks the relation going unread |
+| `tests/test_tiiah/test_reactions.cpp` | §1d — an inverted-only hand making the clue a double chuck, a double chuck over a critical card refused, and both parities resolving: the receiver is called to the button the reacter pressed |
 | `tests/test_tiiah/test_superposition.cpp` | §1e — a set recorded for our own and a partner's ambiguous play, a known play creating none and advancing both views, the two views diverging on a partner's play, a shared collapse, and the shared view staying absent outside the variant |

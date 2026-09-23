@@ -8,7 +8,9 @@
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
+#include "hanabi/conventions/tiiah/buckets.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
+#include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/variants/predicates.h"
 #include "hanabi/conventions/variants/reversed.h"
 #include "hanabi/instrumentation/timer.h"
@@ -39,45 +41,82 @@ int anchor_of(const State& state, const ClueAction& action) {
 // see; the receiver never runs this walk for their own hand (they decode at
 // reaction time), which is the same POV rule reactor0's `play_pool` follows.
 State simulate_known_plays(const Game& game, int player) {
-  State hypo = game.state;
-  bool advanced = true;
-  while (advanced) {
-    advanced = false;
-    for (int o : hypo.hands[player]) {
-      auto id = game.state.deck[o].id();
-      if (!id || !hypo.is_playable(*id)) continue;
-      const bool called = game.meta[o].status == CardStatus::CALLED_TO_PLAY;
-      const IdentitySet live = game.common.thoughts[o].possibilities();
-      const bool empathy_playable =
-          live.non_empty() &&
-          live.forall([&hypo](Identity i) { return hypo.is_playable(i); });
-      if (!called && !empathy_playable) continue;
-      hypo = hypo.with_play(*id);
-      advanced = true;
-    }
+  return hanabi::reactor::variants::stacks_after_queued_plays(game, player);
+}
+
+// Which bucket the receiver's target must sit in, given the reacter's card and
+// the clue kind (CONVENTION.md §1d): one HIGHER for a rank clue, one LOWER for
+// a colour clue, wrapping. Nullopt when the reacter's suit has no bucket, which
+// is what an inverted suit has.
+std::optional<int> required_target_bucket(const Variant& variant, ClueKind kind,
+                                          Identity reacter_id) {
+  auto from = bucket_of(variant, reacter_id.suit_index);
+  if (!from) return std::nullopt;
+  return kind == ClueKind::RANK ? (*from + 1) % 3 : (*from + 2) % 3;
+}
+
+// Does this pairing satisfy §1d's bucket relation?
+bool bucket_relation_holds(const Variant& variant, ClueKind kind,
+                           Identity reacter_id, Identity target_id) {
+  auto want = required_target_bucket(variant, kind, reacter_id);
+  if (!want) return false;
+  auto got = bucket_of(variant, target_id.suit_index);
+  return got && *got == *want;
+}
+
+// What a DOUBLE CHUCK asks of the reacter (§1d). They are pressing Discard, so
+// their card is safe either because the button PLAYS it — a chuck reaches the
+// stack on an inverted suit — or because losing it costs the team nothing.
+// `is_critical` is already false for trash, so the one test covers both halves
+// of "trash, or a card whose other copy survives".
+bool safe_to_chuck(const State& state, const State& after, Identity id) {
+  if (state.variant->suits[id.suit_index].suit_type.inverted &&
+      after.is_playable(id)) {
+    return true;
   }
-  return hypo;
+  return !state.is_critical(id);
+}
+
+// "Both players would know exactly what they are playing" — the licence that
+// lets Alice give a pairing which is neither a finesse nor a bucket relation
+// (§1d). Judged from THEIR views: it is their own empathy that has to settle it,
+// not hers.
+bool both_know_their_own(const Game& game, int react_order, int target_order) {
+  const auto& react_live = game.common.thoughts[react_order].possibilities();
+  const auto& target_live = game.common.thoughts[target_order].possibilities();
+  return react_live.length() == 1 && target_live.length() == 1;
 }
 
 }  // namespace
 
 std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver) {
+  const State& s = game.state;
   const State after = simulate_known_plays(game, receiver);
   std::vector<ReceiverTarget> direct;
   std::vector<ReceiverTarget> one_away;
-  for (int o : game.state.hands[receiver]) {
+  std::vector<ReceiverTarget> inverted;
+  for (int o : s.hands[receiver]) {
     // A card already called to play is one of the plays we just simulated, so
     // it is not waiting on anything: never retargeted (§1c).
     if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
-    auto id = game.state.deck[o].id();
+    auto id = s.deck[o].id();
     if (!id) continue;  // our own hand; the receiver decodes at reaction time
     const int away = after.playable_away(*id);
-    if (away == 0) direct.push_back({o, *id, 0});
-    if (away == 1) one_away.push_back({o, *id, 1});
+    if (away != 0 && away != 1) continue;
+    // An inverted card is skipped — playable or one away alike — and kept aside
+    // in case it turns out to be all the receiver has (§1d).
+    if (s.variant->suits[id->suit_index].suit_type.inverted) {
+      inverted.push_back({o, *id, away});
+      continue;
+    }
+    (away == 0 ? direct : one_away).push_back({o, *id, away});
   }
   // Playables before finesses, each leftmost-first — reactor0's Phase A before
   // Phase B, which is the order every seat walks.
   direct.insert(direct.end(), one_away.begin(), one_away.end());
+  // "Unless they are the only playables left", judged over the RECEIVER's hand:
+  // then the inverted ones are all there is, and the clue is a double chuck.
+  if (direct.empty()) return inverted;
   return direct;
 }
 
@@ -148,9 +187,16 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     }
     const int react_order = state.hands[reacter][react_slot - 1];
 
+    // An inverted target comes back from the walk only when the receiver has
+    // nothing else, and then the clue is a DOUBLE CHUCK: both players press
+    // Discard, which is the button that stacks an inverted card (§1d).
+    const bool double_chuck =
+        state.variant->suits[target.id.suit_index].suit_type.inverted;
+
     // What the reacter has to be holding. A direct target wants any card that
     // plays right now; a one-away target is a FINESSE, and wants the one card
-    // that bridges to it.
+    // that bridges to it. Under a double chuck they are discarding instead, and
+    // what is asked of them is that the discard be affordable.
     std::optional<Identity> connector;
     if (target.away == 1) {
       connector = hanabi::reactor::variants::connector_of(state, target.id);
@@ -158,20 +204,69 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     }
     const IdentitySet react_live =
         hanabi::reactor::effective_possible_for(game, react_order);
-    const bool shared_ok =
-        connector ? react_live.contains(*connector)
-                  : react_live.exists([&after](Identity i) {
-                      return after.is_playable(i);
-                    });
-    if (!shared_ok) continue;  // shared: walk on, and so does the reacter
-
-    if (auto actual = state.deck[react_order].id()) {
-      const bool giver_ok =
-          connector ? *actual == *connector : after.is_playable(*actual);
-      if (!giver_ok) return std::nullopt;  // giver-only: reject, never retarget
+    auto reacter_side_ok = [&](Identity i) {
+      if (connector) return i == *connector;
+      return double_chuck ? safe_to_chuck(state, after, i) : after.is_playable(i);
+    };
+    if (!react_live.exists(reacter_side_ok)) {
+      continue;  // shared: walk on, and so does the reacter
     }
 
-    if (!reactor0::stamp_react_play_button(game, action, react_order)) continue;
+    if (auto actual = state.deck[react_order].id()) {
+      // giver-only: reject, never retarget. The reacter cannot see their own
+      // card, so they would act on this pairing however wrong it is (§1g) —
+      // including chucking a card the team still needs.
+      if (!reacter_side_ok(*actual)) return std::nullopt;
+      // §1d's licence, which is about what the clue may SAY rather than which
+      // slots it names. A finesse says it by itself; otherwise the bucket
+      // relation carries the identities, and failing that the pairing is only
+      // legal when both players can already name their own card. A double chuck
+      // is exempt: the reacter is not playing, so no identity has to reach them
+      // — and an inverted suit has no bucket to relate to in any case.
+      if (!connector && !double_chuck &&
+          !bucket_relation_holds(*state.variant, action.clue.kind, *actual,
+                                 target.id) &&
+          !both_know_their_own(game, react_order, target.order)) {
+        continue;
+      }
+    }
+
+    const auto stamped =
+        double_chuck
+            ? reactor0::stamp_react_discard_button(game, action, react_order)
+            : reactor0::stamp_react_play_button(game, action, react_order);
+    if (!stamped) continue;
+
+    // What the pairing tells the reacter about their own card. A finesse names
+    // it outright; the bucket relation narrows it to the playable cards of the
+    // right bucket; when neither applies the reading is the fallback §1d
+    // describes — a superposition over every playable identity their empathy
+    // still allows, which is what the stamp above already left.
+    //
+    // A double chuck names nothing and needs to name nothing: the call itself
+    // says which button to press, and an inverted target has no bucket, so the
+    // `bucket_of` test below fails for it without a case of its own.
+    if (connector) {
+      game.narrow_thought(react_order, IdentitySet::single(*connector));
+    } else if (auto want = bucket_of(*state.variant, target.id.suit_index)) {
+      // The reacter's card is a playable one — judged AFTER the queued plays,
+      // so a card that only comes live once the receiver plays what they know
+      // counts — sitting in the bucket the relation names. Worked example:
+      // red on 2 with the receiver holding a called r3, a rank clue, and a
+      // green target gives the reacter `{r4, y1}` — the playables of bucket 0.
+      const int from = action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
+                                                          : (*want + 1) % 3;
+      const IdentitySet allowed = IdentitySet::create([&](Identity i) {
+        auto b = bucket_of(*state.variant, i.suit_index);
+        return b && *b == from && after.is_playable(i);
+      });
+      if (game.common.thoughts[react_order]
+              .possibilities()
+              .intersect(allowed)
+              .non_empty()) {
+        game.narrow_thought(react_order, allowed);
+      }
+    }
     if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
     if (game.pending_reactions[receiver]) {
       game.pending_reactions[receiver]->react_order = react_order;

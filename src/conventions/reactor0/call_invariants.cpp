@@ -7,6 +7,7 @@
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/variants/hole.h"
 
 namespace hanabi::reactor0 {
 
@@ -141,13 +142,20 @@ void enforce_single_discard_call(Game& game, const std::vector<int>& hand) {
 // shared commitment and has to die for every seat at the same moment, or they
 // disagree about what is still standing.
 void drop_dead_play_calls(Game& game, const std::vector<int>& hand) {
-  IdentitySet allowed;
-  bool computed = false;
+  const IdentitySet live_allowed = pitch_candidates(game.state);
   for (int o : hand) {
     if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
-    if (!computed) {
-      allowed = pitch_candidates(game.state);
-      computed = true;
+    IdentitySet allowed = live_allowed;
+    // Throw It in a Hole: a call can be a DELAYED play. Its reverse reactive
+    // names the reacter a card that only becomes playable once the receiver
+    // has played what they already know (tiiah/CONVENTION.md §1c), so 'dead'
+    // is judged after the queued plays rather than now — the call is alive, it
+    // is simply not actionable yet. THIS call is left out of the simulation:
+    // counting it would spend its own identity and make it read dead.
+    if (game.state.variant->throw_it_in_a_hole) {
+      const State after = hanabi::reactor::variants::stacks_after_queued_plays(
+          game, std::nullopt, o);
+      allowed = allowed.union_with(pitch_candidates(after));
     }
     const Thought& t = game.common.thoughts[o];
     const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
