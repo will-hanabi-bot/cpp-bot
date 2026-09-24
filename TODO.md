@@ -667,12 +667,23 @@ while `possible` disagreed came in through that arm, and two of them cost max
 score (1957932 T42, 1966558 T25).
 
 The fix belongs where the call is READ, not where it is obeyed. `chuck_candidates`
-(`include/hanabi/conventions/reactor0/interpret_clue.h:63-67`) already defines a
+(`include/hanabi/conventions/reactor0/interpret_clue.h:67-77`) already defines a
 chuck call as "a plain-suit card that is **not playable and not critical**", so
-the stamp should be narrowed to that set by `narrow_to_stamped_button` (`:69-75`)
+the stamp should be narrowed to that set by `narrow_to_stamped_button` (`:79-85`)
 when the reaction resolves. Guarding the obey path instead would have the bot
 refuse a partner's explicit instruction, which is the convention's core loop and
 would desync the signal.
+
+**Partly addressed in v16.11.0, and deliberately not closed.** The STABLE
+referential discard — the one arm that narrowed nothing at all, so its note
+listed the criticals outright (replay 2008422 T1) — now drops them, via
+`narrow_stable_chuck` (`src/conventions/reactor0/interpret_clue.cpp:609-659`).
+That is `target_discard`'s weaker filter, *not* `chuck_candidates`: the ruling
+was that a stable "this slot is safe to throw" does not also claim the card is
+unplayable, so the playable readings stay. So what this entry asks for is still
+open on both counts — the stamp is not `chuck_candidates`-tight, and the CTD arm
+at `src/conventions/reactor0/calls.cpp:312-313` still reaches the chuck list
+without passing `is_chuckable`.
 
 ---
 

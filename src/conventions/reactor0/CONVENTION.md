@@ -885,6 +885,32 @@ stamp the stable orange ladder uses (`interpret_clue.cpp:286-311`) — and falls
 back to `target_discard`. See §1f for why the ladder replaced the v7.30.0
 either/or gate.
 
+**The STABLE referential discard narrows too, but less (v16.11.0).** It is the
+one stamping path that used to narrow nothing: `reactor::ref_discard`
+(`reactor/interpret_clue.cpp:325-428`) stamps the slot and returns, so a note
+reading "throw this away" still listed every critical the card could be — replay
+2008422 T1 called a card to discard holding all five 5s. reactor0 now filters at
+its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:609-659`, called
+from `stable_rank` at `:938-946`), and it differs from the reacter stamps in
+three ways, each deliberate:
+
+- **To the plain-suit non-criticals, not to `chuck_candidates`.** A stable
+  referential discard says "this slot is safe to throw", which is weaker than
+  the reacter stamp's "this card is the chuck": the playable readings stay.
+  Whether they should is TODO.md entry 28.
+- **With the inverted carve-out**, for the reason above: on an inverted suit
+  Discard stacks the card, so a critical reading there is what the call wants.
+  `target_discard`'s bare filter would empty the set outright in Dark Orange.
+- **It never refuses and never erases.** No `narrow_thought`, so its escalation
+  (`basics/game.cpp:119-138`) — which clears the meta when nothing survives, and
+  would delete the call just stamped — is out of reach; an empty result is left
+  alone instead. The CTD is positional and does not depend on the inference,
+  which is the same reasoning as the v0.30 reset at
+  `reactor/interpret_clue.cpp:402-419`.
+
+Reactor is untouched by all of this: its corpus pins a stable CTD that lands on
+a critical dark null 5 (replay 1916791), which is why the filter sits at the
+reactor0 call site and not inside the shared `ref_discard`.
 
 **The receiver is stamped only AFTER the reacter acts.** Until v8.0.0 two of
 the five reactive paths — rank Phase A and colour mode 1 — stamped the
@@ -981,11 +1007,17 @@ readings:
 |---|---|---|
 | advanced a stack, NOT the reacter's | ordinary double play | direct playables, on the passed-over slots only |
 | advanced the SAME stack the reacter did | **finesse** | direct playables across the whole hand, **and** one-away identities on the passed-over slots |
-| advanced no stack | they discarded | direct playables across the whole hand |
+| advanced no stack | they discarded | direct playables **and** one-away identities across the whole hand, **and** trash on the passed-over slots |
 
 An inverted CHUCK advances a stack exactly as a plain play does and a PITCH
 stacks nothing exactly as a plain discard does, so the stacks answer this
-without any button or suit test. Everything is read as of the REACTION —
+without any button or suit test — **outside Throw It in a Hole**. There a play
+goes into the hole, so the seat that made it never learns which stack moved and
+its own stacks do not advance: its own play would read as row 3 and take the
+whole-hand negative. So a hole game asks the BUTTON instead, which is public,
+and a receiver play takes row 1 in every seat — the suit is not common knowledge
+there, so no seat may read the reaction by what it privately saw
+(`src/basics/decide.cpp:84-108`, tiiah/CONVENTION.md §1d). Everything is read as of the REACTION —
 "playable" and "one away" describe the position the clue was given into, not
 whatever the stacks look like when the receiver gets round to acting. A card
 carrying its own call is left alone; that call speaks for it.

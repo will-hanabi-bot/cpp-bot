@@ -323,6 +323,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_stable_colour.cpp
   tests/test_reactor0/test_stable_colour_baseline.cpp
   tests/test_reactor0/test_stable_rank.cpp
+  tests/test_reactor0/test_stable_chuck_drops_criticals.cpp
   tests/test_reactor0/test_odds_and_evens.cpp
   tests/test_reactor0/test_orange.cpp
   tests/test_reactor0/test_reactive_inverted_vet.cpp
@@ -412,6 +413,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_receiver_bucket.cpp
   tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp
   tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp
+  tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp

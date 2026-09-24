@@ -30,7 +30,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0) |
-| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0) |
+| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0) |
 | Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
@@ -82,7 +82,7 @@ Each seat knows every card played **except its own**: we watched a partner's car
 sit in their hand, so `state.deck[order]` still knows what it was even though the
 action carries no identity.
 
-`resolve_hidden_action` (`src/basics/action.cpp:82-130`) rebuilds the
+`resolve_hidden_action` (`src/basics/action.cpp:82-133`) rebuilds the
 button-oriented action the engine would have received in an ordinary variant,
 deciding the outcome from the identity and the stacks rather than from the wire's
 claim:
@@ -95,7 +95,7 @@ claim:
 | it reached the pile | inverted | Play (a pitch) |
 | it reached the pile | plain | Discard |
 
-It runs as a pre-step in `Game::handle_action` (`src/basics/game.cpp:556`), which
+It runs as a pre-step in `Game::handle_action` (`src/basics/game.cpp:563`), which
 is the only choke point live play, snapshot replay, `rewind` and `simulate` all
 share — and it has to be there rather than inside `on_play`, because resolving a
 hidden card can change the action's **type** and `on_play` cannot rewrite itself
@@ -107,7 +107,7 @@ it without serialising anything.
 **Our own play is the one the state cannot name**, because `deck[order].id()`
 is `nullopt` for our seat. Our own EMPATHY often can, though, and a play we can
 name is a play we can account for: `hidden_own_play_id`
-(`src/basics/game.cpp:547-566`) hands that identity to the resolution. What is
+(`src/basics/game.cpp:547-559`) hands that identity to the resolution. What is
 left when empathy cannot name it is §1e's superposition — the hand updates and
 the stacks wait.
 
@@ -138,21 +138,33 @@ As of v16.4.0 the whole interpretation runs on it, not a rule here and there:
 
 | What | How it gets the shared view |
 |---|---|
-| both stable ladders (§1b) | `SharedStacks`, a scoped swap of `play_stacks` / `playable_set` / `trash_set` around the delegation (`tiiah/interpret_clue.cpp:48-76`), plus a `prev` whose state is `shared_view()` |
-| the reactive target walk (§1c, §1d) | `stacks_after_queued_plays` starts from `shared_view()` (`variants/hole.cpp:12-17`) |
-| the §1f pin | `shared_view()` directly (`tiiah/interpret_clue.cpp:119`) |
-| §1b's stall context | `Game::shared_in_endgame` (`tiiah/interpret_clue.cpp:189-193`) |
+| both stable ladders (§1b) | `SharedStacks`, a scoped swap of `play_stacks` / `playable_set` / `trash_set` around the delegation (`tiiah/interpret_clue.cpp:29-57`), plus a `prev` whose state is `shared_view()` |
+| the reactive target walk (§1c, §1d) | `stacks_after_queued_plays` starts from `shared_view()` (`variants/hole.cpp:17-18`) |
+| the §1f pin | `shared_view()` directly (`tiiah/interpret_clue.cpp:100`) |
+| §1b's stall context | `Game::shared_in_endgame` (`tiiah/interpret_clue.cpp:184-190`) |
 | the stable orange ladder's pitch-vs-chuck test | `State::shared_pace` (`reactor0/interpret_clue.cpp:519`), reached by delegating |
+| the reaction's held negative (§1d) | asks the BUTTON, not the stacks — `Game::fire_reaction_elim` (`basics/decide.cpp:84-108`) |
 
 The swap costs nothing until the two views actually differ — `SharedStacks::needed`
 — which is every game until somebody plays into the hole without knowing what
 they played. What a seat DECIDES still reads its own belief, which is the better
 of the two: the shared view is for meanings only.
 
-Two things still read our belief where they arguably should not, both inside
-reactor0 and both out of reach of the swap: `common.hypo_stacks`, rebuilt from
-`play_stacks` by the elim layer, and `Player::hypo_stacks`. They matter for
-delayed-play chains rather than for the call itself.
+The reaction's negative was the third entry in that table only as of v16.11.0,
+and it was the one that cost a game: it asked "did a stack advance?" to tell a
+receiver's play from their discard, which in this variant is the one question
+the stacks cannot answer. Replay 2008422 is written up in §1d.
+
+Three things still read our belief where they arguably should not, all inside
+reactor0 and all out of reach of the swap: `common.hypo_stacks`, rebuilt from
+`play_stacks` by the elim layer; `Player::hypo_stacks`; and
+`reactor0::enforce_call_invariants` (`basics/decide.cpp:213-218`), which runs
+*after* the swap has unwound and so judges rules 3 and 4 — whether a standing
+call still has a button that works — against one seat's private stacks. Its own
+comment says a call "has to die for every seat at the same moment"
+(`reactor0/call_invariants.cpp:141-143`), so that one is a real gap rather than
+a tolerable one. The first two matter for delayed-play chains rather than for
+the call itself.
 
 ### §1.2 A 5 pays nothing
 
@@ -363,6 +375,45 @@ The receiver's reading cannot come from the reacter's *inference* alone, which
 would be the tidier rule: at clue time the receiver returns before the target
 walk runs — they cannot see their own hand to find the target — so in their game
 the reacter's card was never narrowed at all.
+
+#### What the receiver's OTHER slots learn, and whose eyes that is NOT
+
+The reaction also lays a **negative** on the rest of the receiver's hand — *"if
+that slot had been playable, the clue would have named it instead"* — held until
+the receiver acts and then fired by `Game::fire_reaction_elim`
+(`src/basics/decide.cpp:54-152`). reactor0 picks between three strengths of it by
+asking which stack the receiver's action advanced (reactor0/CONVENTION.md §1d.2).
+
+**Here the stacks cannot answer that, and the button does.** A play goes into
+the hole, so the seat that made it never learns which stack moved and its own
+stacks do not advance — its own play would read as a *discard*, the strongest of
+the three readings, and strip a hand that earned none of it. So:
+
+> **A receiver PLAY takes the ordinary double-play reading, in every seat**:
+> only the slots the target walk passed over, and only that they were not
+> directly playable. A receiver DISCARD keeps the ordinary reading, since a
+> discard is public and shows the card.
+
+The suit is not asked for at all, and that is the point. A seat that watched the
+card leave could name it, but the *team* cannot, so reading the reaction by it
+would put that seat's hand-model out of step with the others'. The ordinary
+reading is the weakest of the three — passed-over ⊂ whole hand, nothing ⊂
+passed-over — hence the sound intersection of the readings a play could have
+been.
+
+This is the line "Whose eyes" above does not cross. Seats knowing different
+amounts about the receiver's **own card** is this variant working; a **negative**
+laid on the rest of that hand is a shared commitment, and is read from what every
+seat knows or not at all (§1g).
+
+[2008422](https://hanab.live/shared-replay/2008422) is the cost of getting it
+wrong. will-bot67 played its reactive target (a `g1`) into the hole at T5 and, in
+its own seat only, read that as a discard: order 5 lost its playables, its
+one-aways and its trash and was left as `{y5, g5, b5, p5}`. At T7 yagami's rank-3
+clue called that very slot to discard; every seat stamped it, and then rule 4
+(`drop_dead_chuck_calls`) found nothing chuckable in an all-critical inference
+and erased the call in will-bot67's seat alone. It threw its newest card instead.
+`tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp`.
 
 #### Legality and reading are different jobs
 
@@ -589,6 +640,7 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |
 | `tests/test_tiiah/test_receiver_bucket.cpp` | §1d's receiver half — a colour clue leaving the bucket below, the finesse continuation surviving when the clue does not rule it out, a rank clue reading the other way, and the reacter's own seat reading wider |
 | `tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp` | the live game it was missing in, replayed |
+| `tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp` | §1d's negative half — our own hidden play read as a play rather than a discard, so a later referential discard on the same hand survives |
 | `tests/test_tiiah/test_ordinary_reactive.cpp` | §1c's dispatch table — a clue to Cathy reactive with Bob reacting, the sum rule and bucket naming his slot 3 as `{r1, y1}`, the reacter playing it, and the reverse position keeping a clue to Cathy stable |
 | `tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp` | the live game it was missing in, replayed |
 | `tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp` | §2 — the decision layer reading an ordinary reactive: REACTIVE_PLAY, Bob reacting, Cathy receiving, and the bot giving it |

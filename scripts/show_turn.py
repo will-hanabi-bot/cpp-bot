@@ -116,6 +116,12 @@ def render_state(rec: dict[str, Any]) -> None:
           f"  suits: {'/'.join(_ACTIVE_ABBR)}")
     print(f"  current_player: {dbg.get('current_player_index')} / {replay.get('num_players')}")
     print(f"  stacks: {dbg.get('play_stacks')}  max_ranks: {dbg.get('max_ranks')}")
+    # Throw It in a Hole: `stacks` above is THIS seat's belief (our own plays
+    # are hidden from us), so it can differ from another seat's log of the same
+    # position. The shared view is what a clue is read against.
+    shared = dbg.get("common_play_stacks")
+    if shared is not None and shared != dbg.get("play_stacks"):
+        print(f"  shared stacks: {shared}  <- what a clue MEANS is read here")
     print(f"  clues: {dbg.get('clue_tokens')}  strikes: {dbg.get('strikes')}  "
           f"cards_left: {dbg.get('cards_left')}  endgame_turns: {dbg.get('endgame_turns')}")
     discards = dbg.get("discards", [])

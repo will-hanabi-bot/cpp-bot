@@ -51,7 +51,8 @@ void Game::resolve_deferred_elims() {
   // card's identity to settle. See `Game::fire_reaction_elim`.
 }
 
-void Game::fire_reaction_elim(const Game& prev, int player_index, int order) {
+void Game::fire_reaction_elim(const Game& prev, int player_index, int order,
+                              bool pressed_play) {
   if (!is_reactor0_family(convention)) return;
   PendingReactionElim& p = pending_reaction_elim;
   if (!p.active) return;
@@ -80,7 +81,32 @@ void Game::fire_reaction_elim(const Game& prev, int player_index, int order) {
   Scope direct_scope;
   Scope finesse_scope;
   Scope trash_scope;
-  if (recv_suit < 0) {
+  if (state.variant->throw_it_in_a_hole && pressed_play) {
+    // Throw It in a Hole: the stacks cannot answer this. A play goes into the
+    // hole, so the seat that made it never learns which stack moved and its own
+    // `play_stacks` do not advance -- `recv_suit` comes back -1 there and the
+    // branch below would read the receiver's own play as a DISCARD, laying the
+    // whole-hand negative on a hand that earned none of it.
+    //
+    // Replay 2008422: will-bot67 played its reactive target (a g1) into the
+    // hole at T5. Its own seat stripped its whole hand -- order 5's twelve
+    // readings lost the playables, the one-aways and the trash and were left as
+    // the four 5s -- while will-bot69, which watched the card leave, left the
+    // card alone. At T7 the referential discard stamped that same slot, rule 4
+    // found nothing chuckable in an all-critical inference and erased the call,
+    // and the bot threw its newest card instead of the one it was told to.
+    //
+    // So the BUTTON decides it here, and the suit is not asked for at all: a
+    // hidden play's suit is not common knowledge, and a seat that happened to
+    // see the card may not read the reaction by it or the seats desync. That
+    // leaves the ordinary double-play reading, which is the weakest of the
+    // three below -- `kPassedOver ⊂ kWholeHand`, `kNone ⊂ kPassedOver` -- and
+    // therefore the sound intersection of the two a play could have been.
+    // tiiah/CONVENTION.md §1d.
+    direct_scope = Scope::kPassedOver;
+    finesse_scope = Scope::kNone;
+    trash_scope = Scope::kNone;
+  } else if (recv_suit < 0) {
     // The receiver discarded. They would have been called to play a playable,
     // so they had none at all -- and under the even bucket, where a finesse was
     // on the table, no one-away either. `finesse_elim` is empty under odd
@@ -538,8 +564,11 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   }
 
   // The receiver may just have actioned a reactive target; that is what the
-  // held negative inference has been waiting for.
-  fire_reaction_elim(prev, action.player_index_v, action.order);
+  // held negative inference has been waiting for. A FAILED discard is a play
+  // that did not land -- the engine spells a misplay that way for every seat
+  // that can name the card (`action.cpp:121-124`) -- so it presses Play.
+  fire_reaction_elim(prev, action.player_index_v, action.order,
+                     /*pressed_play=*/failed);
   elim();
   resolve_deferred_elims();
   enforce_calls_after_action(*this);
@@ -592,7 +621,8 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   with_move(PlayInterp::NONE, /*overwrite=*/true);
   // The receiver may just have actioned a reactive target; that is what the
   // held negative inference has been waiting for.
-  fire_reaction_elim(prev, action.player_index_v, action.order);
+  fire_reaction_elim(prev, action.player_index_v, action.order,
+                     /*pressed_play=*/true);
   elim();
   resolve_deferred_elims();
   enforce_calls_after_action(*this);

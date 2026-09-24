@@ -364,6 +364,12 @@ walk passed over were not playable". Captured when the reacter acts
 the receiver does: a different stack means the passed-over slots only, the SAME
 stack is a *finesse*, and no stack at all means they discarded. §1d.2.
 
+Under **Throw It in a Hole** the stacks cannot be asked — a play goes into the
+hole, so the acting seat's own stacks never move and its play would read as a
+discard. There the BUTTON decides it, and a receiver play draws the
+passed-over-slots-only negative in every seat (v16.11.0, tiiah/CONVENTION.md
+§1d).
+
 Each negative is earned only if the **alternative existed** — the clue could
 only have named receiver slot `S` by sending the reacter to his slot
 `calc_slot(V, S, H)`, so if that slot of his could not have carried the reading,

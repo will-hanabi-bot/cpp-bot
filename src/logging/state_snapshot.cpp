@@ -293,6 +293,15 @@ json build_debug_section(const Game& game) {
   const State& s = game.state;
   json dbg;
   dbg["play_stacks"] = s.play_stacks;
+  // Throw It in a Hole only, and empty everywhere else. Our own plays go into
+  // the hole, so `play_stacks` is this seat's BELIEF and two seats' logs of the
+  // same position legitimately differ; the shared view is the one a clue is
+  // read against. Logged since v16.11.0 because without it a POV split shows up
+  // only as an unexplained disagreement between two bots' logs — which is how
+  // replay 2008422 was found, the expensive way.
+  if (!s.common_play_stacks.empty()) {
+    dbg["common_play_stacks"] = s.common_play_stacks;
+  }
   dbg["max_ranks"] = s.max_ranks;
   dbg["clue_tokens"] = s.clue_tokens;
   dbg["strikes"] = s.strikes;

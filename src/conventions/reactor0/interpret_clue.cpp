@@ -606,6 +606,59 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
   return stall_or_fix();
 }
 
+namespace {
+
+// The stable referential discard's target, narrowed to what a chuck of it can
+// mean. `reactor::ref_discard` stamps the slot and narrows nothing -- it is the
+// one stamping path in the family that did not, so until v16.11.0 a note saying
+// "throw this away" still listed every critical the card could be. Replay
+// 2008422 T1: order 6 was called to discard holding all five 5s.
+//
+// The filter is `target_discard`'s (`reactor/interpret_clue.cpp:262-266`), the
+// PLAIN-suit reading: do not throw away a critical. On an INVERTED suit the
+// Discard button is a chuck, which stacks the card rather than losing it, so a
+// critical reading there is the one the call wants -- the same carve-out
+// `narrow_to_stamped_button` makes by testing `chuck_candidates` (`:222-239`),
+// and without it the four Dark Orange variants, where every card is critical by
+// construction, would have the set emptied out from under them.
+//
+// Deliberately NOT `chuck_candidates` itself: that also drops the PLAYABLE
+// readings, which is a stronger claim than a stable referential discard makes.
+// TODO.md entry 28 is the open question of whether it should.
+//
+// Deliberately NOT `Game::narrow_thought`: its escalation (`basics/game.cpp:119-138`)
+// clears the meta when nothing survives, which would erase the very call
+// `ref_discard` just stamped. An empty result is left alone instead -- the CTD
+// is positional and does not depend on the inference, the same reasoning as the
+// v0.30 reset at `reactor/interpret_clue.cpp:402-419`.
+void narrow_stable_chuck(const Game& prev, Game& game, int receiver) {
+  const State& state = game.state;
+  for (int o : state.hands[receiver]) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_DISCARD) continue;
+    // Only the call this clue just made. One that was already standing was
+    // narrowed by its own clue, and re-deriving it here would re-open a
+    // settled inference.
+    if (o < static_cast<int>(prev.meta.size()) &&
+        prev.meta[o].status == CardStatus::CALLED_TO_DISCARD) {
+      continue;
+    }
+    const Thought& t = game.common.thoughts[o];
+    IdentitySet kept = t.inferred.filter([&](Identity i) {
+      return variants::is_inverted_id(state, i) || !state.is_critical(i);
+    });
+    if (kept.is_empty()) return;
+    game.with_thought(o, [&](const Thought& th) {
+      Thought out = th;
+      out.old_inferred = th.inferred;
+      out.inferred = kept;
+      return out;
+    });
+    return;
+  }
+}
+
+}  // namespace
+
 // --- stable rank ----------------------------------------------------------
 
 std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
@@ -880,9 +933,15 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   }
 
   // 5./6. Lock slot → LOCK, else referential discard — reactor's
-  // ref_discard implements both, including the pink promise.
+  // ref_discard implements both, including the pink promise. The narrowing is
+  // ours: reactor reads a referential discard the same way but keeps the
+  // criticals, and its corpus pins a CTD that lands on one (replay 1916791).
   if (!newly_touched.empty()) {
-    return hanabi::reactor::ref_discard(prev, game, action, stall);
+    const auto interp = hanabi::reactor::ref_discard(prev, game, action, stall);
+    if (interp == ClueInterp::DISCARD) {
+      narrow_stable_chuck(prev, game, action.target);
+    }
+    return interp;
   }
 
   // 7. Touches no new cards, conveys nothing else.

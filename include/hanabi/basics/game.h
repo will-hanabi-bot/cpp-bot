@@ -194,7 +194,16 @@ class Game {
 
   // Run a held reactive negative inference, if the receiver has just actioned
   // the card it was waiting on. `prev` is the game before that action.
-  void fire_reaction_elim(const Game& prev, int player_index, int order);
+  //
+  // `pressed_play` is the BUTTON the receiver pressed, which the caller knows
+  // and a stack advance does not: in Throw It in a Hole a play goes into the
+  // hole, so the acting seat's own stacks never move and its own play would
+  // otherwise read as a discard. It is the raw wire button -- a misplay reaches
+  // the seats that can name the card as a failed discard (`action.cpp:121-124`)
+  // and the actor's own seat as a play, so the callers pass `was_play ||
+  // action.failed` to keep every seat agreeing.
+  void fire_reaction_elim(const Game& prev, int player_index, int order,
+                          bool pressed_play);
   // Reactor /allplays toggle. When true, every reactive clue (color or rank)
   // is interpreted as play+play; both the receiver and the reacter end up
   // CALLED_TO_PLAY. When false (default), color clues are play+dc and rank

@@ -93,11 +93,11 @@ each and makes the full suite take ~7 minutes instead of ~23 seconds.
 
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
-build/hanabi_reactor0_tests.exe   # reactor0 only         336 tests,  6 s
+build/hanabi_reactor0_tests.exe   # reactor0 only         338 tests,  7 s
 build/hanabi_tests.exe            # convention-neutral    390 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
 build/hanabi_decision_tests.exe   # decision quality      162 tests,  0.7 s
-build/hanabi_tiiah_tests.exe      # Throw It in a Hole     60 tests,  0.1 s
+build/hanabi_tiiah_tests.exe      # Throw It in a Hole     61 tests,  0.1 s
 ```
 
 Pick the scope from the report's `Convention:` field:
@@ -107,7 +107,7 @@ Pick the scope from the report's `Convention:` field:
 | reactor0 | `hanabi_reactor0_tests` + `hanabi_tests` (6.3 s) |
 | reactor | `hanabi_reactor_tests` + `hanabi_tests` (20 s) |
 | tiiah | `hanabi_tiiah_tests` + `hanabi_tests` (1.5 s) |
-| shared engine (`src/basics/`, eval, elim) | all four |
+| shared engine (`src/basics/`, eval, elim) | all five |
 
 `ctest` remains available when you want label composition or CI-style output:
 
@@ -140,7 +140,7 @@ and it costs **30–60 minutes** for a full pair — roughly 6,000
 **Do not run one by default.** A minor bump — which is every bump unless the
 user says otherwise — is gated on:
 
-1. the four test binaries (see *Running tests* above), and
+1. the five test binaries (see *Running tests* above), and
 2. the replay regression tests already in `tests/`, which run inside those
    binaries and are the durable form of the pinned corpus, plus
 3. `build/replay_log.exe logs/<bot>-<id>.log --turn <N> --rerun` on the specific

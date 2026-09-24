@@ -250,6 +250,15 @@ void arm_reaction_elim(const Game& prev, Game& game, const ReactorWC& wc,
   p.target_order = wc.receiver_hand[target_slot - 1];
   p.target_slot = target_slot;
   p.receiver_hand = wc.receiver_hand;
+  // Our BELIEF's stacks, deliberately, and dead under Throw It in a Hole. Its
+  // only consumer is the finesse test in `Game::fire_reaction_elim`, which a
+  // hole game never reaches: a receiver PLAY takes the button branch ahead of
+  // it, and a receiver DISCARD advances no stack in any seat. Deriving it from
+  // the shared view instead would be a no-op there and a live behaviour change
+  // for reactor0, so it stays as it is. If the finesse arm is ever re-enabled
+  // under the hole, this has to move with it -- a hidden play leaves the
+  // reacter's own seat reading -1 and the watching seats reading the suit, and
+  // the two would then disagree about the receiver's hand.
   p.reacter_suit = advanced_suit(prev.state, game.state);
 
   const bool even = wc_even_parity(prev, wc);
