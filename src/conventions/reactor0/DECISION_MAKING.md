@@ -706,6 +706,14 @@ is judged from Alice's own inference, not common knowledge.
    the following:
     1. Give a stable play clue to Bob if there are `>= 2 clues**`. This includes
        direct rank or color play clues and play reveals given with either rank or color. 
+
+       **Throw It in a Hole adds the one tiebreak this rung has**
+       (`stable_play_chain`, v16.7.0): prefer a call the receiver can read back
+       to a single identity. There a play whose own player cannot name it goes
+       into the hole unnamed, so it superposes instead of advancing the common
+       stacks — tiiah/CONVENTION.md §2 has the rule and the replay. Under every
+       other variant the term is false of every candidate, so `settle` skips it
+       and the default tiebreak decides as it always has.
     2. If pace is >= 3 and Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.
@@ -787,7 +795,7 @@ is judged from Alice's own inference, not common knowledge.
        so it moves him too.
    4c. Alice can give a clue that gets two cards to play (stamps two cards which would advance both stacks).
    Tiebreak by the following:
-    1. Same as 3.1
+    1. Same as 3.1, tiebreak included
     2. Same as 3.3
     3. Same as 3.5
     4. Give a fill-in clue (which is a **stable** clue that narrows down the
@@ -924,7 +932,8 @@ extra card down. In a forced endgame there is no long run left to feed:
    eliminations are handled for free, because the reading comes from a full
    simulation of what Bob will know after the clue — so a colour clue whose
    leftmost touched card has been eliminated as unplayable becomes legal exactly
-   when it should.
+   when it should. Tiebroken as 3.1 is, so Throw It in a Hole prefers a call
+   the receiver can name here too.
 3. Any clue to Bob that singles out a useful card in his hand by empathy —
    `ClueCandidate::newly_useful`: some card of his reads as entirely useful when
    it did not before. **Negative information counts**: a colour clue that strips
@@ -1248,6 +1257,8 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | rung 1 (action a pending reaction) | `take_action`'s urgent return, above the clue phase |
 | §3.7's "close to playing" count, and §4.4's fill-in ranking | `missing_connectors` |
 | the ditch-target rule (§3.8 / §3.9 / §4.8 / §4's floor) | `better_ditch_target` / `ditch_connectors` |
+| §3.1 / §4.1's tiebreak, and the endgame stall list's rung 2 | `stable_play_chain` — empty except under Throw It in a Hole |
+| "can the receiver name the card this clue calls?" | `ClueCandidate::names_its_card`, filled in `analyse_clues` |
 | "is this a STABLE clue to Bob?" (§3.1/3.3/3.5/3.9, §4.1-4.4, §4.7) | `is_stable_to_bob`, which asks `clue_is_reactive` |
 | §3.7's veto on Bob cluing Cathy | `has_colour_play_clue_for` |
 | §3.7 / §3.8 / §3.9's chop test | `chop_is_critical` (`facts.h`) |

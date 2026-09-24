@@ -34,6 +34,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
+| Naming the called card (§2a) | implemented (v16.7.0) |
 
 What has **not** been decided is the endgame: the solver declines to solve a
 TIIAH position rather than solving it wrongly, because our own hidden plays make
@@ -479,6 +480,42 @@ v16.5.0's change, and reactor0's own behaviour is unchanged by it.
 its card accounting inconsistent and it declines rather than solving wrongly, so
 those turns are decided by the stall list and the ordinary rungs.
 
+### §2a Prefer a play clue the receiver can NAME (v16.7.0)
+
+**Among stable play clues, take one whose called card the receiver can read back
+to a single identity.** In practice that is a colour clue: a rank clue names a
+rank, and while several suits are waiting at that rank it names no card.
+
+The reason is §1e. A play the receiver cannot name goes into the hole unnamed —
+they learn nothing from it, so it stamps a superposition instead of advancing
+`common_play_stacks`, and every clue after it is read against a staler shared
+view. A named play advances the shared stacks for everybody.
+
+Replay [2008145](https://hanab.live/shared-replay/2008145#1) T1 is what the rule
+was written for. Stacks empty, Bob holding `g1 r1 y1` on slots 1-3, and rank 1
+touches all three — so it wins the default tiebreak 5.97 to 1.99 and was given
+twice in that game. It left Bob's called card inferred `{r1,y1,g1,b1,p1}`. Green,
+red or yellow each name their card outright, and any of the three is better.
+
+**The exception is not a special case.** A rank clue is a direct play call only
+when every useful identity of that rank is playable (`playable_rank`,
+`src/conventions/reactor0/interpret_clue.cpp`), so when one identity of the rank
+is playable and the rest are trash, the call already means exactly one card. The
+rule then separates nothing and the default tiebreak decides, as it does under
+reactor0. A play reveal names its card by construction and is likewise never the
+thing this demotes.
+
+Implemented as `ClueCandidate::names_its_card`, computed in `analyse_clues`
+(`src/conventions/reactor0/decision.cpp`) as "the called card's shared
+`possibilities()` hold exactly one identity" — the very set `note_hidden_action`
+stamps a superposition from — and read by `stable_play_chain`, the only tiebreak
+rungs 3.1 / 4.1 and the endgame stall list's rung 2 have. Outside this variant
+the term is false of every candidate and `settle` skips it, so no other
+convention moves.
+
+It is a TIEBREAK, not a veto: it orders the stable-play pool and never changes
+which rung fires, so a clue that names its card cannot displace a better rung.
+
 ## Test coverage
 
 | File | What it pins |
@@ -487,8 +524,9 @@ those turns are decided by the stall list and the ordinary rungs.
 | `tests/test_tiiah/test_convention_predicates.cpp` | `is_reactor0_family` / `uses_reactor0_decisions`, and that both are an identity transform on reactor and reactor0 |
 | `tests/test_tiiah/test_buckets.cpp` | §1a's four rows, the inverted re-indexing, and `bucket_of` |
 | `tests/test_tiiah/test_engine_rules.cpp` | §1.1's table and §1.2 — a partner's hidden play advancing our stacks, our own leaving them alone, a hidden misplay striking, a hidden 5 paying nothing, and both sides of the orange mirror |
-| `tests/test_tiiah/test_gate_and_clues.cpp` | §0 — `take_action` answers, and with a legal move; §1b read identically to reactor0 (a differential test); §1c refusing rather than guessing |
+| `tests/test_tiiah/test_gate_and_clues.cpp` | §0 — `take_action` answers, and with a legal move; §1b read identically to reactor0 (a differential test); §1c refusing rather than guessing |
 | `tests/test_net/test_tiiah_commands.cpp` | §0 — `/setall tiiah` refused, the variant selecting the convention, and the `/settings` line carrying the buckets and the dispatch |
+| `tests/test_tiiah/test_decision_making/test_colour_preference.cpp` | §2a — replay 2008145 T1 giving a clue that names its card, the rank candidate naming none while all three colours do, the exception separating nothing, and reactor0 unmoved |
 | `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |
 | `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
 | `tests/test_tiiah/test_bucket_encoding.cpp` | §1d — a rank clue naming the bucket below and a colour clue the bucket above, the spec's `{r4, y1}` worked example, a finesse naming its connector outright, and a pairing that breaks the relation going unread |

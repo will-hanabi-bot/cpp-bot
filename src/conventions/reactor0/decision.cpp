@@ -765,6 +765,24 @@ std::vector<ClueCandidate> analyse_clues(
       }
     }
 
+    // Can the receiver read this call back to ONE identity? Only Throw It in a
+    // Hole asks (`stable_play_chain`), but the answer costs nothing to record
+    // here, where the hypo is already built.
+    //
+    // Read from `common`: the receiver cannot see their own card, so what they
+    // will know about it is the shared reading, and `possibilities()` is the
+    // very expression `note_hidden_action` stamps a superposition from
+    // (tiiah/superposition.cpp). So this field is exactly "this play will NOT
+    // superpose".
+    if (c.reading.shape == ClueShape::STABLE_PLAY &&
+        c.reading.stable_subject >= 0 &&
+        c.reading.stable_subject <
+            static_cast<int>(hypo.common.thoughts.size())) {
+      c.names_its_card =
+          hypo.common.thoughts[c.reading.stable_subject].possibilities().length() ==
+          1;
+    }
+
     // Fill-ins, for rung 4.5. "Narrows" is judged from the TARGET's own view --
     // he is the one who learns something -- and counts both positive and
     // negative information, since a clue that misses a card tells him about it
@@ -1036,6 +1054,30 @@ Pool pool_stable_play(const Game& g, const std::vector<ClueCandidate>& cs) {
   });
 }
 
+// 3.1 / 4.1's tiebreaks, shared with the endgame stall list's rung 2. Empty
+// under reactor0, where the rung has never had one and the default tiebreak
+// settles it.
+//
+// Throw It in a Hole adds one term, and it is the only thing above the default
+// tiebreak there: PREFER A CALL THE RECEIVER CAN READ BACK to one identity
+// (tiiah/CONVENTION.md §2). A play whose own player cannot name it goes into the
+// hole unnamed, so it superposes instead of advancing the common stacks, and
+// every later clue is read against a staler shared view. Replay 2008145 T1 is
+// what this is for: Bob held `g1 r1 y1`, and rank 1 -- which touches all three
+// and so wins the default tiebreak 5.97 to 1.99 -- left him choosing between
+// five identities, while green named the g1 outright.
+//
+// `settle` keeps a term's survivors only when they are a proper non-empty
+// subset, so returning false everywhere is how a term says "no preference".
+// That is what makes the variant guard a plain early return: outside TIIAH this
+// chain cannot move anything.
+std::vector<Term> stable_play_chain(const Game& g) {
+  return {[&g](const ClueCandidate& c) {
+    if (!g.state.variant->throw_it_in_a_hole) return false;
+    return c.names_its_card;
+  }};
+}
+
 // 3.2 / 4.2 -- a stable discard or trash reveal to Bob aimed at a card the team
 // does not want: a CTD on trash or a same-hand-dupe, or a CTP on an inverted
 // trash card (which is a pitch, not a play).
@@ -1229,7 +1271,9 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   if (!priority_3_applies(g)) return nullptr;
   // 3.1 -- a stable play clue to Bob.
   if (clues_at_least(g, 2)) {
-    if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;
+    if (auto* c = settle(g, pool_stable_play(g, cs), stable_play_chain(g))) {
+      return c;
+    }
   }
   // 3.2 -- a double discard, when Cathy's chop is NOT expendable. It outranks
   // the stable discard below because it does two jobs at once: it clears two
@@ -1509,7 +1553,10 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
 
   // 4.1 is "same as 3.1", which carries 3.1's own clue-count condition.
   if (clues_at_least(g, 2)) {
-    if (auto* c = first_of(g, pool_stable_play(g, cs))) return c;       // 4.1
+    // 4.1
+    if (auto* c = settle(g, pool_stable_play(g, cs), stable_play_chain(g))) {
+      return c;
+    }
   }
   // 4.2 is "same as 3.3", and carries 3.3's safe-discard condition with it.
   if (!has_safe_discard(g, bob_of(g))) {
@@ -1686,7 +1733,7 @@ namespace {
 // simulation of what Bob will know after the clue.
 const ClueCandidate* e_rung_stable_play(const Game& g,
                                         const std::vector<ClueCandidate>& cs) {
-  return settle(g, pool_stable_play(g, cs), {});
+  return settle(g, pool_stable_play(g, cs), stable_play_chain(g));
 }
 
 // 3. Any clue to Bob that singles out a useful card in his hand by empathy.

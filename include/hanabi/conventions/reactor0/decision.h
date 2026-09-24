@@ -204,6 +204,16 @@ struct ClueCandidate {
   // stack just as a pitch does on a plain one, which is why this does not
   // simply read `new_plays`.
   bool bob_plays_now = false;
+  // Can the receiver READ THE CALL BACK to one identity? True when this clue's
+  // reading is a stable play and the card it names is narrowed to exactly one
+  // identity in the shared view once the clue has landed.
+  //
+  // Only Throw It in a Hole reads it (`stable_play_chain`), and there it is the
+  // whole question: a play whose identity its own player cannot name goes into
+  // the hole unnamed, so it superposes instead of advancing the common stacks
+  // (tiiah/CONVENTION.md §2, §1e). Recorded here because the test needs the
+  // hypo, and `analyse_clues` is where the hypo lives.
+  bool names_its_card = false;
 };
 
 // One `Game::simulate` per candidate — the same cost the deleted `eval_action`
