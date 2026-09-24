@@ -1,5 +1,28 @@
-// The endgame solver counts a PARTNER's card as seen when we can SEE it, not
-// when common knowledge has pinned it. Replay 1973413 T69 (reactor0).
+// The endgame answer here is a BLIND CLUE, and the accounting that makes the
+// turn possible at all. Replay 1973413 T69 (reactor0, Color Blind (6 Suits)).
+//
+// 26/30 with one card left and two strikes. Every missing card is already in a
+// hand: we hold a pinned, called b4; will-bot67 has the y5 on his slot 4; Noah
+// has the b5 and the p5. Blue to will-bot67 is the first move of a guaranteed
+// win — a colour clue touches nothing here, so its whole meaning is the blind
+// table's, where Blue says PITCH SLOT 4, and that slot is his y5. He can then
+// clue on, and Noah starts the winning endgame.
+//
+// Playing our own b4 instead is what this test asserted until v16.10.0, and it
+// is worse: it draws the last card and starts the final round a tempo early.
+//
+// WHY THE ASSERTION MOVED. The test was written at v13.1.0 against a position
+// the engine built WRONGLY: until v15.0.0 a Color Blind colour clue was modelled
+// as touching the cards of that colour, so it taught both positive and negative
+// information it never carries. `apply_snapshot` REPLAYS the action list, so
+// the snapshot below now rebuilds a materially different position — 8 of its 16
+// cards carry different inferences than they did at v14.2.0 — and the old
+// pinned action belonged to the old position. v15.0.0 also gave the bot blind
+// clues at all, which is the move that wins here.
+//
+// The accounting rule the test was named for still holds and is still worth
+// guarding: `remaining_total` and `total_unknown` agree (4 = 4), so the solver
+// solves rather than throwing, which is what the v13.1.0 fix bought.
 //
 // `remaining_ids` is "cards this seat cannot point at", and `gen_arrs` checks it
 // against the physical `cards_left`. Until v13.1.0 the tally asked
@@ -26,7 +49,7 @@
 
 // Variant: Color Blind (6 Suits). 3 players, our_player_index=2.
 
-TEST(MiscReplay1973413, PartnerCardsCountAsSeenNotAsDeck) {
+TEST(MiscReplay1973413, TheBlindClueNamesTheY5) {
   // Reconstruct exactly the Game the live bot saw at turn 69.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
@@ -2660,11 +2683,12 @@ TEST(MiscReplay1973413, PartnerCardsCountAsSeenNotAsDeck) {
   )json";
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
-  // The bug was an exception, so the assertion that matters is simply that the
-  // turn completes -- gtest fails the test if take_action throws.
+  // The original bug was an EXCEPTION, so half of what this pins is simply that
+  // the turn completes -- gtest fails the test if take_action throws.
   hanabi::PerformAction action = game.take_action();
-  auto* play = std::get_if<hanabi::PerformPlay>(&action);
-  ASSERT_NE(play, nullptr) << "the solver reaches a play once its card "
-                              "accounting is consistent";
-  EXPECT_EQ(play->target, 54);
+  auto* clue = std::get_if<hanabi::PerformColour>(&action);
+  ASSERT_NE(clue, nullptr) << "the win starts with a clue, not with our own b4";
+  EXPECT_EQ(clue->target, 0) << "will-bot67";
+  EXPECT_EQ(clue->value, 3)
+      << "Blue: the blind table's pitch-slot-4, and his slot 4 is the y5";
 }

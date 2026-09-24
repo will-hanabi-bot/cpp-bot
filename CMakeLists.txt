@@ -271,8 +271,8 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1975464_deferred_reaction_survives.cpp
   tests/test_reactor0/test_misc/test_replay_1978081_superseded_call_drops_the_reaction.cpp
   tests/test_reactor0/test_misc/test_replay_1974194_stale_reading_is_not_acted_on.cpp
-  tests/test_reactor0/test_misc/test_replay_1973410_inconsistent_accounting_declines.cpp
-  tests/test_reactor0/test_misc/test_replay_1973413_partner_cards_count_by_sight.cpp
+  tests/test_reactor0/test_misc/test_replay_1973410_blind_clue_names_the_p5.cpp
+  tests/test_reactor0/test_misc/test_replay_1973413_blind_clue_names_the_y5.cpp
   tests/test_reactor0/test_misc/test_replay_1974331_a_clued_spare_orange_is_pitchable.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp
   tests/test_reactor0/test_misc/test_replay_1966687_chuck_known_dupe_not_unknown_chop.cpp

@@ -1,16 +1,24 @@
-// When the endgame solver's card accounting does not add up, it DECLINES the
-// solve instead of throwing. Replay 1973410 T66 (reactor0, Color Blind).
+// A BLIND clue names the last card. Replay 1973410 T66 (reactor0, Color Blind).
 //
-// Counting partners by sight (see 1973413) fixes one source of the mismatch.
-// This position has the other, which cannot be fixed inside the solver: our own
-// empathy PINS all five of our cards -- t2, t3, b1, r2, b1 -- while the hand
-// really holds a y4 and a p1. So `seen_ids` counts the wrong ordinals and two
-// real identities are left over with an empty deck (remaining_total=2,
-// cards_left=0). See TODO 37 for the empathy bug itself.
+// 29/30 with only the p5 missing, no cards left and two turns to go. The p5 is
+// on Noah's slot 5 and he cannot pick it out. A colour clue touches nothing in
+// this variant, so its whole meaning is the blind table's (reactor0 §1f), where
+// PURPLE says PITCH SLOT 5 — and that slot is the p5. He plays it, and the game
+// finishes 30.
 //
-// An endgame solve is an optimisation: declining costs one search, throwing
-// costs the turn. So the solver checks the totals once, up front, and falls
-// through to the ordinary ladder.
+// The live game ended 29: this turn was answered with a discard instead, and
+// the p5 was never played. That is what the test asserted until v16.10.0.
+//
+// WHAT THIS TEST USED TO PIN, and why it no longer can. It was written at
+// v13.1.0 for the solver's card accounting: our own empathy over-pinned all
+// five of our cards, two identities were left over with an empty deck, and the
+// solver had to DECLINE rather than throw. That empathy bug has since been
+// fixed, so the accounting here is consistent (4 = 4) and there is nothing left
+// to decline. `apply_snapshot` REPLAYS the action list, so the snapshot below
+// also rebuilds a different position than it did before v15.0.0 corrected what
+// a Color Blind colour clue teaches — 6 of its 16 cards carry different
+// inferences than at v14.2.0. The turn completing is still asserted, since the
+// original bug was a throw.
 
 #include <gtest/gtest.h>
 
@@ -25,7 +33,7 @@
 
 // Variant: Color Blind (6 Suits). 3 players, our_player_index=2.
 
-TEST(MiscReplay1973410, InconsistentCardAccountingDeclinesRatherThanThrows) {
+TEST(MiscReplay1973410, TheBlindClueNamesTheP5) {
   // Reconstruct exactly the Game the live bot saw at turn 66.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
@@ -2574,9 +2582,12 @@ TEST(MiscReplay1973410, InconsistentCardAccountingDeclinesRatherThanThrows) {
   )json";
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
+  // The turn completes — the original bug here was a THROW, and that is still
+  // the load-bearing half: gtest fails the test if take_action throws.
   hanabi::PerformAction action = game.take_action();
-  auto* discard = std::get_if<hanabi::PerformDiscard>(&action);
-  ASSERT_NE(discard, nullptr)
-      << "the ordinary ladder answers the turn once the solver stands down";
-  EXPECT_EQ(discard->target, 58);
+  auto* clue = std::get_if<hanabi::PerformColour>(&action);
+  ASSERT_NE(clue, nullptr) << "the move that reaches 30 is a clue, not a throw";
+  EXPECT_EQ(clue->target, 0) << "Noah, who holds the p5";
+  EXPECT_EQ(clue->value, 4)
+      << "Purple: the blind table's pitch-slot-5, and his slot 5 is the p5";
 }
