@@ -30,7 +30,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0) |
-| The bucket-encoded reactive (§1d) | implemented (v16.3.0) |
+| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0) |
 | Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
@@ -330,6 +330,40 @@ a teal 1 to play into a teal 2 (a finesse), or a purple/teal card to play into a
 yellow 1 — purple and teal are bucket 2, yellow is bucket 0, which is one higher
 wrapping.
 
+#### The receiver reads it too
+
+The relation has two ends, and the receiver reads theirs when the reaction
+resolves — not at clue time, because until the reacter acts they do not know
+which of their cards the sum rule names. Their card is the **union** of the same
+two readings, intersected with what it could already be
+(`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:325-401`,
+called from the engine seam at `src/basics/decide.cpp:582-589`):
+
+- **the bucket** the reacter's sits one step from — one *lower* for a rank clue,
+  one *higher* for a colour one, the relation above read backwards;
+- **the continuation** of the card the reacter played, `id.next()`, which is what
+  a finesse leaves behind.
+
+Replay [2008217](https://hanab.live/shared-replay/2008217#2) T2 is both halves at
+once. Alice clues Blue to Cathy; Bob answers on slot 4 with a `b1`. Blue is
+bucket 1 and the clue is a colour one, so Cathy is bucket 0 — `{r1, y1}`. The
+continuation would be the `b2`, and a card the Blue clue did not touch cannot be
+blue, so it drops. Had Bob played the `g1` instead — green is bucket 1 too — the
+bucket half is the same and the `g2` survives: `{r1, y1, g2}`.
+
+**Whose eyes.** Both halves read the reacter's card as *this seat* can: its
+identity when the seat watched it, and the inference the clue left on it when the
+seat IS the reacter and cannot name their own card — the POV rule
+`resolve_hidden_action` already follows (§1.1). So the receiver and the giver
+read `{r1, y1}` while the reacter reads the wider set their own superposition
+allows. Seats knowing different amounts is this variant, not a defect; the
+receiver's reading is the one that matters, since it is their card.
+
+The receiver's reading cannot come from the reacter's *inference* alone, which
+would be the tidier rule: at clue time the receiver returns before the target
+walk runs — they cannot see their own hand to find the target — so in their game
+the reacter's card was never narrowed at all.
+
 #### Legality and reading are different jobs
 
 **What Alice may give** is the wider question. She may give a clue that is
@@ -553,9 +587,11 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_net/test_tiiah_commands.cpp` | §0 — `/setall tiiah` refused, the variant selecting the convention, and the `/settings` line carrying the buckets and the dispatch |
 | `tests/test_tiiah/test_decision_making/test_colour_preference.cpp` | §2a — replay 2008145 T1 giving a clue that names its card, the rank candidate naming none while all three colours do, the exception separating nothing, and reactor0 unmoved |
 | `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |
-| `tests/test_tiiah/test_ordinary_reactive.cpp` | §1c's dispatch table — a clue to Cathy reactive with Bob reacting, the sum rule and bucket naming his slot 3 as `{r1, y1}`, the reacter playing it, and the reverse position keeping a clue to Cathy stable |
-| `tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp` | the live game it was missing in, replayed |
-| `tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp` | §2 — the decision layer reading an ordinary reactive: REACTIVE_PLAY, Bob reacting, Cathy receiving, and the bot giving it |
+| `tests/test_tiiah/test_receiver_bucket.cpp` | §1d's receiver half — a colour clue leaving the bucket below, the finesse continuation surviving when the clue does not rule it out, a rank clue reading the other way, and the reacter's own seat reading wider |
+| `tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp` | the live game it was missing in, replayed |
+| `tests/test_tiiah/test_ordinary_reactive.cpp` | §1c's dispatch table — a clue to Cathy reactive with Bob reacting, the sum rule and bucket naming his slot 3 as `{r1, y1}`, the reacter playing it, and the reverse position keeping a clue to Cathy stable |
+| `tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp` | the live game it was missing in, replayed |
+| `tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp` | §2 — the decision layer reading an ordinary reactive: REACTIVE_PLAY, Bob reacting, Cathy receiving, and the bot giving it |
 | `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
 | `tests/test_tiiah/test_bucket_encoding.cpp` | §1d — a rank clue naming the bucket below and a colour clue the bucket above, the spec's `{r4, y1}` worked example, a finesse naming its connector outright, and a pairing that breaks the relation going unread |
 | `tests/test_tiiah/test_reactions.cpp` | §1d — an inverted-only hand making the clue a double chuck, a double chuck over a critical card refused, and both parities resolving: the receiver is called to the button the reacter pressed |

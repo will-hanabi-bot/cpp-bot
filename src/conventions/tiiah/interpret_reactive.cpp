@@ -296,4 +296,108 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   return std::nullopt;
 }
 
+// The RECEIVER's half of 1d's relation, applied when their call is made.
+//
+// The reacter's side is narrowed at clue time, by `interpret_reactive` above.
+// The receiver's call is not made until the reacter acts -- that is the whole
+// shape of a reactive -- and it is made by reactor0's shared
+// `stamp_receiver_call`, which knows nothing about buckets. So until v16.9.0
+// the receiver kept the generic reading, every playable the stacks and their
+// own negative information still allowed (replay 2008217 T2: {r1,y1,g1,p1}
+// where the relation says {r1,y1}).
+//
+// What the receiver may write is the union of the two readings 1d names:
+//
+//   * THE BUCKET. The reacter's bucket, one step along -- up for a rank clue,
+//     down for a colour one. Read off the reacter's own INFERENCE rather than
+//     their card: the set is what every seat holds alike, and it is the only
+//     form the reacter themselves can use, since they cannot name what they
+//     played. A set spanning two buckets says nothing and is skipped.
+//   * THE FINESSE. The card the reacter's own continues into, `id.next()`.
+//     Taken from the identity when this seat can see it and from every
+//     candidate in the reacter's inference when it cannot -- the POV rule
+//     `resolve_hidden_action` already follows for a hidden play.
+//
+// Both are then intersected with what the card could already be, which is what
+// drops the finesse branch in that replay: the reacter played a b1, so the
+// continuation is b2, and a card the Blue clue did not touch cannot be blue.
+// Had they played the g1, `g2` survives and the receiver writes {r1,y1,g2}.
+void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
+                          int react_order) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return;
+  if (wc.receiver < 0 || wc.receiver >= static_cast<int>(s.hands.size())) return;
+  if (react_order < 0 ||
+      react_order >= static_cast<int>(prev.common.thoughts.size())) {
+    return;
+  }
+
+  // The call this reaction just made. A double chuck calls the receiver to
+  // DISCARD and an inverted suit is in no bucket, so only a play is read here.
+  int target = -1;
+  for (int o : s.hands[wc.receiver]) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (o < static_cast<int>(prev.meta.size()) &&
+        prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+      continue;  // an older call, pinned by its own clue
+    }
+    target = o;
+    break;
+  }
+  if (target < 0) return;
+
+  // WHAT THE REACTER'S CARD COULD BE, from this seat. Its identity when this
+  // seat watched it, and the inference the clue left on it when this seat is
+  // the reacter and cannot name its own card — the POV rule
+  // `resolve_hidden_action` already follows for a hidden play. Both halves
+  // below read this one set.
+  //
+  // The receiver cannot use the inference alone: at clue time they return
+  // before the walk runs (they cannot see their own hand to find the target),
+  // so in THEIR game the reacter's card was never narrowed at all. What they
+  // have instead is better — they watched the card.
+  IdentitySet react_live = IdentitySet::empty();
+  if (auto played = prev.state.deck[react_order].id()) {
+    react_live = IdentitySet::single(*played);
+  } else {
+    react_live = prev.common.thoughts[react_order].possibilities();
+  }
+  if (!react_live.non_empty()) return;
+
+  IdentitySet allowed = IdentitySet::empty();
+
+  // The bucket half.
+  std::optional<int> from;
+  bool one_bucket = true;
+  for (Identity i : react_live) {
+    auto b = bucket_of(*s.variant, i.suit_index);
+    if (!b) { one_bucket = false; break; }
+    if (!from) from = *b;
+    else if (*from != *b) { one_bucket = false; break; }
+  }
+  if (one_bucket && from) {
+    const int want = wc.clue.kind == ClueKind::RANK ? (*from + 1) % 3
+                                                    : (*from + 2) % 3;
+    allowed = allowed.union_with(IdentitySet::create(
+        [&s, want](Identity i) {
+          auto b = bucket_of(*s.variant, i.suit_index);
+          return b && *b == want;
+        },
+        static_cast<int>(s.variant->suits.size()) * 5));
+  }
+
+  // The finesse half.
+  for (Identity i : react_live) {
+    if (auto nxt = i.next()) allowed = allowed.add(*nxt);
+  }
+
+  if (!allowed.non_empty()) return;
+  // Never empty the card: an inference that explains nothing is worse than the
+  // generic one the stamp already left (1i).
+  if (game.common.thoughts[target].inferred.intersect(allowed).is_empty()) {
+    return;
+  }
+  game.narrow_thought(target, allowed);
+}
+
 }  // namespace hanabi::tiiah

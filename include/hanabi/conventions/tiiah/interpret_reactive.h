@@ -17,6 +17,7 @@
 
 namespace hanabi {
 class Game;
+struct ReactorWC;
 }
 
 namespace hanabi::tiiah {
@@ -60,5 +61,19 @@ std::optional<int> receiver_target(const Game& game, int receiver,
 std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                                              const ClueAction& action,
                                              int reacter, int receiver);
+
+// The receiver's half of 1d's relation, applied once the reaction has been
+// resolved and their call stamped: the bucket the reacter's own inference
+// names, one step along, together with the continuation of the card the
+// reacter played. See the definition for why each is read the way it is.
+//
+// Called from the engine seam (`Game::interpret_play`) rather than from
+// reactor0's `stamp_receiver_call`, which makes the call: that is shared code
+// and must not reach into a convention for the buckets.
+//
+// A no-op outside Throw It in a Hole, and outside a fresh CALLED_TO_PLAY on
+// the receiver.
+void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
+                          int react_order);
 
 }  // namespace hanabi::tiiah

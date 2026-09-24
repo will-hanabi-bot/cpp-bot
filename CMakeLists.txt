@@ -409,7 +409,9 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_superposition.cpp
   tests/test_tiiah/test_reverse_reactive.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
+  tests/test_tiiah/test_receiver_bucket.cpp
   tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp
+  tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp

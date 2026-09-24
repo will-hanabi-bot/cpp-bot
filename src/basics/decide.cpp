@@ -23,6 +23,7 @@
 #include "hanabi/conventions/reactor0/call_invariants.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/tiiah/interpret_clue.h"
+#include "hanabi/conventions/tiiah/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/facts.h"
@@ -577,6 +578,15 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
       // The rewind already replayed the action end-to-end (including
       // with_move + elim); skip the post-react bookkeeping.
       return;
+    }
+    // Throw It in a Hole: the receiver's call has just been made, and §1d's
+    // relation says more about it than the generic reading does. Here rather
+    // than inside `stamp_receiver_call`, which is shared code and must not
+    // reach into a convention for the buckets — and while `waiting.front()`
+    // still holds the connection it needs.
+    if (!waiting.empty()) {
+      hanabi::tiiah::narrow_receiver_call(prev, *this, waiting.front(),
+                                          action.order);
     }
   }
   with_move(PlayInterp::NONE, /*overwrite=*/true);
