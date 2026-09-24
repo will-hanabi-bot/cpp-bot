@@ -366,6 +366,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_clue_shape.cpp
   tests/test_reactor0/test_decision_making/test_reading_holders.cpp
   tests/test_tiiah/test_decision_making/test_clue_reading.cpp
+  tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
@@ -407,6 +408,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_gate_and_clues.cpp
   tests/test_tiiah/test_superposition.cpp
   tests/test_tiiah/test_reverse_reactive.cpp
+  tests/test_tiiah/test_ordinary_reactive.cpp
+  tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp

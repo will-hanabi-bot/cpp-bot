@@ -1046,18 +1046,29 @@ bool clue_is_reactive(const State& state, const ClueAction& action, int bob) {
 
 bool dispatch_is_reactive(const Game& game, const ClueAction& action) {
   const State& s = game.state;
-  if (s.variant->throw_it_in_a_hole) {
-    return variants::reverse_reactive(game, action);
+  const int bob = s.next_player_index(action.giver);
+  // Throw It in a Hole runs BOTH dispatches, and the POSITION picks which
+  // seat's clue carries the reaction (tiiah/CONVENTION.md 1c): reversed, the
+  // clue to Bob is the reactive one and the clue to Cathy is stable;
+  // otherwise reactor0's positional rule stands unchanged.
+  if (s.variant->throw_it_in_a_hole &&
+      variants::reverse_reactive_position(game, action.giver)) {
+    return action.target == bob;
   }
-  return clue_is_reactive(s, action, s.next_player_index(action.giver));
+  return clue_is_reactive(s, action, bob);
 }
 
 int dispatch_reacter(const Game& game, const ClueAction& action) {
   const State& s = game.state;
   const int bob = s.next_player_index(action.giver);
-  // Throw It in a Hole reverses the roles: the clue goes to the receiver and
-  // the seat after him reacts (tiiah/CONVENTION.md 1c).
-  return s.variant->throw_it_in_a_hole ? s.next_player_index(bob) : bob;
+  // Only the REVERSE reactive swaps the roles -- there the clue goes to the
+  // receiver and the seat after him reacts (tiiah/CONVENTION.md 1c). An
+  // ordinary reactive, in that variant as in every other, is answered by Bob.
+  if (s.variant->throw_it_in_a_hole &&
+      variants::reverse_reactive(game, action)) {
+    return s.next_player_index(bob);
+  }
+  return bob;
 }
 
 int reactive_receiver(const State& state, const ClueAction& action, int reacter) {

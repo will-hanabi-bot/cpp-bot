@@ -221,15 +221,19 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   const ReactorWC& wc = hypo.waiting.front();
   const CardStatus reacter_status = hypo.meta[wc.react_order].status;
 
-  // WHO GOES FIRST. Under reactor0 the reacter does, on the very next turn,
-  // so their card is judged against the stacks as they stand. Throw It in a
-  // Hole reverses that with the roles: the RECEIVER holds a known play --
-  // that is what made the clue reactive at all -- and he plays it before the
-  // reacter answers (tiiah/CONVENTION.md 1c). So the reacter's card is judged
-  // after those queued plays, which is what makes a delayed connector read as
-  // a play rather than a strike.
+  // WHO GOES FIRST. Usually the reacter, on the very next turn, so their card
+  // is judged against the stacks as they stand. Throw It in a Hole's REVERSE
+  // reactive swaps that along with the roles: the RECEIVER holds a known play
+  // -- that is what made the clue reactive at all -- and he plays it before
+  // the reacter answers (tiiah/CONVENTION.md 1c), so the reacter's card is
+  // judged after those queued plays. It is what makes a delayed connector read
+  // as a play rather than a strike.
+  //
+  // An ORDINARY reactive in that variant is answered by Bob like any other, so
+  // the simulation stands down: the test is the direction, not the flag.
   const State base =
-      s.variant->throw_it_in_a_hole
+      (s.variant->throw_it_in_a_hole &&
+       receiver == s.next_player_index(action.giver))
           ? hanabi::reactor::variants::stacks_after_queued_plays(game,
                                                                  receiver)
           : s;

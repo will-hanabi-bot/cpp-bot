@@ -146,21 +146,36 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   const int bob = state.next_player_index(action.giver);
   const int cathy = state.next_player_index(bob);
 
-  // REVERSE REACTIVE (CONVENTION.md §1c).
+  // THE DISPATCH (CONVENTION.md §1c). TIIAH has BOTH: reactor0's positional one
+  // and the reverse, and the POSITION decides which seat's clue carries the
+  // reaction.
   //
-  // When Bob holds a known play and Cathy does not, a clue to BOB is reactive
-  // with CATHY reacting and Bob receiving; a clue to Cathy is stable. That is
-  // the reverse of reactor0's positional dispatch, and it works because Bob
-  // plays what he already knows, Cathy answers, and Bob's target is waiting for
-  // him when he comes round again.
+  //   position | clue to Bob                       | clue to Cathy
+  //   ---------|----------------------------------|--------------------------
+  //   holds    | REACTIVE, Cathy reacts, Bob gets | stable
+  //   else     | stable                           | REACTIVE, Bob reacts
+  //
+  // The reverse arm works because Bob plays what he already knows, Cathy
+  // answers, and Bob's target is waiting for him when he comes round again. The
+  // ordinary arm is reactor0's, unchanged in shape — and it was missing until
+  // v16.8.0, so every clue to Cathy fell through to the stable ladders and a
+  // double play read as a lock (replay 2008177 T3).
   //
   // Asked of PREV, the position before the clue — as reactor0 asks
   // `clue_is_reactive`. Asking the post-clue game instead makes every play clue
   // to Bob answer "Bob has a known play", because the clue itself just gave him
   // one, and the dispatch would eat its own tail.
-  if (hanabi::reactor::variants::reverse_reactive(prev, action)) {
-    return interpret_reactive(prev, game, action, /*reacter=*/cathy,
-                              /*receiver=*/bob);
+  const bool reversed =
+      hanabi::reactor::variants::reverse_reactive_position(prev, action.giver);
+  if (reversed) {
+    if (action.target == bob) {
+      return interpret_reactive(prev, game, action, /*reacter=*/cathy,
+                                /*receiver=*/bob);
+    }
+    // ...and a clue to Cathy is stable, which is the whole point of the flip.
+  } else if (cathy != action.giver && action.target != bob) {
+    return interpret_reactive(prev, game, action, /*reacter=*/bob,
+                              /*receiver=*/cathy);
   }
 
   // STABLE (CONVENTION.md §1b) — reactor0's ladders, unchanged. They are

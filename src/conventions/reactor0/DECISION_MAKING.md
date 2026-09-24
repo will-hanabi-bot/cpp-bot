@@ -1291,16 +1291,24 @@ Two more questions were reactor0's by assumption and are now asked of the
 convention, both in `read_clue` (v16.6.0):
 
 - **which clue is reactive** — `dispatch_is_reactive`
-  (`interpret_reactive.cpp`), which is `clue_is_reactive` for reactor0 and the
-  reverse-reactive rule for TIIAH. `is_stable_to_bob`, `analyse_clues`'s
+  (`interpret_reactive.cpp`), which is `clue_is_reactive` for reactor0 and
+  TIIAH's two-armed table for that variant: reversed, the clue to Bob is the
+  reactive one and the clue to Cathy is stable; otherwise reactor0's rule
+  stands (tiiah/CONVENTION.md §1c). `is_stable_to_bob`, `analyse_clues`'s
   undecodable-reactive guard, `clue_gets_finesse` and N2 all route through it,
   so a TIIAH reactive can no longer look like a harmless stall to rung 4.5.
-- **which of the two acts first** — under reactor0 the reacter does, on the very
-  next turn, so their card is judged against the stacks as they stand. Under
-  TIIAH the receiver holds a known play (that is what made the clue reactive)
-  and plays it first, so the reacter's card is judged against the stacks after
-  those queued plays. Without that, a delayed connector reads as a strike and
-  the clue is priced as a double discard rather than a double play.
+  `dispatch_reacter` goes with it: Cathy answers only a REVERSE reactive, and
+  handing her back unconditionally (v16.6.0 through v16.7.0) left an ordinary
+  one unreadable.
+- **which of the two acts first** — usually the reacter, on the very next turn,
+  so their card is judged against the stacks as they stand. TIIAH's REVERSE
+  reactive swaps that: the receiver holds the known play that made the clue
+  reactive and plays it first, so the reacter's card is judged against the
+  stacks after those queued plays. Without that, a delayed connector reads as
+  a strike and the clue is priced as a double discard rather than a double
+  play. The test is the DIRECTION, not the variant: an ordinary reactive in
+  that variant is answered by Bob like any other, and the simulation stands
+  down.
 
 The same rule applies to parity: a reading is scored under `wc.even_parity`, the
 value bound when the clue was given, rather than re-derived from the clue kind.

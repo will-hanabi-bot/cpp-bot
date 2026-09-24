@@ -29,7 +29,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | The engine rules (§1) | implemented |
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
-| Reverse-reactive dispatch (§1c) | implemented (v16.2.0) |
+| The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0) |
 | Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
@@ -191,20 +191,37 @@ The TIIAH dispatcher differs from reactor0's in two ways only: there is no
 blind-family arm (no TIIAH variant is a Blind one — all 44 carry
 `throwItInAHole` and no other behavioural flag) and no target-parity arm.
 
-### §1c Reverse reactive
+### §1c The dispatch: both reactives, and the position that switches them
 
 A **known play** is a card stamped `CALLED_TO_PLAY` whose inference still
 contains at least one good playable identity, *or* a card whose global empathy is
 entirely playable identities. Read from `common`, so every seat answers it the
-same way (`has_known_play`, `src/conventions/tiiah/interpret_clue.cpp:24-36`).
+same way (`has_known_play`, `src/conventions/variants/hole.cpp:51-67`).
 
-When **Bob has a known play and Cathy does not**, dispatch reverses:
+TIIAH runs **both** dispatches — reactor0's positional one and the reverse — and
+the **position** decides which seat's clue carries the reaction. The position
+holds when **Bob has a known play and Cathy does not**
+(`reverse_reactive_position`, `src/conventions/variants/hole.cpp:69-76`):
 
-- a clue to **Bob** is REACTIVE, with **Cathy** reacting and **Bob** receiving;
-- a clue to **Cathy** is STABLE.
+| position | a clue to **Bob** | a clue to **Cathy** |
+|---|---|---|
+| holds | **REACTIVE** — Cathy reacts, Bob receives | STABLE |
+| otherwise | STABLE | **REACTIVE** — Bob reacts, Cathy receives (reactor0's) |
 
-Bob's target is the next playable in his hand under stack simulation, where every
-known play in his hand is assumed already played. Worked example: Bob holds
+The ordinary square is reactor0's rule unchanged, and it was **missing until
+v16.8.0**: the dispatcher only ever added the reverse arm, so every clue to Cathy
+fell through to the stable ladders. Replay
+[2008177](https://hanab.live/shared-replay/2008177#4) T3 is what that cost — a
+rank 2 that named a double play read as a lock, and the reacter discarded.
+Whichever way the clue goes, it is read by the same §1d rules: even parity, the
+sum rule, and the buckets.
+
+`tiiah::interpret_clue` (`src/conventions/tiiah/interpret_clue.cpp:149-179`) is
+the table, one `if` per row.
+
+Under the REVERSE arm, Bob's target is the next playable in his hand under
+stack simulation, where every known play in his hand is assumed already
+played. Worked example: Bob holds
 `[r3] r5 y1 p5 g5` with the `r3` called to play and all 2s on the stacks. Once
 the `r3` is played the r4 is next, Bob does not hold it, so Cathy is called onto
 the r4 as a finesse and Bob's `r5` is the target.
@@ -226,15 +243,23 @@ installs the waiting connection, stamps the reacter's blind play and leaves the
 receiver's own call for reaction time — the resolution machinery is reactor0's,
 shared.
 
-**The target walk** (`receiver_targets`, `:92-121`) runs over the **shared**
-stacks as they will stand once the receiver's known plays are done
-(`simulate_known_plays`, `:43-48`, a fixpoint so a chain advances in order; the
-shared view is §1.3's, and §1e says why the walk has to use it). Two kinds of
-card qualify,
-and they are walked in this order — reactor0's Phase A before Phase B, which is
+**The target walk** (`receiver_targets`) runs over the **shared** stacks as
+they will stand *when the reacter acts* (`reacter_faces`,
+`src/conventions/tiiah/interpret_reactive.cpp:47-56`; the shared view is
+§1.3's, and §1e says why the walk has to use it). Which stacks those are is
+the one thing the two arms disagree about, and it follows from who moves
+first:
+
+- **reverse** — the receiver moves first, playing the known play that made the
+  clue reactive, so his queued plays are simulated in
+  (`stacks_after_queued_plays`, a fixpoint so a chain advances in order);
+- **ordinary** — the reacter answers on his very next turn and nobody has
+  moved, so the simulation stands down and the shared stacks are the answer.
+
+Two kinds of card qualify, and they are walked in this order — reactor0's Phase A before Phase B, which is
 the order every seat walks:
 
-1. one that plays outright once those known plays are done;
+1. one that plays outright on those stacks;
 2. one that is **one away**, which is a finesse: the reacter holds the bridge.
    §1c's own worked example is this case.
 
@@ -461,7 +486,7 @@ and its predicates:
 | which clue is reactive | positional: any clue not aimed at Bob | the reverse-reactive rule (§1c), through `dispatch_is_reactive` |
 | which seat reacts | Bob | Cathy, through `dispatch_reacter` |
 | which seat receives | Cathy | Bob — the clued seat |
-| who acts first | the reacter, on the very next turn | the RECEIVER, who plays the known play that made the clue reactive; the reacter's card is judged after it |
+| who acts first | the reacter, on the very next turn | the reacter too, on an ORDINARY reactive — but on a REVERSE one the RECEIVER, who plays the known play that made the clue reactive, so the reacter's card is judged after it |
 
 The last is the one with teeth. A reverse-reactive finesse names the reacter a
 card that is only playable once the receiver has played what he already knows
@@ -528,6 +553,9 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_net/test_tiiah_commands.cpp` | §0 — `/setall tiiah` refused, the variant selecting the convention, and the `/settings` line carrying the buckets and the dispatch |
 | `tests/test_tiiah/test_decision_making/test_colour_preference.cpp` | §2a — replay 2008145 T1 giving a clue that names its card, the rank candidate naming none while all three colours do, the exception separating nothing, and reactor0 unmoved |
 | `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |
+| `tests/test_tiiah/test_ordinary_reactive.cpp` | §1c's dispatch table — a clue to Cathy reactive with Bob reacting, the sum rule and bucket naming his slot 3 as `{r1, y1}`, the reacter playing it, and the reverse position keeping a clue to Cathy stable |
+| `tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp` | the live game it was missing in, replayed |
+| `tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp` | §2 — the decision layer reading an ordinary reactive: REACTIVE_PLAY, Bob reacting, Cathy receiving, and the bot giving it |
 | `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
 | `tests/test_tiiah/test_bucket_encoding.cpp` | §1d — a rank clue naming the bucket below and a colour clue the bucket above, the spec's `{r4, y1}` worked example, a finesse naming its connector outright, and a pairing that breaks the relation going unread |
 | `tests/test_tiiah/test_reactions.cpp` | §1d — an inverted-only hand making the clue a double chuck, a double chuck over a critical card refused, and both parities resolving: the receiver is called to the button the reacter pressed |

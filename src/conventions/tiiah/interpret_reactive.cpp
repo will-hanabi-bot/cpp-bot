@@ -44,6 +44,17 @@ State simulate_known_plays(const Game& game, int player) {
   return hanabi::reactor::variants::stacks_after_queued_plays(game, player);
 }
 
+// THE STACKS THE REACTER WILL FACE, which is what every test below is really
+// asking. Under the REVERSE reactive the receiver goes first -- he plays the
+// known play that made the clue reactive at all -- so his queued plays are in.
+// Under the ordinary one the reacter answers on his very next turn and nobody
+// has moved, so the simulation stands down and the shared stacks are the
+// answer. One sentence, both directions.
+State reacter_faces(const Game& game, int receiver, bool receiver_acts_first) {
+  return receiver_acts_first ? simulate_known_plays(game, receiver)
+                             : game.state.shared_view();
+}
+
 // Which bucket the receiver's target must sit in, given the reacter's card and
 // the clue kind (CONVENTION.md §1d): one HIGHER for a rank clue, one LOWER for
 // a colour clue, wrapping. Nullopt when the reacter's suit has no bucket, which
@@ -89,9 +100,10 @@ bool both_know_their_own(const Game& game, int react_order, int target_order) {
 
 }  // namespace
 
-std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver) {
+std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
+                                             bool receiver_acts_first) {
   const State& s = game.state;
-  const State after = simulate_known_plays(game, receiver);
+  const State after = reacter_faces(game, receiver, receiver_acts_first);
   std::vector<ReceiverTarget> direct;
   std::vector<ReceiverTarget> one_away;
   std::vector<ReceiverTarget> inverted;
@@ -120,8 +132,9 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver) {
   return direct;
 }
 
-std::optional<int> receiver_target(const Game& game, int receiver) {
-  const auto targets = receiver_targets(game, receiver);
+std::optional<int> receiver_target(const Game& game, int receiver,
+                                   bool receiver_acts_first) {
+  const auto targets = receiver_targets(game, receiver, receiver_acts_first);
   if (targets.empty()) return std::nullopt;
   return targets.front().order;
 }
@@ -171,8 +184,15 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // past — the reacter walks past it too, so nobody is left behind — while one
   // refused on what only the GIVER can see kills the clue outright (§1g): the
   // reacter cannot see it and would act on that pairing regardless.
-  const State after = simulate_known_plays(game, receiver);
-  for (const ReceiverTarget& target : receiver_targets(game, receiver)) {
+  // Which seat moves first, and so which stacks everything below is judged
+  // against. The receiver goes first only on the REVERSE reactive, where he
+  // is the giver's Bob and the known play in his hand is what made the clue
+  // reactive.
+  const bool receiver_acts_first =
+      receiver == state.next_player_index(action.giver);
+  const State after = reacter_faces(game, receiver, receiver_acts_first);
+  for (const ReceiverTarget& target :
+       receiver_targets(game, receiver, receiver_acts_first)) {
     int target_slot = 0;
     for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
       if (state.hands[receiver][i] == target.order) {

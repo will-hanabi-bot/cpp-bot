@@ -66,14 +66,18 @@ bool has_known_play(const Game& game, int player) {
   return false;
 }
 
-bool reverse_reactive(const Game& prev, int giver, int target) {
+bool reverse_reactive_position(const Game& prev, int giver) {
   const State& s = prev.state;
   const int bob = s.next_player_index(giver);
   const int cathy = s.next_player_index(bob);
   // Fewer than three seats leaves nobody to react.
   if (cathy == giver) return false;
-  if (target != bob) return false;
   return has_known_play(prev, bob) && !has_known_play(prev, cathy);
+}
+
+bool reverse_reactive(const Game& prev, int giver, int target) {
+  if (!reverse_reactive_position(prev, giver)) return false;
+  return target == prev.state.next_player_index(giver);
 }
 
 bool reverse_reactive(const Game& prev, const ClueAction& action) {

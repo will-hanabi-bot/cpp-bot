@@ -100,8 +100,8 @@ TEST(TiiahSuperposition, ACalledPlayableCollapsesTheSet) {
       {"xx", "xx", "xx", "xx", "xx"},
       // Bob plays his y1 blind. It is not red, so red stays on 0 in every view
       // — which is what lets the clue below name the r1 unambiguously.
-      {"y1", "y4", "g4", "b4", "p4"},
-      {"r1", "y3", "g3", "b3", "p3"},
+      {"y1", "r1", "g4", "b4", "p4"},
+      {"y4", "y3", "g3", "b3", "p3"},
   };
   opts.clue_tokens = 7;  // so Cathy may discard
   opts.starting = TestPlayer::BOB;
@@ -116,9 +116,11 @@ TEST(TiiahSuperposition, ACalledPlayableCollapsesTheSet) {
   ASSERT_GT(before.length(), 1);
 
   g = take_turn(std::move(g), "Cathy discards p3", "p2");
-  // Red to Cathy calls her r1: an identity the team still needs, and one Bob
-  // can see, so what Bob threw in was not the r1.
-  g = take_turn(std::move(g), "Alice clues red to Cathy");
+  // Red to BOB calls his own r1: an identity the team still needs, so what he
+  // threw in was not the r1. Aimed at Bob rather than Cathy since v16.8.0 --
+  // a clue to Cathy is the ORDINARY REACTIVE (1c), and this test is about the
+  // collapsing rule, not about the dispatch.
+  g = take_turn(std::move(g), "Alice clues red to Bob");
 
   EXPECT_FALSE(g.meta[order].superposition.contains(Identity{0, 1}))
       << "an identity the team still needs is not one that was already played";

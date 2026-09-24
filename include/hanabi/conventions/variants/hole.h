@@ -45,20 +45,32 @@ State stacks_after_queued_plays(const Game& game,
 // the same way. tiiah/CONVENTION.md §1c.
 bool has_known_play(const Game& game, int player);
 
-// TIIAH's dispatch (§1c), asked of the position BEFORE the clue: a clue is
-// REACTIVE when it goes to the giver's Bob, that Bob holds a known play and the
-// giver's Cathy does not — with Cathy reacting and Bob receiving, the reverse of
-// reactor0's.
+// Is the table in the REVERSE-REACTIVE POSITION (§1c)? The giver's Bob holds a
+// known play and the giver's Cathy does not. Asked of the position BEFORE the
+// clue, and of the seats as the GIVER names them, not as we do.
+//
+// The position is what decides which seat's clue carries the reaction — TIIAH
+// has both dispatches, and this is the switch between them:
+//
+//   position | clue to Bob                       | clue to Cathy
+//   ---------|----------------------------------|---------------------------
+//   holds    | REACTIVE, Cathy reacts, Bob gets | stable
+//   else     | stable                           | REACTIVE, Bob reacts (reactor0's)
+//
+bool reverse_reactive_position(const Game& prev, int giver);
+
+// The top-left square above: this clue is a REVERSE reactive. `position` and a
+// clue aimed at the giver's Bob.
 //
 // The seat form takes a hypothetical giver and target, for the decision layer's
 // "could my partner handle this with a stable clue?" questions, where no
-// `ClueAction` exists yet. Both are named relative to the GIVER, not to us.
+// `ClueAction` exists yet.
 //
 // Here rather than in `tiiah/` for the same reason as the simulation above:
 // reactor0's DECISION layer has to predict what a candidate clue would mean, so
-// it needs the dispatch, and a convention must not depend on a sibling. Neither
-// form tests the variant flag — the caller has already decided which convention
-// it is asking about.
+// it needs the dispatch, and a convention must not depend on a sibling. None of
+// the three tests the variant flag — the caller has already decided which
+// convention it is asking about.
 bool reverse_reactive(const Game& prev, int giver, int target);
 bool reverse_reactive(const Game& prev, const ClueAction& action);
 

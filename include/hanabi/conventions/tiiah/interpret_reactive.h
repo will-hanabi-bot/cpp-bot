@@ -32,7 +32,13 @@ struct ReceiverTarget {
 
 // Every candidate, in the order all three seats walk them: the ones that play
 // outright first, then the one-aways, each leftmost-first.
-std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver);
+//
+// `receiver_acts_first` picks the stacks the walk runs on: the receiver's
+// queued plays are simulated only on the REVERSE reactive, where he moves
+// before the reacter. It defaults to that, the direction this file was
+// written for.
+std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
+                                             bool receiver_acts_first = true);
 
 // The receiver's target: the next playable in their hand under STACK
 // SIMULATION, where every known play in that hand is assumed already played
@@ -42,7 +48,8 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver);
 // which reactor0 deliberately reversed and TIIAH restores — and it falls out of
 // the simulation: a called card is one of the plays assumed to have happened,
 // so it is no longer waiting to be played.
-std::optional<int> receiver_target(const Game& game, int receiver);
+std::optional<int> receiver_target(const Game& game, int receiver,
+                                   bool receiver_acts_first = true);
 
 // Read a reverse-reactive clue. Installs the waiting connection, stamps the
 // reacter's blind play, and leaves the receiver's own call for reaction time,

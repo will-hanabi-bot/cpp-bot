@@ -50,16 +50,19 @@ CONVENTION.md §1a.
 A card stamped `CALLED_TO_PLAY` whose inference still holds at least one good
 playable identity, **or** a card whose global empathy is entirely playable
 identities. Read from `common`, so every seat agrees. It is what the
-reverse-reactive dispatch keys on. `has_known_play`,
-`src/conventions/tiiah/interpret_clue.cpp:24-36`. CONVENTION.md §1c.
+dispatch keys on — it is what decides which seat's clue carries the reaction.
+`has_known_play`, `src/conventions/variants/hole.cpp:51-67`. CONVENTION.md §1c.
 
 ### reverse reactive
-TIIAH's dispatch, and the reverse of reactor0's: when Bob holds a known play and
-Cathy does not, a clue to **Bob** is reactive — with **Cathy** reacting and Bob
-receiving — and a clue to **Cathy** is stable. Not the same as reactor's rule,
-where a clue to Bob makes Bob both reacter and receiver, a degenerate reading
-reactor scores as a MISTAKE. `tiiah::interpret_clue`
-(`src/conventions/tiiah/interpret_clue.cpp:180-184`). CONVENTION.md §1c.
+The second of TIIAH's two dispatches. When Bob holds a known play and Cathy does
+not — the *reverse-reactive position* — a clue to **Bob** is reactive, with
+**Cathy** reacting and Bob receiving, and a clue to **Cathy** is stable. Outside
+that position reactor0's positional rule stands: a clue to Cathy is the reactive
+one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
+Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
+`reverse_reactive_position` / `reverse_reactive`
+(`src/conventions/variants/hole.cpp:69-85`), read by `tiiah::interpret_clue` and
+by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch
 A reactive clue on which both named cards are played — both players press the
