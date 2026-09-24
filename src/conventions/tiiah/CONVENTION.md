@@ -17,15 +17,12 @@ Bob the next player, Cathy the one after.
 
 ## §0 Status
 
-**The bot READS these games but does not PLAY them**, and has since v16.0.0.
-`Game::take_action` throws
-for a TIIAH game (`src/basics/decide.cpp:909-913`) and the client says so once in
-table chat and then sits still (`src/net/commands.cpp:646-666`). That is
-deliberate: the decision layer the bot would otherwise use is reactor0's, which
-prices clues by *reactor0's* meanings. Every rule below it is implemented as of
-v16.4.0; what is left is the decision layer itself. Before v16.0.0 the flag was
-not read at all, so these tables were played by reactor's rules — reactor's own
-§1b.8 said so — and stopping that is what this version is for.
+**The bot PLAYS these games as of v16.6.0.** From v16.0.0 to v16.5.0 it read
+them and refused to act — `Game::take_action` threw — because the decision layer
+it would otherwise have used was reactor0's, which priced clues by *reactor0's*
+meanings. Before v16.0.0 the flag was not read at all and these tables were
+played by reactor's rules, which reactor's own §1b.8 said so; stopping that is
+what v16.0.0 was for, and finishing it is what v16.6.0 is.
 
 | Part | State |
 |---|---|
@@ -36,6 +33,13 @@ not read at all, so these tables were played by reactor's rules — reactor's ow
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0) |
 | Superposition (§1e) | implemented (v16.1.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
+| Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
+
+What has **not** been decided is the endgame: the solver declines to solve a
+TIIAH position rather than solving it wrongly, because our own hidden plays make
+its card accounting inconsistent (`src/endgame/solver.cpp`). The stall list and
+the ordinary rungs carry those turns. That is a deliberate hold, to be settled
+after the convention has been played in anger.
 
 Which convention a game runs is `Game::convention`, resolved at game init
 (`src/net/commands.cpp:378-393`). TIIAH is resolved from the **variant** and
@@ -44,9 +48,11 @@ other convention can be played at them. `parse_convention` accepts the name
 `"tiiah"` so a snapshot round-trips, but `/setall tiiah` is not a way to select
 it.
 
-The convention will be a **3-player** one, like reactor0 — the sum rule in §1d
-takes its modulus from the hand size. Until it is finished, a TIIAH table of any
-seat count is gated, rather than falling back to reactor.
+The convention is a **3-player** one, like reactor0 — the sum rule in §1d takes
+its modulus from the hand size. A TIIAH table of any other seat count resolves
+here too (`commands.cpp` keys on the variant, not on the count), which is a gap
+rather than a claim: the reverse-reactive dispatch names a Bob and a Cathy, and
+at four seats there is a fourth player the rules say nothing about.
 
 ## §1 The rules of the variant, and what they cost the engine
 
@@ -65,8 +71,9 @@ marks 44 variants. In them:
   orange — reaches the discard pile, so it is visible.
 
 The engine consequences are **keyed on the variant flag, not on
-`Game::convention`**, because a 4+ player TIIAH table resolves elsewhere and
-still needs its stacks to be right.
+`Game::convention`**. A TIIAH table the convention will not act on — 4+ seats,
+per §0 — is still tracked as a spectator would track it, and its stacks have to
+be right whatever the bot does with its turn.
 
 ### §1.1 We fill in what the server withholds
 
@@ -436,6 +443,42 @@ The rainbowy suit is the one carrying `rainbowish` (Rainbow, Omni), `muddy`
 one. The non-orange proviso is defensive: no TIIAH variant pairs an inverted suit
 with a rainbowy one, so the guard has nothing to exclude today.
 
+## §2 Decision making — reactor0's, with the roles asked rather than assumed
+
+**[reactor0's DECISION_MAKING.md](../reactor0/DECISION_MAKING.md) is the ruling
+reference for how this convention decides what to do on its turn.** The General
+Clue Evaluation List, the tier gate, Actionable Card Priority and the endgame
+stall list are the same rungs, reached through the same
+`uses_reactor0_decisions` predicate (true here since v16.6.0), and they are
+shared rather than forked for the reason §1b gives: a copy drifts.
+
+What the rungs are told differs, in four places, all of them inside `read_clue`
+and its predicates:
+
+| Question | reactor0 | here |
+|---|---|---|
+| which clue is reactive | positional: any clue not aimed at Bob | the reverse-reactive rule (§1c), through `dispatch_is_reactive` |
+| which seat reacts | Bob | Cathy, through `dispatch_reacter` |
+| which seat receives | Cathy | Bob — the clued seat |
+| who acts first | the reacter, on the very next turn | the RECEIVER, who plays the known play that made the clue reactive; the reacter's card is judged after it |
+
+The last is the one with teeth. A reverse-reactive finesse names the reacter a
+card that is only playable once the receiver has played what he already knows
+(§1c's delayed call), so judging it against the stacks as they stand reads it as
+a strike — and the clue that gets two plays gets priced as a double discard.
+`read_clue` judges the reacter's side against
+`stacks_after_queued_plays(game, receiver)` instead
+(`src/conventions/reactor0/decision.cpp:221-231`).
+
+Each side of a reading also carries the seat that holds it
+(`Designation::holder`), so the rungs that ask "can this hand afford the loss"
+or "how good a ditch is this" ask it of the hand that will actually act. That is
+v16.5.0's change, and reactor0's own behaviour is unchanged by it.
+
+**The endgame solver stands down here**, as §0 says: our own hidden plays leave
+its card accounting inconsistent and it declines rather than solving wrongly, so
+those turns are decided by the stall list and the ordinary rungs.
+
 ## Test coverage
 
 | File | What it pins |
@@ -444,7 +487,9 @@ with a rainbowy one, so the guard has nothing to exclude today.
 | `tests/test_tiiah/test_convention_predicates.cpp` | `is_reactor0_family` / `uses_reactor0_decisions`, and that both are an identity transform on reactor and reactor0 |
 | `tests/test_tiiah/test_buckets.cpp` | §1a's four rows, the inverted re-indexing, and `bucket_of` |
 | `tests/test_tiiah/test_engine_rules.cpp` | §1.1's table and §1.2 — a partner's hidden play advancing our stacks, our own leaving them alone, a hidden misplay striking, a hidden 5 paying nothing, and both sides of the orange mirror |
-| `tests/test_tiiah/test_gate_and_clues.cpp` | §0's refusal, §1b read identically to reactor0 (a differential test), and §1c refusing rather than guessing |
+| `tests/test_tiiah/test_gate_and_clues.cpp` | §0 — `take_action` answers, and with a legal move; §1b read identically to reactor0 (a differential test); §1c refusing rather than guessing |
+| `tests/test_net/test_tiiah_commands.cpp` | §0 — `/setall tiiah` refused, the variant selecting the convention, and the `/settings` line carrying the buckets and the dispatch |
+| `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |
 | `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
 | `tests/test_tiiah/test_bucket_encoding.cpp` | §1d — a rank clue naming the bucket below and a colour clue the bucket above, the spec's `{r4, y1}` worked example, a finesse naming its connector outright, and a pairing that breaks the relation going unread |
 | `tests/test_tiiah/test_reactions.cpp` | §1d — an inverted-only hand making the clue a double chuck, a double chuck over a critical card refused, and both parities resolving: the receiver is called to the button the reacter pressed |

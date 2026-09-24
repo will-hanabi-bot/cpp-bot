@@ -121,7 +121,8 @@ struct Variant {
   // until the game ends.
   //
   // Read by the ENGINE rather than by a convention, and therefore keyed on this
-  // flag rather than on `Game::convention`: a 4+ player TIIAH table falls back
+  // flag rather than on `Game::convention`: a TIIAH table the convention does
+  // not cover -- 4+ seats, which it refuses to act on -- still has to be
   // to reactor (`src/net/commands.cpp`) and still needs the right stacks.
   // `Game::handle_action` resolves each hidden action against what we can see
   // before the engine ever handles it; `State::with_play` reads it for the

@@ -261,7 +261,10 @@ class Game {
   void interpret_clue(const Game& prev, const ClueAction& action);
   void interpret_discard(const Game& prev, const DiscardAction& action);
   void interpret_play(const Game& prev, const PlayAction& action);
-  void update_turn(const TurnAction& action);
+  // `advanced` is false when the turn marker names the seat that is ALREADY
+  // to move -- which a simulation emits twice around its candidate action, and
+  // a real game never sends. Only a genuine advance can retire a reaction.
+  void update_turn(const TurnAction& action, bool advanced);
 
   // Default: pass-through. Conventions may rewrite (e.g. ones in order).
   std::vector<int> filter_playables(const Player& player, int player_index,

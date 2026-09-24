@@ -6,7 +6,8 @@
 // `common`, so the seats agree about what each of them knows.
 //
 // These entry points are keyed on `Variant::throw_it_in_a_hole` rather than on
-// `Game::convention`, because a 4+ player TIIAH table falls back to reactor and
+// `Game::convention`, because a TIIAH table with 4+ seats is one the convention
+// refuses to ACT on while still tracking, and it
 // needs the same bookkeeping.
 #pragma once
 

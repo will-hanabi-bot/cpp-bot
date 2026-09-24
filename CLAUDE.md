@@ -51,7 +51,8 @@ Each convention owns its docs. `src/conventions/<name>/CONVENTION.md` is the
 has a `src/conventions/<name>/DECISION_MAKING.md`, **that file — not
 `CONVENTION.md` — is the ruling reference for how the bot decides** what to do on
 its turn; reactor0 has one, reactor does not (its decision rules live in
-`CONVENTION.md` §2). All are written for a reader with no prior context, and all
+`CONVENTION.md` §2), and tiiah does not either — its §2 delegates to
+reactor0's `DECISION_MAKING.md` and lists only what differs. All are written for a reader with no prior context, and all
 cite `file:line` for every rule so that a claim can be checked against the
 code. Which
 convention a game runs is `Game::convention`; replay tests replay under the
@@ -93,9 +94,9 @@ each and makes the full suite take ~7 minutes instead of ~23 seconds.
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         336 tests,  6 s
-build/hanabi_tests.exe            # convention-neutral    387 tests,  1.4 s
+build/hanabi_tests.exe            # convention-neutral    390 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
-build/hanabi_decision_tests.exe   # decision quality      150 tests,  0.7 s
+build/hanabi_decision_tests.exe   # decision quality      155 tests,  0.7 s
 build/hanabi_tiiah_tests.exe      # Throw It in a Hole     50 tests,  0.1 s
 ```
 
@@ -269,13 +270,12 @@ the per-turn action + the per-game TIMING aggregate.
   convention-neutral engine test. **The folder decides the target**: anything
   under `tests/test_reactor/` belongs to `hanabi_reactor_tests`. No other
   wiring is needed.
-  **One exception**: `test_decision_making/` under either convention
-  (`tests/test_reactor/test_decision_making/`, and
-  `tests/test_reactor0/test_decision_making/` once its first test is written)
-  belongs to `hanabi_decision_tests`, which carries the ctest label
+  **One exception**: `test_decision_making/` under ANY convention
+  (`tests/test_reactor/`, `tests/test_reactor0/` and `tests/test_tiiah/` each
+  have one) belongs to `hanabi_decision_tests`, which carries the ctest label
   `decision_making` so quality failures can be excluded from a correctness
-  run. These tests are convention-specific — the existing ones are all built
-  on reactor — but they share one target because they share that label.
+  run. These tests are convention-specific, but they share one target because
+  they share that label.
   A reactor0 replay test must also carry `"convention": "reactor0"` in its
   snapshot, or `apply_snapshot` will replay it under reactor (the
   missing-key default, which keeps historical logs correct).

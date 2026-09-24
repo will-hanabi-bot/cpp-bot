@@ -7,6 +7,7 @@
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/tiiah/interpret_reactive.h"
+#include "hanabi/conventions/variants/hole.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -14,26 +15,6 @@ namespace hanabi::tiiah {
 
 namespace {
 
-// Does this seat hold a KNOWN PLAY? CONVENTION.md §1c: a card stamped
-// CALLED_TO_PLAY whose inference still contains a playable identity, or a card
-// whose empathy is entirely playable identities. Read from `common`, so every
-// seat answers it the same way.
-//
-// This is the predicate the reverse-reactive dispatch keys on, and v16.0.0 uses
-// it only to recognise a clue it cannot yet read.
-bool has_known_play(const Game& game, int player) {
-  const State& s = game.state;
-  for (int o : s.hands[player]) {
-    const IdentitySet live = game.common.thoughts[o].possibilities();
-    if (!live.non_empty()) continue;
-    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) {
-      if (live.exists([&s](Identity i) { return s.is_playable(i); })) return true;
-      continue;
-    }
-    if (live.forall([&s](Identity i) { return s.is_playable(i); })) return true;
-  }
-  return false;
-}
 
 // Read a stable clue on the SHARED stacks for as long as this object lives
 // (CONVENTION.md §1.3). The giver chose the clue from what everyone knows, so
@@ -177,8 +158,7 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // `clue_is_reactive`. Asking the post-clue game instead makes every play clue
   // to Bob answer "Bob has a known play", because the clue itself just gave him
   // one, and the dispatch would eat its own tail.
-  if (cathy != action.giver && action.target == bob &&
-      has_known_play(prev, bob) && !has_known_play(prev, cathy)) {
+  if (hanabi::reactor::variants::reverse_reactive(prev, action)) {
     return interpret_reactive(prev, game, action, /*reacter=*/cathy,
                               /*receiver=*/bob);
   }

@@ -17,6 +17,7 @@
 #include "hanabi/conventions/reactor0/reactive_assignment.h"
 #include "hanabi/conventions/reactor0/efficiency.h"
 #include "hanabi/conventions/variants/reactive_table.h"
+#include "hanabi/conventions/tiiah/settings.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/game_logger.h"
 #include "hanabi/logging/state_snapshot.h"
@@ -643,26 +644,20 @@ void BotClient::maybe_take_turn(int table_id) {
   if (g.catchup || !g.in_progress || !everyone || !action_time) return;
   if (g.state.current_player_index != g.state.our_player_index) return;
 
-  // Throw It in a Hole: say once why we are idle, then stay idle. The engine
-  // refuses too (`Game::take_action`), which is the guarantee that no wrong
-  // action can leave the bot; this early return is so the table is told, and so
-  // we do not spend a turn's compute — an endgame solve included — on a
-  // decision we are going to throw away. The game is still tracked normally:
-  // hands, clue tokens and our believed stacks all stay in step, so the day the
-  // convention lands this same code plays these tables.
-  if (g.convention == Convention::TIIAH) {
-    action_time_[table_id] = false;
-    if (tiiah_notice_sent_.insert(table_id).second) {
-      transport_.queue_send(
-          "chat",
-          json{{"msg", username_ +
-                           ": Throw It in a Hole is not supported yet (" +
-                           std::string(kBotVersion) +
-                           "), so I will not act in this game."},
-               {"recipient", ""},
-               {"room", "table" + std::to_string(table_id)}});
-    }
-    return;
+  // Throw It in a Hole: say once which convention is in play, then play. From
+  // v16.0.0 to v16.4.0 this block said the opposite and returned — the bot read
+  // these games and refused to act in them — and what replaces the refusal is a
+  // greeting, because the table is most likely somebody's first game against a
+  // bot that knows the variant at all. `/settings` spells the rules out.
+  if (g.convention == Convention::TIIAH &&
+      tiiah_notice_sent_.insert(table_id).second) {
+    transport_.queue_send(
+        "chat",
+        json{{"msg", username_ + ": Throw It in a Hole — playing the tiiah "
+                                 "convention (" +
+                         std::string(kBotVersion) + "). /settings for the rules."},
+             {"recipient", ""},
+             {"room", "table" + std::to_string(table_id)}});
   }
 
   // Snapshot the game so the worker doesn't observe incremental mutations
@@ -1047,12 +1042,17 @@ void BotClient::chat_settings(const std::string& room) {
 
   // Reactor0 has no reactive value table — its anchors are clue values —
   // so it gets its own line. Reactor's output is left byte-identical
-  // (tests/test_reactor/test_reactive_table.cpp pins it verbatim).
+  // (tests/test_reactor/test_reactive_table.cpp pins it verbatim). TIIAH gets a
+  // third: it shares reactor0's anchors but not its even/odd split, and the two
+  // things a reader needs here — the buckets and the reverse-reactive dispatch
+  // — appear in neither of the others.
   std::string msg =
-      is_reactor0_family(conv)
-          ? hanabi::reactor0::format_settings(*variant, overrides, rlocks)
-          : hanabi::reactor::variants::format_reactive_settings(*variant, hand_size,
-                                                                all_plays);
+      conv == Convention::TIIAH
+          ? hanabi::tiiah::format_settings(*variant)
+          : (is_reactor0_family(conv)
+                 ? hanabi::reactor0::format_settings(*variant, overrides, rlocks)
+                 : hanabi::reactor::variants::format_reactive_settings(
+                       *variant, hand_size, all_plays));
   transport_.queue_send(
       "chat",
       json{{"msg", msg}, {"recipient", ""}, {"room", "table" + std::to_string(*tid)}});
@@ -1220,6 +1220,23 @@ void BotClient::chat_setall(const std::vector<std::string>& args, const json& da
   if (args.size() < 2) return;
   auto parsed = parse_convention(args[1]);
   if (!parsed) return;
+  // `tiiah` parses — a snapshot has to round-trip through the name — but it is
+  // resolved from the VARIANT and never chosen. Setting it here would leave a
+  // mode that silently means reactor at every table that is not a TIIAH one, so
+  // say why instead. This IS our grammar, so a reply is owed; the silence rule
+  // above is for words that belong to another bot family.
+  if (*parsed == Convention::TIIAH) {
+    std::string why = username_ +
+                      ": tiiah is chosen by the variant, not by /setall — every "
+                      "Throw It in a Hole table runs it, and no other table can";
+    if (data.value("recipient", "") == username_) {
+      chat_reply(why, data.value("who", ""));
+    } else {
+      transport_.queue_send(
+          "chat", json{{"msg", why}, {"recipient", ""}, {"room", room}});
+    }
+    return;
+  }
 
   convention_mode_ = *parsed;
   // Deliberately NOT propagated into running games: a mid-game convention

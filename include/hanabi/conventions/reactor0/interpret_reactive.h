@@ -92,6 +92,19 @@ bool colour_is_never_stable(const Variant& variant);
 // `action.target`, and a reactive discard clue to Bob read as a MISTAKE.
 bool clue_is_reactive(const State& state, const ClueAction& action, int bob);
 
+// The same question asked where the CONVENTION may answer it differently, which
+// is the shared DECISION layer: it predicts what a candidate clue would mean,
+// and under Throw It in a Hole that is the reverse of the above — a clue to Bob
+// is the reactive one, when he holds a known play and Cathy does not
+// (tiiah/CONVENTION.md §1c). `dispatch_reacter` names the seat that answers it.
+//
+// The INTERPRETATION layer does not use these: each convention's own
+// `interpret_clue` owns its dispatch, and reactor0's is `clue_is_reactive`.
+// Both derive Bob from `action.giver`, so they are correct for a hypothetical
+// clue from a partner as well as for one of ours.
+bool dispatch_is_reactive(const Game& game, const ClueAction& action);
+int dispatch_reacter(const Game& game, const ClueAction& action);
+
 // Who the reaction identifies a slot FOR.
 //
 // Normally the clued seat, `action.target`. In a `variants::uses_target_parity`

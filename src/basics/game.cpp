@@ -568,7 +568,8 @@ void Game::handle_action(const Action& action) {
 
   // Throw It in a Hole: fill in what the server withheld, BEFORE anything else
   // looks at the action. Gated on the VARIANT and not on `Game::convention`,
-  // because a 4+ player TIIAH table falls back to reactor and still needs its
+  // because a TIIAH table with 4+ seats is tracked even though the convention
+  // refuses to act on it, and it still needs its
   // stacks to be right.
   //
   // This is the one choke point every caller shares — live play, snapshot
@@ -625,9 +626,12 @@ void Game::handle_action(const Action& action) {
         } else if constexpr (std::is_same_v<T, GameOverAction>) {
           in_progress = false;
         } else if constexpr (std::is_same_v<T, TurnAction>) {
+          const int was = state.current_player_index;
           state.current_player_index = a.current_player_index;
           state.turn_count = a.num + 1;
-          if (a.current_player_index != -1) update_turn(a);
+          if (a.current_player_index != -1) {
+            update_turn(a, /*advanced=*/was != a.current_player_index);
+          }
         } else if constexpr (std::is_same_v<T, InterpAction>) {
           next_interp = a.interp;
         }

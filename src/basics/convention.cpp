@@ -18,7 +18,7 @@ bool is_reactor0_family(Convention c) {
   return c == Convention::REACTOR0 || c == Convention::TIIAH;
 }
 
-bool uses_reactor0_decisions(Convention c) { return c == Convention::REACTOR0; }
+bool uses_reactor0_decisions(Convention c) { return is_reactor0_family(c); }
 
 std::optional<Convention> parse_convention(std::string_view s) {
   std::string lower;

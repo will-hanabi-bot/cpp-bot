@@ -65,10 +65,12 @@ otherwise **reactor0** is the default, but only for 3-player games — 4+ player
 fall back to **reactor**. `/setall reactor|reactor0` switches the latter two for
 new games, and the card-order-0 note names the convention actually in use.
 
-**tiiah is not selectable and does not play yet.** It is resolved from the
-variant, and as of v16.0.0 the bot says so once in table chat and then sits
-still rather than play those tables by another convention's rules, which is what
-it did before. See [tiiah/CONVENTION.md](src/conventions/tiiah/CONVENTION.md) §0.
+**tiiah is not selectable**: it is resolved from the variant, and `/setall
+tiiah` is refused. As of v16.6.0 the bot plays those tables, at three seats —
+it says once in table chat which convention is in play, and `/settings` spells
+the rules out. A TIIAH table with more seats is tracked but not acted on, since
+the convention names a Bob and a Cathy and nobody else. See
+[tiiah/CONVENTION.md](src/conventions/tiiah/CONVENTION.md) §0.
 
 ### Reactor0 (default)
 

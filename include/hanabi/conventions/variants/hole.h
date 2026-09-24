@@ -3,7 +3,8 @@
 // Lives in the variants layer rather than in `tiiah/` because reactor0's call
 // invariants read it too, and a convention must not depend on a sibling
 // convention. Keyed on `Variant::throw_it_in_a_hole` like every other rule this
-// variant brings, since a 4+ player TIIAH table runs reactor.
+// variant brings, which keeps it right at a table the convention itself will
+// not act on (4+ seats).
 #pragma once
 
 #include <optional>
@@ -12,6 +13,7 @@
 
 namespace hanabi {
 class Game;
+struct ClueAction;
 }
 
 namespace hanabi::reactor::variants {
@@ -36,5 +38,28 @@ namespace hanabi::reactor::variants {
 State stacks_after_queued_plays(const Game& game,
                                 std::optional<int> only_player = std::nullopt,
                                 std::optional<int> except_order = std::nullopt);
+
+// Does this seat hold a KNOWN PLAY? A card stamped CALLED_TO_PLAY whose
+// inference still contains a playable identity, or a card whose global empathy
+// is entirely playable identities. Read from `common`, so every seat answers it
+// the same way. tiiah/CONVENTION.md §1c.
+bool has_known_play(const Game& game, int player);
+
+// TIIAH's dispatch (§1c), asked of the position BEFORE the clue: a clue is
+// REACTIVE when it goes to the giver's Bob, that Bob holds a known play and the
+// giver's Cathy does not — with Cathy reacting and Bob receiving, the reverse of
+// reactor0's.
+//
+// The seat form takes a hypothetical giver and target, for the decision layer's
+// "could my partner handle this with a stable clue?" questions, where no
+// `ClueAction` exists yet. Both are named relative to the GIVER, not to us.
+//
+// Here rather than in `tiiah/` for the same reason as the simulation above:
+// reactor0's DECISION layer has to predict what a candidate clue would mean, so
+// it needs the dispatch, and a convention must not depend on a sibling. Neither
+// form tests the variant flag — the caller has already decided which convention
+// it is asking about.
+bool reverse_reactive(const Game& prev, int giver, int target);
+bool reverse_reactive(const Game& prev, const ClueAction& action);
 
 }  // namespace hanabi::reactor::variants

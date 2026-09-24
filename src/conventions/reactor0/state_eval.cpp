@@ -19,6 +19,7 @@
 #include "hanabi/conventions/reactor/state_eval.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
+#include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
@@ -293,6 +294,14 @@ bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
   // the score has reached. This models a stable COLOUR clue specifically, so the
   // two-colour rule silences it outright rather than only below the threshold.
   if (bob_clue_is_reactive(s) || colour_is_never_stable(*s.variant)) return false;
+  // Throw It in a Hole asks the same question of the pair in front of us: a
+  // clue from `giver` to `receiver` is reactive there when the receiver holds
+  // a known play and the seat after him does not, so it is not the stable
+  // play clue this models (tiiah/CONVENTION.md 1c).
+  if (s.variant->throw_it_in_a_hole &&
+      hanabi::reactor::variants::reverse_reactive(game, giver, receiver)) {
+    return false;
+  }
   for (const Clue& c : s.all_colour_clues(receiver)) {
     auto touched = s.clue_touched(s.hands[receiver], c.kind, c.value);
     if (touched.empty()) continue;
@@ -416,10 +425,12 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   const State& s = game.state;
   const int alice = s.our_player_index;
   const int bob = s.next_player_index(alice);
-  // Stable clues carry no finesse. Still correct under target parity, where a
-  // clue to Bob is not stable at all -- but is ODD parity, and a finesse is
-  // Phase B of the EVEN ruleset, so it cannot be one either way.
-  if (action.target == bob) return false;
+  // Stable clues carry no finesse. Asked through the dispatch predicate: under
+  // target parity a clue to Bob is not stable at all -- but is ODD parity, and
+  // a finesse is Phase B of the EVEN ruleset, so the parity gate below still
+  // refuses it. Under Throw It in a Hole the reactive clue is the one TO Bob,
+  // and testing the seat made VH1 unreachable there.
+  if (!dispatch_is_reactive(game, action)) return false;
   // Phase B is not RANK-only -- it belongs to a RULESET, not a clue kind. It
   // lives in `reactive_rank`, which is the EVEN-parity family; Odds and Evens
   // makes that the colour clue, and `/set` can move an individual clue. Reading
@@ -437,7 +448,9 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
     return false;
   }
   // The RECEIVER, not the clued seat -- see `read_clue`.
-  if (!wc_is_fresh(game, hypo, alice, reactive_receiver(s, action, bob), bob)) {
+  const int reacter = dispatch_reacter(game, action);
+  if (!wc_is_fresh(game, hypo, alice, reactive_receiver(s, action, reacter),
+                   reacter)) {
     return false;
   }
   // A reactive LOCK is not a finesse. It stamps CHOP_MOVED only a turn later,
@@ -641,7 +654,7 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
     // "reactive" is "not aimed at Bob" only while dispatch is positional, and
     // under target parity EVERY clue is reactive, a clue to Bob included.
     // Evaluated last: it is the only expensive term in this function.
-    if (clue_is_reactive(s, action, bob) &&
+    if (dispatch_is_reactive(game, action) &&
         !has_colour_play_clue_for(game, bob, cathy_seat)) {
       return ClueTier::MEDIUM;
     }

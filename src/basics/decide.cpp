@@ -589,7 +589,7 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   if (prev.state.can_clue()) reset_zcs();
 }
 
-void Game::update_turn(const TurnAction& action) {
+void Game::update_turn(const TurnAction& action, bool advanced) {
   int cpi = action.current_player_index;
   if (cpi == -1) return;
 
@@ -606,7 +606,15 @@ void Game::update_turn(const TurnAction& action) {
     }
   }
 
-  if (!waiting.empty() &&
+  // The reaction is spent: the seat that was to react has had its turn end
+  // without reacting. Only on a genuine ADVANCE, though. `simulate_action`
+  // brackets its candidate with two turn markers that both name the ACTOR, so
+  // the seat 'before' them is read as having just finished when nobody has
+  // moved at all -- and under a convention whose reacter is that seat (Throw
+  // It in a Hole, where Cathy reacts to a clue aimed at Bob) that destroyed
+  // every connection the candidate had just created, leaving the decision
+  // layer with no reading to price. A real game never sends such a marker.
+  if (advanced && !waiting.empty() &&
       waiting.front().reacter == state.last_player_index(cpi)) {
     waiting.clear();
   }
@@ -907,16 +915,17 @@ bool contains_v(const std::vector<int>& v, int x) {
 }  // namespace
 
 PerformAction Game::take_action() const {
-  // Throw It in a Hole is READ but not yet PLAYED (v16.0.0). The convention's
-  // reactive half is unimplemented, and the decision layer below is reactor0's,
-  // which prices clues by reactor0's meanings — so acting here is exactly the
-  // "played with the wrong rules" bug this version exists to stop. Refusing at
-  // the engine means no wrong action can physically leave the bot, whatever the
-  // caller: the live worker catches this, logs it and sends nothing.
-  if (convention == Convention::TIIAH) {
+  // Throw It in a Hole is a THREE-player convention, like reactor0. The variant
+  // resolves to it at any seat count (`net/commands.cpp` keys on the flag, so
+  // the stacks are right for a spectator or a bigger table), but the rules name
+  // a Bob and a Cathy and say nothing about a fourth seat — and acting on rules
+  // that do not cover the table is the bug this whole version series exists to
+  // stop. Refusing at the engine means no wrong action can leave the bot
+  // whatever the caller; the live worker catches it, logs it and sends nothing.
+  if (convention == Convention::TIIAH && state.num_players != 3) {
     throw std::runtime_error(
-        "tiiah: convention not implemented yet (v16.0.0) — the bot does not act "
-        "in Throw It in a Hole games");
+        "tiiah: the convention is defined for 3 players — this table has " +
+        std::to_string(state.num_players));
   }
   using namespace hanabi::reactor;
   const State& s = state;

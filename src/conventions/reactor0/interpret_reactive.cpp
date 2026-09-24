@@ -12,6 +12,7 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/conventions/reactor/interpret_clue.h"
+#include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
@@ -1041,6 +1042,22 @@ bool clue_is_reactive(const State& state, const ClueAction& action, int bob) {
     return true;
   }
   return bob_clue_is_reactive(state);
+}
+
+bool dispatch_is_reactive(const Game& game, const ClueAction& action) {
+  const State& s = game.state;
+  if (s.variant->throw_it_in_a_hole) {
+    return variants::reverse_reactive(game, action);
+  }
+  return clue_is_reactive(s, action, s.next_player_index(action.giver));
+}
+
+int dispatch_reacter(const Game& game, const ClueAction& action) {
+  const State& s = game.state;
+  const int bob = s.next_player_index(action.giver);
+  // Throw It in a Hole reverses the roles: the clue goes to the receiver and
+  // the seat after him reacts (tiiah/CONVENTION.md 1c).
+  return s.variant->throw_it_in_a_hole ? s.next_player_index(bob) : bob;
 }
 
 int reactive_receiver(const State& state, const ClueAction& action, int reacter) {

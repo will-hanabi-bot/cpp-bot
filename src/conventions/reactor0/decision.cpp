@@ -14,6 +14,7 @@
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
+#include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/reversed.h"
@@ -203,7 +204,9 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   // reader, which under target parity is wrong: there a clue to Bob is reactive
   // with Cathy receiving, so the decision layer could not classify one at all
   // and would essentially never give one.
-  if (!clue_is_reactive(s, action, bob)) {
+  // `dispatch_is_reactive`, not `clue_is_reactive`: this layer is shared with
+  // Throw It in a Hole, where the reactive clue is the one TO Bob.
+  if (!dispatch_is_reactive(game, action)) {
     return read_stable(game, hypo, action, interp);
   }
 
@@ -212,16 +215,29 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   // must be handed the RECEIVER and not the clued seat -- the two differ under
   // target parity, and passing the target made this fail closed for every clue
   // to Bob there.
-  const int reacter = bob;
+  const int reacter = dispatch_reacter(game, action);
   const int receiver = reactive_receiver(s, action, reacter);
   if (!wc_is_fresh(game, hypo, alice, receiver, reacter)) return r;
   const ReactorWC& wc = hypo.waiting.front();
   const CardStatus reacter_status = hypo.meta[wc.react_order].status;
 
+  // WHO GOES FIRST. Under reactor0 the reacter does, on the very next turn,
+  // so their card is judged against the stacks as they stand. Throw It in a
+  // Hole reverses that with the roles: the RECEIVER holds a known play --
+  // that is what made the clue reactive at all -- and he plays it before the
+  // reacter answers (tiiah/CONVENTION.md 1c). So the reacter's card is judged
+  // after those queued plays, which is what makes a delayed connector read as
+  // a play rather than a strike.
+  const State base =
+      s.variant->throw_it_in_a_hole
+          ? hanabi::reactor::variants::stacks_after_queued_plays(game,
+                                                                 receiver)
+          : s;
+
   if (predicts_reactive_lock(hypo)) {
     r.shape = ClueShape::REACTIVE_LOCK;
     r.reacter_side = {wc.react_order, wc.reacter, reacter_status,
-                      outcome_of(s, wc.react_order, reacter_status)};
+                      outcome_of(base, wc.react_order, reacter_status)};
     return r;
   }
 
@@ -232,9 +248,10 @@ ClueReading read_clue(const Game& game, const Game& hypo,
     return r;
   }
   r.reacter_side = {wc.react_order, wc.reacter, reacter_status,
-                    outcome_of(s, wc.react_order, reacter_status)};
+                    outcome_of(base, wc.react_order, reacter_status)};
 
-  const State after_bob = state_after_reacter(s, wc.react_order, reacter_status);
+  const State after_bob =
+      state_after_reacter(base, wc.react_order, reacter_status);
   // The parity the connection was GIVEN, not the one the clue kind implies. The
   // two agree under reactor0 — `interpret_reactive` binds `wc.even_parity` from
   // this same assignment — but re-deriving it is how clue-time prediction and
@@ -527,8 +544,7 @@ bool predicts_a_strike(const ClueReading& r) {
 // one `read_clue` asks -- so this tracks the pace stand-down for
 // free, and 4.4 is live again once a clue to Bob really is stable.
 bool is_stable_to_bob(const Game& g, const ClueCandidate& c) {
-  const int bob = bob_of(g);
-  return c.action.target == bob && !clue_is_reactive(g.state, c.action, bob);
+  return c.action.target == bob_of(g) && !dispatch_is_reactive(g, c.action);
 }
 
 // The card a reactive throws away, on whichever side is doing the throwing.
@@ -641,10 +657,11 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
     return false;
   }
   const CardStatus rb = receiver_button(
-      reactive_assignment_for(*s.variant, game.reactive_overrides, wc.clue.kind,
-                              wc.clue.value,
-                              /*target_is_bob=*/wc.clue.target == wc.reacter)
-          .even,
+      wc.even_parity.value_or(
+          reactive_assignment_for(*s.variant, game.reactive_overrides,
+                                  wc.clue.kind, wc.clue.value,
+                                  /*target_is_bob=*/wc.clue.target == wc.reacter)
+              .even),
       reacter_status);
   auto recv_id = s.deck[*recv_order].id();
   if (!recv_id) return false;
@@ -696,7 +713,7 @@ std::vector<ClueCandidate> analyse_clues(
     // p1 and kept no discard stamp; 4.5 took it as harmless, and it would have had
     // Bob throw his r5. A LOCK is unaffected -- `predicts_reactive_lock` fills in
     // the reacter side before this point.
-    if (clue_is_reactive(s, ca, bob_of(game)) &&
+    if (dispatch_is_reactive(game, ca) &&
         c.reading.reacter_side.order < 0) {
       continue;
     }

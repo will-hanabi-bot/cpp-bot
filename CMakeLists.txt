@@ -55,6 +55,7 @@ add_library(hanabi_core STATIC
   src/conventions/tiiah/buckets.cpp
   src/conventions/tiiah/interpret_clue.cpp
   src/conventions/tiiah/interpret_reactive.cpp
+  src/conventions/tiiah/settings.cpp
   src/conventions/tiiah/superposition.cpp
   src/conventions/variants/brownish.cpp
   src/conventions/variants/hole.cpp
@@ -147,6 +148,7 @@ add_executable(hanabi_tests
   tests/test_net/test_commands.cpp
   tests/test_net/test_finish_ongoing_game.cpp
   tests/test_net/test_setall.cpp
+  tests/test_net/test_tiiah_commands.cpp
   tests/test_net/test_help_and_announce.cpp
   tests/test_net/test_set_persistence.cpp
   tests/test_net/test_game_lifecycle.cpp
@@ -363,6 +365,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_clue_tier.cpp
   tests/test_reactor0/test_decision_making/test_clue_shape.cpp
   tests/test_reactor0/test_decision_making/test_reading_holders.cpp
+  tests/test_tiiah/test_decision_making/test_clue_reading.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966091_lock_must_not_outrank_reaction.cpp

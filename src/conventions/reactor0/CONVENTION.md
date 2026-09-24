@@ -30,9 +30,12 @@ giver, Bob the next player, Cathy the one after.
   machinery — the no-widening clamp, the missed-call policy, the
   no-reset-on-strike rule, call invariants, reaction resolution. Those shared
   sites ask `is_reactor0_family(convention)` rather than testing reactor0 by
-  name (`include/hanabi/basics/convention.h`); the DECISION layer asks
-  `uses_reactor0_decisions`, which TIIAH does not satisfy, because those
-  routines price clues by reactor0's meanings.
+  name (`include/hanabi/basics/convention.h`). The DECISION layer asks
+  `uses_reactor0_decisions`, which TIIAH satisfies too as of v16.6.0: the rungs
+  are shared, and what used to be reactor0's alone about them — which clue is
+  reactive, which seat reacts, and which of the two acts first — is now asked of
+  the convention rather than assumed (DECISION_MAKING.md, "Whose hand a rung is
+  talking about").
 - **Shared with reactor, unchanged**: most of the decision layer —
   `advance` / `eval_state` / `eval_game`, the `take_action`
   ladder, `chop()`, `has_ptd()`, `find_all_clues`, the endgame solver, and

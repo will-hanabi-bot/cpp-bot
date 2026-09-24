@@ -36,11 +36,17 @@ bool is_reactor0_family(Convention c);
 // Does this convention use reactor0's DECISION layer -- `analyse_clues`,
 // `choose_clue`, `choose_action`, and the endgame's reactor0-only preferences?
 //
-// False for TIIAH, and that is the point: those routines price clues by
-// reactor0's meanings, so letting a TIIAH game into them is exactly the
-// "played with the wrong rules" bug the convention exists to fix. Flipping this
-// to true for TIIAH is the switch a later version throws once TIIAH has a
-// decision layer of its own.
+// True for TIIAH as of v16.6.0. It was false while those routines priced clues
+// by reactor0's MEANINGS — the dispatch above all, since TIIAH reverses it —
+// and letting a TIIAH game into them then would have been the "played with the
+// wrong rules" bug the convention exists to fix. What changed is that the
+// layer stopped assuming: it asks `dispatch_is_reactive` which clue is
+// reactive, reads each side's seat off the reading rather than naming Bob and
+// Cathy, and takes the parity from the connection (v16.5.0).
+//
+// Kept as its own predicate rather than folded into `is_reactor0_family`: the
+// two ask different questions, and a convention that shared the belief
+// machinery but not the rungs would need them apart again.
 bool uses_reactor0_decisions(Convention c);
 
 // Stable wire/log name: "reactor" / "reactor0".

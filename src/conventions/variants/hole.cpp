@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
 
 namespace hanabi::reactor::variants {
@@ -44,6 +45,39 @@ State stacks_after_queued_plays(const Game& game,
     }
   }
   return hypo;
+}
+
+
+bool has_known_play(const Game& game, int player) {
+  const State& s = game.state;
+  for (int o : s.hands[player]) {
+    const IdentitySet live = game.common.thoughts[o].possibilities();
+    if (!live.non_empty()) continue;
+    // A CALLED card qualifies while ONE good playable survives in it: the call
+    // is the promise, and the rest of the set is the superposition it was given
+    // under. An unstamped card has to be playable on every identity it could
+    // still be, which is what `known` means without a call behind it.
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+      if (live.exists([&s](Identity i) { return s.is_playable(i); })) return true;
+      continue;
+    }
+    if (live.forall([&s](Identity i) { return s.is_playable(i); })) return true;
+  }
+  return false;
+}
+
+bool reverse_reactive(const Game& prev, int giver, int target) {
+  const State& s = prev.state;
+  const int bob = s.next_player_index(giver);
+  const int cathy = s.next_player_index(bob);
+  // Fewer than three seats leaves nobody to react.
+  if (cathy == giver) return false;
+  if (target != bob) return false;
+  return has_known_play(prev, bob) && !has_known_play(prev, cathy);
+}
+
+bool reverse_reactive(const Game& prev, const ClueAction& action) {
+  return reverse_reactive(prev, action.giver, action.target);
 }
 
 }  // namespace hanabi::reactor::variants

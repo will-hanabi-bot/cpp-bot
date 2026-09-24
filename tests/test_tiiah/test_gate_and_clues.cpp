@@ -5,6 +5,7 @@
 // to act rather than act wrongly, which is what it did before this version.
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <variant>
 
 #include "hanabi/basics/action.h"
@@ -43,14 +44,30 @@ std::optional<ClueInterp> interp_of(const Game& g) {
 
 }  // namespace
 
-TEST(TiiahGate, TakeActionRefuses) {
+TEST(TiiahGate, TakeActionAnswers) {
   SetupOptions opts = stable_opts("Throw It in a Hole (5 Suits)");
   use_tiiah(opts);
   Game g = setup(std::move(opts));
 
-  EXPECT_THROW((void)g.take_action(), std::runtime_error)
-      << "the engine itself must refuse, so no wrong action can leave the bot "
-         "whatever the caller";
+  PerformAction a;
+  ASSERT_NO_THROW(a = g.take_action())
+      << "v16.6.0 lifted the refusal: the convention and the decision layer are "
+         "both in place, so the engine has an answer";
+
+  // Whatever it chose has to be a move this seat can legally make.
+  const auto& hand = g.state.hands[g.state.our_player_index];
+  const auto in_hand = [&](int order) {
+    return std::find(hand.begin(), hand.end(), order) != hand.end();
+  };
+  if (auto* p = std::get_if<PerformPlay>(&a)) {
+    EXPECT_TRUE(in_hand(p->target)) << "a play names a card in our own hand";
+  } else if (auto* d = std::get_if<PerformDiscard>(&a)) {
+    EXPECT_TRUE(in_hand(d->target)) << "a discard names a card in our own hand";
+  } else {
+    EXPECT_TRUE(hanabi::is_clue(a)) << "play, discard or clue — nothing else";
+    const int target = std::visit([](const auto& v) { return v.target; }, a);
+    EXPECT_NE(target, g.state.our_player_index) << "a clue names somebody else";
+  }
 }
 
 // ...and the refusal is not over-broad: the same fixture under reactor0 still

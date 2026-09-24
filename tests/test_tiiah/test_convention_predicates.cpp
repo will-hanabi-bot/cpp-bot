@@ -31,18 +31,19 @@ TEST(TiiahConventionPredicates, ReactorZeroFamily) {
 }
 
 TEST(TiiahConventionPredicates, ReactorZeroDecisions) {
-  // The decision layer prices clues by reactor0's MEANINGS, so a TIIAH game
-  // entering it is precisely the "played with the wrong rules" bug. Flipping
-  // TIIAH to true here is the switch a later version throws.
+  // True for TIIAH since v16.6.0. The layer no longer prices clues by
+  // reactor0's MEANINGS: it asks `dispatch_is_reactive` which clue is
+  // reactive and reads each side's seat off the reading, so the rungs are
+  // shared rather than reactor0's alone.
   EXPECT_FALSE(uses_reactor0_decisions(Convention::REACTOR));
   EXPECT_TRUE(uses_reactor0_decisions(Convention::REACTOR0));
-  EXPECT_FALSE(uses_reactor0_decisions(Convention::TIIAH));
+  EXPECT_TRUE(uses_reactor0_decisions(Convention::TIIAH));
 }
 
 TEST(TiiahConventionPredicates, TheRewriteIsAnIdentityOnExistingConventions) {
   for (Convention c : {Convention::REACTOR, Convention::REACTOR0}) {
     EXPECT_EQ(is_reactor0_family(c), c == Convention::REACTOR0);
-    EXPECT_EQ(uses_reactor0_decisions(c), c == Convention::REACTOR0);
+    EXPECT_EQ(uses_reactor0_decisions(c), is_reactor0_family(c));
   }
 }
 
