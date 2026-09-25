@@ -57,6 +57,21 @@ struct State {
   // or two seats read the same clue two ways. Empty outside TIIAH, where the
   // `shared_*` accessors below fall through to the ordinary ones.
   std::vector<int> common_play_stacks;
+  // THROW IT IN A HOLE: row `p` is the stacks WE KNOW SEAT p KNOWS — the plays
+  // common to us and them, the "pairwise view" (tiiah/CONVENTION.md 1.3).
+  //
+  // A hidden play is known to every seat EXCEPT the one who made it, so a play
+  // by X counts for the pair (us, p) when X knew it themselves (then everyone
+  // does, and `common_play_stacks` has it too) or when X is neither of us. Our
+  // own hidden plays are absent by construction: seat p watched them, but we
+  // cannot name them, so we cannot put them in. Each row therefore sits between
+  // `common_play_stacks` and what seat p actually believes.
+  //
+  // This is the view a clue is read against: `common_play_stacks` is what
+  // EVERYONE knows, which one seat's ignorance holds back for the whole team,
+  // while a clue only has to mean one thing to the two seats it is between.
+  // Empty outside TIIAH. Row `our_player_index` is unused.
+  std::vector<std::vector<int>> pairwise_play_stacks;
   // discard_stacks[suit][rank-1] = orders of cards discarded for that identity,
   // newest first (matching Scala's `order +: list` cons).
   std::vector<std::array<std::vector<int>, 5>> discard_stacks;
@@ -104,6 +119,9 @@ struct State {
   State with_play(Identity id) const;
   // Advance the shared view alone (Throw It in a Hole). See state.cpp.
   State with_common_play(Identity id) const;
+  // Advance the pairwise rows for every seat in `knowers` (Throw It in a Hole).
+  // The caller decides who learned it; see `tiiah::note_hidden_action`.
+  State with_pairwise_play(Identity id, const std::vector<int>& knowers) const;
   State try_play(Identity id) const;
   State regain_clue() const;
   // This state with the SHARED stacks in place of our own belief: what every
@@ -117,6 +135,23 @@ struct State {
   // views and is left alone. Returns `*this` outside TIIAH, where the shared
   // vector is empty, so no other variant pays for it.
   State shared_view() const;
+  // This state with an arbitrary stack vector in place of our belief, with
+  // `playable_set` / `trash_set` rebuilt to match and the discard accounting
+  // left alone. `shared_view` and `pairwise_view` are both this with a
+  // particular vector; a mismatched length returns `*this`.
+  State with_stacks(const std::vector<int>& stacks) const;
+  // This state as we know seat `other` sees it — the pairwise view
+  // (`pairwise_play_stacks`, tiiah/CONVENTION.md §1.3). What a clue between us
+  // and them is read against. Returns `*this` outside TIIAH, and for our own
+  // seat, where our belief IS what we know we know.
+  State pairwise_view(int other) const;
+  // The stacks we know seats `a` and `b` BOTH hold — the view a clue between
+  // them is read against (tiiah/CONVENTION.md §1.3). When we are one of the two
+  // this is the other's pairwise row, the relation being symmetric; when we are
+  // neither we cannot compute it (the plays missing from the shared view are our
+  // own, and we cannot name them) and the shared view is returned as the floor.
+  // Outside TIIAH it is simply our belief, which every seat shares.
+  std::vector<int> stacks_known_to_both(int a, int b) const;
 
   // --- Pure helpers ---
   bool ended() const;

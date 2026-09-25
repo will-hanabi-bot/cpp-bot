@@ -82,6 +82,10 @@ Game setup(SetupOptions opts) {
     if (!game.state.common_play_stacks.empty()) {
       game.state.common_play_stacks = ps;
     }
+    // Same argument, one row per seat: a seeded play is one every seat watched,
+    // so every pairwise view holds it too. Without this a fixture would start
+    // with every partner modelled as knowing nothing.
+    for (auto& row : game.state.pairwise_play_stacks) row = ps;
     game.common.hypo_stacks = ps;
     for (auto& p : game.players) p.hypo_stacks = ps;
     for (Identity id : seeded_ids) {

@@ -26,7 +26,10 @@ State State::create(std::vector<std::string> names, int our_player_index,
   s.play_stacks.assign(num_suits, 0);
   // The shared view exists only where the two can differ. Leaving it empty in
   // every other variant is what makes `shared_score` / `shared_pace` free.
-  if (variant.throw_it_in_a_hole) s.common_play_stacks.assign(num_suits, 0);
+  if (variant.throw_it_in_a_hole) {
+    s.common_play_stacks.assign(num_suits, 0);
+    s.pairwise_play_stacks.assign(s.num_players, std::vector<int>(num_suits, 0));
+  }
   s.discard_stacks.assign(num_suits, std::array<std::vector<int>, 5>{});
   s.max_ranks.assign(num_suits, 5);
   s.base_count.assign(num_ids, 0);
@@ -39,6 +42,7 @@ State State::create(std::vector<std::string> names, int our_player_index,
     if (variant.suits[suit_index].suit_type.reversed) {
       s.play_stacks[suit_index] = 6;
       if (!s.common_play_stacks.empty()) s.common_play_stacks[suit_index] = 6;
+      for (auto& row : s.pairwise_play_stacks) row[suit_index] = 6;
       s.max_ranks[suit_index] = 1;
     }
   }
@@ -140,10 +144,25 @@ State State::with_common_play(Identity id) const {
   return out;
 }
 
-State State::shared_view() const {
-  if (common_play_stacks.empty()) return *this;
+// As narrow as `with_common_play`, and for the same reason: it moves one row of
+// one vector. WHO learned the play is the caller's judgement -- a hidden play is
+// known to every seat but the one who made it, unless they knew it themselves,
+// in which case it is common knowledge and belongs in the shared view instead.
+State State::with_pairwise_play(Identity id,
+                                const std::vector<int>& knowers) const {
   State out = *this;
-  out.play_stacks = common_play_stacks;
+  if (out.pairwise_play_stacks.empty()) return out;
+  for (int p : knowers) {
+    if (p < 0 || p >= static_cast<int>(out.pairwise_play_stacks.size())) continue;
+    out.pairwise_play_stacks[p][id.suit_index] = id.rank;
+  }
+  return out;
+}
+
+State State::with_stacks(const std::vector<int>& stacks) const {
+  if (stacks.size() != play_stacks.size()) return *this;
+  State out = *this;
+  out.play_stacks = stacks;
   // Bound to the variant's own identities, as `receiver_ctp_set` is: `create`
   // otherwise walks every ordinal and would invent suits this variant lacks.
   const int n = static_cast<int>(variant->suits.size()) * 5;
@@ -153,6 +172,31 @@ State State::shared_view() const {
   out.trash_set =
       IdentitySet::create([&out](Identity i) { return out.is_basic_trash(i); }, n);
   return out;
+}
+
+State State::shared_view() const {
+  if (common_play_stacks.empty()) return *this;
+  return with_stacks(common_play_stacks);
+}
+
+// Row `other` is what we know that seat knows. Our own row is never maintained
+// -- against ourselves the answer is our own belief, which is strictly more.
+State State::pairwise_view(int other) const {
+  if (other == our_player_index) return *this;
+  if (other < 0 || other >= static_cast<int>(pairwise_play_stacks.size())) {
+    return *this;
+  }
+  return with_stacks(pairwise_play_stacks[other]);
+}
+
+std::vector<int> State::stacks_known_to_both(int a, int b) const {
+  if (pairwise_play_stacks.empty()) return play_stacks;  // not TIIAH
+  const int rows = static_cast<int>(pairwise_play_stacks.size());
+  auto row = [&](int p) { return p >= 0 && p < rows; };
+  // Symmetric: whichever of the pair we are, the row we want is the other's.
+  if (a == our_player_index && row(b)) return pairwise_play_stacks[b];
+  if (b == our_player_index && row(a)) return pairwise_play_stacks[a];
+  return common_play_stacks;
 }
 
 State State::try_play(Identity id) const {

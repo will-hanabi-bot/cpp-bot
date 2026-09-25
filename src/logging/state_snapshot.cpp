@@ -302,6 +302,13 @@ json build_debug_section(const Game& game) {
   if (!s.common_play_stacks.empty()) {
     dbg["common_play_stacks"] = s.common_play_stacks;
   }
+  // And one row per seat: what we know THAT seat knows, which since v16.12.0 is
+  // what a clue between us and them is read against (tiiah/CONVENTION.md §1.3).
+  // Without it a reading looks arbitrary in the log, because the vector it was
+  // computed from appears nowhere.
+  if (!s.pairwise_play_stacks.empty()) {
+    dbg["pairwise_play_stacks"] = s.pairwise_play_stacks;
+  }
   dbg["max_ranks"] = s.max_ranks;
   dbg["clue_tokens"] = s.clue_tokens;
   dbg["strikes"] = s.strikes;

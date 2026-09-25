@@ -35,9 +35,15 @@ namespace hanabi::reactor::variants {
 // asking whether it can play once the OTHER queued plays have happened —
 // simulate the call itself and its own identity looks spent, so it reads dead
 // exactly when it is most alive.
+//
+// `base` is the stack vector the walk starts from. Omitting it takes the SHARED
+// view, which is right for anything every seat must agree on; a reader deciding
+// what a clue between two named seats means passes the view those two share
+// instead (`State::stacks_known_to_both`, tiiah/CONVENTION.md §1.3).
 State stacks_after_queued_plays(const Game& game,
                                 std::optional<int> only_player = std::nullopt,
-                                std::optional<int> except_order = std::nullopt);
+                                std::optional<int> except_order = std::nullopt,
+                                const std::vector<int>* base = nullptr);
 
 // Does this seat hold a KNOWN PLAY? A card stamped CALLED_TO_PLAY whose
 // inference still contains a playable identity, or a card whose global empathy

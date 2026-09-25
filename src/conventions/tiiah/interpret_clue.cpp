@@ -28,18 +28,18 @@ namespace {
 // stacks — the three fields below are all that `shared_view` moves.
 class SharedStacks {
  public:
-  static bool needed(const State& s) {
-    return !s.common_play_stacks.empty() && s.common_play_stacks != s.play_stacks;
+  static bool needed(const State& s, const std::vector<int>& stacks) {
+    return !stacks.empty() && stacks != s.play_stacks;
   }
-  explicit SharedStacks(State& s)
+  SharedStacks(State& s, const std::vector<int>& stacks)
       : s_(s),
         play_stacks_(s.play_stacks),
         playable_(s.playable_set),
         trash_(s.trash_set) {
-    const State shared = s.shared_view();
-    s_.play_stacks = shared.play_stacks;
-    s_.playable_set = shared.playable_set;
-    s_.trash_set = shared.trash_set;
+    const State swapped = s.with_stacks(stacks);
+    s_.play_stacks = swapped.play_stacks;
+    s_.playable_set = swapped.playable_set;
+    s_.trash_set = swapped.trash_set;
   }
   ~SharedStacks() {
     s_.play_stacks = std::move(play_stacks_);
@@ -55,6 +55,62 @@ class SharedStacks {
   IdentitySet playable_;
   IdentitySet trash_;
 };
+
+// The stacks a clue between `giver` and `holder` is read against, from OUR seat
+// (CONVENTION.md §1.3).
+//
+// A clue only has to mean one thing to the two seats it is between, so the view
+// is what THOSE two share — not `common_play_stacks`, which is what all three
+// share and which one seat's ignorance holds back for everybody. Since a hidden
+// play is known to every seat but its player, "what we and seat X share" is
+// exactly row X, and the relation is symmetric: whether we are the giver or the
+// holder, the row we want is the OTHER one's.
+//
+// A third party cannot compute it at all — the plays missing from the shared
+// view are its own, and it cannot name them. It gets the shared view as a floor,
+// and §1e's back-solve recovers the rest from the card the pair called.
+// `State::stacks_known_to_both` is the implementation; this names the roles the
+// convention gives the two seats.
+std::vector<int> reading_stacks(const State& s, int giver, int holder) {
+  return s.stacks_known_to_both(giver, holder);
+}
+
+// §1.3, the holder's half: OUR OWN called card is read against OUR OWN belief.
+//
+// The ladder above ran on the pairwise view, because the SLOT has to rest on
+// what the giver and the receiver both know. What the card then IS, though, is
+// ours to say — we watched every play but our own, so our stacks are at least
+// as high as anything the pair shares, and the call means the next card on the
+// stacks WE can see. Replay 2008489 T33: yagami calls will-bot69's next blue.
+// The pair both know blue is on 3, and so does will-bot69, so the call is the
+// b4 it is holding; read against the shared view it was a b3 that had already
+// gone in, so the call read as a stall and the card went unplayed.
+//
+// A narrowing, never a widening: the pairwise reading is kept when our own view
+// leaves the card nothing to be, since that means our belief is the thing that
+// is wrong.
+void repin_own_call(const Game& prev, Game& game) {
+  const State& s = game.state;
+  if (s.pairwise_play_stacks.empty()) return;
+  const int me = s.our_player_index;
+  if (me < 0 || me >= static_cast<int>(s.hands.size())) return;
+  for (int o : s.hands[me]) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (o < static_cast<int>(prev.meta.size()) &&
+        prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+      continue;  // a standing call, already settled by the clue that made it
+    }
+    const IdentitySet kept =
+        game.common.thoughts[o].inferred.intersect(s.playable_set);
+    if (kept.is_empty() || kept == game.common.thoughts[o].inferred) continue;
+    game.with_thought(o, [&kept](const Thought& t) {
+      Thought out = t;
+      out.old_inferred = t.inferred;
+      out.inferred = kept;
+      return out;
+    });
+  }
+}
 
 // The rainbowy suit this variant carries, if it has one: the suit a colour clue
 // would otherwise leave the receiver superposed against (CONVENTION.md §1f).
@@ -187,26 +243,35 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   const bool stall_ctx = prev.common.obvious_locked(prev, action.giver) ||
                          game.shared_in_endgame() ||
                          prev.state.clue_tokens == 8;
-  // Both ladders read the shared stacks (§1.3). Nothing is copied while the two
-  // views agree, which is every game until somebody plays into the hole without
+  // Both ladders read the stacks the giver and the receiver share (§1.3) — the
+  // receiver is the one who must act, so the slot has to rest on what the two of
+  // them can both compute. Nothing is copied while that view already agrees with
+  // our belief, which is every game until somebody plays into the hole without
   // knowing what they played.
-  const bool swap = SharedStacks::needed(state);
+  const std::vector<int> view = reading_stacks(state, action.giver, action.target);
+  const bool swap = SharedStacks::needed(state, view);
   std::optional<Game> prev_shared;
-  std::optional<SharedStacks> scope;
   if (swap) {
     prev_shared = prev;
-    prev_shared->state = prev.state.shared_view();
-    scope.emplace(game.state);
+    prev_shared->state = prev.state.with_stacks(view);
   }
   const Game& p = swap ? *prev_shared : prev;
 
-  if (action.clue.kind != ClueKind::COLOUR) {
-    return reactor0::stable_rank(p, game, action, stall_ctx);
+  std::optional<ClueInterp> interp;
+  {
+    // Scoped so the swap is RELEASED before the re-pin below, which has to see
+    // our own belief rather than the pair's view.
+    std::optional<SharedStacks> scope;
+    if (swap) scope.emplace(game.state, view);
+    if (action.clue.kind != ClueKind::COLOUR) {
+      interp = reactor0::stable_rank(p, game, action, stall_ctx);
+    } else {
+      interp = reactor0::stable_colour(p, game, action, stall_ctx);
+      // §1f, applied to whatever the ladder called.
+      pin_rainbowy_colour(p, game, action);
+    }
   }
-  const std::optional<ClueInterp> interp =
-      reactor0::stable_colour(p, game, action, stall_ctx);
-  // §1f, applied to whatever the ladder called.
-  pin_rainbowy_colour(p, game, action);
+  repin_own_call(prev, game);
   return interp;
 }
 

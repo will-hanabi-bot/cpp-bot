@@ -25,10 +25,35 @@ reason. A wrong belief is invisible until the game ends.
 A play advances them only when its identity was common knowledge at the time,
 or when a superposition later collapses on evidence every seat shares. They lag
 the *believed stacks*, which also move on the partners' plays we watched and
-they did not. Read by everything deciding what a clue MEANS — both stable
-ladders, the reactive target walk and §1f's pin all run on `State::shared_view`,
-and `State::shared_score` / `shared_pace` / `Game::shared_in_endgame` answer the
-same questions of it. Empty, and free, outside TIIAH. CONVENTION.md §1.3.
+they did not. `State::shared_score` / `shared_pace` / `Game::shared_in_endgame`
+ask the ordinary questions of it, through `State::shared_view`. Empty, and free,
+outside TIIAH. CONVENTION.md §1.3.
+
+Since v16.12.0 it is the FLOOR rather than the reading: what a clue means is read
+against the *pairwise view* below, and the common stacks are what is left when we
+are not one of the two seats a clue is between.
+
+### pairwise view
+`State::pairwise_play_stacks[p]`: what we know seat `p` knows — the *common
+stacks* plus every hidden play we can name that `p` did not make. A play goes
+into the hole, so it is known to every seat except the one who made it; ours are
+absent from every row, because `p` watched them but we cannot say what they were.
+
+It is the view a clue is read against, since a clue only has to mean one thing to
+the two seats it is between, and holding the whole team to what all three know
+lets one seat's ignorance stall the reading. `State::stacks_known_to_both(a, b)`
+is the accessor and is symmetric; it answers for the pair only when WE are one of
+them, and hands back the common stacks otherwise — an outsider is missing exactly
+its own plays and recovers them by the *back-solve*. Like any stack it advances
+through the prefix, so a play a row never saw blocks everything above it.
+CONVENTION.md §1.3, `tests/test_tiiah/test_pairwise_stacks.cpp`.
+
+### back-solve
+Reading our own hidden plays off a clue between two other seats. They called a
+card we can SEE, and a call says it is playable, so they hold that suit one below
+it; anything their stack has above ours can only be what we threw in the hole.
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:119-183`. Rule 4
+of §1e's collapse, and the only one that tells a seat about its OWN past.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:143-156`): this state with the

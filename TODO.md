@@ -1092,3 +1092,37 @@ that costs nothing until the two views actually differ.
 Still on our belief, and left there deliberately: `common.hypo_stacks` and
 `Player::hypo_stacks`, which the elim layer rebuilds from `play_stacks` outside
 the swap's reach. They feed delayed-play chains rather than the call itself.
+
+---
+
+## 44. `[tiiah]` A suit nobody can account for stays unplayable to every reader
+
+CONVENTION.md §1.3. A pairwise row advances only through cards that row has seen,
+in order, so a play the row never saw blocks every play above it. That is the
+correct model of what its seat believes — but it means a suit whose LOW card was
+thrown in the hole by the one seat that would have needed it can never come back,
+because no reader can walk past the hole.
+
+Replay [2008489](https://hanab.live/shared-replay/2008489) T52 is the cost. 23
+cards are down, only the `y5` and the `p5` are left, and a rank-1 clue to
+yagami_black plays both. will-bot69 chucks instead. Purple is the blocked suit:
+`p1` was will-bot67's own blind play and `p2`/`p3`/`p4` were yagami's, so the row
+will-bot69 holds for yagami sits on 2 and the `p5` reads as two away — not a
+target the reactive walk will take, at any seat. Every seat's belief is right
+(purple is on 4); no seat can prove it to the reader.
+
+Two candidate fixes, neither taken in v16.12.0:
+
+- **Widen the back-solve.** §1e's back-solve recovers our own hidden plays from a
+  call we can see the answer to (`back_solve_own_plays`,
+  `src/conventions/tiiah/superposition.cpp`). It only fires on a STABLE call, and
+  only for the suit that call named. A discard that reveals a card the stacks
+  cannot explain is the same kind of evidence and is not read.
+- **Lean on §1d's `both_know_their_own` licence.** By T52 each of the two holders
+  can name their own card from empathy alone, which is exactly the case §1d
+  already allows a pairing to rest on. The walk rejects the pairing before that
+  licence is ever consulted, because `receiver_targets` filters on playability
+  first.
+
+The second is the smaller change and the one that matches the ruling the game was
+played under ("both the reacter and receiver know exactly what they are playing").

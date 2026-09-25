@@ -8,8 +8,9 @@ implements it, and every rule that is not says so in the same breath.
 Terminology is in [GLOSSARY.md](GLOSSARY.md); terms not defined there (chop,
 pitch / chuck, CTP / CTD, critical, loaded, …) carry their
 [reactor glossary](../reactor/GLOSSARY.md) meanings. Convention that is legal
-but not yet implemented is tracked in [TODO.md](../../../TODO.md); as of v16.4.0
-this convention has no open entry there.
+but not yet implemented is tracked in [TODO.md](../../../TODO.md), where this
+convention's open entry is **44** — a suit whose low card went into the hole
+unseen can read as unplayable to every seat at once (§1.3).
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -26,12 +27,12 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 
 | Part | State |
 |---|---|
-| The engine rules (§1) | implemented |
+| The engine rules (§1) | implemented; the three stack views (v16.12.0) |
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0) |
-| Superposition (§1e) | implemented (v16.1.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
 | Naming the called card (§2a) | implemented (v16.7.0) |
@@ -115,18 +116,48 @@ Because of all this, `State::play_stacks` in a TIIAH game is **what we believe**
 not what is. So are `score()`, `strikes` and therefore `State::ended()`. A wrong
 belief is invisible until the game ends; that is the variant, not a defect.
 
-### §1.3 Two views of the stacks
+### §1.3 Three views of the stacks
 
 A seat knows every play but its own, so no two seats hold the same stacks — and
 we know more about a partner's play than they do, having watched the card leave
-their hand. A clue still has to mean ONE thing, so the engine keeps two views:
+their hand. A clue still has to mean ONE thing, so the engine keeps three views:
 
 | | advances on |
 |---|---|
 | `State::play_stacks` | **our belief** — every play we can name, which is every partner's and our own identified ones |
 | `State::common_play_stacks` (`state.h:59`) | **the shared view** — only plays whose identity was common knowledge, plus collapses on evidence every seat shares |
+| `State::pairwise_play_stacks[p]` (`state.h:60-73`) | **the pairwise view** — what we know seat `p` knows: the shared view, plus every hidden play we can name that `p` did not make |
 
-Anything deciding what a clue MEANS reads the shared view — `State::shared_view`
+**A clue is read against the PAIRWISE view, not the shared one (v16.12.0).** The
+shared view is what ALL THREE seats know, and a hidden play is known to everyone
+except the seat who made it — so one seat's ignorance holds the reading back for
+the whole team. A clue only has to mean one thing to the two seats it is between.
+
+Replay [2008489](https://hanab.live/shared-replay/2008489) T33 is the case.
+yagami clues blue to will-bot69, whose next blue is the `b4` it is holding: `b1`
+and `b2` were will-bot69's own plays and it knew both, and the `b3` was
+will-bot67's. Both the giver and the receiver therefore hold blue on 3 — only
+will-bot67 does not, because it cannot see what it threw. Read against the shared
+view the call was a `b3` that had already gone in, so will-bot69 read a stall and
+left the card unplayed.
+
+Three properties make the row the right object rather than a patch:
+
+- **It is computable exactly, and only, by the two seats it is about.** Being one
+  of the pair is what lets us name the third seat's plays; a seat outside the pair
+  is missing precisely its OWN plays and cannot name them. `State::stacks_known_to_both`
+  (`state.cpp:150-159`) is symmetric for that reason, and falls back to the shared
+  view for an outsider — who recovers the rest by the back-solve (§1e).
+- **It advances through the prefix, like any stack.** A row takes a card only when
+  it is the next one for that row, so a play the row never saw blocks everything
+  above it — which is exactly what the seat behind that row believes.
+  `tests/test_tiiah/test_pairwise_stacks.cpp`. It is also the limit: a suit whose
+  low card went into the hole unseen can be stuck for every reader at once
+  (TODO.md 44, replay 2008489 T52).
+- **Our own row is never consulted.** Against ourselves there is nothing we do not
+  know, so `pairwise_view(us)` hands back our belief.
+
+Anything deciding what a clue MEANS reads a shared view — `State::shared_view`
 (`src/basics/state.cpp:143-156`) is that state, with `playable_set` and
 `trash_set` rebuilt to match, and `State::shared_score` / `shared_pace`
 (`state.h:121-124`) and `Game::shared_in_endgame` are the questions asked of it.
@@ -134,21 +165,31 @@ Outside TIIAH the second vector is empty, `shared_view` returns the state
 unchanged and the accessors are the ordinary ones, so no other variant pays for
 any of this.
 
-As of v16.4.0 the whole interpretation runs on it, not a rule here and there:
+As of v16.4.0 the whole interpretation runs on a shared view rather than a rule
+here and there, and as of v16.12.0 each rule takes the NARROWEST view the seats it
+concerns all hold:
 
-| What | How it gets the shared view |
+| What | Which view, and how |
 |---|---|
-| both stable ladders (§1b) | `SharedStacks`, a scoped swap of `play_stacks` / `playable_set` / `trash_set` around the delegation (`tiiah/interpret_clue.cpp:29-57`), plus a `prev` whose state is `shared_view()` |
-| the reactive target walk (§1c, §1d) | `stacks_after_queued_plays` starts from `shared_view()` (`variants/hole.cpp:17-18`) |
+| which slot a stable clue names (§1b) | the giver and the RECEIVER's pairwise view — `SharedStacks`, a scoped swap of `play_stacks` / `playable_set` / `trash_set` around the delegation (`tiiah/interpret_clue.cpp:29-57`, installed `:250-266`), plus a `prev` swapped to match |
+| which slots a reactive clue pairs (§1c, §1d) | the giver and the REACTER's, since the reacter is the seat that must act — `stacks_known_to_both` into `reacter_faces` / `stacks_after_queued_plays` (`tiiah/interpret_reactive.cpp:204-213`, `variants/hole.cpp:10-22`) |
+| what a call SAYS the card is | the HOLDER's own belief when the holder is us — `repin_own_call` for a stable call (`tiiah/interpret_clue.cpp:76-110`) and the reacter's own reading of the pairing (`tiiah/interpret_reactive.cpp:288-330`) |
 | the §1f pin | `shared_view()` directly (`tiiah/interpret_clue.cpp:100`) |
-| §1b's stall context | `Game::shared_in_endgame` (`tiiah/interpret_clue.cpp:184-190`) |
+| §1b's stall context | `Game::shared_in_endgame` (`tiiah/interpret_clue.cpp:245-251`) |
 | the stable orange ladder's pitch-vs-chuck test | `State::shared_pace` (`reactor0/interpret_clue.cpp:519`), reached by delegating |
 | the reaction's held negative (§1d) | asks the BUTTON, not the stacks — `Game::fire_reaction_elim` (`basics/decide.cpp:84-108`) |
 
-The swap costs nothing until the two views actually differ — `SharedStacks::needed`
+The swap costs nothing until the views actually differ — `SharedStacks::needed`
 — which is every game until somebody plays into the hole without knowing what
-they played. What a seat DECIDES still reads its own belief, which is the better
-of the two: the shared view is for meanings only.
+they played. What a seat DECIDES still reads its own belief, which is the best of
+the three: the other two are for meanings only.
+
+**The one sanctioned disagreement.** Which slot a clue names is the same at every
+seat, because it rests on a view the giver and the actor both hold and the
+receiver has no freedom left once the reacter has moved. What the called card IS
+can differ: the holder reads it on their own stacks, which are at least as
+advanced as anything the pair shares, and an observer reads it on the pair's. The
+holder's is the one that governs, since they are the one who plays it.
 
 The reaction's negative was the third entry in that table only as of v16.11.0,
 and it was the one that cost a game: it asked "did a stack advance?" to tell a
@@ -501,13 +542,29 @@ superposition when:
 1. another player plays a card of that identity;
 2. another player's clue, stable or reactive, puts CTP on a playable card of
    that identity;
-3. every copy of it is accounted for in the discard pile and the other hands.
+3. every copy of it is accounted for in the discard pile and the other hands;
+4. **a clue between two OTHER seats calls a card we can see, and the card is
+   further up its suit than our own stacks are** — the back-solve.
 
 Rules 1 and 2 say the same thing — that identity was still NEEDED, so the
 superposed card was not it — and both are **shared**: every seat sees them and
 narrows alike, so a collapse on either moves the shared stacks too. Only
 evidence every seat holds counts, which is why a play that was itself a
 superposition is not evidence: the seat that made it does not know what it was.
+
+**Rule 4 is how a seat recovers from the hole (v16.12.0).** A third seat cannot
+compute what a pair shares — the plays missing from the shared view are its own,
+and it cannot name them (§1.3). But it can SEE the card the pair called, and a
+call says "this is playable", so the pair holds that suit one below the card.
+Anything their stack has above ours can only be our own hidden plays: nobody
+else's are missing from our belief. Replay 2008489 T33 — yagami calls
+will-bot69's next blue and will-bot67 can see it is a `b4`, so the two of them
+hold blue on 3; will-bot67 has it on 2, so the card it threw at T29 was the `b3`.
+It then re-reads the call itself, which is how order 34 comes out `{b4}` rather
+than the shared view's `{b3}`. `back_solve_own_plays`
+(`src/conventions/tiiah/superposition.cpp:119-183`) keeps it narrow on purpose:
+only a STABLE call, since a reactive one can name a card that is one away rather
+than playable, and only a plain suit, since the arithmetic is a plain prefix.
 
 Rule 3 is **private** — it is `reactor0::sight_narrowed`'s shape, and it reads
 our own eyes. It narrows what WE believe and never the set partners predict
@@ -641,6 +698,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_receiver_bucket.cpp` | §1d's receiver half — a colour clue leaving the bucket below, the finesse continuation surviving when the clue does not rule it out, a rank clue reading the other way, and the reacter's own seat reading wider |
 | `tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp` | the live game it was missing in, replayed |
 | `tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp` | §1d's negative half — our own hidden play read as a play rather than a discard, so a later referential discard on the same hand survives |
+| `tests/test_tiiah/test_pairwise_stacks.cpp` | §1.3 — a partner's blind play reaching every row but theirs, our own reaching none, a known play reaching all, the prefix rule blocking a row on the card it never saw, and the symmetry of `stacks_known_to_both` |
+| `tests/test_tiiah/test_replay_2008489_reacter_reads_its_own_stacks.cpp` | §1.3 + §1e — the reacter reading its own stacks rather than the giver's stale ones, and the back-solve recovering the blue it threw in the hole |
 | `tests/test_tiiah/test_ordinary_reactive.cpp` | §1c's dispatch table — a clue to Cathy reactive with Bob reacting, the sum rule and bucket naming his slot 3 as `{r1, y1}`, the reacter playing it, and the reverse position keeping a clue to Cathy stable |
 | `tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp` | the live game it was missing in, replayed |
 | `tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp` | §2 — the decision layer reading an ordinary reactive: REACTIVE_PLAY, Bob reacting, Cathy receiving, and the bot giving it |

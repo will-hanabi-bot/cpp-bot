@@ -9,13 +9,17 @@ namespace hanabi::reactor::variants {
 
 State stacks_after_queued_plays(const Game& game,
                                 std::optional<int> only_player,
-                                std::optional<int> except_order) {
-  // The SHARED stacks, not our own belief. A partner's superposed play advanced
-  // ours — we watched the card go in — and advanced nobody else's, so walking
-  // from `game.state` would have each seat simulate a different game. That is
-  // §1e's "assume none of the superposed cards were played", and it is why this
-  // reads `shared_view` rather than the state itself.
-  State hypo = game.state.shared_view();
+                                std::optional<int> except_order,
+                                const std::vector<int>* base) {
+  // Not our own belief. A partner's superposed play advanced ours — we watched
+  // the card go in — and advanced nobody else's, so walking from `game.state`
+  // would have each seat simulate a different game. That is §1e's "assume none
+  // of the superposed cards were played".
+  //
+  // Which view, exactly, is the caller's to say: the SHARED one by default, and
+  // the pairwise one when the walk is deciding what a clue between two named
+  // seats means (§1.3).
+  State hypo = base ? game.state.with_stacks(*base) : game.state.shared_view();
   std::vector<int> hands;
   if (only_player) {
     hands.push_back(*only_player);

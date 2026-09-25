@@ -121,7 +121,14 @@ def render_state(rec: dict[str, Any]) -> None:
     # position. The shared view is what a clue is read against.
     shared = dbg.get("common_play_stacks")
     if shared is not None and shared != dbg.get("play_stacks"):
-        print(f"  shared stacks: {shared}  <- what a clue MEANS is read here")
+        print(f"  shared stacks: {shared}  <- what ALL seats know")
+    # One row per seat: what we know that seat knows, which is what a clue
+    # between us and them is read against (v16.12.0).
+    for i, row in enumerate(dbg.get("pairwise_play_stacks") or []):
+        if i == replay.get("our_player_index") or row == dbg.get("play_stacks"):
+            continue
+        name = (replay.get("names") or [])[i] if i < len(replay.get("names") or []) else i
+        print(f"  shared with {name}: {row}  <- a clue between us is read here")
     print(f"  clues: {dbg.get('clue_tokens')}  strikes: {dbg.get('strikes')}  "
           f"cards_left: {dbg.get('cards_left')}  endgame_turns: {dbg.get('endgame_turns')}")
     discards = dbg.get("discards", [])

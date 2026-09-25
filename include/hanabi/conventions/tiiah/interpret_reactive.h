@@ -38,8 +38,13 @@ struct ReceiverTarget {
 // queued plays are simulated only on the REVERSE reactive, where he moves
 // before the reacter. It defaults to that, the direction this file was
 // written for.
+//
+// `base` is the stack vector the walk is judged against; omitting it takes the
+// SHARED view. A reader deciding what a clue between two named seats means
+// passes what those two share instead (§1.3).
 std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
-                                             bool receiver_acts_first = true);
+                                             bool receiver_acts_first = true,
+                                             const std::vector<int>* base = nullptr);
 
 // The receiver's target: the next playable in their hand under STACK
 // SIMULATION, where every known play in that hand is assumed already played
@@ -50,7 +55,8 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
 // the simulation: a called card is one of the plays assumed to have happened,
 // so it is no longer waiting to be played.
 std::optional<int> receiver_target(const Game& game, int receiver,
-                                   bool receiver_acts_first = true);
+                                   bool receiver_acts_first = true,
+                                   const std::vector<int>* base = nullptr);
 
 // Read a reverse-reactive clue. Installs the waiting connection, stamps the
 // reacter's blind play, and leaves the receiver's own call for reaction time,

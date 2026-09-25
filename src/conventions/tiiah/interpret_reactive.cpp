@@ -40,8 +40,10 @@ int anchor_of(const State& state, const ClueAction& action) {
 // same thing. Identities come from the deck, which the giver and the reacter can
 // see; the receiver never runs this walk for their own hand (they decode at
 // reaction time), which is the same POV rule reactor0's `play_pool` follows.
-State simulate_known_plays(const Game& game, int player) {
-  return hanabi::reactor::variants::stacks_after_queued_plays(game, player);
+State simulate_known_plays(const Game& game, int player,
+                           const std::vector<int>* base) {
+  return hanabi::reactor::variants::stacks_after_queued_plays(
+      game, player, std::nullopt, base);
 }
 
 // THE STACKS THE REACTER WILL FACE, which is what every test below is really
@@ -50,9 +52,16 @@ State simulate_known_plays(const Game& game, int player) {
 // Under the ordinary one the reacter answers on his very next turn and nobody
 // has moved, so the simulation stands down and the shared stacks are the
 // answer. One sentence, both directions.
-State reacter_faces(const Game& game, int receiver, bool receiver_acts_first) {
-  return receiver_acts_first ? simulate_known_plays(game, receiver)
-                             : game.state.shared_view();
+//
+// `base` is the view it is all judged against — the stacks the giver and the
+// REACTER share (§1.3), since the reacter is the seat that must act and the
+// giver is the one who has to be able to predict them. Passing the shared view
+// (an empty `base`) is the pre-v16.12.0 behaviour and the fallback for a seat
+// that is neither of the two.
+State reacter_faces(const Game& game, int receiver, bool receiver_acts_first,
+                    const std::vector<int>* base) {
+  if (receiver_acts_first) return simulate_known_plays(game, receiver, base);
+  return base ? game.state.with_stacks(*base) : game.state.shared_view();
 }
 
 // Which bucket the receiver's target must sit in, given the reacter's card and
@@ -101,9 +110,10 @@ bool both_know_their_own(const Game& game, int react_order, int target_order) {
 }  // namespace
 
 std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
-                                             bool receiver_acts_first) {
+                                             bool receiver_acts_first,
+                                             const std::vector<int>* base) {
   const State& s = game.state;
-  const State after = reacter_faces(game, receiver, receiver_acts_first);
+  const State after = reacter_faces(game, receiver, receiver_acts_first, base);
   std::vector<ReceiverTarget> direct;
   std::vector<ReceiverTarget> one_away;
   std::vector<ReceiverTarget> inverted;
@@ -133,8 +143,9 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
 }
 
 std::optional<int> receiver_target(const Game& game, int receiver,
-                                   bool receiver_acts_first) {
-  const auto targets = receiver_targets(game, receiver, receiver_acts_first);
+                                   bool receiver_acts_first,
+                                   const std::vector<int>* base) {
+  const auto targets = receiver_targets(game, receiver, receiver_acts_first, base);
   if (targets.empty()) return std::nullopt;
   return targets.front().order;
 }
@@ -190,9 +201,17 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // reactive.
   const bool receiver_acts_first =
       receiver == state.next_player_index(action.giver);
-  const State after = reacter_faces(game, receiver, receiver_acts_first);
+  // WHICH SLOTS the clue names rests on what the giver and the REACTER share
+  // (§1.3): the reacter is the seat that must act, and the giver is the one who
+  // has to be able to predict them. The receiver needs no say -- once the
+  // reacter has acted the sum rule leaves them no choice of slot, only a reading
+  // of what their own card is.
+  const std::vector<int> pair_view =
+      state.stacks_known_to_both(action.giver, reacter);
+  const State after =
+      reacter_faces(game, receiver, receiver_acts_first, &pair_view);
   for (const ReceiverTarget& target :
-       receiver_targets(game, receiver, receiver_acts_first)) {
+       receiver_targets(game, receiver, receiver_acts_first, &pair_view)) {
     int target_slot = 0;
     for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
       if (state.hands[receiver][i] == target.order) {
@@ -266,25 +285,49 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     // A double chuck names nothing and needs to name nothing: the call itself
     // says which button to press, and an inverted target has no bucket, so the
     // `bucket_of` test below fails for it without a case of its own.
-    if (connector) {
-      game.narrow_thought(react_order, IdentitySet::single(*connector));
-    } else if (auto want = bucket_of(*state.variant, target.id.suit_index)) {
-      // The reacter's card is a playable one — judged AFTER the queued plays,
-      // so a card that only comes live once the receiver plays what they know
-      // counts — sitting in the bucket the relation names. Worked example:
-      // red on 2 with the receiver holding a called r3, a rank clue, and a
-      // green target gives the reacter `{r4, y1}` — the playables of bucket 0.
-      const int from = action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
-                                                          : (*want + 1) % 3;
-      const IdentitySet allowed = IdentitySet::create([&](Identity i) {
-        auto b = bucket_of(*state.variant, i.suit_index);
-        return b && *b == from && after.is_playable(i);
-      });
-      if (game.common.thoughts[react_order]
-              .possibilities()
-              .intersect(allowed)
-              .non_empty()) {
-        game.narrow_thought(react_order, allowed);
+    // WHICH slots are paired is settled above, on what the giver and the reacter
+    // share. WHAT the pairing says is the REACTER's to read, on their own stacks
+    // (§1.3) — they watched every play but their own, so their view is at least
+    // as advanced as anything the pair shares, and the same pairing can mean two
+    // different things across that gap.
+    //
+    // Replay 2008489 T37 is exactly that gap. will-bot69 clued with yellow on 2
+    // — it had played the y3 itself and never knew — so the pair's view made the
+    // receiver's `y4` ONE AWAY and the clue a finesse naming the `y3` as the
+    // connector. will-bot67 had watched that y3 go down: on its own stacks the
+    // y4 is playable outright, so there is no finesse and the bucket relation
+    // carries the identities instead. Reading the giver's stale finesse, it
+    // wrote `{y3}` on a card that was a `g3` and played it into a strike.
+    const State own = reacter == state.our_player_index
+                          ? reacter_faces(game, receiver, receiver_acts_first,
+                                          &state.play_stacks)
+                          : after;
+    const int own_away = own.playable_away(target.id);
+    std::optional<Identity> own_connector;
+    if (own_away == 1) {
+      own_connector = hanabi::reactor::variants::connector_of(state, target.id);
+    }
+    if (own_connector) {
+      game.narrow_thought(react_order, IdentitySet::single(*own_connector));
+    } else if (own_away == 0 && !double_chuck) {
+      if (auto want = bucket_of(*state.variant, target.id.suit_index)) {
+        // The reacter's card is a playable one — judged AFTER the queued plays,
+        // so a card that only comes live once the receiver plays what they know
+        // counts — sitting in the bucket the relation names. Worked example:
+        // red on 2 with the receiver holding a called r3, a rank clue, and a
+        // green target gives the reacter `{r4, y1}` — the playables of bucket 0.
+        const int from = action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
+                                                            : (*want + 1) % 3;
+        const IdentitySet allowed = IdentitySet::create([&](Identity i) {
+          auto b = bucket_of(*state.variant, i.suit_index);
+          return b && *b == from && own.is_playable(i);
+        });
+        if (game.common.thoughts[react_order]
+                .possibilities()
+                .intersect(allowed)
+                .non_empty()) {
+          game.narrow_thought(react_order, allowed);
+        }
       }
     }
     if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
