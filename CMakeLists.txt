@@ -249,6 +249,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_no_chuck_at_eight_clues.cpp
   tests/test_reactor0/test_deferred_elim.cpp
   tests/test_reactor0/test_reaction_elim_filter.cpp
+  tests/test_reactor0/test_reaction_negative_keeps_inference.cpp
   tests/test_reactor0/test_reactive_bluff.cpp
   tests/test_reactor0/test_misc/test_replay_1983205_synesthesia_rank_map_wraps.cpp
   tests/test_reactor0/test_misc/test_replay_1969696_reversed_orange_clue_is_a_chuck.cpp
@@ -423,6 +424,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp
   tests/test_tiiah/test_replay_2010246_illegal_bucket_pairing_not_retargeted.cpp
   tests/test_tiiah/test_replay_2010296_partner_play_is_presumed_to_land.cpp
+  tests/test_tiiah/test_replay_2010329_receiver_reads_its_own_worlds.cpp
+  tests/test_tiiah/test_replay_2010329_a_withdrawn_call_keeps_its_inference.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp

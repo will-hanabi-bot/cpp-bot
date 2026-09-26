@@ -1022,6 +1022,24 @@ there, so no seat may read the reaction by what it privately saw
 whatever the stacks look like when the receiver gets round to acting. A card
 carrying its own call is left alone; that call speaks for it.
 
+**A negative narrows WITHIN the inference, and never widens it (v16.17.0).** Each
+of these readings only ever *removes* candidates, so the keep-set is taken as
+`inferred − set`, not `possible − set` — and when that would remove every
+candidate, **the promise wins**: an inference the team committed to is not refuted
+by an argument about which slot a clue would have chosen (§1i).
+
+Taking the difference from `possible` was a widening in disguise. On a card already
+narrowed to one identity, `inferred ∩ (possible − set)` is empty, so §1i's
+escalation ladder reset the card to empathy and handed back `possible − set` — the
+complement of the promise. TIIAH replay 2010329 is the case: yagami's order 8 was
+called to play and read `{p1}` in every seat, its call was later withdrawn (which
+by §1i keeps the inference), and the negative then rewrote it as `{p3,p4,p5}`, the
+one set that excludes what the card actually was. That also makes the
+"card carrying its own call" exemption above redundant rather than load-bearing,
+which is the right shape — an inference should not be protected only for as long as
+its signal happens to be standing.
+`tests/test_reactor0/test_reaction_negative_keeps_inference.cpp`.
+
 **And the alternative has to have existed.** Every one of these negatives is an
 argument of the form *"if that slot had been an X, the clue would have named it
 instead"* — which only holds if the clue COULD have named it. The pairing

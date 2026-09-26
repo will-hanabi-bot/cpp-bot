@@ -33,7 +33,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0) |
-| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
 | Naming the called card (§2a) | implemented (v16.7.0) |
@@ -451,8 +451,23 @@ called from the engine seam at `src/basics/decide.cpp:582-589`):
 
 - **the bucket** the reacter's sits one step from — one *lower* for a rank clue,
   one *higher* for a colour one, the relation above read backwards;
-- **the continuation** of the card the reacter played, `id.next()`, which is what
-  a finesse leaves behind.
+- **the continuation** of the card the reacter played — the next card up its suit,
+  which on a reversed suit is `prev()` rather than `next()`, and which is what a
+  finesse leaves behind.
+
+Both halves are read **in every world the receiver's own hole cards leave open**
+(§1e), as the reacter's half has been since v16.13.0. Until v16.17.0 this one read a
+single stack vector, so a candidate playable only in some other world was never
+offered. Replay [2010329](https://hanab.live/shared-replay/2010329#10): will-bot69
+had thrown an `{r2,g1,b1}` into the hole and its called card was an `r3` — playable
+only where that card was the `r2` — and it read `{g2}`. The per-candidate support is
+recorded, so a later collapse withdraws the conditional part.
+
+The baseline it narrows from is `prev`'s inference, not `old_inferred`: unlike
+`reactor::target_play`, `stamp_receiver_call` writes through `narrow_thought` and
+leaves no `old_inferred` to roll back to, and without a rollback `narrow_thought`
+can only ever intersect *inside* the stamp's single-frame set — so the wider reading
+could never land.
 
 Replay [2008217](https://hanab.live/shared-replay/2008217#2) T2 is both halves at
 once. Alice clues Blue to Cathy; Bob answers on slot 4 with a `b1`. Blue is
@@ -852,6 +867,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_decision_making/test_colour_preference.cpp` | §2a — replay 2008145 T1 giving a clue that names its card, the rank candidate naming none while all three colours do, the exception separating nothing, and reactor0 unmoved |
 | `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |
 | `tests/test_tiiah/test_receiver_bucket.cpp` | §1d's receiver half — a colour clue leaving the bucket below, the finesse continuation surviving when the clue does not rule it out, a rank clue reading the other way, and the reacter's own seat reading wider |
+| `tests/test_tiiah/test_replay_2010329_receiver_reads_its_own_worlds.cpp` | §1d's receiver half over the worlds — the live game where the `r3` was playable in only one of them |
+| `tests/test_tiiah/test_replay_2010329_a_withdrawn_call_keeps_its_inference.cpp` | §1i — a withdrawn call keeps its `{p1}`, which the reaction's negative used to widen away |
 | `tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp` | the live game it was missing in, replayed |
 | `tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp` | §1d's negative half — our own hidden play read as a play rather than a discard, so a later referential discard on the same hand survives |
 | `tests/test_tiiah/test_pairwise_stacks.cpp` | §1.3 — a partner's blind play reaching every row but theirs, our own reaching none, a known play reaching all, the prefix rule blocking a row on the card it never saw, and the symmetry of `stacks_known_to_both` |

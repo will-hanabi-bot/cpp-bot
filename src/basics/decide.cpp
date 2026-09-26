@@ -153,7 +153,32 @@ void Game::fire_reaction_elim(const Game& prev, int player_index, int order,
         continue;
       }
       if (sets[i].is_empty()) continue;
-      narrow_thought(o, common.thoughts[o].possible.difference(sets[i]));
+      // Narrow WITHIN the card's inference, never from `possible` (v16.17.0).
+      //
+      // A negative is an argument of the form "if that slot had been an X, the
+      // clue would have named it instead". It can only ever REMOVE candidates,
+      // so it must not be able to widen one -- and taking the difference from
+      // `possible` does exactly that: on a card already narrowed to one
+      // identity, `inferred ∩ (possible − set)` is empty, so
+      // `Game::narrow_thought`'s escalation resets the card to empathy and
+      // hands back `possible − set`, discarding the promise the clue made.
+      //
+      // Replay 2010329: yagami's order 8 was called to play and read `{p1}` in
+      // every seat. Its call was later withdrawn -- which by §1i keeps the
+      // inference -- and this negative then rewrote the card as `{p3,p4,p5}`,
+      // the one set that excludes what it actually was.
+      //
+      // When the negative would remove everything, the promise wins: an
+      // inference the team committed to is not refuted by an argument about
+      // which slot a clue would have chosen. That also makes the
+      // called-card skip above redundant rather than load-bearing, which is the
+      // right shape -- an inference should not be protected only for as long as
+      // its signal happens to be standing.
+      const Thought& t = common.thoughts[o];
+      const IdentitySet live = t.inferred.non_empty() ? t.inferred : t.possible;
+      const IdentitySet keep = live.difference(sets[i]);
+      if (keep.is_empty()) continue;
+      narrow_thought(o, keep);
     }
   };
 

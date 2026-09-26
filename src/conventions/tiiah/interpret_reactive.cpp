@@ -484,9 +484,28 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   }
   if (!react_live.non_empty()) return;
 
-  IdentitySet allowed = IdentitySet::empty();
+  // ...in every world the RECEIVER's own hole cards leave open (1e, v16.17.0).
+  //
+  // The reacter's half has ranged over its worlds since v16.13.0; this one did
+  // not, so it read one stack vector and a candidate that is playable only in
+  // some other world was never offered. Replay 2010329: will-bot69 had thrown an
+  // `{r2,g1,b1}` into the hole, and its called card was an `r3` -- playable only
+  // in the world where that card was the `r2`. It read `{g2}`.
+  const auto worlds = open_worlds(game, s, wc.receiver);
 
-  // The bucket half.
+  IdentitySet allowed = IdentitySet::empty();
+  std::vector<std::pair<Identity, std::uint64_t>> support;
+  auto offer = [&](Identity i, std::size_t w) {
+    allowed = allowed.add(i);
+    auto it = std::find_if(support.begin(), support.end(),
+                           [i](const auto& pr) { return pr.first == i; });
+    if (it == support.end()) support.emplace_back(i, 1ULL << w);
+    else it->second |= (1ULL << w);
+  };
+
+  // The bucket half. Judged per world, so the playability filter is ours rather
+  // than inherited from the stamp's single-world set -- which matters, because
+  // the undo below drops that set.
   std::optional<int> from;
   bool one_bucket = true;
   for (Identity i : react_live) {
@@ -495,29 +514,49 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
     if (!from) from = *b;
     else if (*from != *b) { one_bucket = false; break; }
   }
-  if (one_bucket && from) {
-    const int want = wc.clue.kind == ClueKind::RANK ? (*from + 1) % 3
-                                                    : (*from + 2) % 3;
-    allowed = allowed.union_with(IdentitySet::create(
-        [&s, want](Identity i) {
-          auto b = bucket_of(*s.variant, i.suit_index);
-          return b && *b == want;
-        },
-        static_cast<int>(s.variant->suits.size()) * 5));
-  }
-
-  // The finesse half.
-  for (Identity i : react_live) {
-    if (auto nxt = i.next()) allowed = allowed.add(*nxt);
+  for (std::size_t w = 0; w < worlds.size(); ++w) {
+    if (one_bucket && from) {
+      const int want = wc.clue.kind == ClueKind::RANK ? (*from + 1) % 3
+                                                      : (*from + 2) % 3;
+      const IdentitySet here = IdentitySet::create(
+          [&](Identity i) {
+            auto b = bucket_of(*s.variant, i.suit_index);
+            return b && *b == want && worlds[w].state.is_playable(i);
+          },
+          static_cast<int>(s.variant->suits.size()) * 5);
+      for (Identity i : here) offer(i, w);
+    }
+    // The finesse half: the card that follows what the reacter played. Reversed
+    // suits run 5 -> 1, so the successor is `prev()` there -- `Identity::next()`
+    // raw would name a card that does not exist.
+    for (Identity i : react_live) {
+      const auto& st = s.variant->suits[i.suit_index].suit_type;
+      const auto nxt = st.reversed ? i.prev() : i.next();
+      if (nxt) offer(*nxt, w);
+    }
   }
 
   if (!allowed.non_empty()) return;
   // Never empty the card: an inference that explains nothing is worse than the
   // generic one the stamp already left (1i).
-  if (game.common.thoughts[target].inferred.intersect(allowed).is_empty()) {
+  if (game.common.thoughts[target].possibilities().intersect(allowed).is_empty()) {
     return;
   }
+  // Undo the stamp helper's narrowing before applying ours, in the same spirit as
+  // `reactor0::narrow_to_stamped_button` and the reacter's half above:
+  // `stamp_receiver_call` narrowed to the playables of ONE frame, which is the
+  // single-world reading this is here to widen, and `narrow_thought` alone could
+  // never get past it. Rule 1 constrains the net effect of an interpretation, not
+  // the writes inside it.
+  //
+  // The baseline comes from `prev` rather than from `old_inferred`: unlike
+  // `target_play`, `stamp_receiver_call` writes through `narrow_thought` and so
+  // leaves no `old_inferred` to roll back to. `prev` is the game before the
+  // reaction was processed, which is exactly the pre-stamp inference.
+  const IdentitySet& before = prev.common.thoughts[target].inferred;
+  if (before.non_empty()) game.reset_thought_to(target, before);
   game.narrow_thought(target, allowed);
+  record_conditional(game, target, worlds, support);
 }
 
 }  // namespace hanabi::tiiah
