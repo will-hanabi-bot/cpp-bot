@@ -368,6 +368,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_reading_holders.cpp
   tests/test_tiiah/test_decision_making/test_clue_reading.cpp
   tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp
+  tests/test_tiiah/test_decision_making/test_refusal_clue.cpp
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
@@ -418,6 +419,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp
   tests/test_tiiah/test_replay_2008489_reacter_reads_its_own_stacks.cpp
   tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp
+  tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp

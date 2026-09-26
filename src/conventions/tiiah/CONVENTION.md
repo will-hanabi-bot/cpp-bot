@@ -30,7 +30,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | The engine rules (§1) | implemented; the three stack views (v16.12.0) |
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
-| The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0) |
+| The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0) |
 | Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
@@ -269,8 +269,55 @@ rank 2 that named a double play read as a lock, and the reacter discarded.
 Whichever way the clue goes, it is read by the same §1d rules: even parity, the
 sum rule, and the buckets.
 
-`tiiah::interpret_clue` (`src/conventions/tiiah/interpret_clue.cpp:149-179`) is
+`tiiah::interpret_clue` (`src/conventions/tiiah/interpret_clue.cpp:281-298`) is
 the table, one `if` per row.
+
+#### The refusal: Bob says the card is already played (v16.14.0)
+
+Alice reads her own reactive against **her own** stacks, and those are stale in
+exactly one way — she cannot see what she threw in the hole. So she can name a
+card of Cathy's that is already down, and neither she nor Cathy can tell. Bob
+can. The convention gives him a way to say so:
+
+> **Alice gives Cathy an ordinary reactive, and Bob answers by giving Cathy any
+> STABLE clue ⟹ the card Alice named is already played.** Alice collapses the
+> superposition that must have been it (§1e rule 5).
+
+Read at `read_refusal` (`interpret_clue.cpp:117-160`), ahead of the dispatch
+table because it has to pre-empt it: Bob's clue to Cathy is `giver=bob,
+target=cathy`, which the ordinary row would otherwise read as a fresh reactive.
+
+Four things this rests on:
+
+- **Stable is the discriminator.** A reacter who clues instead of reacting is
+  normally *deferring*, and a deferral carries the reactive intent forward — so
+  it is itself reactive. A refusal is stable. Without that test the two are the
+  same event, since the engine already lets any clue by the reacter clear the
+  waiting connection (`basics/decide.cpp:196-199`), which is also why the arm
+  reads `prev`.
+- **It is an ENVELOPE.** The signal is *that* the clue was stable and aimed at
+  Cathy, so the clue still means whatever stable clue it is, and control falls
+  through to the ladders. Replay 2009367 T7's refusal is also a lock.
+- **Bob's own call stands.** His card was named because it is playable in the
+  right bucket, which is still true whatever Cathy holds; only Cathy's half of
+  the pairing is void.
+- **Ordinary reactives only**, as ruled. Under the reverse the receiver moves
+  first and there is nothing to refuse yet.
+
+**The bot gives it too**, because a human partner can name a dead card just as
+easily. `clue_refuses_dead_target` (`reactor0/decision.cpp:688-718`) marks the
+candidates, and they join **Precedence step 1** — `choose_very_high_clue` — rather
+than a rung: refusing is done *instead of* reacting, and every rung sits below the
+urgent return, which is the very thing being declined. The tier itself
+(`clue_tier`) is left alone so that no non-hole game can see any of this.
+
+[2009367](https://hanab.live/shared-replay/2009367) T6–T7 is the case.
+will-bot67 threw a `{r2, p1}` into the hole at T3; it was the `p1`, so its stacks
+still read purple 0 and its T6 reactive named will-bot69's slot 4 — another `p1`,
+a duplicate. yagami could see the first one go down, and at T7 gave will-bot69 a
+rank 4. Before v16.14.0 that was a lock and nothing else: will-bot67 went on
+believing it might have played the `r2`, and at T9 played a `y3` into a strike.
+Now it settles on the `p1`, and T9 is a playable `b1` instead.
 
 Under the REVERSE arm, Bob's target is the next playable in his hand under
 stack simulation, where every known play in his hand is assumed already
@@ -585,7 +632,9 @@ superposition when:
    that identity;
 3. every copy of it is accounted for in the discard pile and the other hands;
 4. **a clue between two OTHER seats calls a card we can see, and the card is
-   further up its suit than our own stacks are** — the back-solve.
+   further up its suit than our own stacks are** — the back-solve;
+5. **a reactive we gave was REFUSED** (§1c): the card we named is already played,
+   so a superposition of ours that admits it was it.
 
 Rules 1 and 2 say the same thing — that identity was still NEEDED, so the
 superposed card was not it — and both are **shared**: every seat sees them and
@@ -606,6 +655,15 @@ than the shared view's `{b3}`. `back_solve_own_plays`
 (`src/conventions/tiiah/superposition.cpp:119-183`) keeps it narrow on purpose:
 only a STABLE call, since a reactive one can name a card that is one away rather
 than playable, and only a plain suit, since the arithmetic is a plain prefix.
+
+**Rule 5 is the mirror of rule 4** (v16.14.0). The back-solve learns from a call
+being HIGHER up its suit than we thought; the refusal learns from one being
+BEHIND the stacks altogether. Both reduce to the same accounting: a seat's own
+stacks can only be short by what that seat threw in the hole.
+`collapse_refused_target` (`src/conventions/tiiah/superposition.cpp:341-354`),
+driven from §1c's `read_refusal` rather than from the collapse pass, because the
+evidence is the clue being given rather than anything about the cards. Shared,
+like rules 1 and 2: every seat watches the refusal.
 
 Rule 3 is **private** — it is `reactor0::sight_narrowed`'s shape, and it reads
 our own eyes. It narrows what WE believe and never the set partners predict
@@ -742,6 +800,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_pairwise_stacks.cpp` | §1.3 — a partner's blind play reaching every row but theirs, our own reaching none, a known play reaching all, the prefix rule blocking a row on the card it never saw, and the symmetry of `stacks_known_to_both` |
 | `tests/test_tiiah/test_conditional_reading.cpp` | §1e's worlds — one world when nothing is in the hole, one per candidate when something is, whose seat they belong to, two cards multiplying and chaining in play order, and the cap reading it flat |
 | `tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp` | §1e — the live game it was narrow in, and the cascade that withdraws the conditional half |
+| `tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp` | §1c's refusal, read — the collapse it forces, that the clue is still read as the lock it is, and the playable card it frees up |
+| `tests/test_tiiah/test_decision_making/test_refusal_clue.cpp` | §1c's refusal, GIVEN — outranking our own pending reaction when the named card is dead, and answering the reaction when it is not |
 | `tests/test_tiiah/test_replay_2008489_reacter_reads_its_own_stacks.cpp` | §1.3 + §1e — the reacter reading its own stacks rather than the giver's stale ones, and the back-solve recovering the blue it threw in the hole |
 | `tests/test_tiiah/test_ordinary_reactive.cpp` | §1c's dispatch table — a clue to Cathy reactive with Bob reacting, the sum rule and bucket naming his slot 3 as `{r1, y1}`, the reacter playing it, and the reverse position keeping a clue to Cathy stable |
 | `tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp` | the live game it was missing in, replayed |

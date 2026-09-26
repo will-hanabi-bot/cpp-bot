@@ -92,6 +92,18 @@ struct ReactorWC {
   // behaviour. After `rlocks` for the same reason `rlocks` is last: reactor
   // aggregate-initializes this struct positionally and must not be disturbed.
   std::vector<int> clue_play_stacks;
+  // THROW IT IN A HOLE: the RECEIVER's card this reactive named (v16.14.0).
+  //
+  // Normally nobody needs it stored — the receiver's slot is pinned when the
+  // reacter acts, from the sum rule. The refusal is the case where the reacter
+  // never acts (tiiah/CONVENTION.md §1c): the giver then has to know which card
+  // it was pointing at in order to learn that the card is already played, and
+  // the pairing it chose is the only record of that.
+  //
+  // -1 when unknown, which is every non-TIIAH WC and the receiver's own POV,
+  // where the walk never ran. Last, for the same reason `rlocks` and
+  // `clue_play_stacks` are: reactor aggregate-initializes this positionally.
+  int receiver_target_order = -1;
 
   bool operator==(const ReactorWC&) const = default;
 };

@@ -214,6 +214,17 @@ struct ClueCandidate {
   // (tiiah/CONVENTION.md §2, §1e). Recorded here because the test needs the
   // hypo, and `analyse_clues` is where the hypo lives.
   bool names_its_card = false;
+  // Throw It in a Hole only: is this clue a REFUSAL — us, as the reacter of a
+  // standing reactive, telling its giver that the card they named is already
+  // played (tiiah/CONVENTION.md §1c, v16.14.0)?
+  //
+  // The giver read their clue against their own stacks, and those are stale in
+  // exactly one way: they cannot see what they threw in the hole. So they can
+  // point at a card that is already down. The convention's answer is a stable
+  // clue to the receiver, given INSTEAD of reacting — which is why this
+  // outranks the pending reaction in `choose_very_high_clue` rather than sitting
+  // in a rung, where our own urgent call would always have beaten it.
+  bool refuses_dead_target = false;
 };
 
 // One `Game::simulate` per candidate — the same cost the deleted `eval_action`

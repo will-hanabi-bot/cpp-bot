@@ -385,9 +385,13 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         }
       }
     }
-    if (!game.waiting.empty()) game.waiting.front().react_order = react_order;
+    if (!game.waiting.empty()) {
+      game.waiting.front().react_order = react_order;
+      game.waiting.front().receiver_target_order = target.order;
+    }
     if (game.pending_reactions[receiver]) {
       game.pending_reactions[receiver]->react_order = react_order;
+      game.pending_reactions[receiver]->receiver_target_order = target.order;
     }
     return ClueInterp::REACTIVE;
   }

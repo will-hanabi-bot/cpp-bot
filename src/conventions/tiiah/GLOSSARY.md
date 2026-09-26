@@ -48,6 +48,17 @@ its own plays and recovers them by the *back-solve*. Like any stack it advances
 through the prefix, so a play a row never saw blocks everything above it.
 CONVENTION.md §1.3, `tests/test_tiiah/test_pairwise_stacks.cpp`.
 
+### refusal
+Bob answering a reactive by giving Cathy a **stable** clue instead of reacting,
+which says *the card Alice named is already played*. Alice cannot see it — her
+stacks are short by exactly what she threw in the hole — so she collapses the
+superposition that admits it (§1e rule 5). Stable is what tells it apart from a
+*deferral*, which carries the reactive intent forward and is itself reactive; and
+it is an envelope, so the clue still means whatever stable clue it is. Bob's own
+call stands. Read by `read_refusal` and given via `clue_refuses_dead_target`,
+which joins Precedence step 1 because refusing is done instead of reacting.
+CONVENTION.md §1c, v16.14.0, replay 2009367 T6–T7.
+
 ### world
 One assignment of an identity to each card a seat still has in the hole. A seat
 that threw a card without naming it does not know its own stacks, so a call on a

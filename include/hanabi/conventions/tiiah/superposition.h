@@ -52,6 +52,16 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
 // clears the set. Returns whether anything moved.
 bool refute_worlds(Game& game, int antecedent, const IdentitySet& still);
 
+// §1e rule 5, the REFUSAL (v16.14.0): `gone` is already played, and `giver`
+// named it as a play — so their stacks are short by exactly that card, and the
+// only plays missing from a seat's own stacks are the ones it threw in the hole.
+// Settle the superposition that admits it.
+//
+// Shared, like rules 1 and 2: every seat watched the refusal and can draw the
+// same conclusion, so the shared stacks move with it. Returns whether it settled
+// anything.
+bool collapse_refused_target(Game& game, int giver, Identity gone);
+
 // Called from `Game::handle_action` with the RAW wire action, before
 // `resolve_hidden_action` has filled in what we could see. A play that reached
 // the hole without a common-knowledge identity stamps

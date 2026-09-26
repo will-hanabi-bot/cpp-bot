@@ -684,6 +684,39 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
   return game.common.thoughts[*recv_order].possibilities().length() != 1;
 }
 
+// THROW IT IN A HOLE: would this clue be a REFUSAL (tiiah/CONVENTION.md §1c)?
+//
+// We are the reacter of a standing ordinary reactive, and we can see that the
+// card its giver named is already on the stacks — they cannot, because it was
+// their own hole play that put it there. The convention's way to say so is a
+// STABLE clue to the receiver, given instead of reacting.
+//
+// Variant-gated throughout, so no reactor0 game can reach it.
+bool clue_refuses_dead_target(const Game& game, const ClueAction& action) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  if (game.waiting.empty()) return false;
+  const ReactorWC& wc = game.waiting.front();
+  if (wc.reacter != s.our_player_index) return false;  // we are Bob
+  if (action.target != wc.receiver) return false;      // ...cluing Cathy
+  if (wc.receiver_target_order < 0) return false;
+  if (wc.receiver_target_order >= static_cast<int>(s.deck.size())) return false;
+  // Ordinary reactives only, as ruled: under the reverse the receiver moves
+  // first and there is nothing to refuse yet.
+  if (wc.receiver != s.next_player_index(s.next_player_index(wc.giver))) {
+    return false;
+  }
+  // The card they named, as WE see it. Already behind the stacks is what makes
+  // the pairing void; a card that is merely not yet playable is an ordinary
+  // delayed call and none of our business.
+  const auto named = s.deck[wc.receiver_target_order].id();
+  if (!named) return false;
+  if (!s.is_basic_trash(*named)) return false;
+  // And it has to be a STABLE clue, or it is a deferral rather than a refusal --
+  // the same discriminator the reading side uses.
+  return !dispatch_is_reactive(game, action);
+}
+
 std::vector<ClueCandidate> analyse_clues(
     const Game& game,
     const std::vector<std::pair<PerformAction, Action>>& all_clues) {
@@ -786,6 +819,8 @@ std::vector<ClueCandidate> analyse_clues(
           hypo.common.thoughts[c.reading.stable_subject].possibilities().length() ==
           1;
     }
+
+    c.refuses_dead_target = clue_refuses_dead_target(game, c.action);
 
     // Fill-ins, for rung 4.5. "Narrows" is judged from the TARGET's own view --
     // he is the one who learns something -- and counts both positive and
@@ -1658,7 +1693,11 @@ std::optional<PerformAction> choose_very_high_clue(
   std::vector<ClueCandidate> vh;
   int vh_seen = 0;
   for (const ClueCandidate& c : cands) {
-    if (c.tier != ClueTier::VERY_HIGH) continue;
+    // A REFUSAL joins this step rather than the tier (tiiah/CONVENTION.md §1c):
+    // refusing is done INSTEAD of reacting, so it has to outrank the pending
+    // reaction, and step 1 is the only place above it. Kept out of `clue_tier`
+    // itself, which reactor0 shares, so no non-hole game can see it.
+    if (c.tier != ClueTier::VERY_HIGH && !c.refuses_dead_target) continue;
     ++vh_seen;
     if (clue_is_admissible(game, c)) vh.push_back(c);
   }

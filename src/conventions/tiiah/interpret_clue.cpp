@@ -7,6 +7,8 @@
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/tiiah/interpret_reactive.h"
+#include "hanabi/conventions/tiiah/superposition.h"
+#include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
@@ -110,6 +112,51 @@ void repin_own_call(const Game& prev, Game& game) {
       return out;
     });
   }
+}
+
+// THE REFUSAL (CONVENTION.md §1c, v16.14.0). Is this clue Bob telling Alice that
+// the card she named is already played?
+//
+// Alice reads a reactive against her own stacks, and hers can be stale in exactly
+// one way: she does not know what she threw in the hole. So she can name a card
+// of Cathy's that the rest of the table can see has already gone down. Bob is the
+// seat who must answer, and the convention gives him a way to answer "no": give
+// Cathy a stable clue rather than react.
+//
+// Returns true when this clue is that, having applied what it teaches. The caller
+// then skips the dispatch — a refusal must not be read as a fresh reactive — and
+// lets the stable ladders read the clue's own content.
+//
+// Five conditions, and the fourth is the one that makes it a signal rather than
+// an ordinary deferral. A deferral carries the reactive intent forward and is
+// itself reactive; a refusal is stable. Without that test the two are the same
+// event, since `Game::interpret_clue` already treats ANY clue by the reacter as
+// clearing the waiting connection (`basics/decide.cpp:196-199`) — which is also
+// why this reads `prev`, the connection having been cleared before we are called.
+bool read_refusal(const Game& prev, Game& game, const ClueAction& action) {
+  const State& state = game.state;
+  if (prev.waiting.empty()) return false;
+  const ReactorWC& wc = prev.waiting.front();
+  if (wc.reacter != action.giver) return false;            // 1. Bob's clue
+  if (action.target != wc.receiver) return false;          // 3. ...to Cathy
+  if (wc.receiver_target_order < 0) return false;
+  // 2. Ordinary reactives only, per the convention as ruled. Under the reverse
+  // the receiver moves first and there is nothing to refuse yet.
+  if (wc.receiver != state.next_player_index(state.next_player_index(wc.giver))) {
+    return false;
+  }
+  // 5. Immediately: Bob's very next turn. A clue two turns later is a clue.
+  if (state.turn_count != wc.turn + 1) return false;
+  // 4. Stable, which is what distinguishes it from a deferral.
+  if (reactor0::dispatch_is_reactive(game, action)) return false;
+
+  // What Alice pointed at. She can see it, so she can name it -- and Bob has
+  // just told her it is behind the stacks rather than on them.
+  const auto gone = state.deck[wc.receiver_target_order].id();
+  if (!gone) return false;
+
+  collapse_refused_target(game, wc.giver, *gone);
+  return true;
 }
 
 // The rainbowy suit this variant carries, if it has one: the suit a colour clue
@@ -221,17 +268,32 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // `clue_is_reactive`. Asking the post-clue game instead makes every play clue
   // to Bob answer "Bob has a known play", because the clue itself just gave him
   // one, and the dispatch would eat its own tail.
-  const bool reversed =
-      hanabi::reactor::variants::reverse_reactive_position(prev, action.giver);
-  if (reversed) {
-    if (action.target == bob) {
-      return interpret_reactive(prev, game, action, /*reacter=*/cathy,
-                                /*receiver=*/bob);
+  // THE REFUSAL (CONVENTION.md §1c), ahead of the dispatch because it has to
+  // pre-empt it: Bob's clue to Cathy is `giver=bob, target=cathy`, which the
+  // ordinary arm below would read as a fresh reactive.
+  //
+  // Alice named a card of Cathy's that Bob can see is already played, so Bob
+  // says so the only way the convention leaves him — by giving Cathy a stable
+  // clue instead of reacting. The signal is the ENVELOPE, so the clue still gets
+  // read as whatever stable clue it is; what the refusal adds is that Alice now
+  // knows the card she pointed at has gone, and therefore what she threw in the
+  // hole (§1e rule 5).
+  // A refusal is stable by construction, and falls through to the ladders below
+  // — the signal rides along with whatever the clue otherwise says.
+  const bool refusal = read_refusal(prev, game, action);
+  if (!refusal) {
+    const bool reversed =
+        hanabi::reactor::variants::reverse_reactive_position(prev, action.giver);
+    if (reversed) {
+      if (action.target == bob) {
+        return interpret_reactive(prev, game, action, /*reacter=*/cathy,
+                                  /*receiver=*/bob);
+      }
+      // ...and a clue to Cathy is stable, which is the whole point of the flip.
+    } else if (cathy != action.giver && action.target != bob) {
+      return interpret_reactive(prev, game, action, /*reacter=*/bob,
+                                /*receiver=*/cathy);
     }
-    // ...and a clue to Cathy is stable, which is the whole point of the flip.
-  } else if (cathy != action.giver && action.target != bob) {
-    return interpret_reactive(prev, game, action, /*reacter=*/bob,
-                              /*receiver=*/cathy);
   }
 
   // STABLE (CONVENTION.md §1b) — reactor0's ladders, unchanged. They are

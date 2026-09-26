@@ -338,6 +338,21 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
   return out;
 }
 
+bool collapse_refused_target(Game& game, int giver, Identity gone) {
+  if (!game.state.variant->throw_it_in_a_hole) return false;
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    if (!game.meta[o].superposed()) continue;
+    if (o >= static_cast<int>(game.state.holders.size())) continue;
+    if (game.state.holders[o] != giver) continue;
+    if (!game.meta[o].superposition.contains(gone)) continue;
+    // Shared: the refusal is a public event, so this is not our own deduction
+    // about a partner but the team's about all of them.
+    settle(game, o, gone, /*shared=*/true);
+    return true;
+  }
+  return false;
+}
+
 void note_hidden_action(Game& game, const Action& raw) {
   if (!game.state.variant->throw_it_in_a_hole) return;
   // Only a card that reached the HOLE can be a superposition; a discard is

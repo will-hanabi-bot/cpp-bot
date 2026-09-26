@@ -519,6 +519,16 @@ with step 3, so the pre-check costs no extra simulation. It reads
 `ClueCandidate::tier`, so **both** ways into VERY HIGH pre-empt the reaction;
 through v9.2.0 it was `choose_h4_clue` and only the finesse could.
 
+Since v16.14.0 it admits one more thing, and only under **Throw It in a Hole**: a
+candidate flagged `ClueCandidate::refuses_dead_target`. That is the *refusal*
+(tiiah/CONVENTION.md §1c) — us telling the giver of a standing reactive that the
+card they named is already played, which the convention says is done by cluing
+the receiver **instead of** reacting. It has to enter here rather than as a rung
+for exactly the reason the tier does: every rung sits below the urgent return,
+and the urgent return is the thing being declined. The flag is variant-gated at
+the point it is computed (`clue_refuses_dead_target`), and `clue_tier` itself is
+left alone, so no reactor0 game can reach any of it.
+
 A **receiver**-side call carries no such urgency. It makes Alice *occupied*, which
 is what phase 1 rule 1a keys on — so Alice may give **any HIGH-tier clue** while
 holding one, not only a VERY HIGH one. The call itself is actioned in phase 2.
