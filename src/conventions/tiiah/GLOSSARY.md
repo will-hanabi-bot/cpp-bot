@@ -66,7 +66,10 @@ later card of theirs means something different in each world, and the reading is
 the **union** over them — with a note of which worlds each candidate needed, so
 that settling the earlier card withdraws the rest. `open_worlds` /
 `refute_worlds` (`src/conventions/tiiah/superposition.cpp`), stored in
-`ConvData::ConditionalReading`. Capped at 64: beyond that the call is read flat,
+`ConvData::ConditionalReading`. The worlds have a second consumer since v16.16.0:
+§1e rule 6 asks which of them lets a partner's play LAND, and refutes the rest
+(`presume_play_lands`) — which is how a seat stops inventing strikes out of
+stacks that are short by a card it threw in the hole. Capped at 64: beyond that the call is read flat,
 because a partial list of worlds is a conditional reading missing some of its own
 conditions. CONVENTION.md §1e.
 

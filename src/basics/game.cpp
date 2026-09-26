@@ -583,6 +583,15 @@ void Game::handle_action(const Action& action) {
   // history plus our own sight, so `rewind` and `apply_snapshot` reproduce it.
   // Our own card is the one the state cannot name — but our empathy sometimes
   // can, and a play we can name is a play we can account for.
+  // ...but first: never presume a partner's play STRUCK. Our own stacks can be
+  // short by exactly what we threw in the hole, and a card we cannot name is the
+  // one thing that makes them short — so a partner's play that looks dead to us
+  // may simply be landing on a card we played without knowing it. Asked of the
+  // worlds our own hole cards leave open, and it settles them when one of them is
+  // the only world in which the play lands (§1e rule 6). Ahead of the resolution
+  // because it is what the resolution's "dead" test then reads.
+  hanabi::tiiah::presume_play_lands(*this, action);
+
   const Action effective = resolve_hidden_action(state, action, hidden_own_play_id(*this, action));
 
   // ...and record what the player who made it does NOT know. Read from the RAW

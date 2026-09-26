@@ -9,8 +9,9 @@ Terminology is in [GLOSSARY.md](GLOSSARY.md); terms not defined there (chop,
 pitch / chuck, CTP / CTD, critical, loaded, …) carry their
 [reactor glossary](../reactor/GLOSSARY.md) meanings. Convention that is legal
 but not yet implemented is tracked in [TODO.md](../../../TODO.md), where this
-convention's open entry is **44** — a suit whose low card went into the hole
-unseen can read as unplayable to every seat at once (§1.3).
+convention's open entries are **44** — a suit whose low card went into the hole
+unseen can read as unplayable to every seat at once (§1.3) — and **45**, the
+receiver's bucket narrowing being wired only into the play path (§1d).
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -32,7 +33,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0) |
-| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
 | Naming the called card (§2a) | implemented (v16.7.0) |
@@ -91,7 +92,7 @@ claim:
 | The wire says | The card is | The engine is given |
 |---|---|---|
 | it reached the hole | plain, playable | Play — the stack advances |
-| it reached the hole | plain, dead | a failed Discard — a strike |
+| it reached the hole | plain, dead **in every world** | a failed Discard — a strike |
 | it reached the hole | inverted | Discard (a chuck), failed if dead |
 | it reached the pile | inverted | Play (a pitch) |
 | it reached the pile | plain | Discard |
@@ -104,6 +105,15 @@ into `on_discard`. `add_action` still records the RAW action, so the log says
 what the wire said and the resolution stays a pure function of the action history
 plus our own sight, which is what lets `rewind` and `apply_snapshot` reproduce
 it without serialising anything.
+
+**"Dead" is asked of the WORLDS, not of one stack vector (v16.16.0).** Our stacks
+can be short by exactly what we threw in the hole, so a partner's play that looks
+dead to us may be landing on a card we played without knowing it. §1e rule 6 runs
+immediately before the resolution and settles that question first; a strike is
+what is left when **no** world rescues the card. Replay 2010296 is what the old
+order cost: will-bot69 invented a strike, booked a partner's `y2` into the discard
+pile, and — the action now being a failed *discard* — skipped everything wired to
+`interpret_play`.
 
 **Our own play is the one the state cannot name**, because `deck[order].id()`
 is `nullopt` for our seat. Our own EMPATHY often can, though, and a play we can
@@ -650,7 +660,9 @@ superposition when:
 4. **a clue between two OTHER seats calls a card we can see, and the card is
    further up its suit than our own stacks are** — the back-solve;
 5. **a reactive we gave was REFUSED** (§1c): the card we named is already played,
-   so a superposition of ours that admits it was it.
+   so a superposition of ours that admits it was it;
+6. **a partner's play would not land on our stacks** — so it is landing on
+   something of ours, and the worlds in which it strikes are refuted.
 
 Rules 1 and 2 say the same thing — that identity was still NEEDED, so the
 superposed card was not it — and both are **shared**: every seat sees them and
@@ -680,6 +692,35 @@ stacks can only be short by what that seat threw in the hole.
 driven from §1c's `read_refusal` rather than from the collapse pass, because the
 evidence is the clue being given rather than anything about the cards. Shared,
 like rules 1 and 2: every seat watches the refusal.
+
+**Rule 6: never presume a strike (v16.16.0).** The default assumption must never
+be that a partner's play failed. Our stacks can be short by exactly one thing —
+what we threw in the hole — and every partner's play is one we *watched*, so ours
+are the only plays missing from them. A partner's play that looks dead is therefore
+evidence about **us**:
+
+> Ask which of the worlds our own hole cards leave open would let the card land.
+> If any would, those are the only worlds left: every world in which it strikes is
+> refuted. Narrow our superpositions to what survives, settle the ones that come
+> out singletons, and the play lands.
+
+`presume_play_lands` (`src/conventions/tiiah/superposition.cpp:356-409`), called
+from `Game::handle_action` **before** `resolve_hidden_action`, since its answer is
+what the resolution's "dead" test then reads (§1.1). It reuses `open_worlds`
+whole, so chains and the 64-world cap come for free. **Private**, like rule 3: it
+reads our own stacks and our own hole cards, so it moves `play_stacks` and leaves
+the shared view alone — a card we can now name is one we can name when we *play*
+it, and `note_hidden_action` advances the shared stacks then.
+
+Replay [2010296](https://hanab.live/shared-replay/2010296#8) is the case, and the
+whole chain of damage from one missing deduction. will-bot69 threw an `{r3, y1}`
+at T6; it was the `y1`, so yellow really was on 1 and will-bot67's `y2` at T8
+landed. Reading yellow 0, will-bot69 called that a strike — which made the action a
+failed *discard*, which skipped `narrow_receiver_call`, which left its called card
+reading `{r3, g1, b1, p1}` instead of `{p1}`, which meant it could not name the
+card it played at T9, which meant purple never advanced for it, which meant T14's
+clue was read against the wrong stacks. Rule 6 settles the `y1` and the rest
+follows.
 
 Rule 3 is **private** — it is `reactor0::sight_narrowed`'s shape, and it reads
 our own eyes. It narrows what WE believe and never the set partners predict
@@ -815,6 +856,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp` | §1d's negative half — our own hidden play read as a play rather than a discard, so a later referential discard on the same hand survives |
 | `tests/test_tiiah/test_pairwise_stacks.cpp` | §1.3 — a partner's blind play reaching every row but theirs, our own reaching none, a known play reaching all, the prefix rule blocking a row on the card it never saw, and the symmetry of `stacks_known_to_both` |
 | `tests/test_tiiah/test_conditional_reading.cpp` | §1e's worlds — one world when nothing is in the hole, one per candidate when something is, whose seat they belong to, two cards multiplying and chaining in play order, and the cap reading it flat |
+| `tests/test_tiiah/test_presumed_landing.cpp` | §1e rule 6 — the world that lets a partner's play land is the one we are in, a strike no world rescues still stands, and a play that already lands touches nothing |
+| `tests/test_tiiah/test_replay_2010296_partner_play_is_presumed_to_land.cpp` | the live game the invented strike cost, replayed: the settle, the stacks, and the `{p1}` it unblocks |
 | `tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp` | §1e — the live game it was narrow in, and the cascade that withdraws the conditional half |
 | `tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp` | §1c's refusal, read — the collapse it forces, that the clue is still read as the lock it is, and the playable card it frees up |
 | `tests/test_tiiah/test_decision_making/test_refusal_clue.cpp` | §1c's refusal, GIVEN — outranking our own pending reaction when the named card is dead, and answering the reaction when it is not |

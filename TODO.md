@@ -1130,3 +1130,34 @@ Two candidate fixes, neither taken in v16.12.0:
 
 The second is the smaller change and the one that matches the ruling the game was
 played under ("both the reacter and receiver know exactly what they are playing").
+
+---
+
+## 45. `[tiiah]` The receiver's bucket narrowing is wired only into `interpret_play`
+
+CONVENTION.md §1d. `tiiah::narrow_receiver_call` — the receiver's half of the
+bucket relation — is called from one place, `Game::interpret_play`
+(`src/basics/decide.cpp:616-619`). So it is skipped whenever the reacter's action
+reaches a seat as a **discard**, even though the reaction machinery below it gets
+the button right: `reacter_button_pressed`
+(`src/conventions/reactor0/interpret_reaction.cpp:523-533`) already knows that a
+plain card can only reach a strike via the Play button, and stamps the receiver
+`CALLED_TO_PLAY` accordingly. Only the narrowing is missing, so the receiver keeps
+the generic "every playable the stacks allow" reading.
+
+Two paths still reach it after v16.16.0, which removed the third (a *presumed*
+strike):
+
+- a **genuine** misplay by the reacter — it pressed Play, the card was dead, and
+  the clue's meaning is unaffected by the outcome;
+- a **pitch** — Play on an inverted card, which reaches the engine as a discard by
+  design (§1.1's table).
+
+Deferred deliberately while v16.16.0 fixed the cause of replay 2010296 rather than
+this symptom of it. The fix is the shape v16.11.0 used for `fire_reaction_elim`:
+the wire button, not the resolved action type, is what a reaction is about.
+
+The alternative worth weighing first is moving the hook into
+`reactor0::resolve_reaction`, which already has the button in hand — one site that
+cannot drift, at the cost of shared code depending on tiiah for the buckets, which
+the comment at the seam (`decide.cpp:610-615`) deliberately avoided.

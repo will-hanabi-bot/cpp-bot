@@ -62,6 +62,24 @@ bool refute_worlds(Game& game, int antecedent, const IdentitySet& still);
 // anything.
 bool collapse_refused_target(Game& game, int giver, Identity gone);
 
+// §1e rule 6: never presume a partner's play STRUCK.
+//
+// Our own stacks can be short by exactly what we threw in the hole — a card we
+// cannot name is the only thing that makes them short, since every partner's play
+// is one we watched. So a partner's play that looks dead to us may be landing on
+// a card we played without knowing it.
+//
+// Asked of the worlds our own hole cards leave open (`open_worlds`): if ANY of
+// them lets the play land, every world in which it strikes is refuted. Our
+// superpositions are narrowed to what survives and settled when that leaves one
+// identity, which advances our believed stacks — so the play then lands.
+//
+// Called from `Game::handle_action` with the RAW action and BEFORE
+// `resolve_hidden_action`, whose play-vs-misplay test is what reads the result.
+// A no-op outside TIIAH, for our own play (we cannot see it), and when no world
+// rescues the card — a partner really can misplay, and then the strike stands.
+void presume_play_lands(Game& game, const Action& raw);
+
 // Called from `Game::handle_action` with the RAW wire action, before
 // `resolve_hidden_action` has filled in what we could see. A play that reached
 // the hole without a common-knowledge identity stamps

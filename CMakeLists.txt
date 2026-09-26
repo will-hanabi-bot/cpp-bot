@@ -411,6 +411,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_superposition.cpp
   tests/test_tiiah/test_pairwise_stacks.cpp
   tests/test_tiiah/test_conditional_reading.cpp
+  tests/test_tiiah/test_presumed_landing.cpp
   tests/test_tiiah/test_reverse_reactive.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
   tests/test_tiiah/test_receiver_bucket.cpp
@@ -421,6 +422,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp
   tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp
   tests/test_tiiah/test_replay_2010246_illegal_bucket_pairing_not_retargeted.cpp
+  tests/test_tiiah/test_replay_2010296_partner_play_is_presumed_to_land.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp

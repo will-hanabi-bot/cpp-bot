@@ -353,6 +353,61 @@ bool collapse_refused_target(Game& game, int giver, Identity gone) {
   return false;
 }
 
+void presume_play_lands(Game& game, const Action& raw) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return;
+  const auto* play = std::get_if<PlayAction>(&raw);
+  if (!play || play->suit_index != -1) return;  // only a card that reached the hole
+  const int me = s.our_player_index;
+  if (play->player_index_v == me) return;  // our own: we cannot see it to judge
+  const int order = play->order;
+  if (order < 0 || order >= static_cast<int>(s.deck.size())) return;
+  auto played = s.deck[order].id();
+  if (!played) return;
+  if (s.is_playable(*played)) return;  // it lands already; nothing to explain
+
+  // Which of the worlds our own hole cards leave open would let it land? Chains
+  // and the 64-world cap come from `open_worlds` (§1e); one world back means we
+  // have nothing in the hole to blame and the strike is simply real.
+  const auto worlds = open_worlds(game, s, me);
+  if (worlds.size() <= 1) return;
+
+  std::vector<const OpenWorld*> surviving;
+  for (const OpenWorld& w : worlds) {
+    if (w.state.is_playable(*played)) surviving.push_back(&w);
+  }
+  if (surviving.empty()) return;  // no world rescues it: a partner really misplayed
+
+  // Everything the surviving worlds still allow each of our hole cards to be.
+  // One identity left means we have just learned what we played.
+  std::vector<std::pair<int, IdentitySet>> narrowed;
+  for (const auto& [ord, unused] : worlds.front().assignment) {
+    (void)unused;
+    IdentitySet allowed = IdentitySet::empty();
+    for (const OpenWorld* w : surviving) {
+      for (const auto& [o2, id2] : w->assignment) {
+        if (o2 == ord) allowed = allowed.add(id2);
+      }
+    }
+    if (allowed.is_empty()) continue;
+    if (allowed == game.meta[ord].superposition) continue;  // nothing refuted
+    narrowed.emplace_back(ord, allowed);
+  }
+
+  for (const auto& [ord, allowed] : narrowed) {
+    game.with_meta(ord, [&allowed](ConvData& m) { m.superposition = allowed; });
+    refute_worlds(game, ord, allowed);
+    if (auto only = only_one(allowed)) {
+      // PRIVATE, like rule 3: this reads our own stacks and our own hole cards,
+      // so it moves our belief and leaves the shared view alone. It does not need
+      // to be shared -- a card we can now name is one we can name when we play
+      // it, and `note_hidden_action` advances the shared stacks then.
+      settle(game, ord, *only, /*shared=*/false);
+    }
+  }
+  if (!narrowed.empty()) game.elim();
+}
+
 void note_hidden_action(Game& game, const Action& raw) {
   if (!game.state.variant->throw_it_in_a_hole) return;
   // Only a card that reached the HOLE can be a superposition; a discard is
