@@ -279,17 +279,35 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       // card, so they would act on this pairing however wrong it is (§1g) —
       // including chucking a card the team still needs.
       if (!reacter_side_ok(*actual)) return std::nullopt;
-      // §1d's licence, which is about what the clue may SAY rather than which
-      // slots it names. A finesse says it by itself; otherwise the bucket
-      // relation carries the identities, and failing that the pairing is only
-      // legal when both players can already name their own card. A double chuck
-      // is exempt: the reacter is not playing, so no identity has to reach them
-      // — and an inverted suit has no bucket to relate to in any case.
-      if (!connector && !double_chuck &&
+      // §1d's LEGALITY test, and the GIVER's alone (v16.15.0). It is about what
+      // the clue may SAY rather than which slots it names: a finesse says it by
+      // itself; otherwise the bucket relation carries the identities, and failing
+      // that the pairing is only legal when both players can already name their
+      // own card. A double chuck is exempt — the reacter is not playing, so no
+      // identity has to reach them, and an inverted suit has no bucket anyway.
+      //
+      // It may NOT steer the walk, and until v16.15.0 it did: a failure was a
+      // `continue`, which retargeted to the next pairing. But the test reads
+      // `state.deck[react_order].id()`, which is `nullopt` in the reacter's own
+      // game — so the reacter never evaluated it and never retargeted, and the
+      // two seats walked to different pairings. Giver-only information cannot
+      // choose among slots every seat has to agree on (§1g), which is what the
+      // `reacter_side_ok` line above has always said.
+      //
+      // Replay 2010246 T2 is the cost. will-bot67's rank 2 had two pairings: a
+      // direct `r1` whose reacter slot held a `y1` (both bucket 0, so illegal),
+      // and behind it a `y2` finesse. will-bot67 skipped to the finesse;
+      // will-bot69, unable to see its own card, took the `r1` pairing and played
+      // the wrong slot.
+      //
+      // So the giver simply may not give it, and every reader walks on shared
+      // information alone. The bucket remains what tells a reader what their card
+      // IS -- that half is below, and unchanged.
+      if (action.giver == state.our_player_index && !connector && !double_chuck &&
           !bucket_relation_holds(*state.variant, action.clue.kind, *actual,
                                  target.id) &&
           !both_know_their_own(game, react_order, target.order)) {
-        continue;
+        return std::nullopt;
       }
     }
 

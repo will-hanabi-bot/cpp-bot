@@ -1122,7 +1122,11 @@ Two candidate fixes, neither taken in v16.12.0:
   can name their own card from empathy alone, which is exactly the case §1d
   already allows a pairing to rest on. The walk rejects the pairing before that
   licence is ever consulted, because `receiver_targets` filters on playability
-  first.
+  first — and as of **v16.15.0** the licence moved further out of reach, since it
+  now sits inside the GIVER-only legality gate rather than in the walk. Waking it
+  means relaxing `receiver_targets`' playability filter, which is the shared half
+  of the walk and therefore the part every seat has to agree on. That is a bigger
+  change than this entry first assumed.
 
 The second is the smaller change and the one that matches the ruling the game was
 played under ("both the reacter and receiver know exactly what they are playing").

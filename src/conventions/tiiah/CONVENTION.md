@@ -31,7 +31,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0) |
-| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0) |
+| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0) |
 | Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
@@ -172,8 +172,8 @@ concerns all hold:
 | What | Which view, and how |
 |---|---|
 | which slot a stable clue names (§1b) | the giver and the RECEIVER's pairwise view — `SharedStacks`, a scoped swap of `play_stacks` / `playable_set` / `trash_set` around the delegation (`tiiah/interpret_clue.cpp:29-57`, installed `:250-266`), plus a `prev` swapped to match |
-| which slots a reactive clue pairs (§1c, §1d) | the giver and the REACTER's, since the reacter is the seat that must act — `stacks_known_to_both` into `reacter_faces` / `stacks_after_queued_plays` (`tiiah/interpret_reactive.cpp:204-213`, `variants/hole.cpp:10-22`) |
-| what a call SAYS the card is | the HOLDER's own belief when the holder is us — `repin_own_call` for a stable call (`tiiah/interpret_clue.cpp:76-110`) and the reacter's own reading of the pairing (`tiiah/interpret_reactive.cpp:288-330`) |
+| which slots a reactive clue pairs (§1c, §1d) | the giver and the REACTER's, since the reacter is the seat that must act — `stacks_known_to_both` into `reacter_faces` / `stacks_after_queued_plays` (`tiiah/interpret_reactive.cpp:231-240`, `variants/hole.cpp:10-22`) |
+| what a call SAYS the card is | the HOLDER's own belief when the holder is us — `repin_own_call` for a stable call (`tiiah/interpret_clue.cpp:76-110`) and the reacter's own reading of the pairing (`tiiah/interpret_reactive.cpp:318-390`) |
 | the §1f pin | `shared_view()` directly (`tiiah/interpret_clue.cpp:100`) |
 | §1b's stall context | `Game::shared_in_endgame` (`tiiah/interpret_clue.cpp:245-251`) |
 | the stable orange ladder's pitch-vs-chuck test | `State::shared_pace` (`reactor0/interpret_clue.cpp:519`), reached by delegating |
@@ -338,7 +338,7 @@ Dispatch is decided by the position **before** the clue. Asking the post-clue
 game instead makes every play clue to Bob answer "Bob has a known play", because
 the clue itself just gave him one.
 
-`interpret_reactive` (`src/conventions/tiiah/interpret_reactive.cpp:129-277`)
+`interpret_reactive` (`src/conventions/tiiah/interpret_reactive.cpp:176-411`)
 installs the waiting connection, stamps the reacter's blind play and leaves the
 receiver's own call for reaction time — the resolution machinery is reactor0's,
 shared.
@@ -387,12 +387,12 @@ its own identity, and it would read dead exactly when it is most alive
 
 All reactive clues are **even parity**: whichever button the reacter presses, the
 receiver is called to the same one (`wc.even_parity = true`,
-`src/conventions/tiiah/interpret_reactive.cpp:150`). The two slots are picked by
+`src/conventions/tiiah/interpret_reactive.cpp:197`). The two slots are picked by
 the sum rule as in reactor0 — `react_slot + target_slot ≡ anchor (mod hand size)`
-(`interpret_reactive.cpp:182`) — and **the anchor is reactor0's**: the rank value
+(`interpret_reactive.cpp:245-246`) — and **the anchor is reactor0's**: the rank value
 for a rank clue, and the colour's value from the fixed table
 (`include/hanabi/conventions/reactor0/colour_value.h`) for a colour clue
-(`anchor_of`, `interpret_reactive.cpp:27-33`).
+(`anchor_of`, `interpret_reactive.cpp:28-34`).
 
 The clue KIND then carries what the two cards ARE, which is the part a hidden
 stack cannot otherwise convey:
@@ -403,12 +403,12 @@ stack cannot otherwise convey:
 
 **The finesse and the bucket relation are disjoint by definition**, so a clue is
 never both and there is no precedence between them to settle. `required_target_bucket`
-/ `bucket_relation_holds` (`src/conventions/tiiah/interpret_reactive.cpp:51-68`)
+/ `bucket_relation_holds` (`src/conventions/tiiah/interpret_reactive.cpp:72-86`)
 are the relation; the finesse is a target one away, whose *connector* is the one
-card that bridges to it (`interpret_reactive.cpp:200-204`).
+card that bridges to it (`interpret_reactive.cpp:263-266`).
 
 What the reacter writes down is therefore one of three things
-(`interpret_reactive.cpp:249-268`):
+(`interpret_reactive.cpp:318-390`):
 
 | The pairing is | The reacter's card is read as |
 |---|---|
@@ -436,7 +436,7 @@ The relation has two ends, and the receiver reads theirs when the reaction
 resolves — not at clue time, because until the reacter acts they do not know
 which of their cards the sum rule names. Their card is the **union** of the same
 two readings, intersected with what it could already be
-(`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:325-401`,
+(`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:445-521`,
 called from the engine seam at `src/basics/decide.cpp:582-589`):
 
 - **the bucket** the reacter's sits one step from — one *lower* for a rank clue,
@@ -520,21 +520,37 @@ the clue encoded no identity.
 That fallback is a *reading* rule, so it creates superposed cards with nobody
 having played anything, and §1e's collapsing rules govern them the same way.
 
-The legality test therefore gates the **walk**, not the stamp
-(`interpret_reactive.cpp:226-233`): a pairing that is neither a finesse nor a
-bucket relation, and which the two players could not each name from their own
-empathy, is walked past and the next target tried. That is the shared half of
-§1g — the reacter walks past it too, so no seat is left behind.
+#### The relation is a legality test on the GIVER, not a filter on the walk
 
-The **giver-only** half keeps its own rule (`interpret_reactive.cpp:216-219`): if
-what the reacter is actually holding does not fit the pairing, the clue is
-refused outright rather than retargeted. The reacter cannot see their own card,
-so they would act on that pairing however wrong it is.
+The bucket relation is computed from the **reacter's own card**, which the
+reacter cannot see. So it splits in two, and v16.15.0 is where it was put on the
+right side of the line:
+
+| | who applies it | what it does |
+|---|---|---|
+| **legality** | the **giver**, alone | a pairing that is neither a finesse nor a bucket relation, and which the two players could not each name from their own empathy, makes the clue **illegal**. Alice may not give it (`interpret_reactive.cpp:288-311`) |
+| **inference** | every reader | what the reacter's and the receiver's cards ARE, from the bucket the *receiver's target* sits in — which every seat can see (`:365-390`, `narrow_receiver_call`) |
+
+So **the walk runs on shared information alone**, and every seat — the reacter
+included — lands on the same pairing. That is §1g: the relation is exactly the
+kind of giver-only fact that may refuse a clue and may not choose among its
+slots, which is the rule the line above it has always followed (if what the
+reacter is actually holding cannot fit the pairing at all, the clue is refused
+outright rather than retargeted).
+
+Until v16.15.0 a failed relation was a `continue` — it retargeted. Replay
+[2010246](https://hanab.live/shared-replay/2010246#2) T2 is what that cost.
+will-bot67's rank 2 had two pairings: yagami's directly playable `r1`, anchoring
+will-bot69's slot 2 which held a `y1` — both bucket 0, so illegal under a rank
+clue — and behind it a `y2` finesse anchoring slot 1. will-bot67 could see the
+`y1`, skipped the first pairing and gave the clue meaning the second. will-bot69
+could not see its own card, never evaluated the relation, and played **slot 2**:
+the pairing the giver had skipped. One clue, two seats, two slots.
 
 #### Inverted targets, and the double chuck
 
 **Inverted suits are skipped** as reactive targets, playables and finesses
-alike (`receiver_targets`, `src/conventions/tiiah/interpret_reactive.cpp:92-121`),
+alike (`receiver_targets`, `src/conventions/tiiah/interpret_reactive.cpp:135-166`),
 unless they are **the only playables left in the receiver's hand** — that test is
 over the receiver's hand, not the whole table — in which case the clue is a
 **double chuck** instead: both players press **Discard**, which is the button
@@ -542,7 +558,7 @@ that stacks an inverted card.
 
 A double chuck asks something different of the reacter, because they are not
 playing. What they hold has to be **affordable to chuck**
-(`safe_to_chuck`, `interpret_reactive.cpp:72-79`): either the button plays it —
+(`safe_to_chuck`, `interpret_reactive.cpp:93-99`): either the button plays it —
 an inverted card the stack is waiting for — or losing it costs the team nothing,
 which is any card that is not critical (trash included, since trash is never
 critical). Alice may not name a slot that fails this, and the refusal is a
@@ -808,6 +824,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_decision_making/test_ordinary_reactive_reading.cpp` | §2 — the decision layer reading an ordinary reactive: REACTIVE_PLAY, Bob reacting, Cathy receiving, and the bot giving it |
 | `tests/test_tiiah/test_reverse_reactive.cpp` | §1c — the target walk under stack simulation, a called card never retargeted, the dispatch reversing only when Bob has a known play and Cathy does not, and the sum rule picking the reacter's slot |
 | `tests/test_tiiah/test_bucket_encoding.cpp` | §1d — a rank clue naming the bucket below and a colour clue the bucket above, the spec's `{r4, y1}` worked example, a finesse naming its connector outright, and a pairing that breaks the relation going unread |
+| `tests/test_tiiah/test_bucket_legality.cpp` | §1d — the giver may not reach past a bucket-illegal pairing to a legal one behind it, and a reader (who cannot see the reacter's card) takes the first pairing regardless |
+| `tests/test_tiiah/test_replay_2010246_illegal_bucket_pairing_not_retargeted.cpp` | the live game the retargeting desynced, replayed |
 | `tests/test_tiiah/test_reactions.cpp` | §1d — an inverted-only hand making the clue a double chuck, a double chuck over a critical card refused, and both parities resolving: the receiver is called to the button the reacter pressed |
 | `tests/test_tiiah/test_rainbowy.cpp` | §1f — a colour clue naming its own suit rather than the rainbowy one, a rank clue left alone, the re-pin when the own suit is finished, and a superpositioned giver read as though they had not played |
 | `tests/test_tiiah/test_superposition.cpp` | §1e — a set recorded for our own and a partner's ambiguous play, a known play creating none and advancing both views, the two views diverging on a partner's play, a shared collapse, and the shared view staying absent outside the variant |

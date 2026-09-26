@@ -420,7 +420,9 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2008489_reacter_reads_its_own_stacks.cpp
   tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp
   tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp
+  tests/test_tiiah/test_replay_2010246_illegal_bucket_pairing_not_retargeted.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
+  tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp
 )

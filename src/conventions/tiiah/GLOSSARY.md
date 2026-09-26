@@ -98,6 +98,16 @@ re-indexed from 0, and the map is keyed on how many remain — 3 → one suit ea
 `suit_buckets` / `bucket_of`, `src/conventions/tiiah/buckets.cpp`.
 CONVENTION.md §1a.
 
+The **relation** between two buckets — the receiver's target one higher than the
+reacter's card for a rank clue, one lower for a colour one — does two jobs, and
+since v16.15.0 they are kept apart. It is a **legality** test on the GIVER: a
+pairing that breaks it (and is neither a finesse nor a double chuck, and which
+the two players could not each name anyway) is a clue Alice may not give. It is
+**not** a filter on the walk, because it reads the reacter's own card, which the
+reacter cannot see — steering the walk with it made the giver and the reacter
+name different slots (replay 2010246 T2). For readers it is purely the
+**inference**: what the two called cards are. CONVENTION.md §1d.
+
 ### known play
 A card stamped `CALLED_TO_PLAY` whose inference still holds at least one good
 playable identity, **or** a card whose global empathy is entirely playable
