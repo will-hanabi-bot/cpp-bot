@@ -409,6 +409,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_gate_and_clues.cpp
   tests/test_tiiah/test_superposition.cpp
   tests/test_tiiah/test_pairwise_stacks.cpp
+  tests/test_tiiah/test_conditional_reading.cpp
   tests/test_tiiah/test_reverse_reactive.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
   tests/test_tiiah/test_receiver_bucket.cpp
@@ -416,6 +417,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp
   tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp
   tests/test_tiiah/test_replay_2008489_reacter_reads_its_own_stacks.cpp
+  tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp

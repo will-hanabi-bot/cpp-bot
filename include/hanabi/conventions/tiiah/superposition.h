@@ -11,13 +11,46 @@
 // needs the same bookkeeping.
 #pragma once
 
+#include <utility>
+#include <vector>
+
 #include "hanabi/basics/action.h"
+#include "hanabi/basics/identity.h"
+#include "hanabi/basics/state.h"
 
 namespace hanabi {
 class Game;
 }
 
 namespace hanabi::tiiah {
+
+// One of the worlds a seat's outstanding hole plays leave open: an assignment
+// of one identity to each of them, and the stacks that assignment produces.
+struct OpenWorld {
+  std::vector<std::pair<int, Identity>> assignment;
+  State state;
+};
+
+// The worlds `holder`'s cards still in the hole leave open, starting from
+// `base` and applying each assignment in PLAY ORDER so a chain lands
+// (CONVENTION.md §1e).
+//
+// Exactly one world — `base` with an empty assignment — when the holder has
+// nothing in the hole, which keeps every reading that calls this unchanged
+// until somebody plays a card they cannot name. Also one when the product would
+// exceed `cap`: a partial enumeration would read as a conditional set that is
+// missing worlds, which is worse than reading it unconditionally.
+std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
+                                   int holder, int cap = 64);
+
+// The other half of a conditional reading: an antecedent has narrowed to
+// `still`, so every world it contradicts is gone, and so is every candidate that
+// had no other world left to stand in (`ConvData::ConditionalReading`).
+//
+// Called whenever a superposition narrows or settles — from
+// `collapse_superpositions` and from its `settle`, which has to do it before it
+// clears the set. Returns whether anything moved.
+bool refute_worlds(Game& game, int antecedent, const IdentitySet& still);
 
 // Called from `Game::handle_action` with the RAW wire action, before
 // `resolve_hidden_action` has filled in what we could see. A play that reached

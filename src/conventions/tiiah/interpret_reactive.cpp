@@ -9,6 +9,7 @@
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "hanabi/conventions/tiiah/buckets.h"
+#include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/variants/predicates.h"
@@ -95,6 +96,28 @@ bool safe_to_chuck(const State& state, const State& after, Identity id) {
     return true;
   }
   return !state.is_critical(id);
+}
+
+// Keep the conditional half of a reading, so a later fact can withdraw it.
+//
+// Only the candidates that some world declines to support are worth recording:
+// one every world agrees on is unconditional, and one the enumeration collapsed
+// to a single world is not conditional on anything either.
+void record_conditional(Game& game, int order,
+                        const std::vector<OpenWorld>& worlds,
+                        const std::vector<std::pair<Identity, std::uint64_t>>& support) {
+  if (worlds.size() <= 1) return;
+  const std::uint64_t all = (worlds.size() >= 64)
+                                ? ~0ULL
+                                : ((1ULL << worlds.size()) - 1);
+  ConvData::ConditionalReading cond;
+  for (const auto& [id, mask] : support) {
+    if ((mask & all) == all) continue;  // every world agrees: no condition
+    cond.support.emplace_back(id, mask);
+  }
+  if (cond.support.empty()) return;
+  for (const OpenWorld& w : worlds) cond.worlds.push_back(w.assignment);
+  game.with_meta(order, [&cond](ConvData& m) { m.conditional = cond; });
 }
 
 // "Both players would know exactly what they are playing" — the licence that
@@ -318,15 +341,47 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         // green target gives the reacter `{r4, y1}` — the playables of bucket 0.
         const int from = action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
                                                             : (*want + 1) % 3;
-        const IdentitySet allowed = IdentitySet::create([&](Identity i) {
-          auto b = bucket_of(*state.variant, i.suit_index);
-          return b && *b == from && own.is_playable(i);
-        });
+        // ...in every world the reacter's OWN hole plays leave open (§1e). A
+        // seat that threw a card it could not name does not know its own
+        // stacks, so "the playables of bucket 0" is a different set in each
+        // world, and the honest reading is their union. Replay 2009367 T4:
+        // will-bot69 threw an `{r1, y1}` at T2, so bucket 0 reads
+        // `{r1, y1, r2, y2}` -- the `r2` only in the world where that card was
+        // the `r1`. Exactly one world, and this is the old single-state read,
+        // until somebody plays into the hole without knowing what they played.
+        const auto worlds = open_worlds(game, own, reacter);
+        IdentitySet allowed = IdentitySet::empty();
+        std::vector<std::pair<Identity, std::uint64_t>> support;
+        for (std::size_t w = 0; w < worlds.size(); ++w) {
+          const IdentitySet here = IdentitySet::create([&](Identity i) {
+            auto b = bucket_of(*state.variant, i.suit_index);
+            return b && *b == from && worlds[w].state.is_playable(i);
+          });
+          allowed = allowed.union_with(here);
+          for (Identity i : here) {
+            auto it = std::find_if(support.begin(), support.end(),
+                                   [i](const auto& p) { return p.first == i; });
+            if (it == support.end()) {
+              support.emplace_back(i, 1ULL << w);
+            } else {
+              it->second |= (1ULL << w);
+            }
+          }
+        }
         if (game.common.thoughts[react_order]
                 .possibilities()
                 .intersect(allowed)
                 .non_empty()) {
+          // Undo the stamp helper's narrowing before applying ours, the same way
+          // `reactor0::narrow_to_stamped_button` does: `stamp_react_play_button`
+          // narrowed to the playables of ONE state, which is the single-world
+          // reading this is here to widen, and `narrow_thought` alone could
+          // never get past it. Rule 1 constrains the net effect of an
+          // interpretation, not the writes inside it.
+          const Thought& t0 = game.common.thoughts[react_order];
+          if (t0.old_inferred) game.reset_thought_to(react_order, *t0.old_inferred);
           game.narrow_thought(react_order, allowed);
+          record_conditional(game, react_order, worlds, support);
         }
       }
     }

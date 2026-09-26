@@ -32,7 +32,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0) |
-| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
 | Naming the called card (§2a) | implemented (v16.7.0) |
@@ -525,8 +525,49 @@ purple 1 or a teal 1, nothing else has been played, and Cathy holds
 That rule and §1.3's shared view are **the same rule** (v16.4.0): a superposed
 play never advanced `common_play_stacks`, so a walk that runs on the shared view
 is already assuming none of them were played. `stacks_after_queued_plays` starts
-there (`src/conventions/variants/hole.cpp:12-17`), so every seat walks the same
+there (`src/conventions/variants/hole.cpp:10-22`), so every seat walks the same
 simulation however many cards have gone into the hole unnamed.
+
+#### What a card means depends on what you threw away (v16.13.0)
+
+A seat that threw a card into the hole without naming it **does not know its own
+stacks**. So a call on a later card of theirs does not name one identity — it
+names a different one in each world the earlier card leaves open, and what they
+may write down is the **union**:
+
+> **worlds** = every assignment of one identity to each of the holder's cards
+> still in the hole, applied in play order. Read the call in each; the reading is
+> the union, and each candidate remembers which worlds supported it.
+
+[2009367](https://hanab.live/shared-replay/2009367) T4 is the case. will-bot69
+threw an `{r1, y1}` at T2, and yagami's rank-5 reactive then names bucket 0 on
+its slot 4:
+
+| if the T2 card was… | red | yellow | bucket 0 offers |
+|---|---|---|---|
+| `r1` | 1 | 0 | `{r2, y1}` |
+| `y1` | 0 | 1 | `{r1, y2}` |
+
+so the reading is **`{r1, y1, r2, y2}`**, with the `r2` living only in the first
+world and the `y2` only in the second. Before v16.13.0 it read `{r1, y1}` — the
+answer in the one world nobody had established they were in. (It was in fact the
+`y1`, so the narrow reading was lucky rather than earned.)
+
+A candidate every world agrees on is unconditional and nothing is recorded for
+it. The rest are kept in `ConvData::ConditionalReading`
+(`include/hanabi/basics/card.h:173-199`) beside the superposition itself, which
+is what lets a later fact **withdraw** them: when the earlier card settles, the
+worlds it contradicts die and the candidates with no world left go with them
+(`refute_worlds`, `src/conventions/tiiah/superposition.cpp:19-87`, called from
+the collapse below and from `settle` before it clears the set).
+
+Two limits, both deliberate. The enumeration is **capped at 64 worlds**
+(`open_worlds`, `:306-339`) and reads the call flat beyond that, because a
+partial list of worlds would be a conditional set missing some of its own
+conditions — worse than an unconditional one. And the collapse now runs to a
+**fixpoint**, since settling one card can refute another's worlds, leave *it* a
+singleton, and settle it in turn; a single pass over the orders only caught a
+cascade that happened to run in increasing order.
 
 The set is stamped on the card's `ConvData` (`include/hanabi/basics/card.h:169`)
 at the moment of the play, by `note_hidden_action`
@@ -699,6 +740,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp` | the live game it was missing in, replayed |
 | `tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp` | §1d's negative half — our own hidden play read as a play rather than a discard, so a later referential discard on the same hand survives |
 | `tests/test_tiiah/test_pairwise_stacks.cpp` | §1.3 — a partner's blind play reaching every row but theirs, our own reaching none, a known play reaching all, the prefix rule blocking a row on the card it never saw, and the symmetry of `stacks_known_to_both` |
+| `tests/test_tiiah/test_conditional_reading.cpp` | §1e's worlds — one world when nothing is in the hole, one per candidate when something is, whose seat they belong to, two cards multiplying and chaining in play order, and the cap reading it flat |
+| `tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp` | §1e — the live game it was narrow in, and the cascade that withdraws the conditional half |
 | `tests/test_tiiah/test_replay_2008489_reacter_reads_its_own_stacks.cpp` | §1.3 + §1e — the reacter reading its own stacks rather than the giver's stale ones, and the back-solve recovering the blue it threw in the hole |
 | `tests/test_tiiah/test_ordinary_reactive.cpp` | §1c's dispatch table — a clue to Cathy reactive with Bob reacting, the sum rule and bucket naming his slot 3 as `{r1, y1}`, the reacter playing it, and the reverse position keeping a clue to Cathy stable |
 | `tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp` | the live game it was missing in, replayed |

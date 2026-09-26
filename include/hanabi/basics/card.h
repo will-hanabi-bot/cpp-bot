@@ -170,6 +170,34 @@ struct ConvData {
 
   bool superposed() const { return superposition.non_empty(); }
 
+  // THROW IT IN A HOLE: the reading on this card was CONDITIONAL on what its
+  // holder threw in the hole earlier (tiiah/CONVENTION.md §1e).
+  //
+  // A seat that played a card it could not name does not know its own stacks, so
+  // a call on a later card means different identities in each world its earlier
+  // superpositions leave open. The honest reading is the union of those, and
+  // this records which world each candidate needed, so that settling the earlier
+  // card takes the candidates that depended on it away with it.
+  //
+  // Worked example, replay 2009367 T4: will-bot69 threw an `{r1, y1}` at T2, so
+  // when a reactive names bucket 0 on its slot 4 the reading is `{r1, y1, r2,
+  // y2}` — the `r2` in the world where the earlier card was the `r1`, the `y2`
+  // in the world where it was the `y1`.
+  //
+  // Absent when the reading needed no world but the one we are in, which is
+  // every card until somebody plays into the hole without knowing what they
+  // played -- and in every other variant.
+  struct ConditionalReading {
+    // Each world assigns one identity to each earlier hole-played order.
+    std::vector<std::vector<std::pair<int, Identity>>> worlds;
+    // Per candidate, the worlds that support it; bit i is `worlds[i]`. A
+    // candidate supported by every world is unconditional and is not listed.
+    std::vector<std::pair<Identity, std::uint64_t>> support;
+
+    bool operator==(const ConditionalReading&) const = default;
+  };
+  std::optional<ConditionalReading> conditional;
+
   bool cm() const { return status == CardStatus::CHOP_MOVED; }
 
   bool bluffed() const {

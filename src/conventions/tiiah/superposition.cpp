@@ -8,6 +8,85 @@
 
 namespace hanabi::tiiah {
 
+// An antecedent has narrowed, so every world it contradicts is gone — and with
+// them the candidates that had no other world left to stand in (§1e).
+//
+// This is the half of the conditional reading that has to run at collapse time:
+// producing the set is one job, and withdrawing the part of it that a later
+// fact refutes is the other. Replay 2009367 T4: the `r2` on will-bot69's slot 4
+// lives only in the world where the card it threw at T2 was the `r1`, so if that
+// card ever settles on the `y1`, the `r2` goes with it.
+bool refute_worlds(Game& game, int antecedent, const IdentitySet& still) {
+  bool changed = false;
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    if (!game.meta[o].conditional) continue;
+    const ConvData::ConditionalReading& cond = *game.meta[o].conditional;
+
+    std::uint64_t dead = 0;
+    for (size_t w = 0; w < cond.worlds.size(); ++w) {
+      for (const auto& [ord, id] : cond.worlds[w]) {
+        if (ord == antecedent && !still.contains(id)) {
+          dead |= (1ULL << w);
+          break;
+        }
+      }
+    }
+    if (dead == 0) continue;
+
+    // Compact the survivors, so a second refutation composes with this one.
+    ConvData::ConditionalReading next;
+    std::vector<int> remap(cond.worlds.size(), -1);
+    for (size_t w = 0; w < cond.worlds.size(); ++w) {
+      if (dead & (1ULL << w)) continue;
+      remap[w] = static_cast<int>(next.worlds.size());
+      next.worlds.push_back(cond.worlds[w]);
+    }
+    IdentitySet doomed = IdentitySet::empty();
+    for (const auto& [id, mask] : cond.support) {
+      std::uint64_t live = 0;
+      for (size_t w = 0; w < cond.worlds.size(); ++w) {
+        if ((mask & (1ULL << w)) && remap[w] >= 0) live |= (1ULL << remap[w]);
+      }
+      if (live == 0) {
+        doomed = doomed.add(id);
+      } else {
+        next.support.emplace_back(id, live);
+      }
+    }
+
+    const IdentitySet& live_set = game.meta[o].superposed()
+                                      ? game.meta[o].superposition
+                                      : game.common.thoughts[o].inferred;
+    const IdentitySet kept = live_set.difference(doomed);
+    // The same guard the shared rules carry: a reading is a reading, and one
+    // refuted down to nothing is evidence that something else is wrong, not a
+    // licence to assert a contradiction.
+    if (doomed.non_empty() && kept.non_empty()) {
+      if (game.meta[o].superposed()) {
+        game.with_meta(o, [kept](ConvData& m) { m.superposition = kept; });
+      } else {
+        game.with_thought(o, [&kept](const Thought& t) {
+          Thought out = t;
+          out.old_inferred = t.inferred;
+          out.inferred = kept;
+          return out;
+        });
+      }
+      changed = true;
+    }
+    const bool spent = next.worlds.size() <= 1 || next.support.empty();
+    game.with_meta(o, [&next, spent](ConvData& m) {
+      if (spent) {
+        m.conditional.reset();
+      } else {
+        m.conditional = next;
+      }
+    });
+  }
+  return changed;
+}
+
+
 namespace {
 
 // The one identity in a set, or nullopt when it holds none or several.
@@ -120,6 +199,9 @@ void advance_pairwise(Game& game, Identity id, int player, bool self_knew) {
 void settle(Game& game, int order, Identity id, bool shared) {
   const State& s = game.state;
   const bool ours = s.holder_of(order) == s.our_player_index;
+  // Before the set is cleared below: anything whose reading leaned on this card
+  // being something else has just lost that world (§1e).
+  refute_worlds(game, order, IdentitySet::single(id));
   if (shared && playable_on(s, s.common_play_stacks, id)) {
     game.with_state([id](State& st) { st = st.with_common_play(id); });
   }
@@ -221,6 +303,41 @@ bool back_solve_own_plays(Game& game, const Game& prev, const Action& action) {
 
 }  // namespace
 
+std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
+                                   int holder, int cap) {
+  std::vector<OpenWorld> out;
+  out.push_back(OpenWorld{{}, base});
+  if (!game.state.variant->throw_it_in_a_hole) return out;
+
+  // Oldest first: they were played in that order, and a chain only lands if it
+  // is replayed in it.
+  std::vector<int> pending;
+  std::size_t product = 1;
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    if (!game.meta[o].superposed()) continue;
+    if (game.state.holder_of(o) != holder) continue;
+    pending.push_back(o);
+    product *= static_cast<std::size_t>(game.meta[o].superposition.length());
+    if (product > static_cast<std::size_t>(cap)) return out;  // read it flat
+  }
+
+  for (int o : pending) {
+    std::vector<OpenWorld> next;
+    for (const OpenWorld& w : out) {
+      for (Identity id : game.meta[o].superposition) {
+        OpenWorld n = w;
+        n.assignment.emplace_back(o, id);
+        // A play that did not land struck instead, and the stacks stay put --
+        // which is a world too.
+        if (n.state.is_playable(id)) n.state = n.state.with_play(id);
+        next.push_back(std::move(n));
+      }
+    }
+    out = std::move(next);
+  }
+  return out;
+}
+
 void note_hidden_action(Game& game, const Action& raw) {
   if (!game.state.variant->throw_it_in_a_hole) return;
   // Only a card that reached the HOLE can be a superposition; a discard is
@@ -267,6 +384,13 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
   const Evidence ev = evidence_from(prev, game, action);
   bool changed = false;
 
+  // To a FIXPOINT, because the rules feed each other: settling one card refutes
+  // worlds on another, which can leave that one a singleton, which settles it in
+  // turn. A single forward pass over the orders would only ever catch a cascade
+  // that happened to run in increasing order.
+  bool again = true;
+  for (int pass = 0; again && pass < 8; ++pass) {
+    again = false;
   for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
     if (!game.meta[o].superposed()) continue;
     const int owner = game.state.holder_of(o);
@@ -283,11 +407,14 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
     }
     if (shared != game.meta[o].superposition) {
       changed = true;
+      again = true;
       game.with_meta(o, [shared](ConvData& m) { m.superposition = shared; });
+      if (refute_worlds(game, o, shared)) changed = true;
     }
     if (auto only = only_one(shared)) {
       settle(game, o, *only, /*shared=*/true);
       changed = true;
+      again = true;
       continue;
     }
 
@@ -301,7 +428,9 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
     if (auto only = only_one(mine)) {
       settle(game, o, *only, /*shared=*/false);
       changed = true;
+      again = true;
     }
+  }
   }
 
   if (back_solve_own_plays(game, prev, action)) changed = true;

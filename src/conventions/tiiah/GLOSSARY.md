@@ -48,6 +48,22 @@ its own plays and recovers them by the *back-solve*. Like any stack it advances
 through the prefix, so a play a row never saw blocks everything above it.
 CONVENTION.md §1.3, `tests/test_tiiah/test_pairwise_stacks.cpp`.
 
+### world
+One assignment of an identity to each card a seat still has in the hole. A seat
+that threw a card without naming it does not know its own stacks, so a call on a
+later card of theirs means something different in each world, and the reading is
+the **union** over them — with a note of which worlds each candidate needed, so
+that settling the earlier card withdraws the rest. `open_worlds` /
+`refute_worlds` (`src/conventions/tiiah/superposition.cpp`), stored in
+`ConvData::ConditionalReading`. Capped at 64: beyond that the call is read flat,
+because a partial list of worlds is a conditional reading missing some of its own
+conditions. CONVENTION.md §1e.
+
+### conditional reading
+A reading that holds only in some *worlds* — e.g. `{r1, y1, r2, y2}` where the
+`r2` needs the earlier hole card to have been the `r1`. The candidates every
+world agrees on are unconditional and are not recorded. Replay 2009367 T4.
+
 ### back-solve
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below

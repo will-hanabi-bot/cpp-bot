@@ -374,6 +374,39 @@ json build_debug_section(const Game& game) {
   }
   dbg["hands"] = std::move(hands);
 
+  // THROW IT IN A HOLE: the cards in the hole whose own player never learned
+  // what they were, and any reading that is conditional on one of them
+  // (tiiah/CONVENTION.md §1e). Neither shows up in `hands` above — a superposed
+  // card has left its hand — and a conditional reading is unreadable in a log
+  // without the worlds it was computed from. Logged since v16.13.0.
+  json superposed = json::array();
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    const ConvData& m = game.meta[o];
+    if (!m.superposed() && !m.conditional) continue;
+    json e;
+    e["order"] = o;
+    if (o < static_cast<int>(s.holders.size())) e["holder"] = s.holders[o];
+    if (m.superposed()) e["superposition"] = m.superposition.bits();
+    if (m.conditional) {
+      json worlds = json::array();
+      for (const auto& w : m.conditional->worlds) {
+        json assignment = json::array();
+        for (const auto& [ord, id] : w) {
+          assignment.push_back(json::array({ord, id.suit_index, id.rank}));
+        }
+        worlds.push_back(std::move(assignment));
+      }
+      json support = json::array();
+      for (const auto& [id, mask] : m.conditional->support) {
+        support.push_back(json::array({id.suit_index, id.rank, mask}));
+      }
+      e["worlds"] = std::move(worlds);
+      e["support"] = std::move(support);
+    }
+    superposed.push_back(std::move(e));
+  }
+  if (!superposed.empty()) dbg["superpositions"] = std::move(superposed);
+
   // Waiting reactive connections.
   json waiting = json::array();
   for (const auto& wc : game.waiting) {

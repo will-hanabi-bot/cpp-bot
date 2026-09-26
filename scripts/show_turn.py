@@ -155,6 +155,28 @@ def render_state(rec: dict[str, Any]) -> None:
             print(f"      slot {slot}: order={order:4d} {clued}{focused}{urgent} {status:20s} "
                   f"{id_str:10s} inf={empathy}  poss={possible}")
 
+    # Throw It in a Hole: cards in the hole whose player never learned what they
+    # were, plus any reading that is conditional on one of them.
+    sup = dbg.get("superpositions") or []
+    if sup:
+        print("  superpositions (cards in the hole):")
+        for e in sup:
+            bits = e.get("superposition")
+            line = f"    order {e['order']:4d} held by {e.get('holder')}"
+            if bits is not None:
+                line += f"  could be {decode_empathy(int(bits))}"
+            print(line)
+            worlds = e.get("worlds")
+            if worlds:
+                for i, assignment in enumerate(worlds):
+                    parts = [f"ord{o}={decode_empathy(1 << (si * 5 + r - 1))}"
+                             for o, si, r in assignment]
+                    print(f"      world {i}: " + ", ".join(parts))
+                for si, r, mask in e.get("support", []):
+                    who = [str(i) for i in range(len(worlds)) if mask >> i & 1]
+                    tag = decode_empathy(1 << (si * 5 + r - 1))
+                    print(f"      {tag} needs world(s) {','.join(who)}")
+
     waiting = dbg.get("waiting", [])
     if waiting:
         print("  waiting connections:")
