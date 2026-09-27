@@ -64,6 +64,28 @@ FixResult check_fix(const Game& prev, const Game& game, const ClueAction& action
   return FixResultNone{};
 }
 
+std::optional<int> dead_call_fix(const Game& before, const Game& after, int clued) {
+  const State& s = after.state;
+  if (!s.variant->throw_it_in_a_hole) return std::nullopt;
+  if (clued < 0 || clued >= static_cast<int>(s.hands.size())) return std::nullopt;
+  // The deadness is asked of the view every seat shares, which is what makes the
+  // clue mean one thing at all three of them.
+  const State shared = s.shared_view();
+  for (int order : s.hands[clued]) {
+    if (order >= static_cast<int>(before.meta.size())) continue;
+    if (order >= static_cast<int>(before.common.thoughts.size())) continue;
+    if (before.meta[order].status != CardStatus::CALLED_TO_PLAY) continue;
+    // The holder could not tell. A call already down to one identity needs no fix:
+    // either it is fine or the ordinary invariants have dropped it already.
+    if (before.common.thoughts[order].possibilities().length() < 2) continue;
+    const IdentitySet now = after.common.thoughts[order].possibilities();
+    if (now.length() != 1) continue;
+    if (!shared.is_basic_trash(now.head())) continue;
+    return order;
+  }
+  return std::nullopt;
+}
+
 std::optional<IdentitySet> distribution_clue(const Game& prev, const Game& game,
                                                 const ClueAction& action, int focus) {
   const State& state = game.state;

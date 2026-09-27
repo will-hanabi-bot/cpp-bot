@@ -14,7 +14,10 @@ unseen can read as unplayable to every seat at once (§1.3) — **45**, the
 receiver's bucket narrowing being wired only into the play path (§1d), **46**, one
 WC field serving two frames (§1.3), **48**, the shared view not being identical at
 every seat (§1.3), **49**, a finesse pairing read wider than it needs to be (§1d),
-and **50**, the world cap abandoning a whole floor (§1.3).
+**50**, the world cap abandoning a whole floor (§1.3), **51**, the refusal lacking
+the tier-gate exemption the fix clue has (§1h), **52**, a shared call judged dead on
+a private view — the reason 2010512's strike is still unfixed (§1h) — and **53**, the
+envelope form of a negative-touch fix (§1h).
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -39,6 +42,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
+| The fix clue (§1h) | implemented (v16.20.0) |
 | Naming the called card (§2a) | implemented (v16.7.0) |
 
 What has **not** been decided is the endgame: the solver declines to solve a
@@ -944,6 +948,70 @@ The rainbowy suit is the one carrying `rainbowish` (Rainbow, Omni), `muddy`
 one. The non-orange proviso is defensive: no TIIAH variant pairs an inverted suit
 with a rainbowy one, so the guard has nothing to exclude today.
 
+### §1h The fix clue (v16.20.0)
+
+A standing call can go bad, and in this variant it can go bad without the holder
+being able to tell. A card called to play may be a **duplicate** — the identity has
+since gone down — while the holder's own reading still admits a good identity beside
+the dead one. Left alone they play it and strike.
+
+> **A card in a partner's hand carries a standing call; the card the giver can see is
+> dead; the holder's inference still admits more than one identity, one of them that
+> dead card. Then ANY stable clue whose net information — positive touch or negative —
+> narrows that card to exactly the dead identity is a FIX CLUE.** It supersedes the
+> other stable meanings; the holder withdraws the call and treats the card as known
+> trash.
+
+The condition divides in two, and where each half sits is the whole design:
+
+- **that the identity is dead is COMMON knowledge**, asked of the shared view — which
+  is what makes the clue mean one thing at all three seats;
+- **that THIS card is that identity is the giver's sight**, and the clue is the thing
+  that transfers it.
+
+`dead_call_fix` (`src/basics/fix.cpp:67-87`) is the shared half, read by
+`tiiah::interpret_clue` (`tiiah/interpret_clue.cpp:318-321`) **after** the dispatch,
+so only a stable clue can be one — the discriminator §1c's refusal uses. The giver's
+half is `clue_fixes_dead_call` (`reactor0/decision.cpp:736-743`). It lives in the
+engine's fix module rather than in either convention because both of them ask it and
+neither may reach into the other.
+
+**Nothing else needs doing to the card.** `Game::on_clue` has already narrowed it —
+its untouched branch differences out the clue's identities exactly as its touched
+branch intersects them, so a clue that MISSES the card narrows it just as one that
+hits it does — and `drop_dead_play_calls` then withdraws the call at every seat, since
+an all-trash inference is all-trash in every seat's belief once the shared view says
+so. What the reading adds is the one thing only it can: that the clue means the fix
+and **not** what the ladders would have said.
+
+Worked from the four clues replay [2010512](https://hanab.live/shared-replay/2010512)
+offered will-bot67 at T11, against will-bot69's `{y2,p1}` call on a `p1` with purple
+already on 2. **Rank 1** and **colour purple** touch the card and narrow it
+positively; **colour yellow** and **rank 2** never touch it and narrow it by negative
+touch. All four leave `{p1}`.
+
+**It supersedes rather than riding along**, unlike the refusal, which is an envelope.
+That is the ruling, and the cost is real: a negative-touch fix discards whatever the
+ladder would have read into the cards it *did* touch, so a colour yellow that fixes
+one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
+
+**Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
+and rung 3 — `rung_2b` (`reactor0/decision.cpp:1357-1361`), logged as `2b.fix`. Step 1
+is above the pending reaction because a fix is not an alternative to anything: left
+ungiven it is a strike. It also carries an exemption from the tier gate that the
+refusal does not (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm
+of `clue_tier`, and would otherwise be dropped for every OCCUPIED Alice — which is
+precisely the position at T11.
+
+**What this does NOT fix, and why 2010512's strike still happens.** By the time
+will-bot67 could have given one, its own model of will-bot69's call had already been
+withdrawn: `drop_dead_play_calls` judged the call dead on **will-bot67's private
+belief** at T4, while will-bot69 kept it because *its* belief made the `y2` playable.
+So the giver no longer believed there was a call to fix, and will-bot69 played the card
+from its own pitch list rather than from a call at all. The rule above is sound and
+implemented; the game needs the invariant to judge a shared commitment on the shared
+view, which is TODO.md 52.
+
 ## §2 Decision making — reactor0's, with the roles asked rather than assumed
 
 **[reactor0's DECISION_MAKING.md](../reactor0/DECISION_MAKING.md) is the ruling
@@ -1040,6 +1108,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_row_from_own_worlds.cpp` | §1.3 — two `{g1,b1}` holes raising their owner's row, one hole raising nothing for its owner but still reaching the seat that watched it, a lone hole raising the row when only one world lands, and our own hole card withholding that claim |
 | `tests/test_tiiah/test_pair_visible_copies.cpp` | §1e rule 3's pair form — copies outside the pair settling for the pair (and not for the seat holding them), and a copy in the partner's own hand not counting |
 | `tests/test_tiiah/test_replay_2010329_the_frame_is_the_pair_not_the_team.cpp` | §1d's frame — the live game the shared view cost: the pair's row, the call surviving Rule 5, the `{g2,b2}` reading, and the `b2` played |
+| `tests/test_tiiah/test_fix_clue.cpp` | §1h — a negative-touch fix and a positive-touch fix both read FIX and leave the card at the dead identity with its call gone; and three controls: a live identity, a call already named, and no call at all |
+| `tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp` | §1h's priority — a fix given while Alice is OCCUPIED and every candidate is LOW (the tier-gate exemption), and the control where nothing needs fixing and she actions her own call |
 | `tests/test_tiiah/test_reacter_play_read_by_the_receiver.cpp` | §1d's reacter half at the RECEIVER's seat — one playable in the bucket resolving the card and advancing the shared stacks, two narrowing without resolving, and the giver's seat keeping the reading it already had |
 | `tests/test_tiiah/test_replay_2010512_receiver_reads_the_reacter_play.cpp` | the live game it cost: both of yagami's blind plays resolved, purple on 2 in the shared view, the row at `[1,1,0,1,2]`, and the reactive answered on slot 4 instead of read as a MISTAKE |
 | `tests/test_tiiah/test_replay_2010296_partner_play_is_presumed_to_land.cpp` | the live game the invented strike cost, replayed: the settle, the stacks, and the `{p1}` it unblocks |

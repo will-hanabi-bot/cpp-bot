@@ -225,6 +225,22 @@ struct ClueCandidate {
   // outranks the pending reaction in `choose_very_high_clue` rather than sitting
   // in a rung, where our own urgent call would always have beaten it.
   bool refuses_dead_target = false;
+  // Throw It in a Hole only: is this clue a FIX — telling the holder of a
+  // standing call that the card it names is dead (tiiah/CONVENTION.md §1h,
+  // v16.20.0)?
+  //
+  // The holder cannot see its own card and its inference still admits a good
+  // identity alongside the dead one, so left alone it plays the dead one and
+  // strikes. Any clue whose net information — positive touch or negative —
+  // narrows that card to exactly the dead identity says so.
+  //
+  // Like `refuses_dead_target` this joins Precedence step 1 rather than a tier,
+  // because a fix is not an alternative to anything: left ungiven it is a
+  // strike, so it has to be able to outrank our own pending reaction. Unlike the
+  // refusal it also exempts the candidate from the tier gate in
+  // `clue_is_admissible`, which reads `tier` alone and would drop every fix an
+  // OCCUPIED Alice could give.
+  bool fixes_dead_call = false;
 };
 
 // One `Game::simulate` per candidate — the same cost the deleted `eval_action`

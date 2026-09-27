@@ -66,6 +66,22 @@ call stands. Read by `read_refusal` and given via `clue_refuses_dead_target`,
 which joins Precedence step 1 because refusing is done instead of reacting.
 CONVENTION.md §1c, v16.14.0, replay 2009367 T6–T7.
 
+### fix clue
+A stable clue whose net information — positive touch or negative — narrows a partner's
+standing *call* to exactly one identity that the *common stacks* say is dead. It means
+"that call is a duplicate": the holder withdraws it and treats the card as known trash.
+
+Two halves, and where each is checked is the design. That the identity is dead is
+COMMON knowledge, so every seat reads the clue alike; that THIS card is that identity
+is the giver's sight, and the clue is what transfers it. `dead_call_fix`
+(`src/basics/fix.cpp`) is the shared half; `clue_fixes_dead_call`
+(`reactor0/decision.cpp`) adds the giver's.
+
+It **supersedes** the clue's ordinary stable meaning, where a *refusal* is an envelope
+and rides along with it. Priority: Precedence step 1, between rung 2 and rung 3
+(`rung_2b`, logged `2b.fix`), with an exemption from the tier gate the refusal does not
+have. CONVENTION.md §1h, v16.20.0, replay 2010512.
+
 ### world
 One assignment of an identity to each card a seat still has in the hole. A seat
 that threw a card without naming it does not know its own stacks, so a call on a

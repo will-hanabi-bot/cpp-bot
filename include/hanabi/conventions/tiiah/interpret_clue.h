@@ -18,12 +18,18 @@ namespace hanabi::tiiah {
 // `game.convention == Convention::TIIAH`. Returns the interpretation, or
 // nullopt for MISTAKE (the caller stamps it).
 //
-// v16.0.0 implements the STABLE half only, and implements it by delegating to
-// reactor0's ladders, which TIIAH shares unchanged. The reactive half — reverse
-// dispatch, the bucket encoding, superposition — is specified in CONVENTION.md
-// §1c and §1d and tracked in TODO.md; until it lands, a clue that would be
-// reactive reads as a MISTAKE and stamps nothing, which is the only honest
-// answer a convention can give about a meaning it does not yet implement.
+// The order it reads in, and why each step is where it is (CONVENTION.md):
+//
+//   1. the REFUSAL (§1c), ahead of the dispatch because it has to pre-empt it,
+//      and an envelope — it falls through to the ladders;
+//   2. the DISPATCH (§1c), both arms, the position deciding which;
+//   3. the FIX CLUE (§1h), stable-only by construction, and it SUPERSEDES the
+//      ladders rather than riding along;
+//   4. the STABLE ladders (§1b), reactor0's, read on the pair's stacks (§1.3),
+//      with §1f's re-pin on top.
+//
+// The stable half landed in v16.0.0 and the reactive half over v16.2.0-v16.9.0;
+// §0's status table is the current account of what is implemented.
 std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
                                          const ClueAction& action);
 

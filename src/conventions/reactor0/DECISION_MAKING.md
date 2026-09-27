@@ -347,7 +347,14 @@ Two things outrank the phases below, and one thing sits between them:
     have been the r5 the team still needed. The swap is weakly dominant, so
     unlike 0c it needs no carve-out for a solve that finished.
 
-1.  **A VERY HIGH tier clue**, if one is available.
+1.  **A VERY HIGH tier clue**, if one is available — and, in Throw It in a Hole,
+    a **REFUSAL** or a **FIX** whatever its tier. Both are done *instead of*
+    something the step below would otherwise do, so step 1 is the only place they
+    can sit: a refusal is given instead of reacting (tiiah §1c) and a fix is given
+    instead of anything at all, because left ungiven it is a strike (tiiah §1h).
+    Ranked against each other by the General Clue Evaluation List minus §4's
+    floor — priority 1, 2, **2b** (the fix), 3, then the default tiebreak. Only
+    the fix is also exempt from the tier gate; see 2b.
 
 2.  **A pending REACTION.**  If Alice holds a reacter-CTP — or, in a variant
     with an inverted suit, a reacter-CTD — she actions it.  Only a VERY HIGH
@@ -688,6 +695,28 @@ is judged from Alice's own inference, not common knowledge.
    filter unnecessary. The filter existed to stop a zero-play double discard
    beating a stable play clue to Bob; now it cannot, because every rung a double
    discard can reach sits below rung 3.1.
+
+2b. **Alice has a FIX available** — Throw It in a Hole only
+   ([tiiah/CONVENTION.md §1h](../tiiah/CONVENTION.md), v16.20.0). A partner holds a
+   standing call on a card Alice can see is dead, their own reading still admits a
+   good identity beside it, and this clue narrows that card to exactly the dead one.
+   Tiebreak: the default.
+
+   Labelled **2b** rather than renumbered, so the ~60 references to "priority 3",
+   "3.1"–"3.9" and "§4" across these documents and `decision.cpp`'s comments keep
+   meaning what they say.
+
+   Two things make it unlike the other entries, and both follow from a fix not being
+   an alternative to anything — left ungiven it is a strike on a card the team no
+   longer needs:
+
+   - it joins **Precedence step 1** (`choose_very_high_clue`), so it can outrank a
+     pending reaction, and this position is where it ranks *within* that step;
+   - it is **exempt from the tier gate** above (`clue_is_admissible`). A fix stamps
+     nothing and satisfies no arm of `clue_tier`, so it is always LOW; without the
+     exemption every fix an OCCUPIED Alice could give would be rejected. The REFUSAL,
+     which joins step 1 the same way, has no such exemption and can still be dropped
+     that way — TODO.md 51.
 
 3. **Bob's chop is worth a clue** (so in particular he is not locked) **and he
    has no safe play or discard.**

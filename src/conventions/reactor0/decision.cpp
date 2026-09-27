@@ -9,6 +9,7 @@
 
 #include "hanabi/basics/clue.h"
 #include "hanabi/basics/clue_result.h"
+#include "hanabi/basics/fix.h"
 #include "hanabi/basics/interp.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
@@ -717,6 +718,30 @@ bool clue_refuses_dead_target(const Game& game, const ClueAction& action) {
   return !dispatch_is_reactive(game, action);
 }
 
+// THROW IT IN A HOLE: would this clue be a FIX (tiiah/CONVENTION.md §1h)?
+//
+// A partner holds a standing call on a card we can see is dead, and their own
+// inference still admits a good identity alongside it — so they will play it. Any
+// clue that narrows that card to exactly the dead identity says so, whether it
+// touches the card or misses it.
+//
+// `dead_call_fix` is the half both seats share, and lives in the engine's fix
+// module because the reader asks the same question of the same two games. What is
+// added here is the half only the giver has: the card really IS the dead one.
+// Empathy can never exclude the truth, but an INFERENCE can, and a clue that
+// narrows a partner onto an identity their card is not would be a lie rather than a
+// fix.
+//
+// Variant-gated through `dead_call_fix`, so no reactor0 game can reach it.
+bool clue_fixes_dead_call(const Game& game, const Game& hypo,
+                          const ClueAction& action) {
+  const auto order = dead_call_fix(game, hypo, action.target);
+  if (!order) return false;
+  const auto seen = game.state.deck[*order].id();
+  if (!seen) return false;  // our own hand: we cannot see it, so we cannot fix it
+  return hypo.common.thoughts[*order].possibilities().contains(*seen);
+}
+
 std::vector<ClueCandidate> analyse_clues(
     const Game& game,
     const std::vector<std::pair<PerformAction, Action>>& all_clues) {
@@ -821,6 +846,7 @@ std::vector<ClueCandidate> analyse_clues(
     }
 
     c.refuses_dead_target = clue_refuses_dead_target(game, c.action);
+    c.fixes_dead_call = clue_fixes_dead_call(game, hypo, c.action);
 
     // Fill-ins, for rung 4.5. "Narrows" is judged from the TARGET's own view --
     // he is the one who learns something -- and counts both positive and
@@ -886,6 +912,17 @@ bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   if (!occupied && game.common.thinks_locked(game, s.our_player_index)) {
     return true;
   }
+  // A FIX is exempt at any pace and any occupation (tiiah/CONVENTION.md §1h,
+  // v16.20.0). The gate asks whether a clue is worth a turn given what Alice could
+  // do INSTEAD; a fix is not an alternative to anything, because left ungiven it is
+  // a strike on a card the team no longer needs. And it cannot pass the gate on its
+  // own merits: it stamps nothing and satisfies no arm of `clue_tier`, so it is
+  // always LOW, so an OCCUPIED Alice at any positive pace would have every fix she
+  // could give rejected -- which is exactly the position replay 2010512 was in at
+  // T11 (`occupied: true`, pace 10, and the log's `tier_gate_rejected_all`).
+  //
+  // The REFUSAL has no such exemption and can still be dropped this way; TODO.md 51.
+  if (c.fixes_dead_call) return true;
   // The two rules take DIFFERENT pace thresholds, and the difference is the
   // whole point.
   //
@@ -1306,6 +1343,23 @@ bool priority_3_applies(const Game& g) {
 
 namespace {
 
+// --- priority 2b: a FIX (Throw It in a Hole, tiiah/CONVENTION.md §1h) ----
+//
+// Below the two reactives, which get two cards moving, and above priority 3's
+// "Bob's chop is worth a clue" — a partner about to play a dead card is worth
+// more than a chop. That is the position ruled for it, and inside Precedence step
+// 1 (where the flag puts it) this is where "between 2 and 3" lands.
+//
+// Through `select` so it inherits the strike veto, and `first_of` so it inherits
+// the default tiebreak: among clues that all fix the same dead call, the one
+// touching the most useful cards is the one to give. Empty outside TIIAH, since
+// nothing sets the flag there.
+const ClueCandidate* rung_2b(const Game& g, const std::vector<ClueCandidate>& cs) {
+  return first_of(g, select(cs, [](const ClueCandidate& c) {
+                    return c.fixes_dead_call;
+                  }));
+}
+
 const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs) {
   if (!priority_3_applies(g)) return nullptr;
   // 3.1 -- a stable play clue to Bob.
@@ -1697,7 +1751,10 @@ std::optional<PerformAction> choose_very_high_clue(
     // refusing is done INSTEAD of reacting, so it has to outrank the pending
     // reaction, and step 1 is the only place above it. Kept out of `clue_tier`
     // itself, which reactor0 shares, so no non-hole game can see it.
-    if (c.tier != ClueTier::VERY_HIGH && !c.refuses_dead_target) continue;
+    if (c.tier != ClueTier::VERY_HIGH && !c.refuses_dead_target &&
+        !c.fixes_dead_call) {
+      continue;
+    }
     ++vh_seen;
     if (clue_is_admissible(game, c)) vh.push_back(c);
   }
@@ -1720,6 +1777,8 @@ std::optional<PerformAction> choose_very_high_clue(
     rung = "1.reactive_play";
   } else if ((pick = rung_2(game, vh))) {
     rung = "2.reactive_discard";
+  } else if ((pick = rung_2b(game, vh))) {
+    rung = "2b.fix";
   } else if ((pick = rung_3(game, vh))) {
     rung = "3.bob_chop";
   } else {

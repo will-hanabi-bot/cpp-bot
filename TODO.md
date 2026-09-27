@@ -1303,3 +1303,71 @@ greedily accept them smallest-first while the running product fits, and enumerat
 whoever fits rather than giving up. Dropping a holder is conservative in one direction —
 an excluded card can neither advance a stack nor strike — and it over-claims only for a
 card that strikes in *every* world, which a 20-candidate set cannot do.
+
+---
+
+## 51. `[tiiah]` The refusal has no tier-gate exemption and can be silently dropped
+
+CONVENTION.md §1c, §1h. `ClueCandidate::refuses_dead_target` gets a candidate into
+Precedence step 1's pool, but `choose_very_high_clue` still runs
+`clue_is_admissible` on it (`reactor0/decision.cpp:1702`), which inside its pace
+window reads `c.tier` and nothing else. A refusal stamps nothing that lifts a tier, so
+it is LOW, so an OCCUPIED Alice at any positive pace with fewer than 8 tokens has every
+refusal she could give rejected — before its priority is ever consulted.
+
+v16.20.0 gave the FIX clue exactly that exemption (`if (c.fixes_dead_call) return
+true;`) because without it the fix could never fire. The refusal wants the same
+argument made for it: refusing is done *instead of* reacting, so "would a clue be worth
+a turn here" is the wrong question to ask of it. It has not been seen to bite, which is
+the only reason it is an entry rather than a line of code.
+
+---
+
+## 52. `[engine]` A shared call is judged dead on a PRIVATE view
+
+`reactor0/call_invariants.cpp:126-165`. Rule 3, `drop_dead_play_calls`, erases a
+standing CALLED_TO_PLAY when common knowledge can see the card is dead. Its own comment
+states the contract: *"Common knowledge only. The holder's own view may be narrower,
+but a call is a shared commitment and has to die for every seat at the same moment, or
+they disagree about what is still standing."*
+
+**It then reads `pitch_candidates(game.state)` — our own BELIEF.** Outside Throw It in a
+Hole that is the same vector at every seat and the contract holds by accident. Inside
+it, beliefs differ by exactly what each seat threw in the hole, so the rule does the
+thing its comment forbids.
+
+Replay [2010512](https://hanab.live/shared-replay/2010512) is the cost, and it is the
+game's only strike. will-bot69's order 12 was called reading `{y2,p1}` with the `p1`
+already down. At turn 4 will-bot67 erased the call, correctly on its own belief — red
+and yellow on 0, purple on 1, so nothing in `{r2,y2,p1}` was playable. will-bot69 KEPT
+it, because its own belief had yellow on 1 and so the `y2` was playable. Judged on the
+shared view instead, the call dies at both seats and will-bot69 never plays the card.
+
+Two consequences worth stating together:
+
+- the seats disagree about a standing commitment, which is the failure mode the comment
+  names;
+- and it disarms §1h's fix clue for this game: the giver no longer believes there is a
+  call to fix, so `clue_fixes_dead_call` declines. Verified — the fix clue is
+  implemented and correct, and 2010512's strike still happens
+  (`replay_log logs/will-bot69-2010512.log --turn 12 --rerun` still plays order 12).
+
+The fix is `pitch_candidates(game.state.shared_view())` under the hole flag, keeping the
+queued-plays union as it is. It is small; what it needs is a corpus run, because rule 3
+fires on every action of every game.
+
+---
+
+## 53. `[tiiah]` A negative-touch fix discards the clue's other half
+
+CONVENTION.md §1h. A fix clue SUPERSEDES the ordinary stable meanings, as ruled. For a
+fix that TOUCHES the dead card that costs nothing — the touched card is the dead one.
+For one that fixes by **negative** touch it costs the rest of the clue: a colour yellow
+that names a partner's dead purple by missing it still touches their yellows, and
+superseding throws away whatever the ladder would have said about those.
+
+The alternative is the shape §1c's refusal uses — an ENVELOPE, where the signal rides
+along and the clue still means whatever stable clue it is. That would get both the fix
+and a play clue out of one turn, at the cost of two cases in the rule instead of one.
+Ruled as supersede-always for now, deliberately; this entry is the record of what it
+gives up rather than a disagreement with it.

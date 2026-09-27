@@ -47,6 +47,27 @@ using FixResult = std::variant<FixResultNormal, FixResultNoNewInfo, FixResultNon
 
 FixResult check_fix(const Game& prev, const Game& game, const ClueAction& action);
 
+// THE FIX CLUE, Throw It in a Hole's form (tiiah/CONVENTION.md §1h, v16.20.0).
+//
+// A card in `clued`'s hand carries a standing CALLED_TO_PLAY; the holder's inference
+// still admits more than one identity; and this clue has just narrowed it to exactly
+// one, which the SHARED view says is dead. Returns that card's order.
+//
+// The clue does not have to TOUCH the card. `Game::on_clue` narrows from the negative
+// just as it does from the positive, so a colour clue that misses a card can be what
+// names it — which is half the point, since the other cards in the hand are then free
+// to be whatever the giver wants touched.
+//
+// Why the SHARED view decides the deadness: that is the half of the claim every seat
+// holds alike, so every seat reads the clue the same way. The half only the giver has
+// is that THIS card is that identity, which is exactly what the clue transfers.
+//
+// `before` and `after` are the pre- and post-clue games: the reader passes (prev,
+// game) and a giver weighing a candidate passes (game, hypo). Lives here rather than
+// in either convention because both of them ask it, and neither may reach into the
+// other. Nullopt outside Throw It in a Hole.
+std::optional<int> dead_call_fix(const Game& before, const Game& after, int clued);
+
 std::optional<IdentitySet> distribution_clue(const Game& prev, const Game& game,
                                                 const ClueAction& action, int focus);
 

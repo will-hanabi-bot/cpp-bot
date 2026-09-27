@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "hanabi/basics/fix.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
@@ -294,6 +295,29 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       return interpret_reactive(prev, game, action, /*reacter=*/bob,
                                 /*receiver=*/cathy);
     }
+  }
+
+  // THE FIX CLUE (CONVENTION.md §1h, v16.20.0), ahead of the stable ladders and
+  // instead of them.
+  //
+  // A standing call on a card the giver can see is dead, and this clue has just
+  // narrowed it to exactly that dead identity — from the positive touch or from the
+  // negative, `Game::on_clue` does not care which. Nothing more needs doing to the
+  // card: the narrowing has already happened, and `drop_dead_play_calls` withdraws
+  // the call at every seat on the next `enforce_call_invariants`, because an
+  // all-trash inference is all-trash in every seat's belief once the SHARED view
+  // says so. What is left is the one decision only this can make — that the clue
+  // means the fix and NOT what the ladders would have said.
+  //
+  // It supersedes rather than riding along, unlike §1c's refusal. That costs a
+  // negative-touch fix whatever the ladder would have read into the cards it did
+  // touch, which is the ruling and is written up in §1h.
+  //
+  // After the dispatch, so only a stable clue can be one — the same discriminator
+  // the refusal uses.
+  if (dead_call_fix(prev, game, action.target)) {
+    repin_own_call(prev, game);
+    return ClueInterp::FIX;
   }
 
   // STABLE (CONVENTION.md §1b) — reactor0's ladders, unchanged. They are
