@@ -1194,7 +1194,7 @@ field to `play_stacks` and every seat holds the same ones.
 
 ---
 
-## 47. `[tiiah]` Our own belief takes no floor across the surviving worlds
+## 47. `[tiiah]` Our own belief takes no floor across the surviving worlds — CLOSED in v16.19.0
 
 CONVENTION.md §1.3, §1e rule 6. v16.18.0 gives a PARTNER's row the height that
 holds in every surviving world of that partner's hole cards
@@ -1213,6 +1213,19 @@ It is a missed deduction rather than a desync: a row is symmetric by constructio
 (each seat of a pair enumerates the same two seats' hole cards from the same base),
 so the frame a clue is READ in is unaffected. What suffers is our own decisions,
 which run on `play_stacks`.
+
+**That last paragraph was wrong, and replay 2010512 is the counterexample.** §1.3 gives
+the reacter its OWN stacks to read what its card is, so a belief below the floor is not
+only a decision problem: will-bot67's `play_stacks` was two plays short of what it
+could prove, the receiver's `y2` therefore looked one away, the pairing read as a
+finesse demanding a `y1` the reacter's slot could not be, and the call died where it
+was stamped.
+
+Closed in **v16.19.0**, and the double-count objection above dissolved rather than
+being solved: `presume_own_plays_land` raises the stacks with `State::with_stacks`
+instead of `with_play`, so no copy is booked as spent and a later collapse that names
+one of the cards still books it exactly once. The accounting lags the stacks by design,
+which only ever under-eliminates.
 
 ---
 
@@ -1237,3 +1250,56 @@ Until this is settled, any rule keyed on `common_play_stacks` can mean two thing
 at two seats. That is the reason v16.12.0 moved clue reading onto the *pairwise
 view* and v16.18.0 moved the reactive's promise there too — each of those is a step
 away from depending on this vector at all, which may be the real fix.
+
+**v16.19.0 removed one of the contributors, and it was a large one.** The receiver of a
+reactive never narrowed the reacter's blind play, so at that seat the play never
+advanced `common_play_stacks` while at every other seat it did — a guaranteed divergence
+on every reactive the table reads, and the whole of the gap in replay 2010512 (purple 0
+against purple 2). What is left there is the genuinely two-wide case: will-bot67's own
+`{r1,y1}` pair is two candidates for everyone, so its red 1 is knowledge only it and
+the seats watching hold, and `common_play_stacks` is right to lag. Whether any
+divergence remains that is NOT of that kind is the open question.
+
+---
+
+## 49. `[tiiah]` A finesse pairing is read wider than it needs to be by the receiver
+
+CONVENTION.md §1d. `narrow_reacter_play` (v16.19.0) reconstructs what the reacter
+knows about its own blind play as *the playables of the bucket of the identity the
+receiver saw*. That is exact for a direct pairing. For a **finesse** it is not: there
+the reacter was told its card outright — it is the connector — while the bucket may
+hold more than one playable.
+
+The receiver cannot tell the two apart, because which it is depends on how far off its
+OWN target was, and the receiver cannot see its own hand. So it takes the bucket set,
+which is a superset of what the reacter actually knows.
+
+The cost is only that the shared stacks lag: a set of two where one would do keeps
+`common_play_stacks` waiting a turn or two longer. It never over-claims, which is the
+direction that matters. Closing it means the receiver reconstructing its own target
+from the sum rule first — `calc_target_slot` already does exactly that at reaction
+time (`reactor/interpret_reaction.cpp:27-44`), so the ingredients are in hand; it was
+left out of v16.19.0 to keep one mechanism per version.
+
+---
+
+## 50. `[tiiah]` The world cap abandons a whole floor rather than dropping one holder
+
+CONVENTION.md §1.3, §1e. `open_worlds` returns a single flat world when the product of
+the superposition sizes exceeds its 64-world cap, which is right for a *reading* — a
+partial enumeration is a conditional set missing some of its own conditions. But
+`advance_rows_from_own_worlds` enumerates two seats' hole cards together, and there the
+all-or-nothing fallback means one seat's wide sets can destroy a deduction that rests
+entirely on the other's narrow ones.
+
+Replay 2010512 at v16.18.0 is the shape: yagami's two hole cards carried 20 and 24
+candidates, so `20 × 24 × 2 × 2 × 3 = 5760` blew the cap and will-bot67's row for
+yagami lost the `r1`/`y1` pair it could otherwise prove. v16.19.0 fixed that game by
+resolving yagami's cards instead — they should never have been wide — so the cap is no
+longer the reason anything is lost there, and the fragility was left standing.
+
+The fix is to choose the holder list before enumerating: take each holder's own product,
+greedily accept them smallest-first while the running product fits, and enumerate
+whoever fits rather than giving up. Dropping a holder is conservative in one direction —
+an excluded card can neither advance a stack nor strike — and it over-claims only for a
+card that strikes in *every* world, which a 20-candidate set cannot do.

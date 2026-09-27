@@ -120,6 +120,48 @@ void record_conditional(Game& game, int order,
   game.with_meta(order, [&cond](ConvData& m) { m.conditional = cond; });
 }
 
+// WHAT A REACTIVE BLIND PLAY SAYS ABOUT ITSELF: the playables of one bucket, in
+// every world the reacter's OWN earlier hole plays leave open (§1d, §1e).
+//
+// A seat that threw a card it could not name does not know its own stacks, so "the
+// playables of bucket 0" is a different set in each world and the honest reading is
+// their union. Replay 2009367 T4: will-bot69 threw an `{r1, y1}` at T2, so bucket 0
+// reads `{r1, y1, r2, y2}` -- the `r2` only in the world where that card was the
+// `r1`. Exactly one world, and this is the old single-state read, until somebody
+// plays into the hole without knowing what they played.
+//
+// Two readers: the giver and the reacter at clue time, and the RECEIVER once the
+// reaction has resolved (`narrow_reacter_play`). `except_order` is for the latter,
+// whose card has already joined the map by the time it asks.
+struct BucketReading {
+  IdentitySet allowed = IdentitySet::empty();
+  std::vector<std::pair<Identity, std::uint64_t>> support;
+  std::vector<OpenWorld> worlds;
+};
+
+BucketReading bucket_over_worlds(const Game& game, const State& base, int holder,
+                                 int bucket, int except_order = -1) {
+  BucketReading out;
+  out.worlds = open_worlds(game, base, holder, /*cap=*/64, except_order);
+  for (std::size_t w = 0; w < out.worlds.size(); ++w) {
+    const IdentitySet here = IdentitySet::create([&](Identity i) {
+      auto b = bucket_of(*game.state.variant, i.suit_index);
+      return b && *b == bucket && out.worlds[w].state.is_playable(i);
+    });
+    out.allowed = out.allowed.union_with(here);
+    for (Identity i : here) {
+      auto it = std::find_if(out.support.begin(), out.support.end(),
+                             [i](const auto& p) { return p.first == i; });
+      if (it == out.support.end()) {
+        out.support.emplace_back(i, 1ULL << w);
+      } else {
+        it->second |= (1ULL << w);
+      }
+    }
+  }
+  return out;
+}
+
 // "Both players would know exactly what they are playing" — the licence that
 // lets Alice give a pairing which is neither a finesse nor a bucket relation
 // (§1d). Judged from THEIR views: it is their own empathy that has to settle it,
@@ -372,33 +414,13 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         // green target gives the reacter `{r4, y1}` — the playables of bucket 0.
         const int from = action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
                                                             : (*want + 1) % 3;
-        // ...in every world the reacter's OWN hole plays leave open (§1e). A
-        // seat that threw a card it could not name does not know its own
-        // stacks, so "the playables of bucket 0" is a different set in each
-        // world, and the honest reading is their union. Replay 2009367 T4:
-        // will-bot69 threw an `{r1, y1}` at T2, so bucket 0 reads
-        // `{r1, y1, r2, y2}` -- the `r2` only in the world where that card was
-        // the `r1`. Exactly one world, and this is the old single-state read,
-        // until somebody plays into the hole without knowing what they played.
-        const auto worlds = open_worlds(game, own, reacter);
-        IdentitySet allowed = IdentitySet::empty();
-        std::vector<std::pair<Identity, std::uint64_t>> support;
-        for (std::size_t w = 0; w < worlds.size(); ++w) {
-          const IdentitySet here = IdentitySet::create([&](Identity i) {
-            auto b = bucket_of(*state.variant, i.suit_index);
-            return b && *b == from && worlds[w].state.is_playable(i);
-          });
-          allowed = allowed.union_with(here);
-          for (Identity i : here) {
-            auto it = std::find_if(support.begin(), support.end(),
-                                   [i](const auto& p) { return p.first == i; });
-            if (it == support.end()) {
-              support.emplace_back(i, 1ULL << w);
-            } else {
-              it->second |= (1ULL << w);
-            }
-          }
-        }
+        // ...in every world the reacter's own hole plays leave open, which is
+        // `bucket_over_worlds` above -- the same reading the RECEIVER reconstructs
+        // at reaction time.
+        const auto br = bucket_over_worlds(game, own, reacter, from);
+        const IdentitySet& allowed = br.allowed;
+        const auto& worlds = br.worlds;
+        const auto& support = br.support;
         if (game.common.thoughts[react_order]
                 .possibilities()
                 .intersect(allowed)
@@ -427,6 +449,66 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     return ClueInterp::REACTIVE;
   }
   return std::nullopt;
+}
+
+// WHAT THE REACTER PLAYED, read by the RECEIVER once the reaction has resolved
+// (1d, v16.19.0).
+//
+// `interpret_reactive` narrows the reacter's card at clue time, and it writes into
+// `common` -- so `note_hidden_action` later finds a singleton, advances the shared
+// stacks and never stamps a superposition at all. The receiver never gets there: it
+// returns before the target walk, because it cannot see its own hand to find the
+// target. 1d has always said so ("in their game the reacter's card was never
+// narrowed at all"), and until now nothing wrote it back, so at the receiver's seat
+// every reactive blind play left a superposition as wide as the pre-clue empathy,
+// for the rest of the game.
+//
+// Replay 2010512 is what that costs. yagami answered two rank-1 reactives by playing
+// its `p1` and then its `p2`; bucket 2 is `{p}` alone, so each reading was a single
+// identity and will-bot69, the giver, resolved both. will-bot67, the receiver, kept
+// them as 24- and 20-candidate sets, so its shared stacks read purple 0 instead of 2
+// and its row for yagami stayed `[0,0,0,1,0]`. At T13 the human's reactive yellow
+// named a `y2` that is only playable once yellow is on 1: the walk found no pairing,
+// read the clue as a MISTAKE, and answered a reaction it no longer believed in with
+// a stable clue -- while will-bot69 went on waiting for the reaction.
+//
+// The receiver can do this, and only here, because it WATCHED the card. The bucket
+// the reacter reasoned in is `bucket_of` the identity it saw: the reacter derived
+// that bucket from the receiver's target, and the relation is what put the card in
+// it, so the two agree without the receiver ever knowing its own target.
+void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
+                         int react_order) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return;
+  if (react_order < 0 || react_order >= static_cast<int>(game.meta.size())) return;
+  // Nothing to do at the giver's or the reacter's seat: the clue-time reading left
+  // a singleton there, so `note_hidden_action` never built a map entry.
+  if (!game.meta[react_order].superposed()) return;
+  if (wc.reacter < 0 || wc.reacter >= s.num_players) return;
+  if (wc.reacter == s.our_player_index) return;  // our own card; we cannot see it
+  if (react_order >= static_cast<int>(prev.state.deck.size())) return;
+  auto seen = prev.state.deck[react_order].id();
+  if (!seen) return;
+  auto from = bucket_of(*s.variant, seen->suit_index);
+  if (!from) return;  // an inverted suit is in no bucket, and a double chuck says
+                      // nothing about the card anyway (1d)
+
+  // The frame the pairing was judged in, asked exactly as clue time asks it. From
+  // this seat we are outside the giver-and-reacter pair, so it falls back to the
+  // shared view -- a floor rather than the row those two hold, which can only make
+  // the reading wider and the deduction weaker.
+  const State base = s.with_stacks(s.stacks_known_to_both(wc.giver, wc.reacter));
+  const auto br = bucket_over_worlds(game, base, wc.reacter, *from, react_order);
+  if (!br.allowed.non_empty()) return;
+  if (!narrow_superposition(game, react_order, br.allowed)) return;
+  // A finesse pairing reads wider than it needs to: there the reacter knows its card
+  // outright, and the receiver cannot tell a finesse from a direct pairing without
+  // knowing its own target. The bucket set is a superset of what the reacter knows,
+  // so this under-credits them and the shared stacks lag -- safe in the direction
+  // that matters, and TODO.md 49.
+  if (game.meta[react_order].superposed()) {
+    record_conditional(game, react_order, br.worlds, br.support);
+  }
 }
 
 // The RECEIVER's half of 1d's relation, applied when their call is made.

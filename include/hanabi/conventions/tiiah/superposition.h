@@ -50,10 +50,17 @@ struct OpenWorld {
 // More than one holder is for the questions asked ABOUT a seat rather than from
 // it: what seat `p` can work out rests on `p`'s own hole cards AND on ours, since
 // `p` watched ours leave our hand and we cannot name them (§1.3).
+//
+// `except_order` leaves one card out of the enumeration — for a reader asking what
+// THAT card was, whose frame is the other hole cards and not itself. Needed only
+// after the fact: at clue time the card in question is still in a hand, so it is
+// not in the map to begin with.
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
-                                   const std::vector<int>& holders, int cap = 64);
+                                   const std::vector<int>& holders, int cap = 64,
+                                   int except_order = -1);
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
-                                   int holder, int cap = 64);
+                                   int holder, int cap = 64,
+                                   int except_order = -1);
 
 // §1e rule 6, asked of ONE seat's own plays: the worlds in which none of them
 // struck, or all of them when every world has a strike in it — then the strike
@@ -123,6 +130,19 @@ bool presume_own_plays_land(Game& game);
 // Enumerated over that seat's hole cards AND ours together, since the seat watched
 // ours (see `open_worlds`). Rows only ever advance. Returns whether one moved.
 bool advance_rows_from_own_worlds(Game& game);
+
+// Narrow one superposition to `allowed`, and settle it when that leaves a single
+// identity (v16.19.0).
+//
+// SHARED, like rules 1 and 2: the caller's evidence is the convention's own reading
+// of a public action, which every seat computes alike, so the shared stacks move with
+// it. A set narrowed to nothing is left alone — a reading is a reading, and one
+// refuted down to nothing is evidence that something else is wrong.
+//
+// `tiiah::narrow_reacter_play` is the caller: the receiver of a reactive works out at
+// reaction time what the REACTER's blind play must have been, which at that seat is
+// the only chance to write it down at all (§1d).
+bool narrow_superposition(Game& game, int order, const IdentitySet& allowed);
 
 // §1e rule 3 for a PAIR (v16.18.0). Every copy of `id` is accounted for in the
 // discard pile or in a hand belonging to NEITHER us nor `p` — so `p` accounts for

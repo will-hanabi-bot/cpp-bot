@@ -382,8 +382,23 @@ bool all_copies_visible_to_pair(const Game& game, int order, Identity id, int p)
   return copies_accounted_for(game, order, id, {game.state.our_player_index, p});
 }
 
+bool narrow_superposition(Game& game, int order, const IdentitySet& allowed) {
+  if (order < 0 || order >= static_cast<int>(game.meta.size())) return false;
+  if (!game.meta[order].superposed()) return false;
+  const IdentitySet kept = game.meta[order].superposition.intersect(allowed);
+  // The same guard the collapsing rules carry: a set refuted down to nothing says
+  // something else is wrong, and is not a licence to assert a contradiction.
+  if (kept.is_empty()) return false;
+  if (kept == game.meta[order].superposition) return false;
+  game.with_meta(order, [kept](ConvData& m) { m.superposition = kept; });
+  refute_worlds(game, order, kept);
+  if (auto only = only_one(kept)) settle(game, order, *only, /*shared=*/true);
+  return true;
+}
+
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
-                                   const std::vector<int>& holders, int cap) {
+                                   const std::vector<int>& holders, int cap,
+                                   int except_order) {
   std::vector<OpenWorld> out;
   out.push_back(OpenWorld{{}, base});
   if (!game.state.variant->throw_it_in_a_hole) return out;
@@ -394,6 +409,7 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
   std::size_t product = 1;
   for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
     if (!game.meta[o].superposed()) continue;
+    if (o == except_order) continue;
     const int who = game.state.holder_of(o);
     if (std::find(holders.begin(), holders.end(), who) == holders.end()) continue;
     pending.push_back(o);
@@ -423,9 +439,33 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
 }
 
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
-                                   int holder, int cap) {
-  return open_worlds(game, base, std::vector<int>{holder}, cap);
+                                   int holder, int cap, int except_order) {
+  return open_worlds(game, base, std::vector<int>{holder}, cap, except_order);
 }
+
+namespace {
+
+// The height every surviving world reaches, per suit. A stack only ever goes
+// forward, so that is the least advanced of them -- which is `max` on a reversed
+// suit, where the numbers run down.
+std::vector<int> world_floor(const State& s,
+                             const std::vector<const OpenWorld*>& surviving) {
+  std::vector<int> floor;
+  for (const OpenWorld* w : surviving) {
+    if (floor.empty()) {
+      floor = w->state.play_stacks;
+      continue;
+    }
+    for (size_t k = 0; k < floor.size() && k < w->state.play_stacks.size(); ++k) {
+      const bool rev = s.variant->suits[k].suit_type.reversed;
+      floor[k] = rev ? std::max(floor[k], w->state.play_stacks[k])
+                     : std::min(floor[k], w->state.play_stacks[k]);
+    }
+  }
+  return floor;
+}
+
+}  // namespace
 
 std::vector<const OpenWorld*> strike_free(const std::vector<OpenWorld>& worlds) {
   std::vector<const OpenWorld*> out;
@@ -491,7 +531,38 @@ bool presume_own_plays_land(Game& game) {
   // PARTNER can work out about theirs is `advance_rows_from_own_worlds`.
   const auto worlds = open_worlds(game, s, s.our_player_index);
   if (worlds.size() <= 1) return false;
-  return prune_to_worlds(game, worlds, strike_free(worlds));
+  const auto surviving = strike_free(worlds);
+  bool changed = prune_to_worlds(game, worlds, surviving);
+
+  // ...and the height every survivor reaches is one we HOLD, even when no single
+  // card can be named (v16.19.0). Two cards each reading `{r1,y1}` were one of each,
+  // so red and yellow are both on 1 — a fact about the stacks that no fact about
+  // either card carries, and one the rows have had since v16.18.0 while our own
+  // belief did not.
+  //
+  // Replay 2010512 is why it has to be our belief too: §1.3 gives the reacter its
+  // OWN stacks to read what its card is, and on stacks two cards short the receiver's
+  // `y2` looked one away, so the pairing read as a finesse demanding a `y1` the
+  // reacter could not be holding. The call died on the spot.
+  //
+  // `with_stacks` and not `with_play`: the copies are NOT booked as spent, because we
+  // cannot say WHICH card was the `r1`. A later collapse that names one settles it and
+  // books it exactly once; booking here would double-count. So the accounting lags the
+  // stacks by design, in the direction that only ever under-eliminates.
+  const std::vector<int> floor = world_floor(s, surviving);
+  std::vector<int> raised = s.play_stacks;
+  bool moved = false;
+  for (size_t k = 0; k < raised.size() && k < floor.size(); ++k) {
+    const bool rev = s.variant->suits[k].suit_type.reversed;
+    if (rev ? floor[k] >= raised[k] : floor[k] <= raised[k]) continue;
+    raised[k] = floor[k];
+    moved = true;
+  }
+  if (moved) {
+    game.with_state([&raised](State& st) { st = st.with_stacks(raised); });
+    changed = true;
+  }
+  return changed;
 }
 
 bool advance_rows_from_own_worlds(Game& game) {
@@ -511,20 +582,7 @@ bool advance_rows_from_own_worlds(Game& game) {
     if (worlds.size() <= 1) continue;
     const auto surviving = strike_free(worlds);
 
-    // The height every survivor reaches. A stack only ever goes forward, so that
-    // is the least advanced of them -- which is `max` on a reversed suit.
-    std::vector<int> floor;
-    for (const OpenWorld* w : surviving) {
-      if (floor.empty()) {
-        floor = w->state.play_stacks;
-        continue;
-      }
-      for (size_t k = 0; k < floor.size() && k < w->state.play_stacks.size(); ++k) {
-        const bool rev = s.variant->suits[k].suit_type.reversed;
-        floor[k] = rev ? std::max(floor[k], w->state.play_stacks[k])
-                       : std::min(floor[k], w->state.play_stacks[k]);
-      }
-    }
+    const std::vector<int> floor = world_floor(s, surviving);
 
     for (size_t k = 0; k < floor.size() && k < s.pairwise_play_stacks[p].size();
          ++k) {

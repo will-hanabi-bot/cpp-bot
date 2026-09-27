@@ -68,6 +68,20 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                                              const ClueAction& action,
                                              int reacter, int receiver);
 
+// What the REACTER played, read by the receiver once the reaction has resolved
+// (§1d, v16.19.0). The receiver returns before the target walk at clue time, so its
+// copy of the reacter's card was never narrowed; this is the first moment it knows
+// which slot answered, and the only chance it gets.
+//
+// Called from the same engine seam as `narrow_receiver_call`, just before it, since
+// it can move the shared stacks the receiver's own reading then rests on.
+//
+// A no-op outside Throw It in a Hole, at the giver's and the reacter's own seats
+// (where the clue-time reading already resolved the card), and for a card the
+// receiver cannot see.
+void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
+                         int react_order);
+
 // The receiver's half of 1d's relation, applied once the reaction has been
 // resolved and their call stamped: the bucket the reacter's own inference
 // names, one step along, together with the continuation of the card the

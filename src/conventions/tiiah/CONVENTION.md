@@ -12,9 +12,9 @@ but not yet implemented is tracked in [TODO.md](../../../TODO.md), where this
 convention's open entries are **44** — a suit whose low card went into the hole
 unseen can read as unplayable to every seat at once (§1.3) — **45**, the
 receiver's bucket narrowing being wired only into the play path (§1d), **46**, one
-WC field serving two frames (§1.3), **47**, our own belief taking no floor across
-the surviving worlds (§1e), and **48**, the shared view not being identical at
-every seat (§1.3).
+WC field serving two frames (§1.3), **48**, the shared view not being identical at
+every seat (§1.3), **49**, a finesse pairing read wider than it needs to be (§1d),
+and **50**, the world cap abandoning a whole floor (§1.3).
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -35,8 +35,8 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0) |
-| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0) |
-| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0) |
+| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
 | Naming the called card (§2a) | implemented (v16.7.0) |
@@ -175,8 +175,13 @@ Three properties make the row the right object rather than a patch:
 but it can still reason about them. Across the worlds they leave open, §1e rule 6
 refutes the ones in which a play struck, and a height every survivor reaches is one
 the seat holds. `tiiah::advance_rows_from_own_worlds`
-(`tiiah/superposition.cpp:497-541`), run at the end of every
+(`tiiah/superposition.cpp:568-599`), run at the end of every
 `collapse_superpositions`, and `tests/test_tiiah/test_row_from_own_worlds.cpp`.
+
+**Our own belief takes the same floor (v16.19.0)**, by the same `world_floor` over our
+own hole cards — see §1e rule 6. Between v16.18.0 and v16.19.0 only the rows had it,
+which meant we could read a partner's card against a frame more advanced than the one
+we read our OWN card against; replay 2010512 is the game that lost.
 
 Replay [2010329](https://hanab.live/shared-replay/2010329) T14 is the case.
 yagami's orders 6 and 7 are each `{g1,b1}`, so `(g1,g1)` and `(b1,b1)` each strike
@@ -538,7 +543,54 @@ receiver's reading is the one that matters, since it is their card.
 The receiver's reading cannot come from the reacter's *inference* alone, which
 would be the tidier rule: at clue time the receiver returns before the target
 walk runs — they cannot see their own hand to find the target — so in their game
-the reacter's card was never narrowed at all.
+the reacter's card was never narrowed at all. Which is a thing to be fixed in its
+own right, not just worked around: see below.
+
+#### ...and the receiver reads the REACTER's card too (v16.19.0)
+
+The sentence above was a dead end for eight versions. `interpret_reactive` narrows
+the reacter's card at clue time and writes it into `common`, so
+`note_hidden_action` later finds a singleton, advances the shared stacks and never
+stamps a superposition at all. **The receiver, returning early, gets none of that** —
+so at its seat every reactive blind play left a superposition as wide as the pre-clue
+empathy, for the rest of the game, and its shared stacks stayed behind every one of
+them.
+
+It can be put right at reaction time, and only then, because that is when the
+receiver learns which slot answered:
+
+> **The reacter's card is the playables of `bucket_of(the identity the receiver
+> saw)`**, in the frame the pairing was judged in and over the reacter's own open
+> worlds — the same reading clue time computes, recovered from the card instead of
+> from the target. The reacter derived that bucket from the receiver's target, and
+> the relation is what put the card in it, so the two agree without the receiver
+> ever knowing its own target.
+
+`narrow_reacter_play` (`tiiah/interpret_reactive.cpp:479-512`), called from the
+engine seam just before `narrow_receiver_call` (`src/basics/decide.cpp:641-651`)
+since it can move the shared stacks the receiver's own reading then rests on. Both
+readers share `bucket_over_worlds` (`:136-163`); the narrowing and its settle are
+`tiiah::narrow_superposition` (`tiiah/superposition.cpp:385-397`), shared like §1e
+rules 1 and 2 because every seat computes it alike. A no-op at the giver's and the
+reacter's seats, where the clue-time reading already resolved the card.
+
+Replay [2010512](https://hanab.live/shared-replay/2010512#14) is what it cost.
+yagami answered two rank-1 reactives by playing its `p1` and then its `p2`; bucket 2
+is `{p}` alone, so each reading was a single identity and will-bot69, the giver,
+resolved both. will-bot67, the **receiver**, kept 24- and 20-candidate sets, so its
+shared stacks read purple 0 instead of 2 and its row for yagami never moved off
+`[0,0,0,1,0]`. At T13 the human's reactive yellow named a `y2` playable only once
+yellow is on 1: against that row it read one away, the pairing came out a FINESSE
+demanding a `y1` the reacter could not hold, the walk found no pairing at all and
+the clue was recorded a **MISTAKE**. will-bot67 then gave a stable clue while
+will-bot69 went on waiting for its reaction — the asymmetry `decide.cpp:1006-1010`
+warns about, arrived at from the one direction nobody had closed.
+
+**A finesse pairing reads wider than it needs to.** There the reacter knows its card
+outright — the connector — while the bucket may hold more than one playable, and the
+receiver cannot tell a finesse from a direct pairing without knowing its own target.
+So it takes the bucket set, a superset of what the reacter knows, which under-credits
+them and lags the shared stacks rather than over-claiming. TODO.md 49.
 
 #### What the receiver's OTHER slots learn, and whose eyes that is NOT
 
@@ -800,9 +852,30 @@ hole landed or struck and nobody told us which, so it gets the same default: it
 landed. Every world in which one of our own hole cards failed is refuted, as long
 as some world has none failing — and when every world has a strike in it, the
 strike is not an assumption anybody made and there is nothing to refute.
-`presume_own_plays_land` (`:487-495`) over `strike_free` (`:430-440`), which is the
+`presume_own_plays_land` (`:527-566`) over `strike_free` (`:468-479`), which is the
 `OpenWorld::struck` flag `open_worlds` now sets; both forms share the narrowing
 half, `prune_to_worlds` (`:266-293`).
+
+**And the height every survivor reaches is one we HOLD (v16.19.0).** Narrowing the
+cards is only half of it: two cards each reading `{g1,b1}` were one of each, so green
+and blue are both on 1 — a fact about the stacks that no fact about either card
+carries. `world_floor` (`:451-466`) is that height, and `presume_own_plays_land`
+raises `play_stacks` to it. A row has had the same treatment since v16.18.0 (§1.3),
+and until now our own belief did not, which left us reading our own cards on stacks we
+could prove were too low.
+
+It raises the stacks with `with_stacks` and **not** `with_play`, so the copies are not
+booked as spent: we cannot say WHICH card was the `g1`. A later collapse that names one
+settles it and books it exactly once. The accounting therefore lags the stacks by
+design, in the direction that only ever under-eliminates.
+
+Replay [2010512](https://hanab.live/shared-replay/2010512#14) is why it has to be our
+own belief and not only the rows. §1.3 gives the reacter its OWN stacks to read what
+its card is; will-bot67's were two plays short of what it could prove, so the
+receiver's `y2` looked one away, the pairing read as a finesse demanding a `y1` the
+reacter's slot could not be, and the call died where it was stamped. With the floor its
+belief reads `[1,1,0,1,2]`, the `y2` is a direct play, and the bucket names the `b2` it
+was really holding.
 
 This reaches cases the partner form cannot, because that one only ever asked how to
 rescue a play that looked dead. Here the partner's play is perfectly healthy and it
@@ -967,6 +1040,8 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_row_from_own_worlds.cpp` | §1.3 — two `{g1,b1}` holes raising their owner's row, one hole raising nothing for its owner but still reaching the seat that watched it, a lone hole raising the row when only one world lands, and our own hole card withholding that claim |
 | `tests/test_tiiah/test_pair_visible_copies.cpp` | §1e rule 3's pair form — copies outside the pair settling for the pair (and not for the seat holding them), and a copy in the partner's own hand not counting |
 | `tests/test_tiiah/test_replay_2010329_the_frame_is_the_pair_not_the_team.cpp` | §1d's frame — the live game the shared view cost: the pair's row, the call surviving Rule 5, the `{g2,b2}` reading, and the `b2` played |
+| `tests/test_tiiah/test_reacter_play_read_by_the_receiver.cpp` | §1d's reacter half at the RECEIVER's seat — one playable in the bucket resolving the card and advancing the shared stacks, two narrowing without resolving, and the giver's seat keeping the reading it already had |
+| `tests/test_tiiah/test_replay_2010512_receiver_reads_the_reacter_play.cpp` | the live game it cost: both of yagami's blind plays resolved, purple on 2 in the shared view, the row at `[1,1,0,1,2]`, and the reactive answered on slot 4 instead of read as a MISTAKE |
 | `tests/test_tiiah/test_replay_2010296_partner_play_is_presumed_to_land.cpp` | the live game the invented strike cost, replayed: the settle, the stacks, and the `{p1}` it unblocks |
 | `tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp` | §1e — the live game it was narrow in, and the cascade that withdraws the conditional half |
 | `tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp` | §1c's refusal, read — the collapse it forces, that the clue is still read as the lock it is, and the playable card it frees up |

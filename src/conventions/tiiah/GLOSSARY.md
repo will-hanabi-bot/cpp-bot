@@ -87,9 +87,15 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:430-440`), read by
+(`src/conventions/tiiah/superposition.cpp:468-479`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
+
+What the survivors agree on is the **floor**: the least advanced height any of them
+reaches, per suit (`world_floor`, `:451-466`). It raises a partner's row (v16.18.0)
+and, since v16.19.0, our own `play_stacks` — two cards each reading `{g1,b1}` were one
+of each, so both suits are on 1 even though neither card can be named. The copies stay
+unbooked, since which card was which is exactly what is unknown.
 
 ### conditional reading
 A reading that holds only in some *worlds* — e.g. `{r1, y1, r2, y2}` where the
@@ -180,6 +186,14 @@ of the play and built from `common`, so all three seats hold the same set. A
 player may hold several at once, and everyone tracks everyone's. A superpositioned
 reacter picks its target assuming **none** of the superposed cards were played.
 `note_hidden_action`, `src/conventions/tiiah/superposition.cpp`. CONVENTION.md §1e.
+
+A **reactive blind play is often not a superposition at all**: §1d's bucket relation
+names the reacter's card, and where the bucket holds one playable that is a single
+identity, so `note_hidden_action` advances the *common stacks* instead of stamping
+anything. The receiver used to be the exception — it returns before the target walk,
+so its copy was never narrowed and it kept the whole pre-clue empathy — until
+v16.19.0 gave it `narrow_reacter_play` at reaction time. "All three seats hold the
+same set" is the intent; keeping it true takes work at each of them.
 
 ### collapsing
 Removing a candidate from a superposition. The first two rules — another player

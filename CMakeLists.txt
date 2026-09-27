@@ -430,6 +430,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_pair_visible_copies.cpp
   tests/test_tiiah/test_own_plays_presumed_to_land.cpp
   tests/test_tiiah/test_row_from_own_worlds.cpp
+  tests/test_tiiah/test_replay_2010512_receiver_reads_the_reacter_play.cpp
+  tests/test_tiiah/test_reacter_play_read_by_the_receiver.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp

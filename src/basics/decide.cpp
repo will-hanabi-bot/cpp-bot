@@ -639,6 +639,14 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
     // reach into a convention for the buckets — and while `waiting.front()`
     // still holds the connection it needs.
     if (!waiting.empty()) {
+      // ...and so does the REACTER's own card, for the one seat that could not
+      // read it at clue time. The receiver returns before the target walk runs,
+      // so in its game the reacter's card was never narrowed; this is the first
+      // moment it knows which slot answered, and the last chance to write the
+      // reading down (§1d, v16.19.0). Before the receiver's half, since it moves
+      // the shared stacks the rest of the reading rests on.
+      hanabi::tiiah::narrow_reacter_play(prev, *this, waiting.front(),
+                                         action.order);
       hanabi::tiiah::narrow_receiver_call(prev, *this, waiting.front(),
                                           action.order);
     }
