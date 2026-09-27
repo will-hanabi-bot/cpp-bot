@@ -92,11 +92,12 @@ TEST(TiiahPairwiseStacks, AKnownPlayReachesEveryRow) {
   EXPECT_EQ(red_row(g, TestPlayer::CATHY), 1);
 }
 
-// The PREFIX rule, and the reason a row is not simply "our belief minus one
-// seat". A row can only take a card its own stack is waiting for, so a play the
-// row never saw blocks everything above it — which is exactly what the seat
-// behind that row believes.
-TEST(TiiahPairwiseStacks, ARowCannotSkipTheCardItNeverSaw) {
+// A row is a FLOOR, not a prefix (v16.23.0). A play both seats of a pair
+// watched puts that pair's stack at least that high -- never presume a strike,
+// and a stack only goes up -- whatever lower card neither of them can name. And
+// the reason a row is still not "our belief minus one seat": a play the row's
+// seat could NOT name stays out of it.
+TEST(TiiahPairwiseStacks, ARowTakesEveryPlayBothSeatsWatched) {
   SetupOptions opts = opts_for();
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
@@ -109,15 +110,16 @@ TEST(TiiahPairwiseStacks, ARowCannotSkipTheCardItNeverSaw) {
   // Bob blind-plays the r1: his own row stays on 0, Cathy's goes to 1.
   g = hidden_action(std::move(g), TestPlayer::BOB, /*slot=*/1,
                     /*reached_the_hole=*/true);
-  // Cathy blind-plays the r2: Bob's row is still on 0 and cannot take an r2,
-  // so it stays there, while our belief has both.
+  // Cathy blind-plays the r2. Bob and we both watched it go down, so the two of
+  // us know red stands at least on 2 -- Bob cannot name the r1 under it, but he
+  // does not presume Cathy struck, so it must be there.
   g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/1,
                     /*reached_the_hole=*/true);
 
   EXPECT_EQ(g.state.play_stacks[0], 2) << "we watched both";
-  EXPECT_EQ(red_row(g, TestPlayer::BOB), 0)
-      << "Bob never saw the r1 he played, so the r2 he watched cannot land "
-         "either -- which is precisely what Bob himself believes";
+  EXPECT_EQ(red_row(g, TestPlayer::BOB), 2)
+      << "Bob and we both watched the r2 land, so the pair holds red on 2 even "
+         "though Bob cannot name the r1 beneath it";
   EXPECT_EQ(red_row(g, TestPlayer::CATHY), 1)
       << "Cathy saw the r1 and played the r2 blind, so she is on 1";
 }

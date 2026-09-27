@@ -128,7 +128,7 @@ that stamps it is a `LOCK`, which stamps every card in the hand at once.
 
 ### clue starved
 Variant where playing a 5 returns only half a clue token.
-`src/basics/state.cpp:125-135`.
+`src/basics/state.cpp:251-264`.
 
 ### clue-regain rank
 The rank whose play returns a clue token: 5 normally, 1 on reversed suits.
@@ -165,7 +165,7 @@ Distinct from the *table id*.
 
 ### critical
 An identity with exactly one copy left undiscarded that is still useful.
-Losing it lowers the maximum achievable score. `src/basics/state.cpp:163-167`.
+Losing it lowers the maximum achievable score. `src/basics/state.cpp:77-108`.
 
 ### critical rank
 Variant flag making every card of a given rank single-copy, hence critical.
@@ -299,7 +299,7 @@ draws no inferences. `state_eval.cpp:237-244`; formula in CONVENTION.md §2.4.
 
 ### half clue token
 Clue-starved bookkeeping: playing a 5 sets a half-token flag; two of them make
-a whole clue. `src/basics/state.cpp:125-135`.
+a whole clue. `src/basics/state.cpp:251-264`.
 
 ### hand size
 `kHandSize[num_players] = {–, –, 5, 5, 4, 4, 3}`. Used as the modulus in the
@@ -703,7 +703,11 @@ Suit family matched by White, Gray, Light, Null. No colour clue touches them.
 ### zcs_turn (zero-clue-stall turn)
 The turn the team ran out of clue tokens. Cards drawn after it are excluded
 from the chop, so a player who drew during the stall isn't expected to discard
-them. `include/hanabi/basics/game.h:105-106`; `decide.cpp:424-427`.
+them. `include/hanabi/basics/game.h:274`; set at `decide.cpp:411`, read by
+`Game::chop` at `decide.cpp:797-803`. Under reactor0 (and TIIAH), a hand left
+with no chop at all because of it discards the FIRST card drawn during the stall
+rather than pitching blind — floor rung `12.discard_stall_drawn`, reactor0
+DECISION_MAKING.md (v16.23.0).
 
 ### suit name resolution
 `data/variants.json` names a suit by its DISPLAY name; `data/suits.json` is keyed

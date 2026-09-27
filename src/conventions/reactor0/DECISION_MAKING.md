@@ -758,7 +758,16 @@ is judged from Alice's own inference, not common knowledge.
        in an inverted suit.
     3. If Bob does not already have a safe discard that is common knowledge between Alice and Bob,
        give a stable discard clue or trash reveal clue to Bob that stamps CTD on a trash card
-       or same-hand-dupe, or a CTP to a trash card in an inverted suit
+       or same-hand-dupe, or a CTP to a trash card in an inverted suit.
+       A **trash reveal** is any stable clue after which a card in Bob's hand is known
+       trash to the team that was not before — the all-trash rank clue that flags a
+       new card, and equally a clue that narrows an ALREADY-clued card down to trash
+       (which interpretation reads as FIX, REVEAL or STALL and flags nothing).
+       `read_stable` (`reactor0/decision.cpp:173-202`) compares
+       `common.thinks_trash` before and after (v16.23.0); before that a colour clue
+       revealing a clued card as trash came out shape `OTHER`, which no rung selects,
+       and 3.7's lock won instead (replay 2011327 T22,
+       `tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp`).
     4. If pace is `>= 3`, give a double discard clue that stamps CTD on two trash
        cards or same-hand-dupes, or CTP to a trash or same-hand-dupe in an
        inverted suit. Same pace condition as 3.2, for the same reason: a double
@@ -1243,6 +1252,20 @@ list by priority:
     plain card that is not playable. If Alice is in an endgame
     state where she must give a clue instead, the endgame rules at step 0 of the
     Precedence section have already returned and this step is not reached.
+
+    **No chop, but a card drawn during the zero-clue stall** (v16.23.0). `Game::chop`
+    skips any card drawn after the team ran out of clues (`zcs_turn`, the zero-clue
+    safety promise), so a hand whose other cards are all clued has no chop at all.
+    Such a hand is not locked: Alice **discards the first card drawn during the
+    stall** (the lowest `turn_drawn` among the unclued status-`NONE` cards drawn
+    after `zcs_turn`) — `12.discard_stall_drawn` (`reactor0/calls.cpp:533-561`). It
+    keys on the card having been drawn during the stall, not on the current token
+    count, and it is skipped at 8 clues (a discard is illegal) and when the discard
+    would certainly strike. Only a hand with no such card is really locked, and
+    pitches its leftmost card (`12.locked_no_chop`). Replay 2011327 T32: will-bot67's
+    four clued cards were all chop-moved and order 30 was drawn one turn after the
+    team hit zero clues; it pitched order 30, a b1 with blue on 2, into a strike.
+    `tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp`.
 13. If Alice is at 8 clues where she has no known CTPs or CTDs, she should pitch
     her chop card instead (as reaching this point means she also did not have a
     clue to give).
@@ -1367,8 +1390,8 @@ button the receiver was promised.
 | "this clue creates a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |
 | new touches, for the default tiebreak | `elim_result` / `bad_touch_result` | `src/basics/clue_result.cpp` |
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |
-| candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:212-231` |
-| colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:201-210` |
+| candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
+| colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
 | chop | `Game::chop` | `src/basics/decide.cpp:673-702` |
 | safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:938-958` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:115-132` |

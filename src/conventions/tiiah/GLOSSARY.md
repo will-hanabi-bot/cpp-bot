@@ -31,7 +31,10 @@ reason. A wrong belief is invisible until the game ends.
 ### common stacks
 `State::common_play_stacks`: the stacks as everyone-knows-everyone-knows them.
 A play advances them only when its identity was common knowledge at the time,
-or when a superposition later collapses on evidence every seat shares. They lag
+or when a superposition later collapses on evidence every seat shares. A play
+the team could name that lands ABOVE them raises them to at least that card and
+settles the hole cards that must sit under it (§1e rule 6's shared-view form,
+`known_play_lands_in_common`, v16.23.0). They lag
 the *believed stacks*, which also move on the partners' plays we watched and
 they did not. `State::shared_score` / `shared_pace` / `Game::shared_in_endgame`
 ask the ordinary questions of it, through `State::shared_view`. Empty, and free,
@@ -52,8 +55,17 @@ the two seats it is between, and holding the whole team to what all three know
 lets one seat's ignorance stall the reading. `State::stacks_known_to_both(a, b)`
 is the accessor and is symmetric; it answers for the pair only when WE are one of
 them, and hands back the common stacks otherwise — an outsider is missing exactly
-its own plays and recovers them by the *back-solve*. Like any stack it advances
-through the prefix, so a play a row never saw blocks everything above it.
+its own plays and recovers them by the *back-solve*.
+
+**A row is a floor (v16.23.0).** A play both seats of the pair can name — the one
+neither of them made, or one its player could name — raises the row to AT LEAST
+that card, whatever lower card neither of them can name: they watched it land
+(never presume a strike), and a stack only goes up. What they name is the card
+they WATCHED, not our copy of the player's reading. A row is never below the
+*common stacks*. Before v16.23.0 a row advanced through the prefix, one card at a
+time, and a play that arrived above a card the row had not yet named was dropped
+for good. `State::with_pairwise_at_least`, `tiiah::note_hidden_action`; replay
+2011327. CONVENTION.md §1.3.
 
 Since v16.18.0 a row also takes what the seat behind it can WORK OUT about its own
 plays: across the *worlds* those plays leave open, the *surviving* ones agree on a
@@ -114,7 +126,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:468-479`), read by
+(`src/conventions/tiiah/superposition.cpp:504-514`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -133,11 +145,11 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:119-183`. Rule 4
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:347-401`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past.
 
 ### shared view
-`State::shared_view()` (`src/basics/state.cpp:143-156`): this state with the
+`State::shared_view()` (`src/basics/state.cpp:207-227`): this state with the
 *common stacks* in place of `play_stacks`, and `playable_set` / `trash_set`
 rebuilt to match. Since a superposed play never advanced the common stacks, it
 is also the state "assuming none of the superposed cards were played" — §1e's

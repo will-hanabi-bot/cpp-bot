@@ -551,7 +551,8 @@ state and the branch the bot took:
 ```bash
 scripts/find_game.sh <game_id>                       # locate the log
 scripts/show_turn.py logs/<bot>-<game_id>.log <turn> # state + decision trace + timing
-build/replay_log logs/<bot>-<game_id>.log --turn N --rerun   # re-run with the current build
+build/replay_log logs/<bot>-<game_id>.log --turn N --rerun   # re-run with the current build (any turn; --trace for branches)
+scripts/tiiah_stacks.py <game_id> <turn>             # Throw It in a Hole: every seat's private, pairwise and common stacks
 scripts/bug_to_test.sh logs/<bot>-<game_id>.log <turn> [category] [slug]  # emit a regression test
 ```
 

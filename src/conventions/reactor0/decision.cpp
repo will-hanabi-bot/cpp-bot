@@ -171,15 +171,33 @@ ClueReading read_stable(const Game& game, const Game& hypo,
     }
   }
 
-  // A trash reveal stamps no status at all - it sets meta.trash
-  // (reactor0/interpret_clue.cpp:558). That one-field diff isolates it from the
-  // other REVEAL branches, none of which flag a newly touched card.
+  // A trash reveal stamps no status at all. The rank branch that touches only
+  // trash sets meta.trash on the new cards (reactor0/interpret_clue.cpp:900-911),
+  // and that one-field diff isolates it from the other REVEAL branches, none of
+  // which flag a newly touched card.
   for (int o : hypo.state.hands[target]) {
     if (!game.meta[o].trash && hypo.meta[o].trash) {
       r.shape = ClueShape::TRASH_REVEAL;
       r.stable_subject = o;
       return r;
     }
+  }
+
+  // ...but most trash reveals set nothing: a clue that narrows an ALREADY-clued
+  // card until the team can see it is trash reads FIX, REVEAL or STALL, never
+  // touches meta.trash, and came out OTHER -- which no rung selects. So the
+  // reveal is also read the way Bob reads it: a card of his that the team did
+  // not know was trash, and now does.
+  //
+  // Replay 2011327 T22: Red to will-bot67 pinned its clued order 9 to the r2,
+  // with red on 2. Read as a FIX with nothing flagged, 3.3 never saw it and 3.7
+  // locked Bob with a rank 5 instead.
+  const std::vector<int> trash_before = game.common.thinks_trash(game, target);
+  for (int o : hypo.common.thinks_trash(hypo, target)) {
+    if (contains(trash_before, o)) continue;
+    r.shape = ClueShape::TRASH_REVEAL;
+    r.stable_subject = o;
+    return r;
   }
   return r;
 }

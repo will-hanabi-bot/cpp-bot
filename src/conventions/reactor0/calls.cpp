@@ -531,6 +531,30 @@ std::optional<PerformAction> choose_action(const Game& game) {
   // also means section 4 found no clue, which is the case 13 describes.
   auto chop = game.chop(alice);
   if (!chop) {
+    // No chop -- but a hand whose only unclued cards were drawn during the
+    // zero-clue stall is not locked: those cards are not chop only because the
+    // zero-clue promise protects the card that WAS chop when the team ran dry
+    // (`Game::chop`'s second pass). Here there was no such card, so the promise
+    // has nothing to protect, and a card nobody has touched is the cheapest one
+    // to lose. Throw the first of them drawn rather than blind-play slot 1.
+    //
+    // Replay 2011327 T32: will-bot67's four clued cards were all chop-moved and
+    // order 30 was drawn at T29, one turn after the team hit zero clues. With
+    // no chop this pitched order 30 blind -- a strike. The ruling is to discard
+    // it. At 8 tokens a discard is illegal and the pitch below still applies.
+    if (s.clue_tokens < 8) {
+      std::optional<int> first_drawn;
+      for (int o : s.hands[alice]) {
+        if (s.deck[o].clued || game.meta[o].status != CardStatus::NONE) continue;
+        if (game.zcs_turn == -1 || s.deck[o].turn_drawn <= game.zcs_turn) continue;
+        if (!first_drawn || s.deck[o].turn_drawn < s.deck[*first_drawn].turn_drawn) {
+          first_drawn = o;
+        }
+      }
+      if (first_drawn && !chuck_would_strike(game, alice, *first_drawn)) {
+        return taken(game, "12.discard_stall_drawn", *first_drawn, false);
+      }
+    }
     // A locked hand has no chop. Pitch the leftmost card rather than return
     // nothing -- `take_action` must produce a move.
     return taken(game, "12.locked_no_chop", s.hands[alice].front(), true);

@@ -6,12 +6,19 @@
 //   replay_log <log_file> --turn <N> --rerun
 //   replay_log <log_file> --turn <N> --diff
 //   replay_log <log_file> --turn <N> --emit-test <out.cpp>
+//   replay_log <log_file> --turn <N> --stacks
 //
 // The log file is the JSONL produced by GameLogger. Each STATE record has a
 // replay section with variant/options/players/deck + the action history up
 // to that turn; apply_snapshot replays those actions to rebuild an exact
 // Game, then we call Game::take_action() with the current code and report
 // the chosen action.
+//
+// A bot logs a STATE record only on its own turns. For any other turn the
+// first LATER STATE is cut back: its action history is truncated after the
+// `turn` marker that opens turn N, and apply_snapshot replays that. This is
+// what lets --stacks (and scripts/tiiah_stacks.py) read a seat's views at a
+// turn it did not act on.
 //
 // This is the killer-feature of the iteration overhaul: a logged bug
 // report can be re-investigated in seconds without re-simulating from
@@ -44,12 +51,13 @@ struct Args {
   bool rerun = false;
   bool diff = false;
   bool trace = false;
+  bool stacks = false;
   std::optional<std::string> emit_test_path;
 };
 
 void print_usage(std::ostream& os) {
   os << "Usage: replay_log <log_file> --turn <N> [--rerun] [--trace] [--diff] "
-        "[--emit-test <out.cpp>]\n";
+        "[--stacks] [--emit-test <out.cpp>]\n";
 }
 
 std::optional<Args> parse_args(int argc, char** argv) {
@@ -64,6 +72,8 @@ std::optional<Args> parse_args(int argc, char** argv) {
       a.trace = true;
     } else if (s == "--diff") {
       a.diff = true;
+    } else if (s == "--stacks") {
+      a.stacks = true;
     } else if (s == "--emit-test" && i + 1 < argc) {
       a.emit_test_path = argv[++i];
     } else if (s == "-h" || s == "--help") {
@@ -115,6 +125,51 @@ const json* find_state_record(const std::vector<json>& records,
     if (turn) break;
   }
   return match;
+}
+
+// A STATE record for `turn`, cut from the first later one: its action history
+// is truncated after the `turn` marker whose `num` is `turn - 1` (log turn N is
+// the state before action N). `zcs_turn` is dropped because the later record's
+// value may postdate the cut; replaying the history recomputes it.
+std::optional<json> cut_state_record(const std::vector<json>& records, int turn) {
+  for (const auto& rec : records) {
+    if (rec.value("ch", "") != "STATE") continue;
+    if (rec.value("turn", -1) <= turn) continue;
+    json out = rec;
+    json kept = json::array();
+    bool found = false;
+    for (const auto& a : rec.at("replay").at("actions")) {
+      const std::string t = a.value("t", "");
+      if (turn <= 1 && t != "draw" && t != "status") {
+        found = true;
+        break;
+      }
+      kept.push_back(a);
+      if (t == "turn" && a.value("num", -1) == turn - 1) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) return std::nullopt;
+    out["replay"]["actions"] = kept;
+    out["replay"].erase("zcs_turn");
+    out["turn"] = turn;
+    out.erase("debug");
+    return out;
+  }
+  return std::nullopt;
+}
+
+// The three views a TIIAH seat holds, for scripts/tiiah_stacks.py.
+json stacks_json(const hanabi::Game& game) {
+  json j;
+  j["our_player_index"] = game.state.our_player_index;
+  j["current_player_index"] = game.state.current_player_index;
+  j["names"] = game.state.names;
+  j["play_stacks"] = game.state.play_stacks;
+  j["common_play_stacks"] = game.state.common_play_stacks;
+  j["pairwise_play_stacks"] = game.state.pairwise_play_stacks;
+  return j;
 }
 
 // Find the LIFECYCLE outbound_action that immediately follows the STATE at
@@ -238,6 +293,11 @@ int main(int argc, char** argv) {
   const int report_id = database_id >= 0 ? database_id : game_id;
 
   const json* state_rec = find_state_record(records, args.turn);
+  std::optional<json> cut;
+  if (!state_rec && args.turn) {
+    cut = cut_state_record(records, *args.turn);
+    if (cut) state_rec = &*cut;
+  }
   if (!state_rec) {
     std::cerr << "no STATE record"
               << (args.turn ? " for turn " + std::to_string(*args.turn) : "")
@@ -254,7 +314,13 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  if (args.stacks) {
+    std::cout << stacks_json(game).dump() << "\n";
+    return 0;
+  }
+
   std::cout << "loaded " << args.log_path << " — game " << report_id;
+  if (cut) std::cout << " [cut from a later STATE]";
   if (database_id >= 0 && game_id >= 0) std::cout << " (table " << game_id << ")";
   std::cout << " bot " << bot_name << " turn " << turn << "\n";
   std::cout << "reconstructed Game: turn_count=" << game.state.turn_count
@@ -273,6 +339,8 @@ int main(int argc, char** argv) {
     if (args.trace) {
       std::filesystem::path dir =
           std::filesystem::temp_directory_path() / "hanabi_replay_trace";
+      // The logger appends, so a previous run's records would be printed too.
+      std::filesystem::remove_all(dir);
       std::filesystem::create_directories(dir);
       trace_logger.emplace("trace", report_id >= 0 ? report_id : 0, dir.string());
       trace_path = trace_logger->path();
@@ -300,9 +368,11 @@ int main(int argc, char** argv) {
         } catch (const std::exception&) {
           continue;
         }
-        if (r.value("record", "") != "DECIDE") continue;
+        // The logger names the channel `ch`, as every per-game log does;
+        // matching on `record` alone never fired, so no branch was printed.
+        if (r.value("ch", r.value("record", "")) != "DECIDE") continue;
         json info = r;
-        for (const char* k : {"record", "ts", "turn", "game_id", "database_id",
+        for (const char* k : {"ch", "record", "ts", "turn", "game_id", "database_id",
                               "bot", "bot_name"}) {
           info.erase(k);
         }

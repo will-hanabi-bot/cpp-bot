@@ -675,6 +675,64 @@ bool advance_rows_from_own_worlds(Game& game) {
   return changed;
 }
 
+namespace {
+
+// §1e rule 6, asked of the SHARED view (v16.23.0).
+//
+// A player played a card the whole team could name. If it is the next card on the
+// shared stacks, the shared view simply takes it. If it lands ABOVE them, the team
+// is short of something -- and it can only be short by cards somebody threw in the
+// hole without naming them. Never presume a strike: the worlds of every seat's
+// superpositions in which the card could not land are refuted, the survivors'
+// common floor is one the team HOLDS, and the card itself goes on top.
+//
+// Every input is shared -- the play is public, the card's identity was common
+// knowledge, the superpositions are built from `common`, and the base is the
+// shared view -- so every seat reaches the same answer. Rule 6's other shared form,
+// `presume_play_lands`, fires only when a partner's play looks dead to OUR PRIVATE
+// stacks, so the seat that could see the missing card never ran it and its shared
+// view fell behind everybody else's.
+//
+// Replay 2011327: will-bot67 knew o17 was the r2 at T11, with red on 0 in the
+// shared view. The r1 had to be one of will-bot69's two hole cards, o4 {r1,y1} and
+// o18 {r1,r2,y1,y2}; strike-free, they are {r1,y1} either way round, so red and
+// yellow are both on 1 and the r2 makes red 2. will-bot69 had reached that long
+// before; will-bot67's shared view sat on red 0 for the rest of the game.
+void known_play_lands_in_common(Game& game, Identity known, int order) {
+  const State& s = game.state;
+  if (s.common_play_stacks.empty()) return;
+  if (playable_on(s, s.common_play_stacks, known)) {
+    game.with_state([known](State& st) { st = st.with_common_play(known); });
+    return;
+  }
+  const State base = s.shared_view();
+  if (base.is_basic_trash(known)) return;  // behind the shared view: nothing to explain
+
+  std::vector<int> everyone;
+  for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+  const auto worlds = open_worlds(game, base, everyone, 64, order);
+  std::vector<const OpenWorld*> surviving;
+  for (const OpenWorld* w : strike_free(worlds)) {
+    if (w->state.is_playable(known)) surviving.push_back(w);
+  }
+  if (!surviving.empty()) {
+    const std::vector<int> floor = world_floor(s, surviving);
+    prune_to_worlds(game, worlds, surviving, /*shared=*/true);
+    for (size_t k = 0; k < floor.size(); ++k) {
+      game.with_state([&](State& st) {
+        st = st.with_common_at_least(Identity{static_cast<int>(k), floor[k]});
+      });
+    }
+  }
+  // Whether or not a world names the missing cards, the team watched a card it
+  // could name go down, and presumes it landed.
+  game.with_state([known](State& st) {
+    st = st.with_common_at_least(known).with_rows_at_least_common();
+  });
+}
+
+}  // namespace
+
 void note_hidden_action(Game& game, const Action& raw) {
   if (!game.state.variant->throw_it_in_a_hole) return;
   // Only a card that reached the HOLE can be a superposition; a discard is
@@ -690,27 +748,58 @@ void note_hidden_action(Game& game, const Action& raw) {
   // action is dispatched: for a partner's card `on_play` is about to pin the
   // thought to the identity we could see and they could not.
   const IdentitySet candidates = game.common.thoughts[order].possibilities();
+  const int player = play->player_index_v;
+  const auto known = only_one(candidates);
+  const auto seen = game.state.deck[order].id();
 
-  if (auto known = only_one(candidates)) {
-    // The player knew what they were playing, so every seat can follow it and
-    // the shared view advances. Our own believed view is advanced by the
-    // engine, which is handed the same identity.
-    if (playable_on(game.state, game.state.common_play_stacks, *known)) {
-      game.with_state([known](State& st) { st = st.with_common_play(*known); });
+  // The ROWS (§1.3, v16.23.0). A row takes a play when both seats of the pair can
+  // name it, and it takes it as a floor: the pair watched the card land (never
+  // presume a strike), and a stack only goes up, so they know it stands at least
+  // that high whatever lower card neither of them can name. Before v16.23.0 a row
+  // could only take the NEXT card, and a play that arrived above a card the pair
+  // had not yet named was dropped for good.
+  //
+  // Which card they name is the one they WATCHED. The common reading is only our
+  // copy of what the player knew, and a copy read on a stale shared view can be
+  // wrong where our eyes are not.
+  //
+  // Replay 2011327. At T11 will-bot67 played o17 knowing it was the r2, while its
+  // row for will-bot69 still had red on 0 -- will-bot69's r1 was in the hole,
+  // unnamed -- so the r2 never entered that row and red stuck on 1 for the rest of
+  // the game. At T19 will-bot69 played o24, a y2, which will-bot67 had read as
+  // {y1} on its stale shared view; the rows took the y1, missed the y2, and the
+  // y3 at T25 could not land either. At T38 will-bot67 gave a reactive against a
+  // row with yellow on 1 that yagami read with yellow on 3, and she struck.
+  //
+  // Only a play our own belief says LANDED -- `presume_play_lands` has already
+  // asked every world of ours -- so a strike is never booked into anybody's view.
+  const bool ours = player == game.state.our_player_index;
+  const std::optional<Identity> named = seen ? seen : known;
+  if (named && game.state.is_playable(*named)) {
+    std::vector<int> knowers;
+    for (int p = 0; p < game.state.num_players; ++p) {
+      if (p == game.state.our_player_index) continue;
+      // The player's own row takes it only if the player could name it: they
+      // cannot see the card they threw. Our own card we name only through
+      // `known`, which is what every seat watching it reads too.
+      if (p == player && !known) continue;
+      if (ours && !known) continue;
+      knowers.push_back(p);
     }
-    advance_pairwise(game, *known, play->player_index_v, /*self_knew=*/true);
+    game.with_state([&](State& st) { st = st.with_pairwise_at_least(*named, knowers); });
+  }
+
+  if (known) {
+    // The player knew what they were playing, so every seat can follow it and
+    // the shared view takes it (§1e rule 6's shared-view form, v16.23.0, when it
+    // lands above that view). Our own believed view is advanced by the engine,
+    // which is handed the same identity.
+    known_play_lands_in_common(game, *known, order);
     return;
   }
   if (candidates.is_empty()) return;
-  // The player could not name it — but WE may still be able to, because we
-  // watched the card leave their hand. That is the case the pairwise rows
-  // exist for: everyone but the player knows this play, so every other seat's
-  // row advances while the shared view stays put. Our own card is the one we
-  // cannot name, and it contributes to nobody's row (seat p watched it, but we
-  // cannot say what it was, so we cannot write it down).
-  if (auto seen = game.state.deck[order].id()) {
-    advance_pairwise(game, *seen, play->player_index_v, /*self_knew=*/false);
-  }
+  // The player could not name it, so it is a superposition -- for them, and for
+  // the shared view. The watchers' rows took it above.
   game.with_meta(order, [candidates](ConvData& m) { m.superposition = candidates; });
 }
 

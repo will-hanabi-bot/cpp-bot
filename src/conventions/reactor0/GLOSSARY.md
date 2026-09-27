@@ -304,7 +304,7 @@ their chop is expendable, or they already hold a known play, a
 clue from its candidate set when a stable clue to Bob would instead get a card
 played. The dedicated filter this named was removed in v7.0.0; the rule now
 lives in the General Clue Evaluation List's priority 2 admissibility condition,
-`discard_is_affordable` (`src/conventions/reactor0/decision.cpp:354-360`).
+`discard_is_affordable` (`src/conventions/reactor0/decision.cpp:372-378`).
 Reactive locks are exempt. Named from replay 1942181 T41.
 
 ### call invariants
@@ -615,7 +615,13 @@ card is marked known trash and nothing else happens — it is **terminal**,
 never a referential discard, and (unlike the aspirational reactor
 trash-push entry in TODO.md) never a play. Priority 2 of the stable rank
 ladder; priority 3 extends it to previously-clued cards revealed as trash.
-`interpret_clue.cpp:241-274`.
+`interpret_clue.cpp:898-911`.
+
+As a clue SHAPE (`ClueShape::TRASH_REVEAL`, what DECISION_MAKING.md 3.3 / 4.2
+select), it is wider: any stable clue after which a card in Bob's hand is known
+trash to the team that was not before — including a colour or rank clue that
+narrows an already-clued card to trash, which interpretation reads as FIX, REVEAL
+or STALL (v16.23.0; `read_stable`, `decision.cpp:173-202`; replay 2011327 T22).
 
 ### Absent by design
 Concepts reactor has that reactor0 deliberately lacks: **reactive focus**

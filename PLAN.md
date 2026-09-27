@@ -185,8 +185,8 @@ The implementation should invent none of these:
 | new touches / fill-ins / elims | `elim_result` | `src/basics/clue_result.cpp` |
 | trash touched (default tiebreak) | `bad_touch_result` | `src/basics/clue_result.cpp` |
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `reactor0/interpret_clue.cpp:211-231` |
-| candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:212-231` |
-| colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:201-210` |
+| candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
+| colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
 | chop | `Game::chop` | `src/basics/decide.cpp:432-461` |
 | safe discard button (inverted suits) | `discard_button_is_safe` | `src/basics/decide.cpp:938-958` |
 

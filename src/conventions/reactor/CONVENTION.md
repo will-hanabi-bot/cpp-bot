@@ -59,7 +59,7 @@ Six terms are used throughout without further comment; the rest are in
 
 - **critical** — an identity with exactly one copy left undiscarded that is still
   useful. Losing it lowers the maximum achievable score
-  (`src/basics/state.cpp:163-167`).
+  (`src/basics/state.cpp:77-108`).
 - **loaded / unloaded** — loaded means the player has an obvious playable or a
   known trash, i.e. something safe to do (`obvious_loaded`,
   `player_game.cpp:233-236`).
@@ -696,7 +696,7 @@ Also pinkish-only:
   **minimum-order** (rightmost, oldest) newly-touched-and-previously-unclued
   card (`interpret_clue.cpp:471-473`).
 - **Blocked ranks** — with `pink_s`, `brown_s`, or `deceptive_s`, the special
-  rank cannot be used as a clue value at all (`state.cpp:212-231`), and the
+  rank cannot be used as a clue value at all (`state.cpp:350-395`), and the
   `/settings` table renders those slots as `-`
   (`reactive_table.cpp:35-38`, `:156-165`).
 
@@ -851,7 +851,7 @@ touched" means:
 |---|---|---|
 | `dark` suits, `critical_rank` | `card_count == 1` — every such card is critical. | `variant.cpp:183` |
 | `scarce_ones` | Rank-1 count is 2 instead of 3. | `variant.cpp:184` |
-| `clue_starved` | Playing a 5 returns half a clue token. | `src/basics/state.cpp:127-133` |
+| `clue_starved` | Playing a 5 returns half a clue token. | `src/basics/state.cpp:251-264` |
 | Ambiguous | Several suits share a clue colour; see §1b.1. | `variant.cpp:114-128`, `:218-226` |
 
 ### 1b.8 Unsupported variants

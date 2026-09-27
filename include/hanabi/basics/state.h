@@ -122,6 +122,15 @@ struct State {
   // Advance the pairwise rows for every seat in `knowers` (Throw It in a Hole).
   // The caller decides who learned it; see `tiiah::note_hidden_action`.
   State with_pairwise_play(Identity id, const std::vector<int>& knowers) const;
+  // RAISE-ONLY forms of the two above (Throw It in a Hole, v16.23.0): the view
+  // goes to AT LEAST `id`, and a view already at or past it is left alone. A
+  // play both seats of a pair can name puts the stack at least that high for
+  // them, whatever lower card neither of them can name (tiiah §1.3).
+  State with_common_at_least(Identity id) const;
+  State with_pairwise_at_least(Identity id, const std::vector<int>& knowers) const;
+  // Every row raised to at least the shared view, suit by suit: what all seats
+  // know, every pair knows.
+  State with_rows_at_least_common() const;
   State try_play(Identity id) const;
   State regain_clue() const;
   // This state with the SHARED stacks in place of our own belief: what every

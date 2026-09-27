@@ -806,15 +806,22 @@ player who drew them is not expected to throw them, and the promise is that the
 locked card is safe to lose.
 
 The lock itself is implemented. `Game::zcs_turn` records the turn the team ran
-dry (`decide.cpp:352`), `chop`'s second pass skips any card drawn after it
-(`decide.cpp:609-614`), and `reset_zcs` fires only on an action taken from a
-state that still had a clue (`decide.cpp:351`, `:468`, `:497`) — so a discard
+dry (`decide.cpp:411`), `chop`'s second pass skips any card drawn after it
+(`decide.cpp:797-803`), and `reset_zcs` fires only on an action taken from a
+state that still had a clue (`decide.cpp:410`, `:608`, `:670`) — so a discard
 that buys the token back does not clear it, which is the "until the player
 before Alice has at least one clue" part.
 
+**Settled in v16.23.0: a lock that leaves NO chop.** When every card that
+predates the lock is clued, the promise has nothing to protect, and the ruling is
+that Alice discards the first card drawn during the stall rather than pitching
+slot 1 blind (`12.discard_stall_drawn`, `calls.cpp:533-561`; replay 2011327 T32,
+DECISION_MAKING.md rung 12). What follows is the case that is still open: a locked
+card that EXISTS, and a nameable trash card competing with it.
+
 What is undefined is what happens when Alice holds a card she can *name* as
 trash while the lock is on. Phase 2's chuck and pitch rungs all sit **above**
-the `12.discard_chop` floor (`calls.cpp:494`, `:553`), so any chuck candidate
+the `12.discard_chop` floor (`calls.cpp:494`, `:577`), so any chuck candidate
 pre-empts the locked chop. v10.4.0 made that far more common by removing the
 `possible`-must-agree guard from `is_chuckable`, and the two readings genuinely
 conflict:
@@ -1310,7 +1317,7 @@ card that strikes in *every* world, which a 20-candidate set cannot do.
 
 CONVENTION.md §1c, §1h. `ClueCandidate::refuses_dead_target` gets a candidate into
 Precedence step 1's pool, but `choose_very_high_clue` still runs
-`clue_is_admissible` on it (`reactor0/decision.cpp:1702`), which inside its pace
+`clue_is_admissible` on it (`reactor0/decision.cpp:1720`), which inside its pace
 window reads `c.tier` and nothing else. A refusal stamps nothing that lifts a tier, so
 it is LOW, so an OCCUPIED Alice at any positive pace with fewer than 8 tokens has every
 refusal she could give rejected — before its priority is ever consulted.
@@ -1397,3 +1404,25 @@ true for a reactive blind play, which is named by §1d's bucket relation.
 
 The cure is not a test here; it is making our copy of a partner's reading right, which is
 what TODO 48 wants. Until then this is a known gap rather than an unknown one.
+
+**v16.23.0 narrows it.** Rule 6 now also has a form asked of the SHARED view
+(`known_play_lands_in_common`, CONVENTION.md §1e): whenever a card the whole team could
+name lands above the shared stacks, every seat refutes the same worlds from the same
+inputs. That covers the watcher who never ran the partner form because the play landed
+on its own stacks — replay 2011327, where will-bot67's shared view sat on red 0 for 27
+turns while will-bot69's had red 4. What is left of this entry is the private-sight form
+itself (`presume_play_lands`, `shared=true`) on a blind play whose reading the seats
+disagree about; it is kept because 2011133 needs it. `scripts/tiiah_stacks.py` now shows
+any such disagreement directly, flagged `≠`.
+
+---
+
+## 55. `[reactor0]` Rung 3.7 counts known trash as "close to playable"
+
+`DECISION_MAKING.md` 3.7 locks Bob when enough of his cards are close to playable, and
+`missing_connectors` gives basic trash 0 missing connectors, so a card Bob already holds
+as trash counts toward the lock. Replay 2011327 T22: will-bot67's clued r2 (red on 2)
+counted, which helped 3.7 qualify. Since v16.23.0 the Red trash reveal wins at 3.3 before
+3.7 is asked, so this no longer decided that turn — but a trash card is the opposite of
+close to playable, and a hand whose "close" cards are partly trash is not a hand to lock.
+Not changed: it is a rung condition, and would move other turns.

@@ -159,6 +159,51 @@ State State::with_pairwise_play(Identity id,
   return out;
 }
 
+namespace {
+
+// Is `rank` further along its suit than a stack standing at `height`? A
+// reversed suit counts down, so "further" is the smaller number there.
+bool beyond(const Variant& v, int suit, int height, int rank) {
+  return v.suits[suit].suit_type.reversed ? rank < height : rank > height;
+}
+
+}  // namespace
+
+State State::with_common_at_least(Identity id) const {
+  if (common_play_stacks.empty()) return *this;
+  if (!beyond(*variant, id.suit_index, common_play_stacks[id.suit_index], id.rank)) {
+    return *this;
+  }
+  return with_common_play(id);
+}
+
+State State::with_pairwise_at_least(Identity id,
+                                    const std::vector<int>& knowers) const {
+  if (pairwise_play_stacks.empty()) return *this;
+  std::vector<int> raise;
+  for (int p : knowers) {
+    if (p < 0 || p >= static_cast<int>(pairwise_play_stacks.size())) continue;
+    if (beyond(*variant, id.suit_index, pairwise_play_stacks[p][id.suit_index],
+               id.rank)) {
+      raise.push_back(p);
+    }
+  }
+  return raise.empty() ? *this : with_pairwise_play(id, raise);
+}
+
+State State::with_rows_at_least_common() const {
+  if (pairwise_play_stacks.empty() || common_play_stacks.empty()) return *this;
+  State out = *this;
+  for (auto& row : out.pairwise_play_stacks) {
+    for (size_t k = 0; k < row.size() && k < common_play_stacks.size(); ++k) {
+      if (beyond(*variant, static_cast<int>(k), row[k], common_play_stacks[k])) {
+        row[k] = common_play_stacks[k];
+      }
+    }
+  }
+  return out;
+}
+
 State State::with_stacks(const std::vector<int>& stacks) const {
   if (stacks.size() != play_stacks.size()) return *this;
   State out = *this;

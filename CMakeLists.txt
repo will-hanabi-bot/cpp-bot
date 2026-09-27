@@ -372,6 +372,10 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_refusal_clue.cpp
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2011327_trash_reveal_over_lock.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
+  tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
+  tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966091_lock_must_not_outrank_reaction.cpp
@@ -436,6 +440,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_fix_clue.cpp
   tests/test_tiiah/test_replay_2011133_rule_six_is_shared.cpp
   tests/test_tiiah/test_replay_2011319_discarded_playable_was_already_played.cpp
+  tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
+  tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp

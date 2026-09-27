@@ -96,8 +96,8 @@ cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         341 tests,  7 s
 build/hanabi_tests.exe            # convention-neutral    390 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
-build/hanabi_decision_tests.exe   # decision quality      166 tests,  0.7 s
-build/hanabi_tiiah_tests.exe      # Throw It in a Hole    109 tests,  0.2 s
+build/hanabi_decision_tests.exe   # decision quality      173 tests,  0.7 s
+build/hanabi_tiiah_tests.exe      # Throw It in a Hole    116 tests,  0.2 s
 ```
 
 Pick the scope from the report's `Convention:` field:
@@ -236,6 +236,28 @@ When a bug report arrives with `(game_id, turn, expected vs actual)`:
 
    If the rerun action now MATCHES the expected action, the prior log was
    from a build that already had the bug fixed — diff `kBotVersion`s.
+
+   A bot logs a STATE record only on its own turns. For any other turn,
+   `--turn N` cuts the first later STATE back to turn N (its action history is
+   truncated), so every seat's log can be replayed at every turn. `--trace`
+   prints the DECIDE branches the rerun fired; `--stacks` prints the seat's
+   stack views as one JSON line.
+
+   **Throw It in a Hole: print all seven stacks.** Whenever a specific turn of a
+   TIIAH game is investigated, run
+   ```
+   scripts/tiiah_stacks.py <game_id> <turn>
+   ```
+   and put its output in the report. It prints, in short form (one digit per
+   suit in suit-index order, e.g. `43133`): Alice's, Bob's and Cathy's private
+   stacks (Alice is the seat to act), pairwise(Alice,Bob), pairwise(Alice,Cathy),
+   pairwise(Bob,Cathy) and the common stacks. It also shows each pair from BOTH
+   of its members' logs and the common stacks from every seat's, flagged `≠`
+   where they disagree, plus the true stacks for reference. A seat with no log
+   (the human) is simulated from the others' and marked `*`. A pair or the
+   common view is by definition one thing, so a `≠` is a bug in somebody's
+   bookkeeping, and often the first wrong fact in the game. Run it at earlier
+   turns too, to find where two seats first diverge.
 
 4. **Generate a regression test only after you understand the branch.**
    ```
