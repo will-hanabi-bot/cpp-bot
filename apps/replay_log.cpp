@@ -169,6 +169,30 @@ json stacks_json(const hanabi::Game& game) {
   j["play_stacks"] = game.state.play_stacks;
   j["common_play_stacks"] = game.state.common_play_stacks;
   j["pairwise_play_stacks"] = game.state.pairwise_play_stacks;
+  // The cards in the hole nobody has named yet, as [suit, rank] candidates.
+  json sup = json::object();
+  for (size_t o = 0; o < game.meta.size(); ++o) {
+    if (!game.meta[o].superposed()) continue;
+    json ids = json::array();
+    for (hanabi::Identity id : game.meta[o].superposition) {
+      ids.push_back({id.suit_index, id.rank});
+    }
+    sup[std::to_string(o)] = ids;
+  }
+  j["superpositions"] = sup;
+  // Every card called to play, with the reading all seats share.
+  json called = json::object();
+  for (const auto& hand : game.state.hands) {
+    for (int o : hand) {
+      if (game.meta[o].status != hanabi::CardStatus::CALLED_TO_PLAY) continue;
+      json ids = json::array();
+      for (hanabi::Identity id : game.common.thoughts[o].inferred) {
+        ids.push_back({id.suit_index, id.rank});
+      }
+      called[std::to_string(o)] = ids;
+    }
+  }
+  j["called"] = called;
   return j;
 }
 

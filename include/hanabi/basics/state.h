@@ -72,6 +72,23 @@ struct State {
   // while a clue only has to mean one thing to the two seats it is between.
   // Empty outside TIIAH. Row `our_player_index` is unused.
   std::vector<std::vector<int>> pairwise_play_stacks;
+  // The same rows WITHOUT the world floors (`tiiah::advance_rows_from_own_worlds`):
+  // only the plays the pair can name. What hole-card worlds are replayed on --
+  // replaying a world on a row its own floor already lifted strikes the world that
+  // produced the floor (v16.24.0, replay 2011327 T36: `{b3,b4}` on a row already
+  // at blue 3 left only the b4 world, and the row went to blue 4).
+  std::vector<std::vector<int>> pairwise_evidence;
+  // `common_play_stacks` without its world floors, for the same reason.
+  std::vector<int> common_evidence;
+  // ...and `play_stacks` -- our own belief -- without the floor
+  // `tiiah::presume_own_plays_land` raises it to. Empty outside TIIAH.
+  std::vector<int> play_evidence;
+  // Our belief carrying its band: the base our own hole-card worlds replay on.
+  State private_base() const;
+  // TRANSIENT, for world replay only (`tiiah::open_worlds`): the evidence heights
+  // under `play_stacks` when this state is a view with a band of cards known to be
+  // down but not tied to a card. Empty everywhere else.
+  std::vector<int> band_floor;
   // discard_stacks[suit][rank-1] = orders of cards discarded for that identity,
   // newest first (matching Scala's `order +: list` cons).
   std::vector<std::array<std::vector<int>, 5>> discard_stacks;
@@ -131,6 +148,18 @@ struct State {
   // Every row raised to at least the shared view, suit by suit: what all seats
   // know, every pair knows.
   State with_rows_at_least_common() const;
+  // Raise the shared view to a world FLOOR, leaving `common_evidence` where it is.
+  State with_common_floor(const std::vector<int>& floor) const;
+  // Raise row `p` to a world FLOOR, leaving `pairwise_evidence` where it is.
+  State with_pairwise_floor(int p, const std::vector<int>& floor) const;
+  // `stacks_known_to_both` on the evidence rows.
+  std::vector<int> evidence_known_to_both(int a, int b) const;
+  // This state carrying `band_floor = lo`, for replaying hole-card worlds on a view.
+  State with_band(const std::vector<int>& lo) const {
+    State out = *this;
+    out.band_floor = lo;
+    return out;
+  }
   State try_play(Identity id) const;
   State regain_clue() const;
   // This state with the SHARED stacks in place of our own belief: what every

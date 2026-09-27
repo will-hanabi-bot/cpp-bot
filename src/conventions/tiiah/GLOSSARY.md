@@ -126,15 +126,41 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:504-514`), read by
+(`src/conventions/tiiah/superposition.cpp:561-571`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
 What the survivors agree on is the **floor**: the least advanced height any of them
-reaches, per suit (`world_floor`, `:451-466`). It raises a partner's row (v16.18.0)
+reaches, per suit (`world_floor`, `:542-557`). It raises a partner's row (v16.18.0)
 and, since v16.19.0, our own `play_stacks` — two cards each reading `{g1,b1}` were one
 of each, so both suits are on 1 even though neither card can be named. The copies stay
 unbooked, since which card was which is exactly what is unknown.
+
+### frame
+The stacks a reactive's target is walked in: the **minimum**, suit by suit, across
+every world the reacter can live in, from the giver's perspective (v16.24.0). For the
+pair it is their row; for an outside seat, the shared view floored over every seat's
+worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:171-183`.
+CONVENTION.md §1e. It replaced "assume none of the superposed cards were played".
+
+### feasible world
+A *world* the targeting rules allow (v16.24.0). Every reactive play clue that
+resolves is kept as a `ReactionRecord`; a world in which two or more of the
+receiver's cards from that clue sit, and one of them would have out-ranked the card
+the reacter called in the target walk (a direct playable before a finesse, each
+leftmost first), is not the world we are in. `world_feasible`,
+`src/conventions/tiiah/superposition.cpp:609-655`; `open_worlds` drops such worlds
+and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
+
+### evidence / band
+Every view keeps two vectors (v16.24.0): the view itself, which floors and a card
+named above a gap raise to AT LEAST a height, and its **evidence**, which only
+advances by the next card it can name (`State::pairwise_evidence`,
+`common_evidence`, `play_evidence`). The gap between them is the **band**: cards the
+view counts as down without knowing which card each was. A world replayed on a view
+absorbs a card whose rank falls in the band — once per rank — instead of striking it
+(`State::with_band`, `enumerate_worlds`). Without it a floor replayed on itself
+struck the very world that produced it (replay 2011327 T36).
 
 ### conditional reading
 A reading that holds only in some *worlds* — e.g. `{r1, y1, r2, y2}` where the
@@ -149,12 +175,11 @@ it; anything their stack has above ours can only be what we threw in the hole.
 of §1e's collapse, and the only one that tells a seat about its OWN past.
 
 ### shared view
-`State::shared_view()` (`src/basics/state.cpp:207-227`): this state with the
+`State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
 *common stacks* in place of `play_stacks`, and `playable_set` / `trash_set`
-rebuilt to match. Since a superposed play never advanced the common stacks, it
-is also the state "assuming none of the superposed cards were played" — §1e's
-rule and §1.3's shared reading are one thing. Returns the state unchanged
-outside TIIAH.
+rebuilt to match. As of v16.24.0 the common stacks are the MINIMUM across every
+seat's worlds (`advance_common_from_worlds`, §1e), not "assuming none of the
+superposed cards were played". Returns the state unchanged outside TIIAH.
 
 ### bucket
 One of three groups of suits, used by the reactive clues to say what a card IS
@@ -179,7 +204,7 @@ A card stamped `CALLED_TO_PLAY` whose inference still holds at least one good
 playable identity, **or** a card whose global empathy is entirely playable
 identities. Read from `common`, so every seat agrees. It is what the
 dispatch keys on — it is what decides which seat's clue carries the reaction.
-`has_known_play`, `src/conventions/variants/hole.cpp:51-67`. CONVENTION.md §1c.
+`has_known_play`, `src/conventions/variants/hole.cpp:57-73`. CONVENTION.md §1c.
 
 ### reverse reactive
 The second of TIIAH's two dispatches. When Bob holds a known play and Cathy does
@@ -189,7 +214,7 @@ that position reactor0's positional rule stands: a clue to Cathy is the reactive
 one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:69-85`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:75-91`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch
@@ -207,7 +232,7 @@ inverted card. Inverted playables and inverted finesses are otherwise skipped as
 reactive targets. The reacter's own card has to be **affordable to chuck** —
 inverted and playable, so the button plays it, or simply not critical — and a
 pairing that fails that is refused outright, since the reacter cannot see their
-own hand. `safe_to_chuck`, `src/conventions/tiiah/interpret_reactive.cpp:72-79`.
+own hand. `safe_to_chuck`, `src/conventions/tiiah/interpret_reactive.cpp:94-100`.
 CONVENTION.md §1d.
 
 ### delayed call
@@ -222,8 +247,11 @@ CONVENTION.md §1c.
 The state of a player who has played a card without learning what it was: the
 identities it could have been, stamped on `ConvData::superposition` at the moment
 of the play and built from `common`, so all three seats hold the same set. A
-player may hold several at once, and everyone tracks everyone's. A superpositioned
-reacter picks its target assuming **none** of the superposed cards were played.
+player may hold several at once, and everyone tracks everyone's. A reactive's
+target is walked on the *frame*: the minimum across every world the reacter can
+live in (v16.24.0; it was "assuming none of the superposed cards were played").
+`ConvData::hole_turn` records when the card went in, the order its worlds are
+replayed in.
 `note_hidden_action`, `src/conventions/tiiah/superposition.cpp`. CONVENTION.md §1e.
 
 A **reactive blind play is often not a superposition at all**: §1d's bucket relation

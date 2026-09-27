@@ -46,6 +46,9 @@ State State::create(std::vector<std::string> names, int our_player_index,
       s.max_ranks[suit_index] = 1;
     }
   }
+  s.pairwise_evidence = s.pairwise_play_stacks;
+  s.common_evidence = s.common_play_stacks;
+  if (variant.throw_it_in_a_hole) s.play_evidence = s.play_stacks;
 
   IdentitySet playable = IdentitySet::empty();
   IdentitySet critical = IdentitySet::empty();
@@ -118,6 +121,12 @@ State State::with_play(Identity id) const {
   if (next) new_playable = new_playable.union_with(*next);
 
   out.play_stacks[id.suit_index] = id.rank;
+  // Throw It in a Hole: the evidence half of our belief advances only through
+  // the prefix -- a world floor raised `play_stacks` without it (v16.24.0).
+  if (!out.play_evidence.empty()) {
+    int& e = out.play_evidence[id.suit_index];
+    if (reversed ? id.rank == e - 1 : id.rank == e + 1) e = id.rank;
+  }
   ++out.base_count[id.to_ord()];
   out.playable_set = new_playable;
   out.trash_set = trash_set.union_with(id);
@@ -130,6 +139,31 @@ State State::with_play(Identity id) const {
   return out;
 }
 
+namespace {
+
+// Is `rank` further along its suit than a stack standing at `height`? A
+// reversed suit counts down, so "further" is the smaller number there.
+bool beyond(const Variant& v, int suit, int height, int rank) {
+  return v.suits[suit].suit_type.reversed ? rank < height : rank > height;
+}
+
+// Is `rank` the NEXT card on a stack standing at `height`?
+bool next_on(const Variant& v, int suit, int height, int rank) {
+  return v.suits[suit].suit_type.reversed ? rank == height - 1 : rank == height + 1;
+}
+
+// The EVIDENCE half of a view (v16.24.0) advances only through the prefix: it is
+// the plays the seats can name in sequence. A card named above a gap raises the
+// view itself to at least that card, and the gap is a band of cards the seats
+// know are down without being able to say which card each was -- the band a
+// hole card of theirs can be (`tiiah::open_worlds`).
+void advance_evidence(const Variant& v, std::vector<int>& ev, Identity id) {
+  if (id.suit_index >= static_cast<int>(ev.size())) return;
+  if (next_on(v, id.suit_index, ev[id.suit_index], id.rank)) ev[id.suit_index] = id.rank;
+}
+
+}  // namespace
+
 // Advance the SHARED view only. Throw It in a Hole's second stack vector:
 // the caller has decided that this play's identity was common knowledge, or
 // that a superposition collapsed on evidence every seat shares.
@@ -141,6 +175,18 @@ State State::with_common_play(Identity id) const {
   State out = *this;
   if (out.common_play_stacks.empty()) return out;
   out.common_play_stacks[id.suit_index] = id.rank;
+  advance_evidence(*out.variant, out.common_evidence, id);
+  return out;
+}
+
+State State::with_common_floor(const std::vector<int>& floor) const {
+  if (common_play_stacks.empty()) return *this;
+  State out = *this;
+  for (size_t k = 0; k < out.common_play_stacks.size() && k < floor.size(); ++k) {
+    if (beyond(*variant, static_cast<int>(k), out.common_play_stacks[k], floor[k])) {
+      out.common_play_stacks[k] = floor[k];
+    }
+  }
   return out;
 }
 
@@ -155,53 +201,79 @@ State State::with_pairwise_play(Identity id,
   for (int p : knowers) {
     if (p < 0 || p >= static_cast<int>(out.pairwise_play_stacks.size())) continue;
     out.pairwise_play_stacks[p][id.suit_index] = id.rank;
+    if (p < static_cast<int>(out.pairwise_evidence.size())) {
+      advance_evidence(*out.variant, out.pairwise_evidence[p], id);
+    }
   }
   return out;
 }
 
-namespace {
-
-// Is `rank` further along its suit than a stack standing at `height`? A
-// reversed suit counts down, so "further" is the smaller number there.
-bool beyond(const Variant& v, int suit, int height, int rank) {
-  return v.suits[suit].suit_type.reversed ? rank < height : rank > height;
-}
-
-}  // namespace
-
 State State::with_common_at_least(Identity id) const {
   if (common_play_stacks.empty()) return *this;
-  if (!beyond(*variant, id.suit_index, common_play_stacks[id.suit_index], id.rank)) {
-    return *this;
+  State out = *this;
+  const int k = id.suit_index;
+  if (beyond(*variant, k, out.common_play_stacks[k], id.rank)) {
+    out.common_play_stacks[k] = id.rank;
   }
-  return with_common_play(id);
+  advance_evidence(*variant, out.common_evidence, id);
+  return out;
 }
 
 State State::with_pairwise_at_least(Identity id,
                                     const std::vector<int>& knowers) const {
   if (pairwise_play_stacks.empty()) return *this;
-  std::vector<int> raise;
+  State out = *this;
+  const int k = id.suit_index;
   for (int p : knowers) {
-    if (p < 0 || p >= static_cast<int>(pairwise_play_stacks.size())) continue;
-    if (beyond(*variant, id.suit_index, pairwise_play_stacks[p][id.suit_index],
-               id.rank)) {
-      raise.push_back(p);
+    if (p < 0 || p >= static_cast<int>(out.pairwise_play_stacks.size())) continue;
+    // Both vectors, each on its own: the row takes the card as a floor, the
+    // evidence only when it is the next card it can name.
+    if (beyond(*variant, k, out.pairwise_play_stacks[p][k], id.rank)) {
+      out.pairwise_play_stacks[p][k] = id.rank;
+    }
+    if (p < static_cast<int>(out.pairwise_evidence.size())) {
+      advance_evidence(*variant, out.pairwise_evidence[p], id);
     }
   }
-  return raise.empty() ? *this : with_pairwise_play(id, raise);
+  return out;
 }
 
 State State::with_rows_at_least_common() const {
   if (pairwise_play_stacks.empty() || common_play_stacks.empty()) return *this;
   State out = *this;
-  for (auto& row : out.pairwise_play_stacks) {
-    for (size_t k = 0; k < row.size() && k < common_play_stacks.size(); ++k) {
-      if (beyond(*variant, static_cast<int>(k), row[k], common_play_stacks[k])) {
-        row[k] = common_play_stacks[k];
+  auto raise = [&](std::vector<std::vector<int>>& rows, const std::vector<int>& to) {
+    for (auto& row : rows) {
+      for (size_t k = 0; k < row.size() && k < to.size(); ++k) {
+        if (beyond(*variant, static_cast<int>(k), row[k], to[k])) row[k] = to[k];
       }
     }
+  };
+  raise(out.pairwise_play_stacks, common_play_stacks);
+  if (!common_evidence.empty()) raise(out.pairwise_evidence, common_evidence);
+  return out;
+}
+
+State State::with_pairwise_floor(int p, const std::vector<int>& floor) const {
+  if (p < 0 || p >= static_cast<int>(pairwise_play_stacks.size())) return *this;
+  State out = *this;
+  auto& row = out.pairwise_play_stacks[p];
+  for (size_t k = 0; k < row.size() && k < floor.size(); ++k) {
+    if (beyond(*variant, static_cast<int>(k), row[k], floor[k])) row[k] = floor[k];
   }
   return out;
+}
+
+State State::private_base() const {
+  return play_evidence.empty() ? *this : with_band(play_evidence);
+}
+
+std::vector<int> State::evidence_known_to_both(int a, int b) const {
+  if (pairwise_evidence.empty()) return stacks_known_to_both(a, b);
+  const int rows = static_cast<int>(pairwise_evidence.size());
+  auto row = [&](int p) { return p >= 0 && p < rows; };
+  if (a == our_player_index && row(b)) return pairwise_evidence[b];
+  if (b == our_player_index && row(a)) return pairwise_evidence[a];
+  return common_evidence.empty() ? common_play_stacks : common_evidence;
 }
 
 State State::with_stacks(const std::vector<int>& stacks) const {

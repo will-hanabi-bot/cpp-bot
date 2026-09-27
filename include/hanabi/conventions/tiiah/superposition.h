@@ -11,6 +11,7 @@
 // needs the same bookkeeping.
 #pragma once
 
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -35,6 +36,9 @@ struct OpenWorld {
   std::vector<std::pair<int, Identity>> assignment;
   State state;
   bool struck = false;
+  // Per suit, the ranks of the base's BAND (`State::band_floor`) this world's
+  // cards have already been absorbed as -- each can be one card only.
+  std::vector<unsigned> absorbed;
 };
 
 // The worlds the cards `holders` still have in the hole leave open, starting
@@ -66,6 +70,40 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
 // struck, or all of them when every world has a strike in it — then the strike
 // is real and there is nothing to refute.
 std::vector<const OpenWorld*> strike_free(const std::vector<OpenWorld>& worlds);
+
+// Keep the conditional half of a reading, so a later fact can withdraw it: each
+// candidate of `support` carries a bitmask over `worlds`, and one every world
+// agrees on is unconditional and left out (`ConvData::ConditionalReading`).
+void record_conditional(Game& game, int order, const std::vector<OpenWorld>& worlds,
+                        const std::vector<std::pair<Identity, std::uint64_t>>& support);
+
+// A world is FEASIBLE when every reactive play clue its cards were in the receiver's
+// hand for could have produced the reaction we watched (§1e, v16.24.0). The target
+// walk takes a direct playable before a finesse, and each leftmost first; a world
+// in which one of our superposed cards would have out-ranked the card the reacter
+// actually called cannot be the world we are in. `open_worlds` drops such worlds
+// (all of them kept when none survives).
+bool world_feasible(const Game& game, const OpenWorld& world);
+
+// §1e, the STABLE half of "what a card means depends on what you threw away"
+// (v16.24.0). The stable ladder read the clue on one frame, `view`; a card it has
+// just called to play is re-read in every strike-free world of the pair's hole
+// cards, and the reading becomes the union -- the next card of the same suit in
+// each world -- with the conditional half recorded. One world: nothing changes.
+// Returns whether a reading widened.
+bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& action,
+                             const std::vector<int>& view);
+
+// `base` raised, suit by suit, to the height every strike-free world of `holders`'
+// hole cards reaches -- the MINIMUM across those worlds (§1e, v16.24.0). What a
+// frame is: the stacks a seat can count on whichever world it lives in.
+std::vector<int> floor_over_worlds(const Game& game, const std::vector<int>& base,
+                                   const std::vector<int>& holders,
+                                   const std::vector<int>& band = {});
+
+// The identities playable in SOME strike-free world of our own hole cards, on our
+// belief -- what a call on our own card may be when we cannot name what we threw.
+IdentitySet playable_in_some_own_world(const Game& game);
 
 // The other half of a conditional reading: an antecedent has narrowed to
 // `still`, so every world it contradicts is gone, and so is every candidate that

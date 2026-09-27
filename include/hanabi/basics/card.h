@@ -167,6 +167,10 @@ struct ConvData {
   //
   // Survives `cleared()`: like `note_mark` it is knowledge, not a live call.
   IdentitySet superposition = IdentitySet::empty();
+  // The turn the card went into the hole, which is the order its world
+  // assignments must be replayed in: card ORDER is draw order, and a card drawn
+  // early can be played late (replay 2011397: o8 after o9). -1 when unknown.
+  int hole_turn = -1;
 
   bool superposed() const { return superposition.non_empty(); }
 

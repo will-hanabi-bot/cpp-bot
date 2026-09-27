@@ -1125,8 +1125,11 @@ TEST(TiiahReplay2010512, ReceiverReadsTheReacterPlay) {
       << "and its T10 play: bucket 2 on [0,0,0,1,1] is the p2";
 
   // 2. Which is what puts purple on 2 in the view every seat shares -- the thing a
-  //    superposed play cannot do.
-  const std::vector<int> shared{0, 0, 0, 1, 2};
+  //    superposed play cannot do. Red and yellow are on 1 there too as of v16.24.0:
+  //    will-bot67's own {r1,y1} pair on orders 5 and 7 leaves (r1,y1) and (y1,r1)
+  //    as the only strike-free worlds, every seat can see that, and the shared view
+  //    is the minimum across every seat's worlds (§1e).
+  const std::vector<int> shared{1, 1, 0, 1, 2};
   EXPECT_EQ(game.state.common_play_stacks, shared)
       << "it read [0,0,0,1,0] before, with purple stuck behind two plays it could not "
          "name on yagami's behalf";

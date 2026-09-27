@@ -104,8 +104,32 @@ struct ReactorWC {
   // where the walk never ran. Last, for the same reason `rlocks` and
   // `clue_play_stacks` are: reactor aggregate-initializes this positionally.
   int receiver_target_order = -1;
+  // THROW IT IN A HOLE, for world feasibility (tiiah/CONVENTION.md §1e, v16.24.0):
+  // the frame the RECEIVER can reconstruct the target walk in (the shared view at
+  // clue time, which every seat computes alike), and the receiver's cards the walk
+  // passed over because they were already called to play. Empty on the reverse
+  // arm, where the receiver moves first and the frame rests on its own queued
+  // plays -- such a reaction is not recorded. Trailing, like the fields above.
+  std::vector<int> receiver_frame;
+  std::vector<int> receiver_called;
 
   bool operator==(const ReactorWC&) const = default;
+};
+
+// THROW IT IN A HOLE: one reactive play clue as it RESOLVED (v16.24.0) -- the
+// receiver's hand when it was given, the frame the receiver can walk it in, and
+// the card the reacter's answer named. A world whose superposed cards would have
+// out-ranked `target_order` in that walk is not the world we are in
+// (`tiiah::world_feasible`). Rebuilt from the action history on every replay.
+struct ReactionRecord {
+  int turn = 0;
+  int receiver = 0;
+  std::vector<int> receiver_hand;
+  std::vector<int> called;
+  std::vector<int> frame;
+  int target_order = -1;
+
+  bool operator==(const ReactionRecord&) const = default;
 };
 
 class Game {
@@ -270,6 +294,11 @@ class Game {
   // and a giver's reactive clue always has the same receiver, so a repeat from
   // the same giver simply replaces its own entry.
   std::vector<std::optional<ReactorWC>> pending_reactions;
+
+  // THROW IT IN A HOLE: every reactive play clue that has resolved, in order
+  // (tiiah/CONVENTION.md §1e, v16.24.0) -- the evidence `tiiah::world_feasible`
+  // judges a world of hole cards against.
+  std::vector<ReactionRecord> reaction_records;
 
   int zcs_turn = -1;
 

@@ -13,8 +13,10 @@ State stacks_after_queued_plays(const Game& game,
                                 const std::vector<int>* base) {
   // Not our own belief. A partner's superposed play advanced ours — we watched
   // the card go in — and advanced nobody else's, so walking from `game.state`
-  // would have each seat simulate a different game. That is §1e's "assume none
-  // of the superposed cards were played".
+  // would have each seat simulate a different game. The views the caller hands
+  // us are the MINIMUM across the worlds their seats' hole cards leave open
+  // (§1e, v16.24.0; before that, "assume none of the superposed cards were
+  // played").
   //
   // Which view, exactly, is the caller's to say: the SHARED one by default, and
   // the pairwise one when the walk is deciding what a clue between two named

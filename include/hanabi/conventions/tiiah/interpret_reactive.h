@@ -96,4 +96,16 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
 void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
                           int react_order);
 
+// Keep the resolved reaction as evidence for world feasibility (§1e, v16.24.0):
+// the receiver's hand at clue time, the frame the receiver could walk it in, and
+// the card the reacter's answer named by the sum rule. Called from the engine seam
+// when the REACTER pressed Play. A no-op outside Throw It in a Hole and for a
+// connection that carries no receiver frame (the reverse arm).
+void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
+                     int react_order);
+
+// The frame a reactive's target is walked in: the MINIMUM across every world the
+// reacter can live in, from the giver's perspective (§1e, v16.24.0).
+std::vector<int> reacter_frame(const Game& game, int giver, int reacter);
+
 }  // namespace hanabi::tiiah

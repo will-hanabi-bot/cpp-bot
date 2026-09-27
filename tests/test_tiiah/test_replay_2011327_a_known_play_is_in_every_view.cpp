@@ -785,7 +785,11 @@ TEST(TiiahReplay2011327, EveryViewIs22121AtT22) {
   expect_every_view(game, {2, 2, 1, 2, 1});
 }
 
-TEST(TiiahReplay2011327, EveryViewIs43133AndNoIllegalYellowAtT38) {
+// v16.24.0: at T35 will-bot67's Blue on yagami's o31 (the b3) reads {b3, b4}, since
+// her o23 -- in the hole as {b3, p3} -- could be the b3. Nothing has settled which by
+// T38, so every view the two of them share is the MINIMUM of those two worlds,
+// 43132, while our own belief sees both cards and holds 43133 (§1e).
+TEST(TiiahReplay2011327, EveryViewIsTheMinimumAcrossWorldsAndNoIllegalYellowAtT38) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",
@@ -2499,7 +2503,14 @@ TEST(TiiahReplay2011327, EveryViewIs43133AndNoIllegalYellowAtT38) {
   )json";
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
-  expect_every_view(game, {4, 3, 1, 3, 3});
+  EXPECT_EQ(game.state.play_stacks, (std::vector<int>{4, 3, 1, 3, 3})) << "our belief";
+  EXPECT_EQ(game.state.pairwise_play_stacks[0], (std::vector<int>{4, 3, 1, 3, 3}))
+      << "the row for will-bot69, which watched both of yagami's cards";
+  const std::vector<int> minimum{4, 3, 1, 3, 2};
+  EXPECT_EQ(game.state.pairwise_play_stacks[2], minimum)
+      << "the row for yagami: (o23, o31) is (b3, b4) or (p3, b3), and purple is on 2 "
+         "in the first";
+  EXPECT_EQ(game.state.common_play_stacks, minimum) << "the shared view, likewise";
 
   hanabi::PerformAction action = game.take_action();
   const auto* colour = std::get_if<hanabi::PerformColour>(&action);

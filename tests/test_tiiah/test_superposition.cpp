@@ -93,30 +93,35 @@ TEST(TiiahSuperposition, APartnersAmbiguousPlayMovesOnlyOurView) {
 
 // Shared collapsing rule 2: a clue that calls a playable card of that identity
 // to play says the identity was still needed, so the superposed card was not it.
+//
+// The superposed card is CATHY's (v16.24.0). A call is read in every world of the
+// hole cards of the two seats it is between (§1e), so had Bob made the blind play,
+// Red to Bob would read {r1, r2} -- the r2 in the world where his hole card was the
+// r1 -- and name no single identity to collapse on. Cathy's hole card is not
+// ambiguous to Alice and Bob: both watched it go in.
 TEST(TiiahSuperposition, ACalledPlayableCollapsesTheSet) {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (5 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      // Bob plays his y1 blind. It is not red, so red stays on 0 in every view
+      {"r1", "y4", "g4", "b4", "p4"},
+      // Cathy plays her y1 blind. It is not red, so red stays on 0 in every view
       // — which is what lets the clue below name the r1 unambiguously.
-      {"y1", "r1", "g4", "b4", "p4"},
-      {"y4", "y3", "g3", "b3", "p3"},
+      {"y1", "y3", "g3", "b3", "p3"},
   };
-  opts.clue_tokens = 7;  // so Cathy may discard
-  opts.starting = TestPlayer::BOB;
+  opts.clue_tokens = 7;
+  opts.starting = TestPlayer::CATHY;
   use_tiiah(opts);
   Game g = setup(std::move(opts));
-  const int order = order_at(g, TestPlayer::BOB, 1);
+  const int order = order_at(g, TestPlayer::CATHY, 1);
 
-  g = hidden_action(std::move(g), TestPlayer::BOB, /*slot=*/1,
+  g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/1,
                     /*reached_the_hole=*/true, "y2");
   const IdentitySet before = g.meta[order].superposition;
   ASSERT_TRUE(before.contains(Identity{0, 1})) << "guard: r1 is a candidate";
   ASSERT_GT(before.length(), 1);
 
-  g = take_turn(std::move(g), "Cathy discards p3", "p2");
-  // Red to BOB calls his own r1: an identity the team still needs, so what he
+  // Red to BOB calls his r1: an identity the team still needs, so what Cathy
   // threw in was not the r1. Aimed at Bob rather than Cathy since v16.8.0 --
   // a clue to Cathy is the ORDINARY REACTIVE (1c), and this test is about the
   // collapsing rule, not about the dispatch.

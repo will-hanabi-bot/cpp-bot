@@ -54,8 +54,9 @@ State simulate_known_plays(const Game& game, int player,
 // has moved, so the simulation stands down and the shared stacks are the
 // answer. One sentence, both directions.
 //
-// `base` is the view it is all judged against — the stacks the giver and the
-// REACTER share (§1.3), since the reacter is the seat that must act and the
+// `base` is the view it is all judged against — `reacter_frame`, the stacks the
+// giver and the REACTER share as the minimum across their worlds (§1.3, §1e),
+// since the reacter is the seat that must act and the
 // giver is the one who has to be able to predict them. Passing the shared view
 // (an empty `base`) is the pre-v16.12.0 behaviour and the fallback for a seat
 // that is neither of the two.
@@ -96,28 +97,6 @@ bool safe_to_chuck(const State& state, const State& after, Identity id) {
     return true;
   }
   return !state.is_critical(id);
-}
-
-// Keep the conditional half of a reading, so a later fact can withdraw it.
-//
-// Only the candidates that some world declines to support are worth recording:
-// one every world agrees on is unconditional, and one the enumeration collapsed
-// to a single world is not conditional on anything either.
-void record_conditional(Game& game, int order,
-                        const std::vector<OpenWorld>& worlds,
-                        const std::vector<std::pair<Identity, std::uint64_t>>& support) {
-  if (worlds.size() <= 1) return;
-  const std::uint64_t all = (worlds.size() >= 64)
-                                ? ~0ULL
-                                : ((1ULL << worlds.size()) - 1);
-  ConvData::ConditionalReading cond;
-  for (const auto& [id, mask] : support) {
-    if ((mask & all) == all) continue;  // every world agrees: no condition
-    cond.support.emplace_back(id, mask);
-  }
-  if (cond.support.empty()) return;
-  for (const OpenWorld& w : worlds) cond.worlds.push_back(w.assignment);
-  game.with_meta(order, [&cond](ConvData& m) { m.conditional = cond; });
 }
 
 // WHAT A REACTIVE BLIND PLAY SAYS ABOUT ITSELF: the playables of one bucket, in
@@ -173,6 +152,51 @@ bool both_know_their_own(const Game& game, int react_order, int target_order) {
 }
 
 }  // namespace
+
+// THE FRAME A REACTIVE'S TARGET IS WALKED IN (§1e, v16.24.0): the MINIMUM, suit
+// by suit, across every world the reacter can live in, from the giver's
+// perspective -- neither of them can name their own hole cards, so each world of
+// both seats' hole plays is a set of stacks the reacter might hold, and only a
+// height every one of them reaches is one the giver can count on.
+//
+// For the pair itself that is the pair's row, which `advance_rows_from_own_worlds`
+// floors over both seats' worlds; an outside seat floors the shared view below.
+// Worlds the targeting rules rule out never enter (`world_feasible`).
+//
+// It replaced "assume none of the superposed cards were played", which is the
+// minimum only when the worlds share no height. Replay 2011397 T14: will-bot69's
+// two hole cards left worlds 10131 and 10122, whose minimum 10121 already makes
+// the p2 on will-bot67's slot 2 the target -- and the T6 reaction rules out the
+// second world, so the frame is 10131.
+std::vector<int> reacter_frame(const Game& game, int giver, int reacter) {
+  const State& s = game.state;
+  const std::vector<int> base = s.stacks_known_to_both(giver, reacter);
+  const int me = s.our_player_index;
+  if (me == giver || me == reacter) return base;  // the pair's row: already a floor
+  // An outside seat falls back to the shared view, which is not floored where it
+  // is kept -- a floor written back into a view and then replayed on top of can
+  // make the wrong world look strike-free -- so it is floored here, on the fly,
+  // over every seat's hole cards.
+  std::vector<int> everyone;
+  for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+  return floor_over_worlds(game, base, everyone, s.common_evidence);
+}
+
+void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
+                     int react_order) {
+  if (!game.state.variant->throw_it_in_a_hole) return;
+  if (wc.receiver_frame.empty()) return;  // the reverse arm: nothing reconstructible
+  const auto slots = hanabi::reactor::calc_target_slot(prev, game, react_order, wc);
+  if (!slots) return;
+  ReactionRecord r;
+  r.turn = wc.turn;
+  r.receiver = wc.receiver;
+  r.receiver_hand = wc.receiver_hand;
+  r.called = wc.receiver_called;
+  r.frame = wc.receiver_frame;
+  r.target_order = wc.receiver_hand[slots->second - 1];
+  game.reaction_records.push_back(std::move(r));
+}
 
 std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
                                              bool receiver_acts_first,
@@ -257,6 +281,23 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // whether the REACTER's card was playable at clue time, which wants the giver's
   // and the reacter's pair instead. Recorded in TODO.md rather than fixed here.
   wc.clue_play_stacks = state.stacks_known_to_both(action.giver, receiver);
+  // Which seat moves first, and so which stacks everything below is judged
+  // against. The receiver goes first only on the REVERSE reactive, where he
+  // is the giver's Bob and the known play in his hand is what made the clue
+  // reactive.
+  const bool receiver_acts_first =
+      receiver == state.next_player_index(action.giver);
+  // What the RECEIVER can reconstruct of this walk, for world feasibility (§1e,
+  // v16.24.0): the shared view, which every seat computes alike, and the cards
+  // the walk passes over as already called. The reverse arm's frame rests on the
+  // receiver's own queued plays, which it cannot name from the deck, so it
+  // records nothing.
+  if (!receiver_acts_first) {
+    wc.receiver_frame = state.common_play_stacks;
+    for (int o : state.hands[receiver]) {
+      if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) wc.receiver_called.push_back(o);
+    }
+  }
   game.waiting.clear();
   game.waiting.push_back(wc);
   if (static_cast<int>(game.pending_reactions.size()) != state.num_players) {
@@ -273,19 +314,12 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // past — the reacter walks past it too, so nobody is left behind — while one
   // refused on what only the GIVER can see kills the clue outright (§1g): the
   // reacter cannot see it and would act on that pairing regardless.
-  // Which seat moves first, and so which stacks everything below is judged
-  // against. The receiver goes first only on the REVERSE reactive, where he
-  // is the giver's Bob and the known play in his hand is what made the clue
-  // reactive.
-  const bool receiver_acts_first =
-      receiver == state.next_player_index(action.giver);
   // WHICH SLOTS the clue names rests on what the giver and the REACTER share
   // (§1.3): the reacter is the seat that must act, and the giver is the one who
   // has to be able to predict them. The receiver needs no say -- once the
   // reacter has acted the sum rule leaves them no choice of slot, only a reading
   // of what their own card is.
-  const std::vector<int> pair_view =
-      state.stacks_known_to_both(action.giver, reacter);
+  const std::vector<int> pair_view = reacter_frame(game, action.giver, reacter);
   const State after =
       reacter_faces(game, receiver, receiver_acts_first, &pair_view);
   for (const ReceiverTarget& target :
@@ -417,7 +451,13 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         // ...in every world the reacter's own hole plays leave open, which is
         // `bucket_over_worlds` above -- the same reading the RECEIVER reconstructs
         // at reaction time.
-        const auto br = bucket_over_worlds(game, own, reacter, from);
+        // With the pair's BAND when the reacter is a partner: the row may already
+        // carry the floor those same worlds produced (v16.24.0).
+        const State world_base =
+            reacter == state.our_player_index
+                ? (state.play_evidence.empty() ? own : own.with_band(state.play_evidence))
+                : own.with_band(state.evidence_known_to_both(action.giver, reacter));
+        const auto br = bucket_over_worlds(game, world_base, reacter, from);
         const IdentitySet& allowed = br.allowed;
         const auto& worlds = br.worlds;
         const auto& support = br.support;
@@ -497,7 +537,9 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   // this seat we are outside the giver-and-reacter pair, so it falls back to the
   // shared view -- a floor rather than the row those two hold, which can only make
   // the reading wider and the deduction weaker.
-  const State base = s.with_stacks(s.stacks_known_to_both(wc.giver, wc.reacter));
+  // With its BAND, since worlds are replayed on it (v16.24.0).
+  const State base = s.with_stacks(reacter_frame(game, wc.giver, wc.reacter))
+                         .with_band(s.evidence_known_to_both(wc.giver, wc.reacter));
   const auto br = bucket_over_worlds(game, base, wc.reacter, *from, react_order);
   if (!br.allowed.non_empty()) return;
   if (!narrow_superposition(game, react_order, br.allowed)) return;
@@ -586,7 +628,7 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   // some other world was never offered. Replay 2010329: will-bot69 had thrown an
   // `{r2,g1,b1}` into the hole, and its called card was an `r3` -- playable only
   // in the world where that card was the `r2`. It read `{g2}`.
-  const auto worlds = open_worlds(game, s, wc.receiver);
+  const auto worlds = open_worlds(game, s.private_base(), wc.receiver);
 
   IdentitySet allowed = IdentitySet::empty();
   std::vector<std::pair<Identity, std::uint64_t>> support;

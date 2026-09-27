@@ -1426,3 +1426,26 @@ counted, which helped 3.7 qualify. Since v16.23.0 the Red trash reveal wins at 3
 3.7 is asked, so this no longer decided that turn — but a trash card is the opposite of
 close to playable, and a hand whose "close" cards are partly trash is not a hand to lock.
 Not changed: it is a rung condition, and would move other turns.
+
+---
+
+## 56. `[tiiah]` World feasibility reads only the ordinary reactive, and only its Play
+
+§1e world feasibility (v16.24.0) keeps a `ReactionRecord` for every reactive play clue
+that resolves, and rules out a world whose hole cards would have out-ranked the card the
+reacter called. Three things are not recorded yet:
+
+- **The reverse arm.** The receiver moves first and the target walk runs on the stacks
+  after the receiver's queued plays, which the receiver cannot name from the deck, so no
+  frame every seat agrees on is available. `interpret_reactive` records nothing for it.
+- **A deferred reaction.** `resolve_deferred_reaction` resolves it turns later; only the
+  live seam in `Game::interpret_play` records.
+- **A reactive discard.** Its target walk is the discard-target walk, not the play walk
+  `world_feasible` models.
+
+Each is a source of refutations the bot leaves on the table, never a wrong one.
+
+Also noted while building it: replay 2011319's views disagree between seats from its
+early turns (`scripts/tiiah_stacks.py 2011319 11`), in v16.23.0 as in v16.24.0. Two of
+its three seats are simulated there -- will-bot67's log stops at T13 -- so how much of that
+is the simulation and how much the bots has not been separated.

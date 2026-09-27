@@ -143,9 +143,12 @@ def main() -> int:
     simulated: set[int] = set()
     with tempfile.TemporaryDirectory() as tmp:
         for seat in range(n):
-            if seat in by_seat:
+            try:
+                if seat not in by_seat:
+                    raise RuntimeError("no log")
                 views[seat] = run_stacks(by_seat[seat], args.turn)
-            else:
+            except RuntimeError:
+                # No log, or a log that stops before this turn: simulate the seat.
                 views[seat] = simulate(base, seat, ids, args.turn, tmp)
                 simulated.add(seat)
         truth = simulate(base, None, ids, args.turn, tmp)

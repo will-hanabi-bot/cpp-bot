@@ -653,6 +653,12 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
       // moment it knows which slot answered, and the last chance to write the
       // reading down (§1d, v16.19.0). Before the receiver's half, since it moves
       // the shared stacks the rest of the reading rests on.
+      // The reaction itself is evidence about the hole, for as long as the
+      // superpositions it could speak to are open (§1e world feasibility,
+      // v16.24.0). Only the REACTER's Play: that is a reactive play clue.
+      if (action.player_index_v == waiting.front().reacter) {
+        hanabi::tiiah::record_reaction(prev, *this, waiting.front(), action.order);
+      }
       hanabi::tiiah::narrow_reacter_play(prev, *this, waiting.front(),
                                          action.order);
       hanabi::tiiah::narrow_receiver_call(prev, *this, waiting.front(),

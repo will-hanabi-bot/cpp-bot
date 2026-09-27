@@ -83,10 +83,11 @@ TEST(TiiahRainbowy, TheCallRePinsWhenTheOwnSuitIsFinished) {
 
 // §1f's second half. Bob plays a card he cannot name — we watched it and know it
 // was the purple 1, but he did not — and then clues purple. Our own stacks say
-// purple is on 1, so "the next playable purple" would be the `p2`. The shared
-// stacks say purple is on 0, because a superposed play never advanced them, and
-// that is the view the clue is read against: Cathy writes `p1`.
-TEST(TiiahRainbowy, ASuperpositionedGiverIsReadAsThoughTheyHadNotPlayed) {
+// purple is on 1, so "the next playable purple" would be the `p2` to us alone. The
+// clue means what it means to the two seats it is between, in every world of THEIR
+// hole cards (§1e, v16.24.0): the `p1` in the world where Bob's card was something
+// else, the `p2` in the one where it was the `p1`. Cathy writes `{p1, p2}`.
+TEST(TiiahRainbowy, ASuperpositionedGiverIsReadInEveryWorldOfTheirHoleCards) {
   SetupOptions opts = rainbow_opts();
   opts.starting = TestPlayer::BOB;
   // Two discards follow below, and a clue given at 8 tokens reads as a stall
@@ -111,5 +112,5 @@ TEST(TiiahRainbowy, ASuperpositionedGiverIsReadAsThoughTheyHadNotPlayed) {
 
   // Her draw above pushed the p1 from slot 1 to slot 2.
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/2, {"p1"});
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/2, {"p1", "p2"});
 }

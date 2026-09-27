@@ -19,11 +19,12 @@ namespace hanabi::tiiah {
 namespace {
 
 
-// Read a stable clue on the SHARED stacks for as long as this object lives
-// (CONVENTION.md §1.3). The giver chose the clue from what everyone knows, so
-// every seat has to decode it from the same stacks — and §1e's "assume none of
-// the superposed cards were played" is exactly what the shared view says,
-// because a superposed play never advanced it.
+// Read a stable clue on a SHARED frame for as long as this object lives
+// (CONVENTION.md §1.3). The giver chose the clue from what the two of them know,
+// so every seat has to decode it from the same stacks: the pair's view, the
+// minimum across the worlds of their hole cards. Where those worlds DISAGREE the
+// ladder's one reading is widened afterwards to the union over them
+// (`read_stable_over_worlds`, §1e, v16.24.0).
 //
 // A swap rather than a fork of reactor0's ladders: they take the state through
 // `Game`, and forking them to take a second one would be the copy §1b exists to
@@ -103,8 +104,12 @@ void repin_own_call(const Game& prev, Game& game) {
         prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
       continue;  // a standing call, already settled by the clue that made it
     }
+    // Playable in SOME world of our own hole cards (§1e, v16.24.0): our belief is
+    // their minimum, and a call on a card that is only live in one of them -- the
+    // b3 of 2011397 T10, in the world where our o9 was the b2 -- must survive.
+    // One world is the old `playable_set` exactly.
     const IdentitySet kept =
-        game.common.thoughts[o].inferred.intersect(s.playable_set);
+        game.common.thoughts[o].inferred.intersect(playable_in_some_own_world(game));
     if (kept.is_empty() || kept == game.common.thoughts[o].inferred) continue;
     game.with_thought(o, [&kept](const Thought& t) {
       Thought out = t;
@@ -335,28 +340,74 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // our belief, which is every game until somebody plays into the hole without
   // knowing what they played.
   const std::vector<int> view = reading_stacks(state, action.giver, action.target);
-  const bool swap = SharedStacks::needed(state, view);
-  std::optional<Game> prev_shared;
-  if (swap) {
-    prev_shared = prev;
-    prev_shared->state = prev.state.with_stacks(view);
-  }
-  const Game& p = swap ? *prev_shared : prev;
 
-  std::optional<ClueInterp> interp;
-  {
-    // Scoped so the swap is RELEASED before the re-pin below, which has to see
-    // our own belief rather than the pair's view.
+  // One run of the ladder on `frame`. Scoped so the swap is RELEASED before the
+  // re-pin below, which has to see our own belief rather than the pair's view.
+  auto run_ladder = [&](Game& g, const std::vector<int>& frame) {
+    const bool swap = SharedStacks::needed(g.state, frame);
+    std::optional<Game> prev_shared;
+    if (swap) {
+      prev_shared = prev;
+      prev_shared->state = prev.state.with_stacks(frame);
+    }
+    const Game& p = swap ? *prev_shared : prev;
     std::optional<SharedStacks> scope;
-    if (swap) scope.emplace(game.state, view);
+    if (swap) scope.emplace(g.state, frame);
+    std::optional<ClueInterp> out;
     if (action.clue.kind != ClueKind::COLOUR) {
-      interp = reactor0::stable_rank(p, game, action, stall_ctx);
+      out = reactor0::stable_rank(p, g, action, stall_ctx);
     } else {
-      interp = reactor0::stable_colour(p, game, action, stall_ctx);
+      out = reactor0::stable_colour(p, g, action, stall_ctx);
       // §1f, applied to whatever the ladder called.
-      pin_rainbowy_colour(p, game, action);
+      pin_rainbowy_colour(p, g, action);
+    }
+    return out;
+  };
+  auto called_something = [&](const Game& g) {
+    for (int o : g.state.hands[action.target]) {
+      if (g.meta[o].status == CardStatus::CALLED_TO_PLAY &&
+          prev.meta[o].status != CardStatus::CALLED_TO_PLAY) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const Game before_ladder = game;
+  std::optional<ClueInterp> interp = run_ladder(game, view);
+
+  // §1e, v16.24.0: the ladder read the call in ONE frame -- the minimum across the
+  // worlds of the pair's hole cards -- and in each of those worlds it names a
+  // different card. A seat that can SEE the card judges the call against it, so on
+  // the minimum frame it may refuse a call that is perfectly sound in the world the
+  // pair is actually in. Then the call is read in each world, and the first that
+  // makes it is the call.
+  //
+  // Replay 2011397 T10: yagami's Blue named will-bot69's o8, the b3, with its o9
+  // `{b2,p2}` in the hole. On the minimum frame (blue on 1) will-bot67, who could
+  // see the b3, refused the call and read a MISTAKE; will-bot69, who could not,
+  // read `{b2}`. In the world where o9 was the b2, the call is the b3.
+  if (!called_something(game)) {
+    const auto all = open_worlds(
+        before_ladder,
+        before_ladder.state.with_stacks(view).with_band(
+            before_ladder.state.evidence_known_to_both(action.giver, action.target)),
+        {action.giver, action.target});
+    const auto worlds = strike_free(all);
+    if (worlds.size() > 1) {
+      for (const OpenWorld* w : worlds) {
+        Game g = before_ladder;
+        auto i2 = run_ladder(g, w->state.play_stacks);
+        if (!called_something(g)) continue;
+        game = std::move(g);
+        interp = i2;
+        break;
+      }
     }
   }
+  // ...and the reading is the union over those worlds, whichever frame made the
+  // call: the singleton `{b2}` told every seat o9 was the p2.
+  read_stable_over_worlds(prev, game, action, view);
   repin_own_call(prev, game);
   return interp;
 }

@@ -430,9 +430,17 @@ bool narrow_superposition(Game& game, int order, const IdentitySet& allowed) {
   return true;
 }
 
-std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
-                                   const std::vector<int>& holders, int cap,
-                                   int except_order) {
+namespace {
+
+// Every assignment, feasible or not -- `open_worlds` is this with the targeting
+// rules applied, and `prune_infeasible_worlds` needs both to see what they refute.
+bool s_reversed(const Game& game, int suit) {
+  return game.state.variant->suits[suit].suit_type.reversed;
+}
+
+std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
+                                        const std::vector<int>& holders, int cap,
+                                        int except_order) {
   std::vector<OpenWorld> out;
   out.push_back(OpenWorld{{}, base});
   if (!game.state.variant->throw_it_in_a_hole) return out;
@@ -450,6 +458,13 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
     product *= static_cast<std::size_t>(game.meta[o].superposition.length());
     if (product > static_cast<std::size_t>(cap)) return out;  // read it flat
   }
+  // PLAY order, not card order (v16.24.0): a card drawn early can be played late,
+  // and replaying it before a card that went in ahead of it strikes a world that
+  // is sound. Replay 2011397: o8 went in at T11, after o9 at T8, and (o9 = b2,
+  // o8 = b3) replayed as b3-then-b2 looked struck.
+  std::stable_sort(pending.begin(), pending.end(), [&game](int a, int b) {
+    return game.meta[a].hole_turn < game.meta[b].hole_turn;
+  });
 
   for (int o : pending) {
     std::vector<OpenWorld> next;
@@ -457,11 +472,36 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
       for (Identity id : game.meta[o].superposition) {
         OpenWorld n = w;
         n.assignment.emplace_back(o, id);
-        // A play that did not land struck instead, and the stacks stay put --
-        // which is a world too, and `struck` is how rule 6 tells it apart.
+        const int k = id.suit_index;
+        // A card in the base's BAND -- above what the view can name, at or below
+        // what it holds -- is one of the cards the view already counts without
+        // knowing which card it was (v16.24.0). It is absorbed as that card,
+        // once per rank, rather than read as a duplicate: a view raised by a
+        // floor, or by a known card above a gap, is not evidence that this card
+        // struck. Replay 2011327 T36: a row at blue 3 by floor, replayed with its
+        // own `{b3,b4}` card, struck the b3 world and left only the b4.
+        const auto& band = base.band_floor;
+        // The band is the BASE's -- between its evidence and its own height --
+        // not whatever this world has since played onto it.
+        const bool in_band =
+            k < static_cast<int>(band.size()) &&
+            (s_reversed(game, k) ? id.rank < band[k] &&
+                                       id.rank >= base.play_stacks[k]
+                                 : id.rank > band[k] &&
+                                       id.rank <= base.play_stacks[k]);
         if (n.state.is_playable(id)) {
           n.state = n.state.with_play(id);
+        } else if (in_band) {
+          if (n.absorbed.empty()) n.absorbed.assign(band.size(), 0u);
+          const unsigned bit = 1u << id.rank;
+          if (n.absorbed[k] & bit) {
+            n.struck = true;  // two cards cannot both be the one band card
+          } else {
+            n.absorbed[k] |= bit;
+          }
         } else {
+          // A play that did not land struck instead, and the stacks stay put --
+          // which is a world too, and `struck` is how rule 6 tells it apart.
           n.struck = true;
         }
         next.push_back(std::move(n));
@@ -469,6 +509,23 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
     }
     out = std::move(next);
   }
+  return out;
+}
+
+}  // namespace
+
+std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
+                                   const std::vector<int>& holders, int cap,
+                                   int except_order) {
+  std::vector<OpenWorld> out = enumerate_worlds(game, base, holders, cap, except_order);
+  // Only the worlds the targeting rules allow (§1e, v16.24.0) -- every one of them
+  // kept when none survives, since the evidence is then contradicting itself and
+  // is not a licence to assert that.
+  std::vector<OpenWorld> feasible;
+  for (const OpenWorld& w : out) {
+    if (world_feasible(game, w)) feasible.push_back(w);
+  }
+  if (!feasible.empty() && feasible.size() != out.size()) return feasible;
   return out;
 }
 
@@ -513,6 +570,90 @@ std::vector<const OpenWorld*> strike_free(const std::vector<OpenWorld>& worlds) 
   return out;
 }
 
+void record_conditional(Game& game, int order, const std::vector<OpenWorld>& worlds,
+                        const std::vector<std::pair<Identity, std::uint64_t>>& support) {
+  if (worlds.size() <= 1) return;
+  const std::uint64_t all =
+      (worlds.size() >= 64) ? ~0ULL : ((1ULL << worlds.size()) - 1);
+  ConvData::ConditionalReading cond;
+  for (const auto& [id, mask] : support) {
+    if ((mask & all) == all) continue;  // every world agrees: no condition
+    cond.support.emplace_back(id, mask);
+  }
+  if (cond.support.empty()) return;
+  for (const OpenWorld& w : worlds) cond.worlds.push_back(w.assignment);
+  game.with_meta(order, [&cond](ConvData& m) { m.conditional = cond; });
+}
+
+// WORLD FEASIBILITY (§1e, v16.24.0). A world assigns an identity to each card in
+// the hole; it is only the world we are in if every reactive play clue those
+// cards were given could have produced the answer we watched.
+//
+// The target walk (`receiver_targets`) takes a DIRECT playable before a one-away
+// finesse, and each leftmost first. So for a recorded reaction whose receiver
+// held two or more of this world's cards: the called card, if it is one of them,
+// must be direct or one away in this world; no other of them may be a direct
+// playable to its left, nor a direct playable at all when the called card is a
+// finesse; and none may be a finesse to its left when the called card is one too.
+// A card that is NOT in the hole is judged only by what that leaves certain -- we
+// cannot name it, so it constrains nothing.
+//
+// The frame is the shared view at clue time, what the receiver could reconstruct
+// of the walk, and the same at every seat.
+//
+// Replay 2011397 T6: will-bot67's Green reactive, and yagami's slot 1 called
+// will-bot69's slot 2. o9 and o8, slots 2 and 3, later went into the hole as
+// {b2,p2} and {b2,b3}. In the world (p2, b2) slot 2 is a finesse and slot 3 a
+// direct playable, so yagami would have called slot 3 -- that world is refuted,
+// and the cards were the b2 and the b3.
+bool world_feasible(const Game& game, const OpenWorld& world) {
+  if (world.assignment.size() < 2) return true;
+  const State& s = game.state;
+  for (const ReactionRecord& r : game.reaction_records) {
+    if (r.frame.size() != s.play_stacks.size()) continue;
+    int target_slot = -1;
+    for (size_t i = 0; i < r.receiver_hand.size(); ++i) {
+      if (r.receiver_hand[i] == r.target_order) target_slot = static_cast<int>(i) + 1;
+    }
+    if (target_slot < 0) continue;
+
+    struct Held { int order; int slot; Identity id; };
+    std::vector<Held> held;
+    for (const auto& [o, id] : world.assignment) {
+      if (std::find(r.called.begin(), r.called.end(), o) != r.called.end()) continue;
+      for (size_t i = 0; i < r.receiver_hand.size(); ++i) {
+        if (r.receiver_hand[i] == o) held.push_back({o, static_cast<int>(i) + 1, id});
+      }
+    }
+    if (held.size() < 2) continue;
+
+    const State frame = s.with_stacks(r.frame);
+    // 0 = direct, 1 = one away, -1 = neither (and an inverted suit, which the walk
+    // skips while anything else is on offer).
+    auto kind = [&](Identity id) {
+      if (s.variant->suits[id.suit_index].suit_type.inverted) return -1;
+      const int away = frame.playable_away(id);
+      return (away == 0 || away == 1) ? away : -1;
+    };
+    std::optional<int> target_kind;
+    for (const Held& h : held) {
+      if (h.order == r.target_order) target_kind = kind(h.id);
+    }
+    if (target_kind && *target_kind < 0) return false;
+    for (const Held& h : held) {
+      if (h.order == r.target_order) continue;
+      const int k = kind(h.id);
+      if (k == 0 && (h.slot < target_slot || (target_kind && *target_kind == 1))) {
+        return false;
+      }
+      if (k == 1 && target_kind && *target_kind == 1 && h.slot < target_slot) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 bool collapse_refused_target(Game& game, int giver, Identity gone) {
   if (!game.state.variant->throw_it_in_a_hole) return false;
   for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
@@ -544,7 +685,7 @@ void presume_play_lands(Game& game, const Action& raw) {
   // Which of the worlds our own hole cards leave open would let it land? Chains
   // and the 64-world cap come from `open_worlds` (§1e); one world back means we
   // have nothing in the hole to blame and the strike is simply real.
-  const auto worlds = open_worlds(game, s, me);
+  const auto worlds = open_worlds(game, s.private_base(), me);
   if (worlds.size() <= 1) return;
 
   std::vector<const OpenWorld*> surviving;
@@ -582,9 +723,17 @@ void presume_discard_was_played(Game& game, const Action& raw) {
   // any reason. The same test as `useful_dc` (decide.cpp), asked before the
   // discard reveals it.
   auto known = game.common.thoughts[order].id(/*infer=*/true, /*symmetric=*/true);
-  if (!known || *known != id) return;
+  // ...or named up to the worlds of somebody's hole cards (v16.24.0): a CALLED
+  // card whose reading is one identity per world, and the discard shows which.
+  // Replay 2011319 T8: our Purple on yagami's o14 reads {p1, p2} -- p2 in the world
+  // where our own o5 was the p1 -- and her discard of the p1 at T12 is what says
+  // that world is the one we are in.
+  const bool named_in_some_world =
+      game.meta[order].status == CardStatus::CALLED_TO_PLAY &&
+      game.common.thoughts[order].possibilities().contains(id);
+  if (!(known && *known == id) && !named_in_some_world) return;
 
-  const auto worlds = open_worlds(game, s, me);
+  const auto worlds = open_worlds(game, s.private_base(), me);
   if (worlds.size() <= 1) return;
 
   std::vector<const OpenWorld*> surviving;
@@ -605,7 +754,7 @@ bool presume_own_plays_land(Game& game) {
   if (!s.variant->throw_it_in_a_hole) return false;
   // Our own hole cards alone: this is the rule read from our own seat, and what a
   // PARTNER can work out about theirs is `advance_rows_from_own_worlds`.
-  const auto worlds = open_worlds(game, s, s.our_player_index);
+  const auto worlds = open_worlds(game, s.private_base(), s.our_player_index);
   if (worlds.size() <= 1) return false;
   const auto surviving = strike_free(worlds);
   // PRIVATE: the base is our own belief, which no partner can reproduce.
@@ -642,6 +791,106 @@ bool presume_own_plays_land(Game& game) {
   return changed;
 }
 
+std::vector<int> floor_over_worlds(const Game& game, const std::vector<int>& base,
+                                   const std::vector<int>& holders,
+                                   const std::vector<int>& band) {
+  const State& s = game.state;
+  if (base.size() != s.play_stacks.size()) return base;
+  const auto worlds = open_worlds(game, s.with_stacks(base).with_band(band), holders);
+  if (worlds.size() <= 1) return base;
+  const std::vector<int> floor = world_floor(s, strike_free(worlds));
+  std::vector<int> out = base;
+  for (size_t k = 0; k < out.size() && k < floor.size(); ++k) {
+    const bool rev = s.variant->suits[k].suit_type.reversed;
+    if (rev ? floor[k] < out[k] : floor[k] > out[k]) out[k] = floor[k];
+  }
+  return out;
+}
+
+IdentitySet playable_in_some_own_world(const Game& game) {
+  const State& s = game.state;
+  const auto worlds = open_worlds(game, s.private_base(), s.our_player_index);
+  if (worlds.size() <= 1) return s.playable_set;
+  IdentitySet out = s.playable_set;
+  for (const OpenWorld* w : strike_free(worlds)) out = out.union_with(w->state.playable_set);
+  return out;
+}
+
+bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& action,
+                             const std::vector<int>& view) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  if (view.size() != s.play_stacks.size()) return false;
+  // The worlds of the PAIR's own hole cards, and nobody else's: those are what the
+  // giver and the receiver cannot name, so they are where the clue is ambiguous TO
+  // THEM. A third seat's hole cards are not -- both of them watched those go in.
+  // Our own, when we are that third seat, are our private uncertainty, and
+  // widening the shared reading with them would write one seat's doubt into
+  // `common` (replay 2011397 T3: will-bot69's {g1,b1} turned yagami's clued b1 into
+  // {b1,b2} at will-bot69's seat alone, and rule 1 never fired on it).
+  const std::vector<int> holders{action.giver, action.target};
+  const State frame = s.with_stacks(view);
+  // Worlds are replayed on the frame with its BAND: `view` may already carry the
+  // floor these same worlds produced (v16.24.0).
+  const auto all = open_worlds(
+      game, frame.with_band(s.evidence_known_to_both(action.giver, action.target)),
+      holders);
+  if (all.size() <= 1) return false;
+  std::vector<OpenWorld> worlds;
+  for (const OpenWorld* w : strike_free(all)) worlds.push_back(*w);
+  if (worlds.size() <= 1) return false;
+
+  bool changed = false;
+  for (int o : s.hands[action.target]) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (o < static_cast<int>(prev.meta.size()) &&
+        prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+      continue;  // a standing call, read by the clue that made it
+    }
+    const Thought& t = game.common.thoughts[o];
+    const IdentitySet read = t.inferred;
+    // A PLAY call: what the ladder named is playable in the frame it read -- or,
+    // when a seat that could see the card made the call in one world only
+    // (`tiiah::interpret_clue`), in that world.
+    const bool play_call = read.exists([&](Identity i) {
+      if (frame.is_playable(i)) return true;
+      for (const OpenWorld& w : worlds) {
+        if (w.state.is_playable(i)) return true;
+      }
+      return false;
+    });
+    if (!play_call) continue;
+    // In each world, the playable card of each suit the ladder named.
+    IdentitySet widened = IdentitySet::empty();
+    std::vector<std::pair<Identity, std::uint64_t>> support;
+    for (std::size_t w = 0; w < worlds.size(); ++w) {
+      for (Identity i : t.possible) {
+        const bool named_suit = read.filter([&i](Identity r) {
+                                      return r.suit_index == i.suit_index;
+                                    }).non_empty();
+        if (!named_suit || !worlds[w].state.is_playable(i)) continue;
+        widened = widened.add(i);
+        auto it = std::find_if(support.begin(), support.end(),
+                               [i](const auto& p) { return p.first == i; });
+        if (it == support.end()) {
+          support.emplace_back(i, 1ULL << w);
+        } else {
+          it->second |= (1ULL << w);
+        }
+      }
+    }
+    if (widened.is_empty() || widened == read) continue;
+    game.with_thought(o, [&widened](const Thought& th) {
+      Thought out = th;
+      out.inferred = widened;
+      return out;
+    });
+    record_conditional(game, o, worlds, support);
+    changed = true;
+  }
+  return changed;
+}
+
 bool advance_rows_from_own_worlds(Game& game) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return false;
@@ -655,22 +904,21 @@ bool advance_rows_from_own_worlds(Game& game) {
     // `p`'s own hole cards AND ours. `p` watched ours leave our hand, so what `p`
     // knows rests on both, and a claim drawn from the row's base alone could
     // exceed what `p` believes (§1.3).
-    const auto worlds = open_worlds(game, s.pairwise_view(p), {p, me});
+    // Replayed on the row with its BAND (v16.24.0): a floor this very enumeration
+    // wrote last time is cards the row counts without naming, and a world card
+    // that is one of them is absorbed rather than struck (replay 2011327 T36).
+    const State base =
+        p < static_cast<int>(s.pairwise_evidence.size())
+            ? s.pairwise_view(p).with_band(s.pairwise_evidence[p])
+            : s.pairwise_view(p);
+    const auto worlds = open_worlds(game, base, {p, me});
     if (worlds.size() <= 1) continue;
     const auto surviving = strike_free(worlds);
 
     const std::vector<int> floor = world_floor(s, surviving);
-
-    for (size_t k = 0; k < floor.size() && k < s.pairwise_play_stacks[p].size();
-         ++k) {
-      const int have = s.pairwise_play_stacks[p][k];
-      const bool rev = s.variant->suits[k].suit_type.reversed;
-      if (rev ? floor[k] >= have : floor[k] <= have) continue;  // rows only advance
-      game.with_state([&](State& st) {
-        st = st.with_pairwise_play(Identity{static_cast<int>(k), floor[k]}, {p});
-      });
-      changed = true;
-    }
+    const std::vector<int> before = s.pairwise_play_stacks[p];
+    game.with_state([&](State& st) { st = st.with_pairwise_floor(p, floor); });
+    if (game.state.pairwise_play_stacks[p] != before) changed = true;
   }
   return changed;
 }
@@ -705,7 +953,10 @@ void known_play_lands_in_common(Game& game, Identity known, int order) {
     game.with_state([known](State& st) { st = st.with_common_play(known); });
     return;
   }
-  const State base = s.shared_view();
+  // Worlds are replayed on the shared view with its BAND (v16.24.0).
+  const State base = s.common_evidence.empty()
+                         ? s.shared_view()
+                         : s.shared_view().with_band(s.common_evidence);
   if (base.is_basic_trash(known)) return;  // behind the shared view: nothing to explain
 
   std::vector<int> everyone;
@@ -718,11 +969,8 @@ void known_play_lands_in_common(Game& game, Identity known, int order) {
   if (!surviving.empty()) {
     const std::vector<int> floor = world_floor(s, surviving);
     prune_to_worlds(game, worlds, surviving, /*shared=*/true);
-    for (size_t k = 0; k < floor.size(); ++k) {
-      game.with_state([&](State& st) {
-        st = st.with_common_at_least(Identity{static_cast<int>(k), floor[k]});
-      });
-    }
+    // A FLOOR: the shared view rises, its evidence stays where it was.
+    game.with_state([&floor](State& st) { st = st.with_common_floor(floor); });
   }
   // Whether or not a world names the missing cards, the team watched a card it
   // could name go down, and presumes it landed.
@@ -800,8 +1048,75 @@ void note_hidden_action(Game& game, const Action& raw) {
   if (candidates.is_empty()) return;
   // The player could not name it, so it is a superposition -- for them, and for
   // the shared view. The watchers' rows took it above.
-  game.with_meta(order, [candidates](ConvData& m) { m.superposition = candidates; });
+  const int turn = game.state.turn_count;
+  game.with_meta(order, [candidates, turn](ConvData& m) {
+    m.superposition = candidates;
+    m.hole_turn = turn;
+  });
 }
+
+namespace {
+
+// §1e, the targeting rules as evidence (v16.24.0), SHARED. Every seat watched the
+// reactions, every seat holds the same superpositions, and the frame each record
+// keeps is the shared view -- so every seat refutes the same worlds. Among what
+// survives, "never presume a strike" is the convention (rule 6), asked of the
+// shared view over every seat's hole cards jointly.
+//
+// Only when the targeting rules refuted something: that is the evidence this rule
+// adds. Without it the same strike-free question on the shared view would be a
+// new shared form of rule 6 in its own right, and the shared view can lag cards a
+// seat settled privately -- a world could look struck there that is not.
+// The shared view is the MINIMUM across every seat's worlds, as every other view
+// is (§1e, v16.24.0): what all seats know of the stacks is the height every world
+// of everybody's hole cards reaches. Every input is shared, so every seat writes
+// the same floor; replayed with its band, so a floor written last time is absorbed
+// rather than read as a strike.
+bool advance_common_from_worlds(Game& game) {
+  const State& s = game.state;
+  if (s.common_play_stacks.empty()) return false;
+  std::vector<int> everyone;
+  for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+  const State base = s.common_evidence.empty()
+                         ? s.shared_view()
+                         : s.shared_view().with_band(s.common_evidence);
+  const auto worlds = open_worlds(game, base, everyone);
+  if (worlds.size() <= 1) return false;
+  const std::vector<int> floor = world_floor(s, strike_free(worlds));
+  const std::vector<int> before = s.common_play_stacks;
+  game.with_state([&floor](State& st) {
+    st = st.with_common_floor(floor).with_rows_at_least_common();
+  });
+  return game.state.common_play_stacks != before;
+}
+
+bool prune_infeasible_worlds(Game& game) {
+  const State& s = game.state;
+  if (game.reaction_records.empty()) return false;
+  std::vector<int> everyone;
+  for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+  // Worlds are replayed on the shared view with its BAND (v16.24.0).
+  const State base = s.common_evidence.empty()
+                         ? s.shared_view()
+                         : s.shared_view().with_band(s.common_evidence);
+  const auto raw = enumerate_worlds(game, base, everyone, 64, -1);
+  if (raw.size() <= 1) return false;
+  std::vector<OpenWorld> feasible;
+  for (const OpenWorld& w : raw) {
+    if (world_feasible(game, w)) feasible.push_back(w);
+  }
+  if (feasible.empty() || feasible.size() == raw.size()) return false;
+  std::vector<const OpenWorld*> surviving;
+  for (const OpenWorld* w : strike_free(feasible)) {
+    // Point back into `raw`, which is what `prune_to_worlds` narrows against.
+    for (const OpenWorld& r : raw) {
+      if (r.assignment == w->assignment) surviving.push_back(&r);
+    }
+  }
+  return prune_to_worlds(game, raw, surviving, /*shared=*/true);
+}
+
+}  // namespace
 
 void collapse_superpositions(Game& game, const Game& prev, const Action& action) {
   if (!game.state.variant->throw_it_in_a_hole) return;
@@ -809,6 +1124,10 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
 
   const Evidence ev = evidence_from(prev, game, action);
   bool changed = false;
+
+  // The targeting rules first: a world no reaction could have come from is not
+  // one any rule below should be weighing.
+  if (prune_infeasible_worlds(game)) changed = true;
 
   // To a FIXPOINT, because the rules feed each other: settling one card refutes
   // worlds on another, which can leave that one a singleton, which settles it in
@@ -891,6 +1210,7 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
   // The rows last, since every rule above can raise one: what a partner can work
   // out about its own hidden plays is not evidence anybody produced, it is what
   // follows from everything already known (§1.3).
+  if (advance_common_from_worlds(game)) changed = true;
   if (advance_rows_from_own_worlds(game)) changed = true;
 
   // A stack that moved changes what every hand could be holding.
