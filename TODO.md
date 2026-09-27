@@ -1131,13 +1131,20 @@ Two candidate fixes, neither taken in v16.12.0:
 The second is the smaller change and the one that matches the ruling the game was
 played under ("both the reacter and receiver know exactly what they are playing").
 
+**v16.18.0 added a third route and it does not reach this case.** A row now takes
+what holds in every *surviving* world of its own seat's hole cards, so a row CAN
+now walk past a hole — but only when the no-strike argument forces the identities,
+and yagami's `p2`/`p3`/`p4` sets are far too wide for that. Verified:
+`build/replay_log.exe logs/will-bot69-2008489.log --turn 52 --rerun` still chooses
+`discard(order=46)`. The entry stands as written.
+
 ---
 
 ## 45. `[tiiah]` The receiver's bucket narrowing is wired only into `interpret_play`
 
 CONVENTION.md §1d. `tiiah::narrow_receiver_call` — the receiver's half of the
 bucket relation — is called from one place, `Game::interpret_play`
-(`src/basics/decide.cpp:616-619`). So it is skipped whenever the reacter's action
+(`src/basics/decide.cpp:636-644`). So it is skipped whenever the reacter's action
 reaches a seat as a **discard**, even though the reaction machinery below it gets
 the button right: `reacter_button_pressed`
 (`src/conventions/reactor0/interpret_reaction.cpp:523-533`) already knows that a
@@ -1160,4 +1167,73 @@ the wire button, not the resolved action type, is what a reaction is about.
 The alternative worth weighing first is moving the hook into
 `reactor0::resolve_reaction`, which already has the button in hand — one site that
 cannot drift, at the cost of shared code depending on tiiah for the buckets, which
-the comment at the seam (`decide.cpp:610-615`) deliberately avoided.
+the comment at the seam (`decide.cpp:636-640`) deliberately avoided.
+
+---
+
+## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
+
+CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
+the RECEIVER share (`tiiah/interpret_reactive.cpp:217`), because its main consumer
+is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
+what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
+
+The deferral's Rule 3 reads the same field to ask a different question — was the
+REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:695-709`) —
+and that one wants the giver-and-reacter pair, the view the target walk already
+uses (`tiiah/interpret_reactive.cpp:246`). One field cannot be both, and today the
+deferral rule reads the receiver's frame.
+
+It has not been seen to cost anything: the two rows differ only once a seat has
+thrown a card in the hole that the other of the pair can name and the third cannot,
+and Rule 3 only fires on a DEFERRED reaction whose reacter successfully advanced a
+stack. The fix is a second field on the WC plus its snapshot round-trip
+(`src/logging/state_snapshot.cpp:425`, `:445`), which is more surface than the bug
+currently justifies. Outside TIIAH the question does not arise — reactor0 sets the
+field to `play_stacks` and every seat holds the same ones.
+
+---
+
+## 47. `[tiiah]` Our own belief takes no floor across the surviving worlds
+
+CONVENTION.md §1.3, §1e rule 6. v16.18.0 gives a PARTNER's row the height that
+holds in every surviving world of that partner's hole cards
+(`advance_rows_from_own_worlds`). Our own belief gets the narrowing half of the
+same rule (`presume_own_plays_land` prunes our sets and settles singletons) but not
+the floor: two hole cards of ours over `{g1,b1}` must have been one of each, so
+green and blue are both on 1, and `State::play_stacks` does not know it.
+
+Why it was left: the two cards cannot be settled INDIVIDUALLY — neither is pinned,
+only the pair is — so advancing the stacks would have to be done without settling
+either, and `settle` would then double-count the copy if one of them was named
+later. Expressing "these two are a `g1` and a `b1` in some order" needs a joint
+superposition the data model does not have.
+
+It is a missed deduction rather than a desync: a row is symmetric by construction
+(each seat of a pair enumerates the same two seats' hole cards from the same base),
+so the frame a clue is READ in is unaffected. What suffers is our own decisions,
+which run on `play_stacks`.
+
+---
+
+## 48. `[engine]` `common_play_stacks` is not the same at every seat
+
+CONVENTION.md §1.3 defines the shared view as what every seat knows every seat
+knows, so the vector must be identical at all three seats. In replay
+[2010329](https://hanab.live/shared-replay/2010329) it is not: at the same moment
+will-bot67 holds `[1,0,0,0,0]` and will-bot69 holds `[0,0,0,0,0]`.
+
+The cause is upstream of the view. `note_hidden_action` advances it when the player
+could NAME the card they played, which it asks as
+`only_one(common.thoughts[order].possibilities())` — and `Game::common` is not
+actually seat-independent under this convention. Several TIIAH rules write a
+seat-specific reading into it: `narrow_receiver_call` takes the reacter's card from
+`prev.state.deck[react_order].id()` when this seat watched it and from the common
+inference when it did not, and `repin_own_call` re-pins a call on the holder's own
+belief. Both are deliberate (§1.3's "one sanctioned disagreement"), and both leak
+into the singleton test.
+
+Until this is settled, any rule keyed on `common_play_stacks` can mean two things
+at two seats. That is the reason v16.12.0 moved clue reading onto the *pairwise
+view* and v16.18.0 moved the reactive's promise there too — each of those is a step
+away from depending on this vector at all, which may be the real fix.

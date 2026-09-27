@@ -426,6 +426,10 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2010296_partner_play_is_presumed_to_land.cpp
   tests/test_tiiah/test_replay_2010329_receiver_reads_its_own_worlds.cpp
   tests/test_tiiah/test_replay_2010329_a_withdrawn_call_keeps_its_inference.cpp
+  tests/test_tiiah/test_replay_2010329_the_frame_is_the_pair_not_the_team.cpp
+  tests/test_tiiah/test_pair_visible_copies.cpp
+  tests/test_tiiah/test_own_plays_presumed_to_land.cpp
+  tests/test_tiiah/test_row_from_own_worlds.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp

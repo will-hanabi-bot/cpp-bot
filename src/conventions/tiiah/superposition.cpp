@@ -1,5 +1,6 @@
 #include "hanabi/conventions/tiiah/superposition.h"
 
+#include <algorithm>
 #include <optional>
 #include <vector>
 
@@ -104,25 +105,34 @@ bool playable_on(const State& s, const std::vector<int>& stacks, Identity id) {
                      : stacks[id.suit_index] + 1 == id.rank;
 }
 
-// Every copy of `id` is accounted for somewhere we can SEE — the discard pile,
-// or a hand that is not ours — so the card we hold a superposition for cannot
-// have been that identity.
+// Every copy of `id` is accounted for without looking into the hands of the
+// seats in `blind` — the discard pile, the cards already spent, or a hand none of
+// them holds — so the card we hold a superposition for cannot have been that
+// identity.
 //
-// Our-seat-only by construction, and the shape of `reactor0::sight_narrowed`:
-// it reads our own eyes, so it is knowledge no partner has. §1e keeps it out of
-// the shared set for exactly that reason.
-bool all_copies_visible(const Game& game, int order, Identity id) {
+// A seat cannot see its own hand, so `blind` is the seats whose sight this answer
+// has to survive: `{us}` for what WE know, and `{us, p}` for what `p` and we both
+// know (`all_copies_visible_to_pair`).
+bool copies_accounted_for(const Game& game, int order, Identity id,
+                          const std::vector<int>& blind) {
   const State& s = game.state;
   int unaccounted = s.card_count[id.to_ord()] - s.base_count[id.to_ord()];
   if (unaccounted <= 0) return true;
   for (int p = 0; p < s.num_players; ++p) {
-    if (p == s.our_player_index) continue;  // we cannot see our own hand
+    if (std::find(blind.begin(), blind.end(), p) != blind.end()) continue;
     for (int o : s.hands[p]) {
       if (o == order) continue;
       if (s.deck[o].id() == id) --unaccounted;
     }
   }
   return unaccounted <= 0;
+}
+
+// Our-seat-only by construction, and the shape of `reactor0::sight_narrowed`:
+// it reads our own eyes, so it is knowledge no partner has. §1e keeps it out of
+// the shared set for exactly that reason.
+bool all_copies_visible(const Game& game, int order, Identity id) {
+  return copies_accounted_for(game, order, id, {game.state.our_player_index});
 }
 
 // What this action proved is STILL NEEDED, and who proved it.
@@ -192,6 +202,20 @@ void advance_pairwise(Game& game, Identity id, int player, bool self_knew) {
   game.with_state([&](State& st) { st = st.with_pairwise_play(id, knowers); });
 }
 
+// Advance ONE row, for evidence only that pair holds.
+//
+// `advance_pairwise` is every-seat-but-one, which is the right shape for a play
+// somebody made: everyone watching it learns the same thing at the same moment.
+// The pair form of rule 3 is not like that — it is a deduction one partner can
+// follow and another cannot — so it moves a single row (§1.3).
+bool advance_one_row(Game& game, Identity id, int p) {
+  const State& s = game.state;
+  if (p < 0 || p >= static_cast<int>(s.pairwise_play_stacks.size())) return false;
+  if (!playable_on(s, s.pairwise_play_stacks[p], id)) return false;
+  game.with_state([id, p](State& st) { st = st.with_pairwise_play(id, {p}); });
+  return true;
+}
+
 // A collapsed card leaves the map, and the view it was hiding from advances.
 // Our own card is the one our BELIEVED stacks never advanced for, because
 // `resolve_hidden_action` could not name it; a partner's already advanced ours
@@ -225,6 +249,47 @@ void settle(Game& game, int order, Identity id, bool shared) {
     });
   }
   game.with_meta(order, [](ConvData& m) { m.superposition = IdentitySet::empty(); });
+}
+
+// Keep only what the SURVIVING worlds still allow each of our hole cards to be,
+// and settle anything that leaves at one identity.
+//
+// The second half of rule 6, shared by both of its forms: which worlds survive is
+// the caller's question — "would this world let the partner's play land?" for
+// `presume_play_lands`, "is this world free of a strike of our own?" for
+// `presume_own_plays_land` — and this is what follows from either answer.
+//
+// PRIVATE, like rule 3: it reads our own stacks and our own hole cards, so it
+// moves our belief and leaves the shared view alone. A card we can now name is one
+// we can name when we play it, and `note_hidden_action` advances the shared stacks
+// then.
+bool prune_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
+                     const std::vector<const OpenWorld*>& surviving) {
+  if (worlds.empty() || surviving.empty()) return false;
+  if (surviving.size() == worlds.size()) return false;  // nothing refuted
+
+  std::vector<std::pair<int, IdentitySet>> narrowed;
+  for (const auto& [ord, unused] : worlds.front().assignment) {
+    (void)unused;
+    IdentitySet allowed = IdentitySet::empty();
+    for (const OpenWorld* w : surviving) {
+      for (const auto& [o2, id2] : w->assignment) {
+        if (o2 == ord) allowed = allowed.add(id2);
+      }
+    }
+    if (allowed.is_empty()) continue;
+    if (allowed == game.meta[ord].superposition) continue;  // nothing refuted
+    narrowed.emplace_back(ord, allowed);
+  }
+  if (narrowed.empty()) return false;
+
+  for (const auto& [ord, allowed] : narrowed) {
+    game.with_meta(ord, [&allowed](ConvData& m) { m.superposition = allowed; });
+    refute_worlds(game, ord, allowed);
+    if (auto only = only_one(allowed)) settle(game, ord, *only, /*shared=*/false);
+  }
+  game.elim();
+  return true;
 }
 
 // §1e's third source of evidence: a clue between two OTHER seats tells us what
@@ -303,8 +368,22 @@ bool back_solve_own_plays(Game& game, const Game& prev, const Action& action) {
 
 }  // namespace
 
+bool all_copies_visible_to_pair(const Game& game, int order, Identity id, int p) {
+  if (p == game.state.our_player_index) return false;
+  // Both of our hands are out: a copy in either is one the OTHER of us cannot
+  // see, so it cannot be part of an answer we are claiming both of us reach.
+  // Everything else -- the discard pile, the spent copies, the third seat's hand
+  // -- we both read the same way, and each of us can see that the other does.
+  //
+  // One residue, and rule 6 is what keeps it small: the spent copies come from
+  // OUR accounting, so a card `p` itself misplayed into the hole counts here
+  // while `p` cannot name it. That requires us to have concluded `p` struck,
+  // which rule 6 now refuses wherever a world without the strike is open.
+  return copies_accounted_for(game, order, id, {game.state.our_player_index, p});
+}
+
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
-                                   int holder, int cap) {
+                                   const std::vector<int>& holders, int cap) {
   std::vector<OpenWorld> out;
   out.push_back(OpenWorld{{}, base});
   if (!game.state.variant->throw_it_in_a_hole) return out;
@@ -315,7 +394,8 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
   std::size_t product = 1;
   for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
     if (!game.meta[o].superposed()) continue;
-    if (game.state.holder_of(o) != holder) continue;
+    const int who = game.state.holder_of(o);
+    if (std::find(holders.begin(), holders.end(), who) == holders.end()) continue;
     pending.push_back(o);
     product *= static_cast<std::size_t>(game.meta[o].superposition.length());
     if (product > static_cast<std::size_t>(cap)) return out;  // read it flat
@@ -328,13 +408,34 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
         OpenWorld n = w;
         n.assignment.emplace_back(o, id);
         // A play that did not land struck instead, and the stacks stay put --
-        // which is a world too.
-        if (n.state.is_playable(id)) n.state = n.state.with_play(id);
+        // which is a world too, and `struck` is how rule 6 tells it apart.
+        if (n.state.is_playable(id)) {
+          n.state = n.state.with_play(id);
+        } else {
+          n.struck = true;
+        }
         next.push_back(std::move(n));
       }
     }
     out = std::move(next);
   }
+  return out;
+}
+
+std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
+                                   int holder, int cap) {
+  return open_worlds(game, base, std::vector<int>{holder}, cap);
+}
+
+std::vector<const OpenWorld*> strike_free(const std::vector<OpenWorld>& worlds) {
+  std::vector<const OpenWorld*> out;
+  for (const OpenWorld& w : worlds) {
+    if (!w.struck) out.push_back(&w);
+  }
+  if (!out.empty()) return out;
+  // Every world has a strike in it, so the strike is not an assumption anybody
+  // made -- it happened, and rule 6 has nothing to refute.
+  for (const OpenWorld& w : worlds) out.push_back(&w);
   return out;
 }
 
@@ -380,32 +481,63 @@ void presume_play_lands(Game& game, const Action& raw) {
 
   // Everything the surviving worlds still allow each of our hole cards to be.
   // One identity left means we have just learned what we played.
-  std::vector<std::pair<int, IdentitySet>> narrowed;
-  for (const auto& [ord, unused] : worlds.front().assignment) {
-    (void)unused;
-    IdentitySet allowed = IdentitySet::empty();
+  prune_to_worlds(game, worlds, surviving);
+}
+
+bool presume_own_plays_land(Game& game) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  // Our own hole cards alone: this is the rule read from our own seat, and what a
+  // PARTNER can work out about theirs is `advance_rows_from_own_worlds`.
+  const auto worlds = open_worlds(game, s, s.our_player_index);
+  if (worlds.size() <= 1) return false;
+  return prune_to_worlds(game, worlds, strike_free(worlds));
+}
+
+bool advance_rows_from_own_worlds(Game& game) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  if (s.pairwise_play_stacks.empty()) return false;
+  const int me = s.our_player_index;
+  bool changed = false;
+
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == me) continue;  // against ourselves there is nothing we do not know
+    if (p >= static_cast<int>(s.pairwise_play_stacks.size())) continue;
+    // `p`'s own hole cards AND ours. `p` watched ours leave our hand, so what `p`
+    // knows rests on both, and a claim drawn from the row's base alone could
+    // exceed what `p` believes (§1.3).
+    const auto worlds = open_worlds(game, s.pairwise_view(p), {p, me});
+    if (worlds.size() <= 1) continue;
+    const auto surviving = strike_free(worlds);
+
+    // The height every survivor reaches. A stack only ever goes forward, so that
+    // is the least advanced of them -- which is `max` on a reversed suit.
+    std::vector<int> floor;
     for (const OpenWorld* w : surviving) {
-      for (const auto& [o2, id2] : w->assignment) {
-        if (o2 == ord) allowed = allowed.add(id2);
+      if (floor.empty()) {
+        floor = w->state.play_stacks;
+        continue;
+      }
+      for (size_t k = 0; k < floor.size() && k < w->state.play_stacks.size(); ++k) {
+        const bool rev = s.variant->suits[k].suit_type.reversed;
+        floor[k] = rev ? std::max(floor[k], w->state.play_stacks[k])
+                       : std::min(floor[k], w->state.play_stacks[k]);
       }
     }
-    if (allowed.is_empty()) continue;
-    if (allowed == game.meta[ord].superposition) continue;  // nothing refuted
-    narrowed.emplace_back(ord, allowed);
-  }
 
-  for (const auto& [ord, allowed] : narrowed) {
-    game.with_meta(ord, [&allowed](ConvData& m) { m.superposition = allowed; });
-    refute_worlds(game, ord, allowed);
-    if (auto only = only_one(allowed)) {
-      // PRIVATE, like rule 3: this reads our own stacks and our own hole cards,
-      // so it moves our belief and leaves the shared view alone. It does not need
-      // to be shared -- a card we can now name is one we can name when we play
-      // it, and `note_hidden_action` advances the shared stacks then.
-      settle(game, ord, *only, /*shared=*/false);
+    for (size_t k = 0; k < floor.size() && k < s.pairwise_play_stacks[p].size();
+         ++k) {
+      const int have = s.pairwise_play_stacks[p][k];
+      const bool rev = s.variant->suits[k].suit_type.reversed;
+      if (rev ? floor[k] >= have : floor[k] <= have) continue;  // rows only advance
+      game.with_state([&](State& st) {
+        st = st.with_pairwise_play(Identity{static_cast<int>(k), floor[k]}, {p});
+      });
+      changed = true;
     }
   }
-  if (!narrowed.empty()) game.elim();
+  return changed;
 }
 
 void note_hidden_action(Game& game, const Action& raw) {
@@ -495,15 +627,47 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
     if (owner != game.state.our_player_index) continue;
     IdentitySet mine =
         shared.filter([&](Identity id) { return !all_copies_visible(game, o, id); });
+
+    // ...and its PAIR form, read before the settle below clears the set. A
+    // partner who can account for the same copies reaches the same answer, so
+    // their row learns it -- one row rather than the shared view, because the
+    // third seat may not be able to follow it (§1.3, v16.18.0).
+    //
+    // Replay 2010329: our order 3 was a `{r4,y1}` and both `r4` copies sit in
+    // will-bot69's hand, so yagami rules the `r4` out exactly as we do and holds
+    // yellow on 1 -- which is the frame its rank 2 at T14 has to be read in.
+    for (int p = 0; p < game.state.num_players; ++p) {
+      if (p == game.state.our_player_index) continue;
+      const IdentitySet pair_set = shared.filter(
+          [&](Identity id) { return !all_copies_visible_to_pair(game, o, id, p); });
+      if (auto only = only_one(pair_set)) {
+        if (advance_one_row(game, *only, p)) changed = true;
+      }
+    }
+
     if (auto only = only_one(mine)) {
       settle(game, o, *only, /*shared=*/false);
       changed = true;
       again = true;
     }
   }
+
+  // --- rule 6, on our OWN plays ------------------------------------------
+  //
+  // Inside the loop: refuting the worlds that assume a strike of ours can leave a
+  // card named, which is evidence the rules above then feed on.
+  if (presume_own_plays_land(game)) {
+    changed = true;
+    again = true;
+  }
   }
 
   if (back_solve_own_plays(game, prev, action)) changed = true;
+
+  // The rows last, since every rule above can raise one: what a partner can work
+  // out about its own hidden plays is not evidence anybody produced, it is what
+  // follows from everything already known (§1.3).
+  if (advance_rows_from_own_worlds(game)) changed = true;
 
   // A stack that moved changes what every hand could be holding.
   if (changed) game.elim();

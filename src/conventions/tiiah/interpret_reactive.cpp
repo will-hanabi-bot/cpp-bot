@@ -196,12 +196,25 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                /*all_plays=*/false};
   wc.even_parity = true;
   wc.rlocks = false;  // no reactive lock in this convention
-  // The frame the giver chose the target in. A deferral resolves later, against
-  // stacks that have moved, and under TIIAH they may also have moved differently
-  // for different seats — so the SHARED view is what the reading binds to.
-  wc.clue_play_stacks = state.common_play_stacks.empty()
-                            ? state.play_stacks
-                            : state.common_play_stacks;
+  // The frame the giver chose the target in, and the one `stamp_receiver_call`
+  // builds the receiver's reading in (`reactor0/interpret_reaction.cpp:365-390`).
+  // A deferral resolves later, against stacks that have moved, and under TIIAH
+  // they may also have moved differently for different seats — so the reading has
+  // to bind to a view that does not move with our own.
+  //
+  // The GIVER's and the RECEIVER's, not the shared one (§1.3, v16.18.0). The
+  // shared view is what all three seats know, which one seat's ignorance holds
+  // back for the whole team; this reading is a claim about the receiver's card, so
+  // it only has to mean one thing to the two seats it is between. Replay 2010329
+  // T14 is the cost: read against the shared `[1,0,0,0,0]` the promise came out
+  // `{r2,y2}`, both of them trash by then, and Rule 5 dropped the call as a stale
+  // reading -- so the receiver never played the `b2` it had been handed.
+  //
+  // One frame, two questions: the deferral's Rule 3
+  // (`reactor0/interpret_reaction.cpp:695-709`) reads the same field to ask
+  // whether the REACTER's card was playable at clue time, which wants the giver's
+  // and the reacter's pair instead. Recorded in TODO.md rather than fixed here.
+  wc.clue_play_stacks = state.stacks_known_to_both(action.giver, receiver);
   game.waiting.clear();
   game.waiting.push_back(wc);
   if (static_cast<int>(game.pending_reactions.size()) != state.num_players) {

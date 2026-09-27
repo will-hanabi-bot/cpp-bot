@@ -26,22 +26,39 @@ namespace hanabi::tiiah {
 
 // One of the worlds a seat's outstanding hole plays leave open: an assignment
 // of one identity to each of them, and the stacks that assignment produces.
+//
+// `struck` marks a world in which one of those plays did NOT land. It is still a
+// world — a strike is possible — but §1e rule 6 refutes it whenever a strike-free
+// world is available, so the callers that apply that rule need to be told which
+// is which.
 struct OpenWorld {
   std::vector<std::pair<int, Identity>> assignment;
   State state;
+  bool struck = false;
 };
 
-// The worlds `holder`'s cards still in the hole leave open, starting from
-// `base` and applying each assignment in PLAY ORDER so a chain lands
+// The worlds the cards `holders` still have in the hole leave open, starting
+// from `base` and applying each assignment in PLAY ORDER so a chain lands
 // (CONVENTION.md §1e).
 //
-// Exactly one world — `base` with an empty assignment — when the holder has
-// nothing in the hole, which keeps every reading that calls this unchanged
-// until somebody plays a card they cannot name. Also one when the product would
-// exceed `cap`: a partial enumeration would read as a conditional set that is
-// missing worlds, which is worse than reading it unconditionally.
+// Exactly one world — `base` with an empty assignment — when they have nothing in
+// the hole, which keeps every reading that calls this unchanged until somebody
+// plays a card they cannot name. Also one when the product would exceed `cap`: a
+// partial enumeration would read as a conditional set that is missing worlds,
+// which is worse than reading it unconditionally.
+//
+// More than one holder is for the questions asked ABOUT a seat rather than from
+// it: what seat `p` can work out rests on `p`'s own hole cards AND on ours, since
+// `p` watched ours leave our hand and we cannot name them (§1.3).
+std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
+                                   const std::vector<int>& holders, int cap = 64);
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
                                    int holder, int cap = 64);
+
+// §1e rule 6, asked of ONE seat's own plays: the worlds in which none of them
+// struck, or all of them when every world has a strike in it — then the strike
+// is real and there is nothing to refute.
+std::vector<const OpenWorld*> strike_free(const std::vector<OpenWorld>& worlds);
 
 // The other half of a conditional reading: an antecedent has narrowed to
 // `still`, so every world it contradicts is gone, and so is every candidate that
@@ -79,6 +96,43 @@ bool collapse_refused_target(Game& game, int giver, Identity gone);
 // A no-op outside TIIAH, for our own play (we cannot see it), and when no world
 // rescues the card — a partner really can misplay, and then the strike stands.
 void presume_play_lands(Game& game, const Action& raw);
+
+// §1e rule 6 again, turned on OUR OWN plays (v16.18.0).
+//
+// A card we threw in the hole struck or landed and we were not told which. The
+// rule is the same one rule 6 applies to a partner's play, so it has to be the
+// same answer: presume it landed. Every world in which one of our own hole cards
+// failed is refuted, as long as some world has none failing, and a set narrowed
+// to one identity settles — which advances our believed stacks.
+//
+// Called from `collapse_superpositions` rather than from an action hook, because
+// it is not about the action: it is about what our own outstanding plays must have
+// been, and any evidence that narrows one of them can make it answerable.
+bool presume_own_plays_land(Game& game);
+
+// §1.3: a pairwise row takes what holds in EVERY world that survives for the seat
+// behind it (v16.18.0).
+//
+// A row excludes that seat's own hidden plays, because the seat cannot name them.
+// But it can still REASON about them: across the worlds they leave open, the ones
+// where a play struck are refuted by rule 6, and whatever height is reached in all
+// the survivors is one the seat holds. Replay 2010329: yagami's two hole cards are
+// each `{g1,b1}`, so `(g1,g1)` and `(b1,b1)` both strike and green and blue are on
+// 1 in every survivor.
+//
+// Enumerated over that seat's hole cards AND ours together, since the seat watched
+// ours (see `open_worlds`). Rows only ever advance. Returns whether one moved.
+bool advance_rows_from_own_worlds(Game& game);
+
+// §1e rule 3 for a PAIR (v16.18.0). Every copy of `id` is accounted for in the
+// discard pile or in a hand belonging to NEITHER us nor `p` — so `p` accounts for
+// them exactly as we do, and each of us can see that the other can.
+//
+// Strictly stronger than the private form `collapse_superpositions` applies to our
+// own belief: a copy in either of our own hands is one the other cannot see, so it
+// does not count for the pair. That ordering is what keeps a row from ever holding
+// something our own belief does not.
+bool all_copies_visible_to_pair(const Game& game, int order, Identity id, int p);
 
 // Called from `Game::handle_action` with the RAW wire action, before
 // `resolve_hidden_action` has filled in what we could see. A play that reached

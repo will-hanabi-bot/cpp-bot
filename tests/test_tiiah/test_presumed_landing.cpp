@@ -95,9 +95,13 @@ TEST(TiiahPresumedLanding, AStrikeNoWorldRescuesStillStands) {
       << "and our own card is untouched -- a strike is not evidence about it";
 }
 
-// A partner's play that is playable on our stacks already asks nothing of our
-// hole cards, and must leave them alone.
-TEST(TiiahPresumedLanding, APlayThatAlreadyLandsChangesNothing) {
+// A partner's play that is playable on our stacks already needs no rescuing, so
+// THIS rule does not fire on it.
+//
+// Rule 6's own-play form does, though (v16.18.0): if our hole card had been the
+// other r1, one of the two must have struck, and that world is refuted. So the set
+// does move — just not by anything `presume_play_lands` did.
+TEST(TiiahPresumedLanding, APlayThatAlreadyLandsNeedsNoRescue) {
   SetupOptions opts = opts_for();
   opts.hands[1] = {"r1", "y4", "g4", "b4", "p4"};  // playable with red on 0
   Game g = setup(std::move(opts));
@@ -113,8 +117,13 @@ TEST(TiiahPresumedLanding, APlayThatAlreadyLandsChangesNothing) {
 
   EXPECT_EQ(g.state.strikes, 0);
   EXPECT_EQ(g.state.play_stacks[0], 1) << "Bob's r1, and nothing of ours";
-  EXPECT_EQ(g.meta[mine].superposition, before)
-      << "the rule only fires when the play needs explaining";
+  EXPECT_FALSE(g.meta[mine].superposition.contains(Identity{0, 1}))
+      << "the r1 is gone, but not by this rule: ours being the other copy needs a "
+         "strike somewhere, and rule 6 refuses to presume one (v16.18.0)";
+  EXPECT_EQ(g.meta[mine].superposition,
+            before.difference(IdentitySet::single(Identity{0, 1})))
+      << "and that is the ONLY thing it took -- the play itself needed no world of "
+         "ours to land in, so nothing else about our card was in question";
 }
 
 // Nothing in the hole means nothing to blame, so a dead play is simply dead.

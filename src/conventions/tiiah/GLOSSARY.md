@@ -46,7 +46,14 @@ is the accessor and is symmetric; it answers for the pair only when WE are one o
 them, and hands back the common stacks otherwise — an outsider is missing exactly
 its own plays and recovers them by the *back-solve*. Like any stack it advances
 through the prefix, so a play a row never saw blocks everything above it.
-CONVENTION.md §1.3, `tests/test_tiiah/test_pairwise_stacks.cpp`.
+
+Since v16.18.0 a row also takes what the seat behind it can WORK OUT about its own
+plays: across the *worlds* those plays leave open, the *surviving* ones agree on a
+height, and that height is the seat's (`advance_rows_from_own_worlds`). The
+enumeration spans that seat's hole cards and ours together, which is both what
+makes the answer the pair's and what stops it exceeding what the seat believes.
+CONVENTION.md §1.3, `tests/test_tiiah/test_pairwise_stacks.cpp`,
+`test_row_from_own_worlds.cpp`.
 
 ### refusal
 Bob answering a reactive by giving Cathy a **stable** clue instead of reacting,
@@ -73,6 +80,16 @@ stacks that are short by a card it threw in the hole. And since v16.17.0 the
 RECEIVER's half of §1d reads them too, not just the reacter's. Capped at 64: beyond that the call is read flat,
 because a partial list of worlds is a conditional reading missing some of its own
 conditions. CONVENTION.md §1e.
+
+### surviving world
+A world in which none of the plays it assigns STRUCK — `OpenWorld::struck` is set
+when an assignment is not playable on the stacks the world has reached. §1e rule 6
+refutes a striking world whenever a strike-free one is available, and stands them
+all up again when every world has a strike in it: then the strike is not an
+assumption anybody made. `strike_free`
+(`src/conventions/tiiah/superposition.cpp:430-440`), read by
+`presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
+for a partner's row. v16.18.0.
 
 ### conditional reading
 A reading that holds only in some *worlds* — e.g. `{r1, y1, r2, y2}` where the
@@ -171,6 +188,11 @@ both say the identity was still needed, every seat sees them, and a collapse on
 either moves the *common stacks* as well. The third — every copy accounted for
 between the discard pile and the hands that seat can see — is **private**, so it
 moves that seat's believed stacks alone and never the set partners predict from.
+Since v16.18.0 the third also has a **pair form**: count only the copies outside
+BOTH our hand and one partner's, and the partner reaches the same answer, so that
+partner's *pairwise view* may take it (`all_copies_visible_to_pair`). It is the
+private form with one more hand struck out, hence strictly the stronger test — a
+row can never learn what our own belief has not.
 At one remaining candidate the card leaves the map and the stack it belongs to
 advances. `collapse_superpositions`, `src/conventions/tiiah/superposition.cpp`.
 CONVENTION.md §1e.
