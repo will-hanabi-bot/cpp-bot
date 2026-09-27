@@ -98,6 +98,13 @@ bool collapse_refused_target(Game& game, int giver, Identity gone);
 // superpositions are narrowed to what survives and settled when that leaves one
 // identity, which advances our believed stacks — so the play then lands.
 //
+// SHARED as of v16.21.0, so `common_play_stacks` and every pairwise row move with our
+// belief. Every seat watched our card go into the hole, every seat holds its candidate
+// set (built from `common`), the seat that made the play knows its own reading of it,
+// and never-presuming-a-strike is the convention — so the conclusion is reachable from
+// every chair. `presume_own_plays_land` below is the form that stays PRIVATE, because
+// it judges our own plays against our own belief.
+//
 // Called from `Game::handle_action` with the RAW action and BEFORE
 // `resolve_hidden_action`, whose play-vs-misplay test is what reads the result.
 // A no-op outside TIIAH, for our own play (we cannot see it), and when no world

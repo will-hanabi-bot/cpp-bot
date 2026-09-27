@@ -220,6 +220,35 @@ bool advance_one_row(Game& game, Identity id, int p) {
 // Our own card is the one our BELIEVED stacks never advanced for, because
 // `resolve_hidden_action` could not name it; a partner's already advanced ours
 // at play time and only the shared view is owed the update.
+// A CLUE FRAME is frozen at clue time, and our own hole plays are the one thing that
+// copy can be WRONG about (§1d, v16.21.0).
+//
+// `ReactorWC::clue_play_stacks` is our estimate of the stacks the giver chose the
+// target in — `stacks_known_to_both(giver, receiver)` as it read when the clue landed.
+// The giver could see the card we threw in the hole all along, so their frame already
+// counted it; ours could not. Naming it therefore does not MOVE the frame, it restores
+// what was frozen, and v12.0.0's reason for freezing at all — a deferral must be read
+// as it was meant — is untouched.
+//
+// Replay 2011133 T16-T17 is the cost of leaving it stale. will-bot67's frozen frame had
+// blue on 0 because it could not name the `b1` it played at T6; at T17 rule 6 named it,
+// and without this the promise on its clued `b3` came out `{b2}` — already played — so
+// `stamp_receiver_call`'s Rule 5 dropped the whole call and the b3 was never played.
+//
+// Raises only, and reversed-aware, like every other stack write in this file.
+void correct_frozen_frames(Game& game, Identity id) {
+  const auto& st = game.state.variant->suits[id.suit_index].suit_type;
+  auto raise = [&](ReactorWC& wc) {
+    if (id.suit_index >= static_cast<int>(wc.clue_play_stacks.size())) return;
+    int& h = wc.clue_play_stacks[id.suit_index];
+    if (st.reversed ? id.rank < h : id.rank > h) h = id.rank;
+  };
+  for (ReactorWC& wc : game.waiting) raise(wc);
+  for (auto& pending : game.pending_reactions) {
+    if (pending) raise(*pending);
+  }
+}
+
 void settle(Game& game, int order, Identity id, bool shared) {
   const State& s = game.state;
   const bool ours = s.holder_of(order) == s.our_player_index;
@@ -247,6 +276,7 @@ void settle(Game& game, int order, Identity id, bool shared) {
       st = playable ? st.with_play(id) : st.with_discard(id, order);
       if (!playable) ++st.strikes;
     });
+    correct_frozen_frames(game, id);
   }
   game.with_meta(order, [](ConvData& m) { m.superposition = IdentitySet::empty(); });
 }
@@ -259,12 +289,16 @@ void settle(Game& game, int order, Identity id, bool shared) {
 // `presume_play_lands`, "is this world free of a strike of our own?" for
 // `presume_own_plays_land` — and this is what follows from either answer.
 //
-// PRIVATE, like rule 3: it reads our own stacks and our own hole cards, so it
-// moves our belief and leaves the shared view alone. A card we can now name is one
-// we can name when we play it, and `note_hidden_action` advances the shared stacks
-// then.
+// `shared` is the caller's too, and the two forms differ on it (v16.21.0):
+//
+//   * a PARTNER's play is a public event, and its rescue rests on the candidate set
+//     (built from `common`), the player's own reading of what they played, and the
+//     no-strike rule — so every seat reaches the same answer and the shared stacks
+//     move with our belief;
+//   * our OWN plays are judged against our OWN belief, which no partner can
+//     reproduce, so `presume_own_plays_land` stays private.
 bool prune_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
-                     const std::vector<const OpenWorld*>& surviving) {
+                     const std::vector<const OpenWorld*>& surviving, bool shared) {
   if (worlds.empty() || surviving.empty()) return false;
   if (surviving.size() == worlds.size()) return false;  // nothing refuted
 
@@ -286,7 +320,7 @@ bool prune_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
   for (const auto& [ord, allowed] : narrowed) {
     game.with_meta(ord, [&allowed](ConvData& m) { m.superposition = allowed; });
     refute_worlds(game, ord, allowed);
-    if (auto only = only_one(allowed)) settle(game, ord, *only, /*shared=*/false);
+    if (auto only = only_one(allowed)) settle(game, ord, *only, shared);
   }
   game.elim();
   return true;
@@ -521,7 +555,15 @@ void presume_play_lands(Game& game, const Action& raw) {
 
   // Everything the surviving worlds still allow each of our hole cards to be.
   // One identity left means we have just learned what we played.
-  prune_to_worlds(game, worlds, surviving);
+  //
+  // SHARED (v16.21.0). The evidence is a public play, the candidate set is built from
+  // `common`, and "never presume a strike" is the convention rather than one seat's
+  // opinion -- so every seat reaches the same conclusion about what WE threw in the
+  // hole, and the shared stacks have to move with our belief. Replay 2011133 is what
+  // the private form cost: will-bot67 alone knew blue was on 1, every view a clue is
+  // read against still said 0, and its clued `b3` was never called for the rest of
+  // the game.
+  prune_to_worlds(game, worlds, surviving, /*shared=*/true);
 }
 
 bool presume_own_plays_land(Game& game) {
@@ -532,7 +574,8 @@ bool presume_own_plays_land(Game& game) {
   const auto worlds = open_worlds(game, s, s.our_player_index);
   if (worlds.size() <= 1) return false;
   const auto surviving = strike_free(worlds);
-  bool changed = prune_to_worlds(game, worlds, surviving);
+  // PRIVATE: the base is our own belief, which no partner can reproduce.
+  bool changed = prune_to_worlds(game, worlds, surviving, /*shared=*/false);
 
   // ...and the height every survivor reaches is one we HOLD, even when no single
   // card can be named (v16.19.0). Two cards each reading `{r1,y1}` were one of each,

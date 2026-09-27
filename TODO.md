@@ -1371,3 +1371,29 @@ along and the clue still means whatever stable clue it is. That would get both t
 and a play clue out of one turn, at the cost of two cases in the rule instead of one.
 Ruled as supersede-always for now, deliberately; this entry is the record of what it
 gives up rather than a disagreement with it.
+
+---
+
+## 54. `[tiiah]` Rule 6's shared collapse cannot check the condition rule 1 insists on
+
+CONVENTION.md §1e. Rules 1 and 2 count only evidence every seat holds, and they say so
+explicitly: *"A play whose own identity was a superposition is not common knowledge —
+the player who made it does not know what they played — so narrowing on it would desync
+them from the seats that watched it."*
+
+Rule 6's shared form (v16.21.0) rests on the same footing — the seat that made the play
+has to know what it played, or it cannot run the argument about OUR hole card — and it
+does **not** apply the test. It cannot, and replay 2011133 is exactly why: will-bot69's
+own reading of order 23 was `{b2}`, a singleton, so it could run it; but will-bot67's
+copy of that same reading was **`{g2,b1}`**, because §1.3 has an observer read the
+reacter's card on the pair's stacks while the holder reads it on their own, and
+will-bot67's pair view had blue on 0. Applying rule 1's test to our copy of the reading
+would therefore have stopped the shared collapse firing in the one game it was written
+for.
+
+So the shared form is strictly sound only when the player's own reading was a singleton,
+and from outside we cannot always tell whether it was. In practice it is close to always
+true for a reactive blind play, which is named by §1d's bucket relation.
+
+The cure is not a test here; it is making our copy of a partner's reading right, which is
+what TODO 48 wants. Until then this is a known gap rather than an unknown one.

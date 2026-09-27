@@ -434,6 +434,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2010512_receiver_reads_the_reacter_play.cpp
   tests/test_tiiah/test_reacter_play_read_by_the_receiver.cpp
   tests/test_tiiah/test_fix_clue.cpp
+  tests/test_tiiah/test_replay_2011133_rule_six_is_shared.cpp
+  tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp

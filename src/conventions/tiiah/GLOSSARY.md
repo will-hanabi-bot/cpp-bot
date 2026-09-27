@@ -92,8 +92,11 @@ that settling the earlier card withdraws the rest. `open_worlds` /
 `ConvData::ConditionalReading`. The worlds have a second consumer since v16.16.0:
 §1e rule 6 asks which of them lets a partner's play LAND, and refutes the rest
 (`presume_play_lands`) — which is how a seat stops inventing strikes out of
-stacks that are short by a card it threw in the hole. And since v16.17.0 the
-RECEIVER's half of §1d reads them too, not just the reacter's. Capped at 64: beyond that the call is read flat,
+stacks that are short by a card it threw in the hole. **That collapse is SHARED as of
+v16.21.0**: every seat watched the card, holds its candidate set and applies the same
+rule, so the *common stacks* and every *pairwise view* move with our belief. Rule 6
+asked of our OWN plays stays private, because it is judged against our own belief.
+And since v16.17.0 the RECEIVER's half of §1d reads them too, not just the reacter's. Capped at 64: beyond that the call is read flat,
 because a partial list of worlds is a conditional reading missing some of its own
 conditions. CONVENTION.md §1e.
 
