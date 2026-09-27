@@ -458,7 +458,9 @@ who throws a card the team can NAME is telling whoever holds the other copy that
 they hold it (`DiscardInterp::SARCASTIC`, or `GENTLEMANS_DISCARD` when the card
 is playable). `src/basics/sarcastic.cpp`, reached from `decide.cpp` — which is
 **not** gated on convention, so it runs here alongside reactor0's own discard
-vocabulary of CTD, chuck and pitch.
+vocabulary of CTD, chuck and pitch. It **is** gated on variant: in Throw It in a
+Hole a playable card never reads as a gentleman's discard, because a partner who
+can see the hole is saying it was already played (tiiah CONVENTION.md §1e rule 7).
 
 **"Can name" is the precondition**, and it is the whole of it: `useful_dc`
 (`decide.cpp`) requires the card to have been pinned to one identity in `common`

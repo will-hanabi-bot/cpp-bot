@@ -514,8 +514,16 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   // is a mistake, not a signal.
   auto dc_known = prev.common.thoughts[action.order].id(/*infer=*/true,
                                                         /*symmetric=*/true);
+  //
+  // No gentleman's discard in Throw It in a Hole. A partner sees every card in
+  // the hole but their own, so a named playable they throw is one they can see
+  // was already played — §1e rule 7 (`presume_discard_was_played`) reads it that
+  // way before we get here. Replay 2011319 T12: yagami threw a known p1 we had
+  // already played, this branch pinned our only unknown card to p1, and at T14
+  // we played it — a b2.
   bool useful_dc = !failed && prev.state.deck[action.order].clued && id.has_value() &&
                     state.is_useful(*id) &&
+                    !(state.variant->throw_it_in_a_hole && state.is_playable(*id)) &&
                     dc_known && *dc_known == *id &&
                     prev.meta[action.order].status != CardStatus::CALLED_TO_DISCARD &&
                     !(prev.common.thinks_locked(prev, action.player_index_v) &&

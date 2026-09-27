@@ -566,6 +566,40 @@ void presume_play_lands(Game& game, const Action& raw) {
   prune_to_worlds(game, worlds, surviving, /*shared=*/true);
 }
 
+void presume_discard_was_played(Game& game, const Action& raw) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return;
+  const auto* dc = std::get_if<DiscardAction>(&raw);
+  if (!dc || dc->suit_index == -1 || dc->rank == -1) return;
+  const int me = s.our_player_index;
+  if (dc->player_index_v == me) return;  // our own hole cards are what we cannot see
+  const int order = dc->order;
+  if (order < 0 || order >= static_cast<int>(game.common.thoughts.size())) return;
+  const Identity id{dc->suit_index, dc->rank};
+  if (!s.is_playable(id)) return;  // not playable to us: nothing to explain
+
+  // The team must have NAMED it: a card merely touched may have been thrown for
+  // any reason. The same test as `useful_dc` (decide.cpp), asked before the
+  // discard reveals it.
+  auto known = game.common.thoughts[order].id(/*infer=*/true, /*symmetric=*/true);
+  if (!known || *known != id) return;
+
+  const auto worlds = open_worlds(game, s, me);
+  if (worlds.size() <= 1) return;
+
+  std::vector<const OpenWorld*> surviving;
+  for (const OpenWorld* w : strike_free(worlds)) {
+    if (!w->state.is_playable(id) && w->state.is_basic_trash(id)) surviving.push_back(w);
+  }
+  if (surviving.empty()) return;  // no world has it played: a partner threw a useful card
+
+  // Replay 2011319 T12: yagami threw the p1 our purple clue had called, because
+  // she could see the p1 and p2 we had thrown in the hole. Read against purple 0,
+  // it looked playable, and the gentleman's-discard reading pinned our only
+  // unknown card to p1; at T14 we played it, a b2. Strike.
+  prune_to_worlds(game, worlds, surviving, /*shared=*/true);
+}
+
 bool presume_own_plays_land(Game& game) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return false;

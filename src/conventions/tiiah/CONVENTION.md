@@ -40,7 +40,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0) |
-| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
 | The fix clue (§1h) | implemented (v16.20.0) |
@@ -180,7 +180,7 @@ Three properties make the row the right object rather than a patch:
 but it can still reason about them. Across the worlds they leave open, §1e rule 6
 refutes the ones in which a play struck, and a height every survivor reaches is one
 the seat holds. `tiiah::advance_rows_from_own_worlds`
-(`tiiah/superposition.cpp:611-642`), run at the end of every
+(`tiiah/superposition.cpp:645-676`), run at the end of every
 `collapse_superpositions`, and `tests/test_tiiah/test_row_from_own_worlds.cpp`.
 
 **Our own belief takes the same floor (v16.19.0)**, by the same `world_floor` over our
@@ -529,7 +529,7 @@ resolves — not at clue time, because until the reacter acts they do not know
 which of their cards the sum rule names. Their card is the **union** of the same
 two readings, intersected with what it could already be
 (`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:458-573`,
-called from the engine seam at `src/basics/decide.cpp:636-646`):
+called from the engine seam at `src/basics/decide.cpp:644-654`):
 
 - **the bucket** the reacter's sits one step from — one *lower* for a rank clue,
   one *higher* for a colour one, the relation above read backwards;
@@ -593,7 +593,7 @@ receiver learns which slot answered:
 > ever knowing its own target.
 
 `narrow_reacter_play` (`tiiah/interpret_reactive.cpp:479-512`), called from the
-engine seam just before `narrow_receiver_call` (`src/basics/decide.cpp:641-651`)
+engine seam just before `narrow_receiver_call` (`src/basics/decide.cpp:649-659`)
 since it can move the shared stacks the receiver's own reading then rests on. Both
 readers share `bucket_over_worlds` (`:136-163`); the narrowing and its settle are
 `tiiah::narrow_superposition` (`tiiah/superposition.cpp:385-397`), shared like §1e
@@ -795,7 +795,7 @@ already names one identity is no superposition at all: the player knew, so the
 SHARED stacks advance with it.
 
 **Collapsing** (`collapse_superpositions`,
-`src/conventions/tiiah/superposition.cpp:582-674`). A candidate leaves a
+`src/conventions/tiiah/superposition.cpp:717-809`). A candidate leaves a
 superposition when:
 
 1. another player plays a card of that identity;
@@ -811,7 +811,10 @@ superposition when:
 6. **a partner's play would not land on our stacks** — so it is landing on
    something of ours, and the worlds in which it strikes are refuted; and the same
    rule asked of OUR OWN plays, so a world in which one of them struck is refuted
-   too.
+   too;
+7. **a partner discards a card the team had named, and it is playable on our
+   stacks** — they can see it has already been played, so it was one of ours, and
+   the worlds in which it is still needed are refuted (v16.22.0).
 
 Rules 1 and 2 say the same thing — that identity was still NEEDED, so the
 superposed card was not it — and both are **shared**: every seat sees them and
@@ -896,7 +899,7 @@ hole landed or struck and nobody told us which, so it gets the same default: it
 landed. Every world in which one of our own hole cards failed is refuted, as long
 as some world has none failing — and when every world has a strike in it, the
 strike is not an assumption anybody made and there is nothing to refute.
-`presume_own_plays_land` (`:569-609`) over `strike_free` (`:504-514`), which is the
+`presume_own_plays_land` (`:603-643`) over `strike_free` (`:504-514`), which is the
 `OpenWorld::struck` flag `open_worlds` now sets; both forms share the narrowing
 half, `prune_to_worlds` (`:300-327`).
 
@@ -942,6 +945,40 @@ reading `{r3, g1, b1, p1}` instead of `{p1}`, which meant it could not name the
 card it played at T9, which meant purple never advanced for it, which meant T14's
 clue was read against the wrong stacks. Rule 6 settles the `y1` and the rest
 follows.
+
+**Rule 7: a named playable thrown away was already played (v16.22.0).** It is rule
+6's discard twin. A partner sees every card in the hole but their own, so when they
+throw a card the whole team had named — pinned in `common` before the discard, the
+same test `useful_dc` asks (`src/basics/decide.cpp:515-530`) — and it looks playable
+to us, our stacks are short, and they can only be short by what we threw in the hole:
+
+> Ask which strike-free worlds our own hole cards leave open would have the card
+> already played. If any would, those are the only worlds left. If none would, the
+> partner simply threw a useful card, and nothing is refuted.
+
+`presume_discard_was_played` (`src/conventions/tiiah/superposition.cpp:569-601`),
+called from `Game::handle_action` beside `presume_play_lands`
+(`src/basics/game.cpp:593-597`), before the dispatch, so `interpret_discard` reads
+the advanced stacks. It narrows through `prune_to_worlds` with `shared=true`, for rule
+6's reasons: the discard is public, the card's identity was common knowledge, and the
+candidate sets are built from `common`.
+
+**There is no gentleman's discard in TIIAH.** The shared engine reads a named
+playable thrown away as "you hold the other copy" (reactor0 GLOSSARY, *sarcastic
+discard / gentleman's discard*), and with no copy visible it falls back on "then it
+is in mine". Here the same discard means rule 7 instead, so `useful_dc` excludes a
+playable card in a hole variant (`src/basics/decide.cpp:517-526`). A sarcastic
+reading of a useful card that is NOT playable is unchanged.
+
+Replay [2011319](https://hanab.live/shared-replay/2011319#14) is the case.
+will-bot69 threw order 5 (`{g1,b1,p1}`, really the `p1`) and order 9 (`{r2,p2}`,
+really the `p2`) into the hole; at T8 its Purple clue called yagami's order 14 as `p1`,
+and at T12 she threw it away — correctly, since she could see purple on 2. Read
+against purple 0 it looked playable, the gentleman's-discard reading found no `p1` in
+any hand, and it pinned will-bot69's only unknown card, order 16, to `{p1}`. At T14 it
+played it: a `b2`, a strike. With rule 7 the discard settles order 5 to `p1` and order
+9 to `p2`, purple is on 2 in our belief and the shared view, and T14 plays the Red
+clue's `r2` instead.
 
 Rule 3 is **private** — it is `reactor0::sight_narrowed`'s shape, and it reads
 our own eyes. It narrows what WE believe and never the set partners predict
@@ -1150,6 +1187,7 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_replay_2010329_the_frame_is_the_pair_not_the_team.cpp` | §1d's frame — the live game the shared view cost: the pair's row, the call surviving Rule 5, the `{g2,b2}` reading, and the `b2` played |
 | `tests/test_tiiah/test_shared_rule_six.cpp` | §1e rule 6 SHARED — a partner's rescued play moving the shared view and every row, our own collapse still moving neither, and a frozen clue frame raised by the settle but never lowered |
 | `tests/test_tiiah/test_replay_2011133_rule_six_is_shared.cpp` | the live game the private form lost: the collapse, blue on 1 in the shared view and every row, the promise surviving Rule 5 as `{b3}`, and the b3 played |
+| `tests/test_tiiah/test_replay_2011319_discarded_playable_was_already_played.cpp` | §1e rule 7 — the live game the gentleman's discard cost: yagami's thrown `p1` settling our two hole cards, purple on 2 in our belief and the shared view, order 16 left unpinned, and the `r2` played instead of the `b2` |
 | `tests/test_tiiah/test_fix_clue.cpp` | §1h — a negative-touch fix and a positive-touch fix both read FIX and leave the card at the dead identity with its call gone; and three controls: a live identity, a call already named, and no call at all |
 | `tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp` | §1h's priority — a fix given while Alice is OCCUPIED and every candidate is LOW (the tier-gate exemption), and the control where nothing needs fixing and she actions her own call |
 | `tests/test_tiiah/test_reacter_play_read_by_the_receiver.cpp` | §1d's reacter half at the RECEIVER's seat — one playable in the bucket resolving the card and advancing the shared stacks, two narrowing without resolving, and the giver's seat keeping the reading it already had |

@@ -111,6 +111,23 @@ bool collapse_refused_target(Game& game, int giver, Identity gone);
 // rescues the card — a partner really can misplay, and then the strike stands.
 void presume_play_lands(Game& game, const Action& raw);
 
+// §1e rule 7: a known playable that a partner DISCARDS was already played (v16.22.0).
+//
+// A partner sees every card in the hole but their own. If they throw a card the
+// team had named, and our stacks say it is playable, then our stacks are short —
+// and they can only be short by what WE threw in the hole. So every world in which
+// the card is still needed is refuted, exactly as rule 6 refutes the worlds in
+// which a partner's play strikes. There is no gentleman's discard in TIIAH; this is
+// what such a discard means instead. SHARED, for rule 6's reasons: the discard is
+// public, the card's identity was common knowledge, the candidate sets come from
+// `common`.
+//
+// Called from `Game::handle_action` with the RAW action, before the dispatch, so
+// `interpret_discard` reads the advanced stacks. A no-op outside TIIAH, for our own
+// discard, for a card the team could not name, and when no world has the card
+// already played — then the partner simply threw a useful card.
+void presume_discard_was_played(Game& game, const Action& raw);
+
 // §1e rule 6 again, turned on OUR OWN plays (v16.18.0).
 //
 // A card we threw in the hole struck or landed and we were not told which. The

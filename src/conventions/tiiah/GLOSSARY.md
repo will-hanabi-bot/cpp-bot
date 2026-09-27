@@ -13,6 +13,14 @@ included — and nobody is told whether it landed. The discard pile is *not* the
 hole: discards stay visible. On an inverted suit the two swap, because a chuck
 reaches the stack and a pitch reaches the pile. CONVENTION.md §1.
 
+### gentleman's discard (does not exist here)
+The shared engine reads a named playable thrown away as "you hold the other copy"
+(reactor0 GLOSSARY). In TIIAH a partner can see the hole, so the same discard means
+the card **was already played** — by us, since our stacks can only be short by
+what we threw in the hole — and it collapses our superpositions instead
+(`presume_discard_was_played`, CONVENTION.md §1e rule 7). `useful_dc` excludes a
+playable card in a hole variant (`src/basics/decide.cpp:517-526`). Replay 2011319.
+
 ### believed stacks
 `State::play_stacks` under TIIAH. We resolve each hidden action against the card
 we watched in a partner's hand (`resolve_hidden_action`,

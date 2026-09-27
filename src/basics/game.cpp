@@ -591,6 +591,10 @@ void Game::handle_action(const Action& action) {
   // the only world in which the play lands (§1e rule 6). Ahead of the resolution
   // because it is what the resolution's "dead" test then reads.
   hanabi::tiiah::presume_play_lands(*this, action);
+  // ...and its discard twin: a partner who throws a card the team had named, and
+  // that looks playable to us, can see it has already been played — by us, into
+  // the hole (§1e rule 7).
+  hanabi::tiiah::presume_discard_was_played(*this, action);
 
   const Action effective = resolve_hidden_action(state, action, hidden_own_play_id(*this, action));
 
