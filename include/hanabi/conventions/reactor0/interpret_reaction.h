@@ -18,8 +18,13 @@ namespace hanabi::reactor0 {
 
 bool react_play(const Game& prev, Game& game, int player_index, int order,
                 const ReactorWC& wc);
+// `as_play`: resolve the reaction as though the reacter had pressed Play. Throw It
+// in a Hole's playable-dupe DISCHARGE (tiiah/CONVENTION.md §1k, v16.25.0): the
+// reacter threw away a card the giver had already played without knowing it, and
+// the receiver still plays. The caller decides; reactor0 does not reach into a
+// convention to ask.
 bool react_discard(const Game& prev, Game& game, int player_index, int order,
-                   const ReactorWC& wc);
+                   const ReactorWC& wc, bool as_play = false);
 
 // Resolve a reaction the reacter DEFERRED (v12.0.0, §1e).
 //

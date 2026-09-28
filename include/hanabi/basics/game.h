@@ -132,6 +132,19 @@ struct ReactionRecord {
   bool operator==(const ReactionRecord&) const = default;
 };
 
+// THROW IT IN A HOLE: "one of these hole cards WAS `id`" (v16.25.0) -- a joint
+// fact no single card's candidate set can carry. Rule 7 (a named playable
+// discarded) and rule 8 (a playable card that struck) prove that a card is
+// already down, which only our own hole cards can explain; a world in which none
+// of `orders` is `id` is not the world we are in (`tiiah::world_feasible`).
+// Replay 2011475 T43: o7 {b3,p3} and o33 {g5,b3}, one of which was the b3.
+struct HoleRequirement {
+  Identity id{0, 0};
+  std::vector<int> orders;
+
+  bool operator==(const HoleRequirement&) const = default;
+};
+
 class Game {
  public:
   // --- Fields ---
@@ -299,6 +312,12 @@ class Game {
   // (tiiah/CONVENTION.md §1e, v16.24.0) -- the evidence `tiiah::world_feasible`
   // judges a world of hole cards against.
   std::vector<ReactionRecord> reaction_records;
+  // ...and the joint facts rules 7 and 8 proved about our own hole cards.
+  std::vector<HoleRequirement> hole_requirements;
+  // TRANSIENT, one action long: the giver's hole card a reacter's discard is a
+  // DISCHARGE of (tiiah/CONVENTION.md §1k, v16.25.0). Found in `handle_action`
+  // before rule 7 can settle that card, read by `interpret_discard`.
+  std::optional<int> tiiah_discharge;
 
   int zcs_turn = -1;
 

@@ -102,6 +102,23 @@ def simulate(base: dict[str, Any], seat: int | None, ids: dict[int, tuple[int, i
     return run_stacks(path, turn)
 
 
+def true_stacks(base: dict[str, Any], ids: dict[int, tuple[int, int]], turn: int,
+                num_suits: int) -> list[int]:
+    """The stacks as they really stand: every play that was not a strike, counted
+    from the identities the logs reveal. (A fully sighted SIMULATION would push the
+    seat's own visible plays through the superposition machinery and can invent a
+    card.) A misplay arrives as a failed discard, so every raw play landed. Plain
+    suits only -- an inverted suit's chuck lands through the Discard button -- so
+    on those suits the height is marked with '?' by the caller if it matters."""
+    stacks = [0] * num_suits
+    for a in cut_actions(base["replay"]["actions"], turn):
+        if a.get("t") != "play" or a["order"] not in ids:
+            continue
+        suit, rank = ids[a["order"]]
+        stacks[suit] = max(stacks[suit], rank)
+    return stacks
+
+
 def short(stacks: list[int]) -> str:
     return "".join(str(x) for x in stacks) if stacks else "-"
 
@@ -151,7 +168,7 @@ def main() -> int:
                 # No log, or a log that stops before this turn: simulate the seat.
                 views[seat] = simulate(base, seat, ids, args.turn, tmp)
                 simulated.add(seat)
-        truth = simulate(base, None, ids, args.turn, tmp)
+        truth = true_stacks(base, ids, args.turn, len(views[0]["play_stacks"]))
 
     alice = views[next(iter(views))]["current_player_index"]
     order = [(alice + k) % n for k in range(n)]
@@ -166,7 +183,7 @@ def main() -> int:
         body = "  ".join(f"{v} [{who(s)}]" for (s, _), v in zip(readings, vals))
         return f"  {label:<22}{body}{flag}"
 
-    suits = " ".join(suit_abbrs_for(variant)[: len(truth["play_stacks"])])
+    suits = " ".join(suit_abbrs_for(variant)[: len(truth)])
     print(f"game {args.game_id} turn {args.turn} -- "
           + "  ".join(f"{role[s]}={who(s)}" for s in order)
           + f"   (suits {suits}; * = simulated, no log)")
@@ -178,7 +195,7 @@ def main() -> int:
                        [(a, views[a]["pairwise_play_stacks"][b]),
                         (b, views[b]["pairwise_play_stacks"][a])]))
     print(line("common", [(s, views[s]["common_play_stacks"]) for s in order]))
-    print(f"  {'true':<22}{short(truth['play_stacks'])}")
+    print(f"  {'true':<22}{short(truth)}")
     return 0
 
 

@@ -53,6 +53,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor0/interpret_reactive.cpp
   src/conventions/reactor0/state_eval.cpp
   src/conventions/tiiah/buckets.cpp
+  src/conventions/tiiah/dupes.cpp
   src/conventions/tiiah/interpret_clue.cpp
   src/conventions/tiiah/interpret_reactive.cpp
   src/conventions/tiiah/settings.cpp
@@ -445,6 +446,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp
   tests/test_tiiah/test_world_feasibility.cpp
   tests/test_tiiah/test_stable_clue_over_worlds.cpp
+  tests/test_tiiah/test_replay_2011475_dupes_strikes_and_the_shared_collapse.cpp
+  tests/test_tiiah/test_dupes.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp

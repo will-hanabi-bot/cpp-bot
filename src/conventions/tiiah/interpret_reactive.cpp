@@ -9,6 +9,7 @@
 #include "hanabi/conventions/reactor/interpret_reactive.h"
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "hanabi/conventions/tiiah/buckets.h"
+#include "hanabi/conventions/tiiah/dupes.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
@@ -179,7 +180,7 @@ std::vector<int> reacter_frame(const Game& game, int giver, int reacter) {
   // over every seat's hole cards.
   std::vector<int> everyone;
   for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
-  return floor_over_worlds(game, base, everyone, s.common_evidence);
+  return floor_over_worlds(game, base, everyone, s.common_evidence, /*shared=*/true);
 }
 
 void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
@@ -400,10 +401,27 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       }
     }
 
-    const auto stamped =
+    auto stamped =
         double_chuck
             ? reactor0::stamp_react_discard_button(game, action, react_order)
             : reactor0::stamp_react_play_button(game, action, react_order);
+    // The playable-dupe DISCHARGE, at the reacter's own seat (§1k, v16.25.0). The
+    // pairing names our card as X on the frame we share with the giver, but X is
+    // already down on our own stacks -- the giver threw it into the hole without
+    // knowing -- so the play button cannot be stamped. We are called to throw it
+    // instead; the receiver still plays.
+    if (!stamped && !double_chuck && reacter == state.our_player_index) {
+      const IdentitySet on_frame =
+          react_live.filter([&after](Identity i) { return after.is_playable(i); });
+      if (on_frame.length() == 1 && state.is_basic_trash(on_frame.head()) &&
+          discharge_hole_card(game, wc, on_frame.head())) {
+        game.narrow_thought(react_order, on_frame);
+        stamped = reactor0::stamp_react_discard_button(game, action, react_order);
+        if (stamped) {
+          hanabi::logging::log_branch("tiiah.discharge_stamped", {{"order", react_order}});
+        }
+      }
+    }
     if (!stamped) continue;
 
     // What the pairing tells the reacter about their own card. A finesse names
@@ -628,7 +646,22 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   // some other world was never offered. Replay 2010329: will-bot69 had thrown an
   // `{r2,g1,b1}` into the hole, and its called card was an `r3` -- playable only
   // in the world where that card was the `r2`. It read `{g2}`.
-  const auto worlds = open_worlds(game, s.private_base(), wc.receiver);
+  // The RECEIVER's worlds, replayed on what the receiver knows (v16.25.0). At the
+  // receiver's own seat that is our belief. At any other seat it is the frame the
+  // giver and the receiver share, NOT our belief: we watched the receiver's hole
+  // cards land, so replaying them on our own stacks strikes the world in which
+  // they are what we saw. Replay 2011475 T18: yagami's o4 `{g1,b1}` was the g1;
+  // on will-bot67's belief (green 1) the g1 world struck, and the call on her o21
+  // read `{r4,b1}` instead of `{g1,b1,r4}`.
+  const bool at_receiver = wc.receiver == s.our_player_index;
+  const State base =
+      at_receiver ? s.private_base()
+                  : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
+                        .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
+  const std::vector<int> holders =
+      at_receiver ? std::vector<int>{wc.receiver}
+                  : std::vector<int>{wc.receiver, wc.giver};
+  const auto worlds = open_worlds(game, base, holders);
 
   IdentitySet allowed = IdentitySet::empty();
   std::vector<std::pair<Identity, std::uint64_t>> support;

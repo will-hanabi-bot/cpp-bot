@@ -171,6 +171,11 @@ struct ConvData {
   // assignments must be replayed in: card ORDER is draw order, and a card drawn
   // early can be played late (replay 2011397: o8 after o9). -1 when unknown.
   int hole_turn = -1;
+  // What the SHARED view still allows this card to be, after WE settled it
+  // privately (v16.25.0). A private settle clears `superposition`, but no other
+  // seat followed us, so the worlds every seat enumerates for the shared view
+  // must keep the card with this set. Empty otherwise.
+  IdentitySet shared_left = IdentitySet::empty();
 
   bool superposed() const { return superposition.non_empty(); }
 

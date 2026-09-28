@@ -8,6 +8,7 @@
 #include "hanabi/basics/identity_set.h"
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/player_elim.h"
+#include "hanabi/conventions/tiiah/dupes.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/instrumentation/timer.h"
 
@@ -594,7 +595,16 @@ void Game::handle_action(const Action& action) {
   // ...and its discard twin: a partner who throws a card the team had named, and
   // that looks playable to us, can see it has already been played — by us, into
   // the hole (§1e rule 7).
-  hanabi::tiiah::presume_discard_was_played(*this, action);
+  // Unless it is a PASSBACK (§1j, v16.25.0): a named card thrown away while
+  // another seat holds a called copy it cannot name tells that seat what it holds,
+  // and says nothing about anybody's hole.
+  //
+  // A DISCHARGE (§1k) is looked for first: rule 7 would settle the giver's hole
+  // card from this same discard, and the reaction still has to know it was one.
+  tiiah_discharge = hanabi::tiiah::find_discharge(*this, action);
+  if (!hanabi::tiiah::read_passback(*this, action)) {
+    hanabi::tiiah::presume_discard_was_played(*this, action);
+  }
 
   const Action effective = resolve_hidden_action(state, action, hidden_own_play_id(*this, action));
 

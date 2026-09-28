@@ -1449,3 +1449,20 @@ Also noted while building it: replay 2011319's views disagree between seats from
 early turns (`scripts/tiiah_stacks.py 2011319 11`), in v16.23.0 as in v16.24.0. Two of
 its three seats are simulated there -- will-bot67's log stops at T13 -- so how much of that
 is the simulation and how much the bots has not been separated.
+
+---
+
+## 57. `[tiiah]` The playable-dupe conventions cover the plain cases only
+
+§1j (passback) and §1k (discharge), v16.25.0. What is not handled yet:
+
+- **Discharge on a deferred reaction.** `find_discharge` reads `waiting.front()`, so a
+  reaction the reacter deferred and resolves turns later (`pending_reactions`) is read
+  as an ordinary discard.
+- **Discharge on the reverse arm.** The reverse reactive's receiver moves first; a
+  discharge there has not been ruled on and is read by the same code, unexamined.
+- **Passback when the other holder is not called yet** -- a card that will be called by
+  a reaction still in flight. `dupe_passback` only looks at standing CTP stamps.
+- **The rule-2 side of a passback.** Narrowing the other copy to {X} is written straight
+  into `common` by `read_passback`; the collapse rules that key on a newly CALLED
+  identity (rule 2) do not see it as a new call.

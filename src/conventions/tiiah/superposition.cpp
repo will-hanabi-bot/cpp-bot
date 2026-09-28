@@ -278,7 +278,25 @@ void settle(Game& game, int order, Identity id, bool shared) {
     });
     correct_frozen_frames(game, id);
   }
-  game.with_meta(order, [](ConvData& m) { m.superposition = IdentitySet::empty(); });
+  game.with_meta(order, [shared](ConvData& m) {
+    // A private settle leaves the shared view's candidate set behind (v16.25.0):
+    // no other seat followed us, so the shared worlds keep the card.
+    if (!shared && m.shared_left.is_empty()) m.shared_left = m.superposition;
+    if (shared) m.shared_left = IdentitySet::empty();
+    m.superposition = IdentitySet::empty();
+  });
+}
+
+// A card WE settled privately that a shared argument now names (v16.25.0): the
+// shared view and every row learn it, our own belief already has it.
+void settle_shared_only(Game& game, int order, Identity id) {
+  const State& s = game.state;
+  refute_worlds(game, order, IdentitySet::single(id));
+  if (playable_on(s, s.common_play_stacks, id)) {
+    game.with_state([id](State& st) { st = st.with_common_play(id); });
+  }
+  advance_pairwise(game, id, /*player=*/-1, /*self_knew=*/true);
+  game.with_meta(order, [](ConvData& m) { m.shared_left = IdentitySet::empty(); });
 }
 
 // Keep only what the SURVIVING worlds still allow each of our hole cards to be,
@@ -312,15 +330,50 @@ bool prune_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
       }
     }
     if (allowed.is_empty()) continue;
-    if (allowed == game.meta[ord].superposition) continue;  // nothing refuted
+    // The set these worlds were built from: the SHARED set when the argument is
+    // shared and we have narrowed the card privately (v16.25.0).
+    const ConvData& m0 = game.meta[ord];
+    const IdentitySet& current =
+        shared && m0.shared_left.non_empty() ? m0.shared_left : m0.superposition;
+    if (allowed == current) continue;  // nothing refuted
     narrowed.emplace_back(ord, allowed);
   }
   if (narrowed.empty()) return false;
 
   for (const auto& [ord, allowed] : narrowed) {
-    game.with_meta(ord, [&allowed](ConvData& m) { m.superposition = allowed; });
-    refute_worlds(game, ord, allowed);
-    if (auto only = only_one(allowed)) settle(game, ord, *only, shared);
+    const bool superposed = game.meta[ord].superposed();
+    if (!shared) {
+      // A PRIVATE narrowing: remember what the shared view still allows first,
+      // since no other seat followed us.
+      game.with_meta(ord, [&allowed](ConvData& m) {
+        if (m.shared_left.is_empty()) m.shared_left = m.superposition;
+        m.superposition = allowed;
+      });
+      refute_worlds(game, ord, allowed);
+      if (auto only = only_one(allowed)) settle(game, ord, *only, /*shared=*/false);
+      continue;
+    }
+    // A SHARED narrowing: the shared set takes it, and our own set -- never wider
+    // -- keeps what is left of it.
+    game.with_meta(ord, [&allowed](ConvData& m) {
+      if (m.shared_left.non_empty()) m.shared_left = allowed;
+      if (m.superposed()) {
+        const IdentitySet kept = m.superposition.intersect(allowed);
+        if (kept.non_empty()) m.superposition = kept;
+      }
+    });
+    if (superposed) refute_worlds(game, ord, game.meta[ord].superposition);
+    if (auto only = only_one(allowed)) {
+      if (game.meta[ord].superposed()) {
+        settle(game, ord, *only, /*shared=*/true);
+      } else {
+        settle_shared_only(game, ord, *only);
+      }
+    } else if (game.meta[ord].superposed()) {
+      if (auto mine = only_one(game.meta[ord].superposition)) {
+        settle(game, ord, *mine, /*shared=*/false);
+      }
+    }
   }
   game.elim();
   return true;
@@ -440,7 +493,13 @@ bool s_reversed(const Game& game, int suit) {
 
 std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
                                         const std::vector<int>& holders, int cap,
-                                        int except_order) {
+                                        int except_order, bool shared = false) {
+  // The candidate set a card carries in these worlds. The SHARED view also
+  // carries the cards we settled privately, with the set it still allows.
+  auto cands = [&game, shared](int o) -> const IdentitySet& {
+    if (shared && game.meta[o].shared_left.non_empty()) return game.meta[o].shared_left;
+    return game.meta[o].superposition;
+  };
   std::vector<OpenWorld> out;
   out.push_back(OpenWorld{{}, base});
   if (!game.state.variant->throw_it_in_a_hole) return out;
@@ -450,12 +509,12 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
   std::vector<int> pending;
   std::size_t product = 1;
   for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
-    if (!game.meta[o].superposed()) continue;
+    if (cands(o).is_empty()) continue;
     if (o == except_order) continue;
     const int who = game.state.holder_of(o);
     if (std::find(holders.begin(), holders.end(), who) == holders.end()) continue;
     pending.push_back(o);
-    product *= static_cast<std::size_t>(game.meta[o].superposition.length());
+    product *= static_cast<std::size_t>(cands(o).length());
     if (product > static_cast<std::size_t>(cap)) return out;  // read it flat
   }
   // PLAY order, not card order (v16.24.0): a card drawn early can be played late,
@@ -469,7 +528,7 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
   for (int o : pending) {
     std::vector<OpenWorld> next;
     for (const OpenWorld& w : out) {
-      for (Identity id : game.meta[o].superposition) {
+      for (Identity id : cands(o)) {
         OpenWorld n = w;
         n.assignment.emplace_back(o, id);
         const int k = id.suit_index;
@@ -516,8 +575,9 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
 
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
                                    const std::vector<int>& holders, int cap,
-                                   int except_order) {
-  std::vector<OpenWorld> out = enumerate_worlds(game, base, holders, cap, except_order);
+                                   int except_order, bool shared) {
+  std::vector<OpenWorld> out =
+      enumerate_worlds(game, base, holders, cap, except_order, shared);
   // Only the worlds the targeting rules allow (§1e, v16.24.0) -- every one of them
   // kept when none survives, since the evidence is then contradicting itself and
   // is not a licence to assert that.
@@ -530,8 +590,8 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
 }
 
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
-                                   int holder, int cap, int except_order) {
-  return open_worlds(game, base, std::vector<int>{holder}, cap, except_order);
+                                   int holder, int cap, int except_order, bool shared) {
+  return open_worlds(game, base, std::vector<int>{holder}, cap, except_order, shared);
 }
 
 namespace {
@@ -607,6 +667,22 @@ void record_conditional(Game& game, int order, const std::vector<OpenWorld>& wor
 // direct playable, so yagami would have called slot 3 -- that world is refuted,
 // and the cards were the b2 and the b3.
 bool world_feasible(const Game& game, const OpenWorld& world) {
+  // A joint fact rules 7 and 8 proved (v16.25.0): one of these cards WAS `id`.
+  // Judged only when the world assigns every one of them.
+  for (const HoleRequirement& req : game.hole_requirements) {
+    bool all_there = !req.orders.empty();
+    bool met = false;
+    for (int o : req.orders) {
+      bool there = false;
+      for (const auto& [ao, aid] : world.assignment) {
+        if (ao != o) continue;
+        there = true;
+        if (aid == req.id) met = true;
+      }
+      if (!there) all_there = false;
+    }
+    if (all_there && !met) return false;
+  }
   if (world.assignment.size() < 2) return true;
   const State& s = game.state;
   for (const ReactionRecord& r : game.reaction_records) {
@@ -711,27 +787,41 @@ void presume_discard_was_played(Game& game, const Action& raw) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return;
   const auto* dc = std::get_if<DiscardAction>(&raw);
-  if (!dc || dc->suit_index == -1 || dc->rank == -1) return;
+  if (!dc) return;
   const int me = s.our_player_index;
   if (dc->player_index_v == me) return;  // our own hole cards are what we cannot see
   const int order = dc->order;
   if (order < 0 || order >= static_cast<int>(game.common.thoughts.size())) return;
-  const Identity id{dc->suit_index, dc->rank};
+  // A STRIKE arrives as a failed discard with its identity withheld; we watched
+  // the card in the partner's hand, so we can name it (§1e rule 8, v16.25.0).
+  std::optional<Identity> seen;
+  if (dc->suit_index != -1 && dc->rank != -1) {
+    seen = Identity{dc->suit_index, dc->rank};
+  } else if (order < static_cast<int>(s.deck.size())) {
+    seen = s.deck[order].id();
+  }
+  if (!seen) return;
+  const Identity id = *seen;
   if (!s.is_playable(id)) return;  // not playable to us: nothing to explain
+  const bool struck = dc->failed;
 
-  // The team must have NAMED it: a card merely touched may have been thrown for
-  // any reason. The same test as `useful_dc` (decide.cpp), asked before the
-  // discard reveals it.
-  auto known = game.common.thoughts[order].id(/*infer=*/true, /*symmetric=*/true);
-  // ...or named up to the worlds of somebody's hole cards (v16.24.0): a CALLED
-  // card whose reading is one identity per world, and the discard shows which.
-  // Replay 2011319 T8: our Purple on yagami's o14 reads {p1, p2} -- p2 in the world
-  // where our own o5 was the p1 -- and her discard of the p1 at T12 is what says
-  // that world is the one we are in.
-  const bool named_in_some_world =
-      game.meta[order].status == CardStatus::CALLED_TO_PLAY &&
-      game.common.thoughts[order].possibilities().contains(id);
-  if (!(known && *known == id) && !named_in_some_world) return;
+  if (!struck) {
+    // The team must have NAMED it: a card merely touched may have been thrown for
+    // any reason. The same test as `useful_dc` (decide.cpp), asked before the
+    // discard reveals it.
+    auto known = game.common.thoughts[order].id(/*infer=*/true, /*symmetric=*/true);
+    // ...or named up to the worlds of somebody's hole cards (v16.24.0): a CALLED
+    // card whose reading is one identity per world, and the discard shows which.
+    // Replay 2011319 T8: our Purple on yagami's o14 reads {p1, p2} -- p2 in the
+    // world where our own o5 was the p1 -- and her discard of the p1 at T12 is what
+    // says that world is the one we are in.
+    const bool named_in_some_world =
+        game.meta[order].status == CardStatus::CALLED_TO_PLAY &&
+        game.common.thoughts[order].possibilities().contains(id);
+    if (!(known && *known == id) && !named_in_some_world) return;
+  }
+  // A strike needs no naming: the card physically failed to land, and a card that
+  // looks playable on our stacks can only fail if it was already played (rule 8).
 
   const auto worlds = open_worlds(game, s.private_base(), me);
   if (worlds.size() <= 1) return;
@@ -746,7 +836,22 @@ void presume_discard_was_played(Game& game, const Action& raw) {
   // she could see the p1 and p2 we had thrown in the hole. Read against purple 0,
   // it looked playable, and the gentleman's-discard reading pinned our only
   // unknown card to p1; at T14 we played it, a b2. Strike.
-  prune_to_worlds(game, worlds, surviving, /*shared=*/true);
+  //
+  // Replay 2011475 T43 (rule 8): yagami's b3 STRUCK with blue on 2 in will-bot67's
+  // belief, so one of will-bot67's own hole cards -- o7 {b3,p3} or o33 {g5,b3} --
+  // was the b3. It stayed on blue 2 and at T47 gave a useless rank 2 instead of
+  // the Blue for will-bot69's b4. The striker cannot name what struck, so the
+  // argument is the watchers' and stays out of the shared view.
+  // Which of our hole cards it was need not be decidable card by card -- (g5,b3)
+  // and (b3,p3) leave each card both ways -- so the joint fact is kept as well,
+  // and every enumeration after this one honours it.
+  HoleRequirement req{id, {}};
+  for (const auto& [o, unused] : worlds.front().assignment) {
+    (void)unused;
+    if (game.meta[o].superposition.contains(id)) req.orders.push_back(o);
+  }
+  if (!req.orders.empty()) game.hole_requirements.push_back(std::move(req));
+  prune_to_worlds(game, worlds, surviving, /*shared=*/!struck);
 }
 
 bool presume_own_plays_land(Game& game) {
@@ -793,10 +898,11 @@ bool presume_own_plays_land(Game& game) {
 
 std::vector<int> floor_over_worlds(const Game& game, const std::vector<int>& base,
                                    const std::vector<int>& holders,
-                                   const std::vector<int>& band) {
+                                   const std::vector<int>& band, bool shared) {
   const State& s = game.state;
   if (base.size() != s.play_stacks.size()) return base;
-  const auto worlds = open_worlds(game, s.with_stacks(base).with_band(band), holders);
+  const auto worlds =
+      open_worlds(game, s.with_stacks(base).with_band(band), holders, 64, -1, shared);
   if (worlds.size() <= 1) return base;
   const std::vector<int> floor = world_floor(s, strike_free(worlds));
   std::vector<int> out = base;
@@ -961,7 +1067,7 @@ void known_play_lands_in_common(Game& game, Identity known, int order) {
 
   std::vector<int> everyone;
   for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
-  const auto worlds = open_worlds(game, base, everyone, 64, order);
+  const auto worlds = open_worlds(game, base, everyone, 64, order, /*shared=*/true);
   std::vector<const OpenWorld*> surviving;
   for (const OpenWorld* w : strike_free(worlds)) {
     if (w->state.is_playable(known)) surviving.push_back(w);
@@ -1080,14 +1186,22 @@ bool advance_common_from_worlds(Game& game) {
   const State base = s.common_evidence.empty()
                          ? s.shared_view()
                          : s.shared_view().with_band(s.common_evidence);
-  const auto worlds = open_worlds(game, base, everyone);
+  const auto worlds = open_worlds(game, base, everyone, 64, -1, /*shared=*/true);
   if (worlds.size() <= 1) return false;
-  const std::vector<int> floor = world_floor(s, strike_free(worlds));
+  const auto surviving = strike_free(worlds);
+  const std::vector<int> floor = world_floor(s, surviving);
   const std::vector<int> before = s.common_play_stacks;
   game.with_state([&floor](State& st) {
     st = st.with_common_floor(floor).with_rows_at_least_common();
   });
-  return game.state.common_play_stacks != before;
+  // ...and what every surviving world agrees a card WAS, the team knows it was
+  // (v16.25.0): never presume a strike, asked of the shared view over every
+  // seat's hole cards. The worlds are the SHARED set -- cards a seat settled
+  // privately stay in them -- so no world strikes for want of a card only one
+  // seat can name. Replay 2011475 T25: after will-bot67's g2 (o23 `{g2,b1}`),
+  // (o4, o23) is (g1, g2) or (g1, b1); yagami's o4 was the g1, and not before.
+  const bool pruned = prune_to_worlds(game, worlds, surviving, /*shared=*/true);
+  return pruned || game.state.common_play_stacks != before;
 }
 
 bool prune_infeasible_worlds(Game& game) {
@@ -1099,7 +1213,7 @@ bool prune_infeasible_worlds(Game& game) {
   const State base = s.common_evidence.empty()
                          ? s.shared_view()
                          : s.shared_view().with_band(s.common_evidence);
-  const auto raw = enumerate_worlds(game, base, everyone, 64, -1);
+  const auto raw = enumerate_worlds(game, base, everyone, 64, -1, /*shared=*/true);
   if (raw.size() <= 1) return false;
   std::vector<OpenWorld> feasible;
   for (const OpenWorld& w : raw) {

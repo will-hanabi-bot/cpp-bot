@@ -580,7 +580,7 @@ bool react_play(const Game& prev, Game& game, int player_index, int order,
 }
 
 bool react_discard(const Game& prev, Game& game, int player_index, int order,
-                   const ReactorWC& wc) {
+                   const ReactorWC& wc, bool as_play) {
   hanabi::instr::ScopedTimer st("reactor0.react_discard");
   hanabi::logging::LogScope ls(
       "reactor0.react_discard",
@@ -611,7 +611,9 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
   // A discard on the table is a PITCH when the button was Play; see
   // `resolve_reaction`.
   resolve_reaction(prev, game, wc, target_slot,
-                   reacter_button_pressed(prev, game, order, /*hook_was_play=*/false),
+                   as_play ? CardStatus::CALLED_TO_PLAY
+                           : reacter_button_pressed(prev, game, order,
+                                                    /*hook_was_play=*/false),
                    order);
   game.with_move(DiscardInterp::NONE);
   return false;

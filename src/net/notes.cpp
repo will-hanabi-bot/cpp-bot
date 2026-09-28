@@ -78,6 +78,22 @@ std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
   int prev_meta_len = static_cast<int>(prev.meta.size());
   int prev_thought_len = static_cast<int>(me_prev.thoughts.size());
 
+  // What a call SAYS the card is, as the note should show it. For our own card
+  // that is our belief. For a partner's card it is the TEAM's reading, `common`:
+  // our own thoughts about a card we can see are our sight of it, and noting
+  // that reads as though the holder knew. Replay 2011475 T3: yagami's o4, called
+  // as `{g1,b1}` and thrown into the hole unnamed, was noted `[f] g1` by both bots
+  // -- which looked like her superposition had collapsed on the spot.
+  auto reading = [&](const Game& g, int order) -> IdentitySet {
+    const bool ours = std::find(g.state.hands[me_idx].begin(),
+                                g.state.hands[me_idx].end(),
+                                order) != g.state.hands[me_idx].end();
+    if (ours || order >= static_cast<int>(g.common.thoughts.size())) {
+      return g.players[me_idx].thoughts[order].inferred;
+    }
+    return g.common.thoughts[order].inferred;
+  };
+
   for (int order = 0; order < static_cast<int>(cur.meta.size()); ++order) {
     CardStatus new_status = cur.meta[order].status;
     CardStatus prev_status =
@@ -105,10 +121,10 @@ std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
     if (new_status != prev_status) {
       if (new_status == CardStatus::CALLED_TO_PLAY) {
         out.emplace_back(order, format_play_segment(state.turn_count,
-                                                       me_new.thoughts[order].inferred, state));
+                                                       reading(cur, order), state));
       } else if (new_status == CardStatus::CALLED_TO_DISCARD) {
         out.emplace_back(order, format_discard_segment(state.turn_count,
-                                                        me_new.thoughts[order].inferred, state));
+                                                        reading(cur, order), state));
       } else if (new_status == CardStatus::NONE &&
                   (prev_status == CardStatus::CALLED_TO_PLAY ||
                   prev_status == CardStatus::CALLED_TO_DISCARD)) {
@@ -143,8 +159,8 @@ std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
       continue;
     }
     if (order >= prev_thought_len) continue;
-    IdentitySet prev_inferred = me_prev.thoughts[order].inferred;
-    IdentitySet new_inferred = me_new.thoughts[order].inferred;
+    IdentitySet prev_inferred = reading(prev, order);
+    IdentitySet new_inferred = reading(cur, order);
     if (new_inferred != prev_inferred && new_inferred.length() < prev_inferred.length()) {
       // Both note kinds carry their inferred set now, so both re-emit when it
       // narrows -- otherwise a `[d]` note would freeze at the set it had when

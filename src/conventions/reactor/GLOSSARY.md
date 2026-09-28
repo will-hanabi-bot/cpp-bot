@@ -408,8 +408,11 @@ touched slot-1 card is demoted, so the focus prefers an older touched card.
 Text the bot publishes back to hanab.live per card: `turn N: [f] <ids>` on a
 new CTP, `turn N: [d] <ids>` on a new CTD, `[reset]` when one clears, and
 `[?]` when no reading explains the card at all. Both id-carrying kinds write the
-inferred set out in full, and both re-emit whenever it narrows. Card order 0
-carries the bot version. `src/net/notes.cpp`.
+inferred set out in full, and both re-emit whenever it narrows. On a PARTNER's card
+that set is the team's reading (`common`), not our sight of the card (v16.25.0):
+under Throw It in a Hole our own thoughts about a card we can see named it outright,
+which read as though its holder knew. Card order 0 carries the bot version.
+`src/net/notes.cpp`.
 
 A fifth kind carries **no bracket**: `turn N: <ids>` on an **unstamped card of
 our own** whose candidate set changes and is down to `kEmpathyNoteMax` = **six or

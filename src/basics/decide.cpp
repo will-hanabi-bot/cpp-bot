@@ -23,7 +23,9 @@
 #include "hanabi/conventions/reactor0/call_invariants.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
 #include "hanabi/conventions/tiiah/interpret_clue.h"
+#include "hanabi/conventions/tiiah/dupes.h"
 #include "hanabi/conventions/tiiah/interpret_reactive.h"
+#include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/calls.h"
 #include "hanabi/conventions/reactor0/facts.h"
@@ -544,12 +546,23 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   }
 
   if (!waiting.empty()) {
+    // Throw It in a Hole's DISCHARGE (§1k, v16.25.0): the reacter threw away a
+    // card the giver had already played without knowing it. The receiver still
+    // plays, and the giver's hole card was that card.
+    // Found before rule 7 ran (`Game::handle_action`), which may already have
+    // settled that hole card from this very discard.
+    const std::optional<int> discharged = tiiah_discharge;
+    tiiah_discharge.reset();
     bool rewound =
         is_reactor0_family(convention)
             ? hanabi::reactor0::react_discard(prev, *this, action.player_index_v,
-                                              action.order, waiting.front())
+                                              action.order, waiting.front(),
+                                              /*as_play=*/discharged.has_value())
             : react_discard(prev, *this, action.player_index_v, action.order,
                             waiting.front());
+    if (discharged && id && meta[*discharged].superposed()) {
+      hanabi::tiiah::narrow_superposition(*this, *discharged, IdentitySet::single(*id));
+    }
     if (is_reactor0_family(convention)) {
       hanabi::reactor0::enforce_call_invariants(*this);
     }
@@ -1155,6 +1168,15 @@ PerformAction Game::take_action() const {
                   [&](Identity i) { return s.is_basic_trash(i); })) {
             continue;  // known trash — try the next call
           }
+          // Throw It in a Hole's DISCHARGE (§1k, v16.25.0): the card we were
+          // called to play is one the giver already played without knowing it.
+          // Throwing it away still sends the receiver to play.
+          if (hanabi::tiiah::discharge_instead(*this, o)) {
+            hanabi::logging::log_branch("tiiah.discharge", {{"order", o}});
+            urgent_action = PerformDiscard{o};
+            note_call(PerformDiscard{o});
+            break;
+          }
           urgent_action = PerformPlay{o};
           note_call(PerformPlay{o});
         } else if (status == CardStatus::CALLED_TO_DISCARD &&
@@ -1578,6 +1600,15 @@ PerformAction Game::take_action() const {
     if (auto vh = hanabi::reactor0::choose_very_high_clue(*this, r0_clues)) {
       return *vh;
     }
+  }
+
+  // Throw It in a Hole's PASSBACK (§1j, v16.25.0), ahead of any play: a copy of
+  // our card sits called in another seat's hand, unnamed. Playing ours would
+  // leave theirs to strike, so ours is thrown and theirs is named by the throw.
+  // Replay 2011475 T20: will-bot67's r4 and yagami's {g1,b1,r4}, which was the r4.
+  if (auto dup = hanabi::tiiah::dupe_passback(*this)) {
+    hanabi::logging::log_branch("tiiah.dupe_passback", {{"order", *dup}});
+    return PerformDiscard{*dup};
   }
 
   if (urgent_action) {

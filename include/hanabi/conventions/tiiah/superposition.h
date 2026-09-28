@@ -59,12 +59,16 @@ struct OpenWorld {
 // THAT card was, whose frame is the other hole cards and not itself. Needed only
 // after the fact: at clue time the card in question is still in a hand, so it is
 // not in the map to begin with.
+//
+// `shared` asks for the worlds of the SHARED view (v16.25.0): cards we settled
+// privately stay in them with the set every other seat still allows
+// (`ConvData::shared_left`), since no other seat followed us.
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
                                    const std::vector<int>& holders, int cap = 64,
-                                   int except_order = -1);
+                                   int except_order = -1, bool shared = false);
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
                                    int holder, int cap = 64,
-                                   int except_order = -1);
+                                   int except_order = -1, bool shared = false);
 
 // §1e rule 6, asked of ONE seat's own plays: the worlds in which none of them
 // struck, or all of them when every world has a strike in it — then the strike
@@ -99,7 +103,8 @@ bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& act
 // frame is: the stacks a seat can count on whichever world it lives in.
 std::vector<int> floor_over_worlds(const Game& game, const std::vector<int>& base,
                                    const std::vector<int>& holders,
-                                   const std::vector<int>& band = {});
+                                   const std::vector<int>& band = {},
+                                   bool shared = false);
 
 // The identities playable in SOME strike-free world of our own hole cards, on our
 // belief -- what a call on our own card may be when we cannot name what we threw.
