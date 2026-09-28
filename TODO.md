@@ -1181,14 +1181,14 @@ the comment at the seam (`decide.cpp:636-640`) deliberately avoided.
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:218`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:220`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
 what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
 REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:702-716`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:247`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:249`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has
@@ -1283,10 +1283,12 @@ which is a superset of what the reacter actually knows.
 
 The cost is only that the shared stacks lag: a set of two where one would do keeps
 `common_play_stacks` waiting a turn or two longer. It never over-claims, which is the
-direction that matters. Closing it means the receiver reconstructing its own target
-from the sum rule first — `calc_target_slot` already does exactly that at reaction
-time (`reactor/interpret_reaction.cpp:27-44`), so the ingredients are in hand; it was
-left out of v16.19.0 to keep one mechanism per version.
+direction that matters.
+
+**Narrowed in v17.1.0.** When the called card's public touch information rules out
+every card of the bucket half, the finesse is proven and the reacter's card is named
+(`proven_finesse`, CONVENTION.md §1d). What remains open is a called card that could
+be either half. The receiver could only settle that by knowing its own card.
 
 ---
 

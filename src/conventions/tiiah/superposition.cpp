@@ -1052,11 +1052,12 @@ bool presume_own_plays_land(Game& game) {
 
 std::vector<int> floor_over_worlds(const Game& game, const std::vector<int>& base,
                                    const std::vector<int>& holders,
-                                   const std::vector<int>& band, bool shared) {
+                                   const std::vector<int>& band, bool shared,
+                                   int except_order) {
   const State& s = game.state;
   if (base.size() != s.play_stacks.size()) return base;
-  const auto worlds =
-      open_worlds(game, s.with_stacks(base).with_band(band), holders, 64, -1, shared);
+  const auto worlds = open_worlds(game, s.with_stacks(base).with_band(band), holders, 64,
+                                  except_order, shared);
   if (worlds.size() <= 1) return base;
   const std::vector<int> floor = world_floor(s, strike_free(worlds));
   std::vector<int> out = base;
@@ -1492,6 +1493,29 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
 
   // A stack that moved changes what every hand could be holding.
   if (changed) game.elim();
+}
+
+bool narrow_own_privately(Game& game, int order, const IdentitySet& allowed) {
+  if (order < 0 || order >= static_cast<int>(game.meta.size())) return false;
+  if (!game.meta[order].superposed()) return false;
+  const IdentitySet kept = game.meta[order].superposition.intersect(allowed);
+  if (kept.is_empty() || kept == game.meta[order].superposition) return false;
+  // What the shared view still allows is left behind first: no other seat
+  // followed us (v16.25.0).
+  game.with_meta(order, [kept](ConvData& m) {
+    if (m.shared_left.is_empty()) m.shared_left = m.superposition;
+    m.superposition = kept;
+  });
+  refute_worlds(game, order, kept);
+  if (auto only = only_one(kept)) {
+    settle(game, order, *only, /*shared=*/false);
+    // Every other seat watched the card go in, so their rows hold it too -- we
+    // simply could not write it down until now (as the back-solve does).
+    if (game.state.holder_of(order) == game.state.our_player_index) {
+      advance_pairwise(game, *only, game.state.our_player_index, /*self_knew=*/false);
+    }
+  }
+  return true;
 }
 
 }  // namespace hanabi::tiiah

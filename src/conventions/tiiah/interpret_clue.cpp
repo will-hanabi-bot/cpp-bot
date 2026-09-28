@@ -387,21 +387,52 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // `{b2,p2}` in the hole. On the minimum frame (blue on 1) will-bot67, who could
   // see the b3, refused the call and read a MISTAKE; will-bot69, who could not,
   // read `{b2}`. In the world where o9 was the b2, the call is the b3.
+  //
+  // An OUTSIDE seat also tries the worlds of its own hole cards (v17.1.0): the pair
+  // watched those go in, so a world of them is one the pair may well be in, and
+  // the call can rest on it. Replay 9000016 T9 (self-play): Cathy's Blue named
+  // Alice's b3 on the b2 Bob had blind-played at T8; Bob could not name his own
+  // b2, found no call on any frame of theirs, and read a MISTAKE.
   if (!called_something(game)) {
+    std::vector<int> holders{action.giver, action.target};
+    const int me = before_ladder.state.our_player_index;
+    if (me != action.giver && me != action.target) holders.push_back(me);
     const auto all = open_worlds(
         before_ladder,
         before_ladder.state.with_stacks(view).with_band(
             before_ladder.state.evidence_known_to_both(action.giver, action.target)),
-        {action.giver, action.target});
+        holders);
     const auto worlds = strike_free(all);
     if (worlds.size() > 1) {
+      // Every world that makes the call, keeping the first one's reading.
+      std::vector<const OpenWorld*> calling;
       for (const OpenWorld* w : worlds) {
         Game g = before_ladder;
         auto i2 = run_ladder(g, w->state.play_stacks);
         if (!called_something(g)) continue;
-        game = std::move(g);
-        interp = i2;
-        break;
+        if (calling.empty()) {
+          game = std::move(g);
+          interp = i2;
+        }
+        calling.push_back(w);
+      }
+      // A call that rests on our own hole cards tells us what they were, as the
+      // back-solve does (§1e rule 4): only the worlds that make it are ours. What
+      // we learn is private -- the pair already knew.
+      if (!calling.empty() && holders.size() > 2) {
+        bool narrowed = false;
+        for (const auto& [ord, unused] : calling.front()->assignment) {
+          (void)unused;
+          if (before_ladder.state.holder_of(ord) != me) continue;
+          IdentitySet allowed = IdentitySet::empty();
+          for (const OpenWorld* w : calling) {
+            for (const auto& [o2, id2] : w->assignment) {
+              if (o2 == ord) allowed = allowed.add(id2);
+            }
+          }
+          if (narrow_own_privately(game, ord, allowed)) narrowed = true;
+        }
+        if (narrowed) game.elim();
       }
     }
   }

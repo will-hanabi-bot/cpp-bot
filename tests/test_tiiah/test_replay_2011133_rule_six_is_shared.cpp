@@ -1067,9 +1067,13 @@ TEST(TiiahReplay2011133, RuleSixIsShared) {
 
   // 2. What v16.21.0 adds: the conclusion is one every seat reaches, so the SHARED view
   //    moves with our belief. It read [0,2,1,0,1] -- blue 0 -- before.
-  EXPECT_EQ(game.state.common_play_stacks[3], 1)
+  //    Since v17.1.0 it reaches 2: will-bot69's b2 was the connector of a finesse
+  //    the receiver can prove (the Blue on our b3 cannot be a bucket card), so the
+  //    b2 is named for the team as well.
+  EXPECT_EQ(game.state.common_play_stacks[3], 2)
       << "the b1 is common knowledge now: they all watched the card, they all hold its "
-         "candidate set, and never-presume-a-strike is the convention";
+         "candidate set, and never-presume-a-strike is the convention -- and the b2 "
+         "on top of it was the proven finesse's connector";
   for (size_t p = 0; p < game.state.pairwise_play_stacks.size(); ++p) {
     EXPECT_GE(game.state.pairwise_play_stacks[p][3], 1)
         << "every row learns it too, row " << p;

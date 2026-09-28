@@ -106,10 +106,11 @@ bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& act
 // `base` raised, suit by suit, to the height every strike-free world of `holders`'
 // hole cards reaches -- the MINIMUM across those worlds (§1e, v16.24.0). What a
 // frame is: the stacks a seat can count on whichever world it lives in.
+// `except_order` leaves one hole card out, as for `open_worlds`.
 std::vector<int> floor_over_worlds(const Game& game, const std::vector<int>& base,
                                    const std::vector<int>& holders,
                                    const std::vector<int>& band = {},
-                                   bool shared = false);
+                                   bool shared = false, int except_order = -1);
 
 // The identities playable in SOME strike-free world of our own hole cards, on our
 // belief -- what a call on our own card may be when we cannot name what we threw.
@@ -215,6 +216,12 @@ bool advance_rows_from_own_worlds(Game& game);
 // reaction time what the REACTER's blind play must have been, which at that seat is
 // the only chance to write it down at all (§1d).
 bool narrow_superposition(Game& game, int order, const IdentitySet& allowed);
+
+// The PRIVATE twin (v17.1.0): narrow one of OUR superpositions on evidence only we
+// hold, leaving the shared set behind (`ConvData::shared_left`), and settle it
+// privately when one identity is left. Used when a clue between two other seats
+// can only be a call in some worlds of our own hole cards (§1e rule 4's shape).
+bool narrow_own_privately(Game& game, int order, const IdentitySet& allowed);
 
 // §1e rule 3 for a PAIR (v16.18.0). Every copy of `id` is accounted for in the
 // discard pile or in a hand belonging to NEITHER us nor `p` — so `p` accounts for

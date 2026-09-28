@@ -109,7 +109,10 @@ void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
 
 // The frame a reactive's target is walked in: the MINIMUM across every world the
 // reacter can live in, from the giver's perspective (§1e, v16.24.0).
-std::vector<int> reacter_frame(const Game& game, int giver, int reacter);
+// `except_order` leaves one hole card out of those worlds: the reacter's own card,
+// when the frame is asked after it has been played (`narrow_reacter_play`).
+std::vector<int> reacter_frame(const Game& game, int giver, int reacter,
+                               int except_order = -1);
 
 // The giver's prediction of how many identities the receiver of a REACTIVE_PLAY
 // candidate will read its called card as (§2, v16.28.0), written into

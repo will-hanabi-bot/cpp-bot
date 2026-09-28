@@ -396,14 +396,10 @@ void Diagnostics::check_stacks(const Sim& sim, int turn) {
     return;
   }
 
-  auto player_names = [&](const Landed& l) {
-    if (l.named_by_player) return true;
-    const Game& g = sim.seat(l.player);
-    return l.order < static_cast<int>(g.meta.size()) &&
-           !g.meta[l.order].superposed();
-  };
-  auto common_names = [&](const Landed& l) {
-    if (l.named_in_common) return true;
+  // Settled for the TEAM since (`ConvData::named_in_hole`) at any seat. A player's
+  // PRIVATE settle does not count: the other party to a view cannot know of it,
+  // so a view that ignores it is not lagging.
+  auto team_named = [&](const Landed& l) {
     for (int s = 0; s < np_; ++s) {
       const Game& g = sim.seat(s);
       if (l.order < static_cast<int>(g.meta.size()) &&
@@ -413,6 +409,14 @@ void Diagnostics::check_stacks(const Sim& sim, int turn) {
     }
     return false;
   };
+  auto player_names = [&](const Landed& l) { return l.named_by_player || team_named(l); };
+  // ...but the player's OWN view may count its private settle.
+  auto player_knows = [&](const Landed& l) {
+    if (player_names(l)) return true;
+    const Game& g = sim.seat(l.player);
+    return l.order < static_cast<int>(g.meta.size()) && !g.meta[l.order].superposed();
+  };
+  auto common_names = [&](const Landed& l) { return l.named_in_common || team_named(l); };
   // floor(P, k): the highest landed rank every member of P saw.
   auto floor_for = [&](const std::vector<int>& members, bool common) {
     std::vector<int> f(suits, 0);
@@ -423,7 +427,9 @@ void Diagnostics::check_stacks(const Sim& sim, int turn) {
         all = common_names(l);
       } else {
         for (int m : members) {
-          if (m == l.player && !player_names(l)) all = false;
+          if (m != l.player) continue;
+          const bool knows = members.size() == 1 ? player_knows(l) : player_names(l);
+          if (!knows) all = false;
         }
       }
       if (all) f[l.id.suit_index] = std::max(f[l.id.suit_index], static_cast<int>(l.id.rank));

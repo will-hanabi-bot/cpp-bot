@@ -170,7 +170,8 @@ bool both_know_their_own(const Game& game, int react_order, int target_order) {
 // two hole cards left worlds 10131 and 10122, whose minimum 10121 already makes
 // the p2 on will-bot67's slot 2 the target -- and the T6 reaction rules out the
 // second world, so the frame is 10131.
-std::vector<int> reacter_frame(const Game& game, int giver, int reacter) {
+std::vector<int> reacter_frame(const Game& game, int giver, int reacter,
+                               int except_order) {
   const State& s = game.state;
   const std::vector<int> base = s.stacks_known_to_both(giver, reacter);
   const int me = s.our_player_index;
@@ -181,7 +182,8 @@ std::vector<int> reacter_frame(const Game& game, int giver, int reacter) {
   // over every seat's hole cards.
   std::vector<int> everyone;
   for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
-  return floor_over_worlds(game, base, everyone, s.common_evidence, /*shared=*/true);
+  return floor_over_worlds(game, base, everyone, s.common_evidence, /*shared=*/true,
+                           except_order);
 }
 
 void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
@@ -510,6 +512,12 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   return std::nullopt;
 }
 
+namespace {
+// Defined with §1d's receiver reading, below.
+bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
+                    Identity seen);
+}  // namespace
+
 // WHAT THE REACTER PLAYED, read by the RECEIVER once the reaction has resolved
 // (1d, v16.19.0).
 //
@@ -552,13 +560,33 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   if (!from) return;  // an inverted suit is in no bucket, and a double chuck says
                       // nothing about the card anyway (1d)
 
+  // A FINESSE THE RECEIVER CAN PROVE (v17.1.0). The reacter read a finesse
+  // pairing as the connector alone, so when the called card cannot be any card
+  // of the bucket half in any world, the pairing was a finesse and the reacter
+  // knew exactly the card we watched it play. Replay 9000002 T7 (self-play):
+  // Cathy's Red named Bob's r2, Alice answered with the r1, and Bob -- whose
+  // red card could not be a purple -- read her card as `{r1,y2}`, so his shared
+  // view and his row for Alice stayed on red 0 while the other two seats moved
+  // to red 1.
+  if (proven_finesse(prev, game, wc, *seen)) {
+    narrow_superposition(game, react_order, IdentitySet::single(*seen));
+    return;
+  }
+
   // The frame the pairing was judged in, asked exactly as clue time asks it. From
   // this seat we are outside the giver-and-reacter pair, so it falls back to the
   // shared view -- a floor rather than the row those two hold, which can only make
   // the reading wider and the deduction weaker.
   // With its BAND, since worlds are replayed on it (v16.24.0).
-  const State base = s.with_stacks(reacter_frame(game, wc.giver, wc.reacter))
-                         .with_band(s.evidence_known_to_both(wc.giver, wc.reacter));
+  //
+  // WITHOUT the card being read (v17.1.0). It is in the hole by now, so the shared
+  // view floored across worlds would count it as already down. Replay 9000008 T32
+  // (self-play): Bob's g3 answered a Red, Cathy's frame read green 3 rather than
+  // 2, the bucket reading came out `{g4}`, and the card was settled for the team
+  // as the g4 -- her row for the giver went to green 4 with green really on 3.
+  const State base =
+      s.with_stacks(reacter_frame(game, wc.giver, wc.reacter, react_order))
+          .with_band(s.evidence_known_to_both(wc.giver, wc.reacter));
   const auto br = bucket_over_worlds(game, base, wc.reacter, *from, react_order);
   if (!br.allowed.non_empty()) return;
   if (!narrow_superposition(game, react_order, br.allowed)) return;
@@ -583,6 +611,9 @@ namespace {
 struct ReceiverReading {
   IdentitySet allowed = IdentitySet::empty();
   std::vector<std::pair<Identity, std::uint64_t>> support;
+  // The two halves apart, for telling a finesse from a direct pairing.
+  IdentitySet bucket = IdentitySet::empty();
+  IdentitySet finesse = IdentitySet::empty();
 };
 
 ReceiverReading receiver_reading(const Variant& variant,
@@ -619,7 +650,10 @@ ReceiverReading receiver_reading(const Variant& variant,
             return b && *b == want && worlds[w].state.is_playable(i);
           },
           static_cast<int>(variant.suits.size()) * 5);
-      for (Identity i : here) offer(i, w);
+      for (Identity i : here) {
+        offer(i, w);
+        out.bucket = out.bucket.add(i);
+      }
     }
     // The finesse half: the card that follows what the reacter played. Reversed
     // suits run 5 -> 1, so the successor is `prev()` there -- `Identity::next()`
@@ -627,10 +661,68 @@ ReceiverReading receiver_reading(const Variant& variant,
     for (Identity i : react_live) {
       const auto& st = variant.suits[i.suit_index].suit_type;
       const auto nxt = st.reversed ? i.prev() : i.next();
-      if (nxt) offer(*nxt, w);
+      if (nxt) {
+        offer(*nxt, w);
+        out.finesse = out.finesse.add(*nxt);
+      }
     }
   }
   return out;
+}
+
+// The receiver's card this reaction has just called: a CALLED_TO_PLAY that was
+// not one before it. -1 when there is none.
+int new_play_call(const Game& prev, const Game& game, int receiver) {
+  for (int o : game.state.hands[receiver]) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (o < static_cast<int>(prev.meta.size()) &&
+        prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+      continue;  // an older call, pinned by its own clue
+    }
+    return o;
+  }
+  return -1;
+}
+
+// The worlds the receiver's reading ranges over (1e): at the receiver's own seat
+// its belief over its own hole cards; elsewhere the frame the giver and the
+// receiver share, over both of theirs. `narrow_receiver_call` explains why.
+std::vector<OpenWorld> receiver_worlds(const Game& game, const ReactorWC& wc) {
+  const State& s = game.state;
+  const bool at_receiver = wc.receiver == s.our_player_index;
+  const State base =
+      at_receiver ? s.private_base()
+                  : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
+                        .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
+  const std::vector<int> holders =
+      at_receiver ? std::vector<int>{wc.receiver}
+                  : std::vector<int>{wc.receiver, wc.giver};
+  return open_worlds(game, base, holders);
+}
+
+// Was this reaction a FINESSE, provably, from what every seat can see? The
+// receiver's called card is the card after the one the reacter played (the
+// finesse half) or a playable of the reacter's bucket one step along (the
+// bucket half), and the walk takes whichever the card IS. When the card could be
+// the former and cannot be any card of the latter in any world, it was the
+// finesse. Judged on the card's clue-given `possible`, which every seat holds
+// alike, and only for a plain play reaction (a double chuck is no pairing).
+bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
+                    Identity seen) {
+  const State& s = game.state;
+  if (wc.receiver < 0 || wc.receiver >= s.num_players) return false;
+  const int target = new_play_call(prev, game, wc.receiver);
+  if (target < 0 || target >= static_cast<int>(prev.common.thoughts.size())) {
+    return false;
+  }
+  const IdentitySet& before = prev.common.thoughts[target].inferred;
+  const IdentitySet& possible = game.common.thoughts[target].possible;
+  const IdentitySet could = before.non_empty() ? before.intersect(possible) : possible;
+  const auto worlds = receiver_worlds(game, wc);
+  const ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind,
+                                              IdentitySet::single(seen));
+  return could.intersect(rr.finesse).non_empty() &&
+         could.intersect(rr.bucket).is_empty();
 }
 
 }  // namespace

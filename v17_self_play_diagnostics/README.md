@@ -105,9 +105,12 @@ or the reacter's side of a reactive, a fix or a refusal re-call.
 
 **Stack floors (class 4).**
 - **Private and pair views.** A party *saw* a landed sN if they were not the
-  player, or they were the player and could name the card: their own reading
-  named it at play time, or their view has since settled it. floor(P, suit) is
-  the highest landed rank every member of P saw.
+  player, or they were the player and could name the card. For a pair view that
+  means the player's own reading named it at play time, or a seat has since
+  settled it for the team (`named_in_hole`). The player's PRIVATE settle does not
+  count toward a pair view, because the other party cannot know of it, but it does
+  count toward the player's own private view. floor(P, suit) is the highest landed
+  rank every member of P saw.
 - **Common view: the best deductions all three can make.** A landed sN counts
   when the player's common reading named it at play time, or any seat has since
   settled it for the team (`ConvData::named_in_hole`).

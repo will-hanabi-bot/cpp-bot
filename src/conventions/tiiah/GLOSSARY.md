@@ -151,7 +151,7 @@ unbooked, since which card was which is exactly what is unknown.
 The stacks a reactive's target is walked in: the **minimum**, suit by suit, across
 every world the reacter can live in, from the giver's perspective (v16.24.0). For the
 pair it is their row; for an outside seat, the shared view floored over every seat's
-worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:173-185`.
+worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:173-187`.
 CONVENTION.md §1e. It replaced "assume none of the superposed cards were played".
 
 ### feasible world
@@ -224,6 +224,13 @@ card we can SEE, and a call says it is playable, so they hold that suit one belo
 it; anything their stack has above ours can only be what we threw in the hole.
 `back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:406-460`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past.
+
+### proven finesse
+A reactive pairing the RECEIVER can show was a finesse without seeing its own card. Its
+called card could be the card after the one the reacter played, and could not be any
+card of the bucket half in any of its worlds. The reacter's card is then named, for the
+whole team, as the connector it was (v17.1.0). `proven_finesse`,
+`src/conventions/tiiah/interpret_reactive.cpp:710-726`. CONVENTION.md §1d.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
