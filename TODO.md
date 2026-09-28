@@ -1313,23 +1313,6 @@ card that strikes in *every* world, which a 20-candidate set cannot do.
 
 ---
 
-## 51. `[tiiah]` The refusal has no tier-gate exemption and can be silently dropped
-
-CONVENTION.md §1c, §1h. `ClueCandidate::refuses_dead_target` gets a candidate into
-Precedence step 1's pool, but `choose_very_high_clue` still runs
-`clue_is_admissible` on it (`reactor0/decision.cpp:1720`), which inside its pace
-window reads `c.tier` and nothing else. A refusal stamps nothing that lifts a tier, so
-it is LOW, so an OCCUPIED Alice at any positive pace with fewer than 8 tokens has every
-refusal she could give rejected — before its priority is ever consulted.
-
-v16.20.0 gave the FIX clue exactly that exemption (`if (c.fixes_dead_call) return
-true;`) because without it the fix could never fire. The refusal wants the same
-argument made for it: refusing is done *instead of* reacting, so "would a clue be worth
-a turn here" is the wrong question to ask of it. It has not been seen to bite, which is
-the only reason it is an entry rather than a line of code.
-
----
-
 ## 52. `[engine]` A shared call is judged dead on a PRIVATE view
 
 `reactor0/call_invariants.cpp:126-165`. Rule 3, `drop_dead_play_calls`, erases a
@@ -1466,3 +1449,21 @@ is the simulation and how much the bots has not been separated.
 - **The rule-2 side of a passback.** Narrowing the other copy to {X} is written straight
   into `common` by `read_passback`; the collapse rules that key on a newly CALLED
   identity (rule 2) do not see it as a new call.
+
+---
+
+## 58. `[tiiah]` The striker does not learn what its own dupe strike was
+
+CONVENTION.md §1e rule 8. Rule 8's shared form (v16.27.0, `strike_was_a_watched_dupe`)
+floors every view when a partner strikes on a duplicate whose other copy went into the
+hole in front of the striker. It runs at the WATCHERS' seats only: the striker cannot see
+the card that struck, so its own model of the shared view stays behind.
+
+The striker can often deduce it. Replay 2011854 T28: will-bot69 read its called o29 as
+`{g5,p2}`, both of which would have landed on its own stacks, so the strike contradicted
+its reading; on the frame yagami gave the call in (purple 0) the bucket named the p1, and
+a p1 can only strike as a duplicate. Reading the call on the giver-and-receiver frame
+recorded in its `ReactionRecord`, and taking the one candidate that could have struck,
+would give the striker the same fact. Until then, will-bot69's shared view sits one step
+behind the other two seats' models of it, which only costs anything when will-bot69 is
+the one reading a later clue on that view.

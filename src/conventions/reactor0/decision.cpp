@@ -939,8 +939,13 @@ bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   // could give rejected -- which is exactly the position replay 2010512 was in at
   // T11 (`occupied: true`, pace 10, and the log's `tier_gate_rejected_all`).
   //
-  // The REFUSAL has no such exemption and can still be dropped this way; TODO.md 51.
-  if (c.fixes_dead_call) return true;
+  // The REFUSAL (tiiah/CONVENTION.md §1c) is exempt for the same reason, since
+  // v16.27.0: it is given INSTEAD of reacting, so "is a clue worth a turn here" is
+  // the wrong question to ask of it, and it is always LOW for the same reason the
+  // fix is. Replay 2011854 T27: will-bot67 was occupied at pace 9, all five of its
+  // refusals were gated out, and it reacted into yagami's call on a dead p1 --
+  // which will-bot69 then played into a strike.
+  if (c.fixes_dead_call || c.refuses_dead_target) return true;
   // The two rules take DIFFERENT pace thresholds, and the difference is the
   // whole point.
   //
@@ -1799,6 +1804,19 @@ std::optional<PerformAction> choose_very_high_clue(
     rung = "2b.fix";
   } else if ((pick = rung_3(game, vh))) {
     rung = "3.bob_chop";
+  } else if ((pick = settle(game,
+                            select(vh,
+                                   [](const ClueCandidate& c) {
+                                     return c.refuses_dead_target &&
+                                            c.reading.shape == ClueShape::STABLE_PLAY;
+                                   }),
+                            stable_play_chain(game)))) {
+    // A REFUSAL is any stable clue to the receiver (tiiah/CONVENTION.md §1c, an
+    // envelope), so which one is ours to choose: one that also gets a card
+    // played, and among those the one that names it (v16.27.0). Replay 2011854
+    // T27: Purple named will-bot69's p2, and without this the default tiebreak
+    // took a Rank 5 lock over it on card order.
+    rung = "refusal.stable_play";
   } else {
     Pool all;
     for (const ClueCandidate& c : vh) all.push_back(&c);

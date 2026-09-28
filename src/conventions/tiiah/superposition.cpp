@@ -730,19 +730,57 @@ bool world_feasible(const Game& game, const OpenWorld& world) {
   return true;
 }
 
+namespace {
+
+// THE TEAM LEARNS that `gone` is already on the stacks, and that one of `orders`
+// -- hole cards, possibly several -- was the copy that put it there (v16.27.0).
+//
+// A played card means its whole suit prefix is down, so every view is floored at
+// its rank on its suit: the shared view directly, and each pairwise row through
+// `with_rows_at_least_common`. Which hole card it was is left to the worlds: the
+// joint fact is recorded, so every later enumeration honours it and collapses
+// the cards as soon as it fits under the cap -- which a table with seven
+// superpositions does not (TODO.md 50), and is why the floor is written here
+// rather than waited for.
+void team_learns_already_played(Game& game, Identity gone,
+                                std::vector<int> orders) {
+  if (!orders.empty()) {
+    game.hole_requirements.push_back(HoleRequirement{gone, std::move(orders)});
+  }
+  std::vector<int> floor = game.state.common_play_stacks;
+  if (gone.suit_index < 0 || gone.suit_index >= static_cast<int>(floor.size())) return;
+  floor[gone.suit_index] = gone.rank;
+  game.with_state([&floor](State& st) {
+    st = st.with_common_floor(floor).with_rows_at_least_common();
+  });
+}
+
+}  // namespace
+
 bool collapse_refused_target(Game& game, int giver, Identity gone) {
   if (!game.state.variant->throw_it_in_a_hole) return false;
+  std::vector<int> could;
   for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
     if (!game.meta[o].superposed()) continue;
     if (o >= static_cast<int>(game.state.holders.size())) continue;
     if (game.state.holders[o] != giver) continue;
-    if (!game.meta[o].superposition.contains(gone)) continue;
+    if (game.meta[o].superposition.contains(gone)) could.push_back(o);
+  }
+  if (could.empty()) return false;
+  if (could.size() == 1) {
     // Shared: the refusal is a public event, so this is not our own deduction
     // about a partner but the team's about all of them.
-    settle(game, o, gone, /*shared=*/true);
+    settle(game, could.front(), gone, /*shared=*/true);
     return true;
   }
-  return false;
+  // SEVERAL of the giver's hole cards could have been it (v16.27.0). The refusal
+  // says one of them was, not which, and settling the first by card order is a
+  // guess. Replay 2011854 T27: yagami's o5 `{r1,y1,b1,p1}` (the b1), o18
+  // `{r1,g1,p1}` and o24 `{r3,p1,p2}` (the p1) all admitted the refused p1; the
+  // guess named o5, and the shared view jumped from 23300 to 34301 with red
+  // really on 2.
+  team_learns_already_played(game, gone, std::move(could));
+  return true;
 }
 
 void presume_play_lands(Game& game, const Action& raw) {
@@ -783,6 +821,68 @@ void presume_play_lands(Game& game, const Action& raw) {
   prune_to_worlds(game, worlds, surviving, /*shared=*/true);
 }
 
+namespace {
+
+// RULE 8, SHARED (v16.27.0): a partner's STRIKE on a card the whole table can tell
+// was already down is common knowledge, and every view learns it.
+//
+// The strike itself is hidden -- the striker never sees what struck -- so it is
+// public only when every seat can reach the same conclusion without that sight:
+//
+//   * we WATCHED it: the card is X, and X is already down on our own stacks;
+//   * the shared view has X's suit at X.rank-1 or above, so to any seat that saw it
+//     the card could only have struck as a duplicate (a 1 always qualifies);
+//   * the copy that is down is a hole card we can name as X, held by a seat OTHER
+//     than the striker -- who therefore watched it go in and knows X is down too.
+//
+// Replay 2011854: yagami's o24 `{r3,p1,p2}` was the p1; at T28 will-bot69's o29,
+// another p1, struck. Every seat knew purple was on 1, but the shared view stayed
+// at 0 all game, so yagami's T41 Rank 5 -- will-bot67's b4 paired with will-bot69's
+// p2 -- was unreadable to the reacter and will-bot67 discarded.
+//
+// The striker's own seat learns nothing here: it cannot see X, and would have to
+// deduce it from the reading of the call (TODO.md).
+void strike_was_a_watched_dupe(Game& game, int striker, int order, Identity id) {
+  const State& s = game.state;
+  const int me = s.our_player_index;
+  if (striker == me) return;
+  if (s.common_play_stacks.empty()) return;
+  if (s.variant->suits[id.suit_index].suit_type.reversed) return;
+  if (!s.is_basic_trash(id)) return;  // not down on our stacks: an ordinary strike
+  const int shared = s.common_play_stacks[id.suit_index];
+  if (shared >= id.rank) return;      // the team already knows
+  if (shared < id.rank - 1) return;   // could have struck as not-yet-playable
+  // A card in the hole: drawn, no longer in a hand, and not in the discard pile
+  // as X (a strike is filed there, which is why `order` itself is skipped).
+  const auto& thrown = s.discard_stacks[id.suit_index][id.rank - 1];
+  bool watched = false;
+  for (int o = 0; o < static_cast<int>(std::min(s.holders.size(), s.deck.size())); ++o) {
+    if (o == order) continue;
+    const int holder = s.holder_of(o);
+    if (holder < 0 || holder == striker) continue;
+    const auto& hand = s.hands[holder];
+    if (std::find(hand.begin(), hand.end(), o) != hand.end()) continue;
+    if (std::find(thrown.begin(), thrown.end(), o) != thrown.end()) continue;
+    auto x = holder == me ? game.me().thoughts[o].id(/*infer=*/true) : s.deck[o].id();
+    if (x && *x == id) {
+      watched = true;
+      break;
+    }
+  }
+  if (!watched) return;
+  // Which hole card was the copy is the worlds' business, over the SHARED set.
+  std::vector<int> could;
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    const IdentitySet& c = game.meta[o].shared_left.non_empty()
+                               ? game.meta[o].shared_left
+                               : game.meta[o].superposition;
+    if (c.contains(id)) could.push_back(o);
+  }
+  team_learns_already_played(game, id, std::move(could));
+}
+
+}  // namespace
+
 void presume_discard_was_played(Game& game, const Action& raw) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return;
@@ -802,6 +902,7 @@ void presume_discard_was_played(Game& game, const Action& raw) {
   }
   if (!seen) return;
   const Identity id = *seen;
+  if (dc->failed) strike_was_a_watched_dupe(game, dc->player_index_v, order, id);
   if (!s.is_playable(id)) return;  // not playable to us: nothing to explain
   const bool struck = dc->failed;
 

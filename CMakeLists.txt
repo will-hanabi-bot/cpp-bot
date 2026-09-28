@@ -450,6 +450,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_dupes.cpp
   tests/test_tiiah/test_replay_2011830_receiver_bucket_reading_not_the_stamp.cpp
   tests/test_tiiah/test_receiver_reading_beats_the_stamp.cpp
+  tests/test_tiiah/test_replay_2011854_refusal_and_the_dupe_strike.cpp
+  tests/test_tiiah/test_refusal_and_dupe_strike.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp

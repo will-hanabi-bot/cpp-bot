@@ -79,12 +79,15 @@ CONVENTION.md §1.3, `tests/test_tiiah/test_pairwise_stacks.cpp`,
 Bob answering a reactive by giving Cathy a **stable** clue instead of reacting,
 which says *the card Alice named is already played*. Alice cannot see it — her
 stacks are short by exactly what she threw in the hole — so she collapses the
-superposition that admits it (§1e rule 5). Stable is what tells it apart from a
+superposition that admits it (§1e rule 5), or, when several do, records that one of
+them was it and floors every view (v16.27.0). Stable is what tells it apart from a
 *deferral*, which carries the reactive intent forward and is itself reactive; and
 it is an envelope, so the clue still means whatever stable clue it is. Bob's own
 call stands. Read by `read_refusal` and given via `clue_refuses_dead_target`,
-which joins Precedence step 1 because refusing is done instead of reacting.
-CONVENTION.md §1c, v16.14.0, replay 2009367 T6–T7.
+which joins Precedence step 1 because refusing is done instead of reacting, is
+exempt from the tier gate, and prefers a stable play clue that names its card
+(`refusal.stable_play`, v16.27.0). CONVENTION.md §1c, v16.14.0, replays 2009367 T6–T7
+and 2011854 T27.
 
 ### fix clue
 A stable clue whose net information — positive touch or negative — narrows a partner's
@@ -99,8 +102,16 @@ is the giver's sight, and the clue is what transfers it. `dead_call_fix`
 
 It **supersedes** the clue's ordinary stable meaning, where a *refusal* is an envelope
 and rides along with it. Priority: Precedence step 1, between rung 2 and rung 3
-(`rung_2b`, logged `2b.fix`), with an exemption from the tier gate the refusal does not
-have. CONVENTION.md §1h, v16.20.0, replay 2010512.
+(`rung_2b`, logged `2b.fix`), exempt from the tier gate (as the refusal is, since
+v16.27.0). CONVENTION.md §1h, v16.20.0, replay 2010512.
+
+### dupe strike
+A partner's strike on a card that was already down, which every seat can tell was a
+duplicate: the watchers saw it, and the copy that is down went into the hole in front
+of the striker. Common knowledge, so every view is floored at it and a `HoleRequirement`
+records which hole cards could have been the copy — §1e rule 8's shared form,
+`strike_was_a_watched_dupe`, v16.27.0, replay 2011854 T28. The striker itself does not
+yet take it (TODO.md 58).
 
 ### world
 One assignment of an identity to each card a seat still has in the hole. A seat

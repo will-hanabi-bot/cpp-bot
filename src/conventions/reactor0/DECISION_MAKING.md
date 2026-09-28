@@ -536,6 +536,14 @@ and the urgent return is the thing being declined. The flag is variant-gated at
 the point it is computed (`clue_refuses_dead_target`), and `clue_tier` itself is
 left alone, so no reactor0 game can reach any of it.
 
+Since v16.27.0 a refusal also skips the tier gate (`clue_is_admissible`, as the
+fix does — see priority 2b), and when no rung of the step ranks the admitted
+clues, the refusals that are **stable play** clues are preferred, settled by
+`stable_play_chain` (a call the receiver can name), before the default tiebreak —
+logged as `refusal.stable_play`. Any stable clue to the receiver is a refusal, so
+the one chosen should also be worth giving; at replay 2011854 T27 the default
+tiebreak had taken a Rank 5 lock over the Purple that named the receiver's p2.
+
 A **receiver**-side call carries no such urgency. It makes Alice *occupied*, which
 is what phase 1 rule 1a keys on — so Alice may give **any HIGH-tier clue** while
 holding one, not only a VERY HIGH one. The call itself is actioned in phase 2.
@@ -714,9 +722,10 @@ is judged from Alice's own inference, not common knowledge.
      pending reaction, and this position is where it ranks *within* that step;
    - it is **exempt from the tier gate** above (`clue_is_admissible`). A fix stamps
      nothing and satisfies no arm of `clue_tier`, so it is always LOW; without the
-     exemption every fix an OCCUPIED Alice could give would be rejected. The REFUSAL,
-     which joins step 1 the same way, has no such exemption and can still be dropped
-     that way — TODO.md 51.
+     exemption every fix an OCCUPIED Alice could give would be rejected. The REFUSAL
+     ([tiiah/CONVENTION.md §1c](../tiiah/CONVENTION.md)), which joins step 1 the same
+     way, carries the same exemption since v16.27.0, for the same reason: it is given
+     *instead of* reacting. Replay 2011854 T27 is the gate dropping all five.
 
 3. **Bob's chop is worth a clue** (so in particular he is not locked) **and he
    has no safe play or discard.**
