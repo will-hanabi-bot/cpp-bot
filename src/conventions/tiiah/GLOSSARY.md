@@ -137,7 +137,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:675-685`), read by
+(`src/conventions/tiiah/superposition.cpp:676-686`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -160,7 +160,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:723-785`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:724-786`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 
 ### evidence / band
@@ -222,8 +222,9 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:407-461`. Rule 4
-of §1e's collapse, and the only one that tells a seat about its OWN past.
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:407-462`. Rule 4
+of §1e's collapse, and the only one that tells a seat about its OWN past. What it
+learns is private: it moves our belief and no pairwise row (v17.3.0).
 
 ### team reading
 What the WHOLE TEAM can name a reacter's blind play as: what the receiver will be able

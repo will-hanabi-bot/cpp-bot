@@ -102,6 +102,7 @@ void Diagnostics::before_action(const Sim& sim) {
   pre_truth_ = t;
   actor_named_.clear();
   actor_named_common_.clear();
+  named_at_.clear();
   const int a = t.current;
   const Game& ga = sim.seat(a);
   for (int o : t.hands[a]) {
@@ -110,11 +111,14 @@ void Diagnostics::before_action(const Sim& sim) {
     // `common` can hold what only it and one partner know.
     std::optional<Identity> all;
     bool agree = true;
-    for (int s = 0; s < np_ && agree; ++s) {
+    std::vector<bool> at(np_, false);
+    for (int s = 0; s < np_; ++s) {
       auto id = only(sim.seat(s).common.thoughts[o].possibilities());
+      at[s] = id && *id == t.deck[o];
       if (!id || (all && *all != *id)) agree = false;
       all = id;
     }
+    named_at_[o] = at;
     if (agree && all) actor_named_common_[o] = *all;
   }
 }
@@ -122,7 +126,8 @@ void Diagnostics::before_action(const Sim& sim) {
 void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
   const int turn = o.turn + 1;
   if (o.kind == Outcome::Kind::PLAY_LANDED) {
-    Landed l{o.order, *o.id, o.actor, false, false};
+    Landed l{o.order, *o.id, o.actor, false, false, std::vector<bool>(np_, false)};
+    if (auto it = named_at_.find(o.order); it != named_at_.end()) l.named_at = it->second;
     if (auto it = actor_named_.find(o.order); it != actor_named_.end()) {
       l.named_by_player = it->second == *o.id;
     }
@@ -141,6 +146,55 @@ void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
     check_reaction(sim, o, turn);
   }
   check_stacks(sim, turn);
+  note_onsets(sim, o, turn);
+}
+
+void Diagnostics::note_onsets(const Sim& sim, const Outcome& o, int turn) {
+  if (!variant_->throw_it_in_a_hole) return;
+  auto str = [](const std::vector<int>& v) {
+    std::string c;
+    for (int k : v) c += std::to_string(k);
+    return c;
+  };
+  // Index 0: common agreement; then one per pair (a,b).
+  std::vector<std::string> now;
+  {
+    std::vector<std::string> commons;
+    for (int s = 0; s < np_; ++s) commons.push_back(str(sim.seat(s).state.common_play_stacks));
+    const bool agree = std::all_of(commons.begin(), commons.end(),
+                                   [&](const std::string& c) { return c == commons[0]; });
+    now.push_back(agree ? "=" : "!");
+  }
+  for (int a = 0; a < np_; ++a) {
+    for (int b = a + 1; b < np_; ++b) {
+      const auto& ra = sim.seat(a).state.pairwise_play_stacks;
+      const auto& rb = sim.seat(b).state.pairwise_play_stacks;
+      const bool agree = b < static_cast<int>(ra.size()) &&
+                         a < static_cast<int>(rb.size()) && ra[b] == rb[a];
+      now.push_back(agree ? "=" : "!");
+    }
+  }
+  if (last_views_.size() == now.size()) {
+    std::string kind;
+    switch (o.kind) {
+      case Outcome::Kind::CLUE: kind = "clue"; break;
+      case Outcome::Kind::PLAY_LANDED: kind = "play"; break;
+      case Outcome::Kind::PLAY_MISSED: kind = "miss"; break;
+      case Outcome::Kind::DISCARD: kind = "discard"; break;
+    }
+    const CardStatus st = o.order >= 0 && o.order < static_cast<int>(pre_status_[o.actor].size())
+                              ? pre_status_[o.actor][o.order]
+                              : CardStatus::NONE;
+    for (std::size_t k = 0; k < now.size(); ++k) {
+      if (last_views_[k] == "=" && now[k] == "!") {
+        issues_.push_back(Issue{"onset", k == 0 ? "common" : "pair", turn, o.actor, o.order,
+                                json{{"action", kind},
+                                     {"status", std::string(name(st))},
+                                     {"view", static_cast<int>(k)}}});
+      }
+    }
+  }
+  last_views_ = std::move(now);
 }
 
 // --- (1) -------------------------------------------------------------------
@@ -414,18 +468,19 @@ void Diagnostics::check_stacks(const Sim& sim, int turn) {
     return;
   }
 
-  // Settled for the TEAM since (`ConvData::named_in_hole`) at any seat. A player's
-  // PRIVATE settle does not count: the other party to a view cannot know of it,
-  // so a view that ignores it is not lagging.
+  // Settled for the TEAM since (`ConvData::named_in_hole`) at EVERY seat. A name
+  // written at one seat only is that seat's, however it is labelled; and a
+  // player's PRIVATE settle does not count either: the other party to a view
+  // cannot know of it, so a view that ignores it is not lagging.
   auto team_named = [&](const Landed& l) {
     for (int s = 0; s < np_; ++s) {
       const Game& g = sim.seat(s);
-      if (l.order < static_cast<int>(g.meta.size()) &&
-          g.meta[l.order].named_in_hole.contains(l.id)) {
-        return true;
+      if (l.order >= static_cast<int>(g.meta.size()) ||
+          !g.meta[l.order].named_in_hole.contains(l.id)) {
+        return false;
       }
     }
-    return false;
+    return true;
   };
   auto player_names = [&](const Landed& l) { return l.named_by_player || team_named(l); };
   // ...but the player's OWN view may count its private settle.
@@ -446,7 +501,16 @@ void Diagnostics::check_stacks(const Sim& sim, int turn) {
       } else {
         for (int m : members) {
           if (m != l.player) continue;
-          const bool knows = members.size() == 1 ? player_knows(l) : player_names(l);
+          bool knows = members.size() == 1 ? player_knows(l) : player_names(l);
+          // For a PAIR, the other member must be able to attribute that knowledge
+          // to the player: its own common reading named the card too (or the team
+          // has since named it). A pair view is one thing both of them compute.
+          if (knows && members.size() == 2 && !team_named(l)) {
+            const int other = members[0] == m ? members[1] : members[0];
+            if (other < static_cast<int>(l.named_at.size()) && !l.named_at[other]) {
+              knows = false;
+            }
+          }
           if (!knows) all = false;
         }
       }
@@ -489,6 +553,48 @@ void Diagnostics::check_stacks(const Sim& sim, int turn) {
     if (std::any_of(commons.begin(), commons.end(),
                     [&](const std::string& c) { return c != commons[0]; })) {
       add(Issue{"div", "common", turn, -1, -1, json{{"views", commons}}});
+      ++div_common_turns_;
+    }
+    bool pair_div = false;
+    for (int a = 0; a < np_; ++a) {
+      for (int b = a + 1; b < np_; ++b) {
+        const auto& ra = sim.seat(a).state.pairwise_play_stacks;
+        const auto& rb = sim.seat(b).state.pairwise_play_stacks;
+        if (b < static_cast<int>(ra.size()) && a < static_cast<int>(rb.size()) &&
+            ra[b] != rb[a]) {
+          pair_div = true;
+        }
+      }
+    }
+    if (pair_div) ++div_pair_turns_;
+    // Calls: which cards are called to play, and the common reading of each,
+    // at every seat that is not the card's holder (the holder may read its own
+    // card on its own stacks, §1.3).
+    for (int h = 0; h < np_; ++h) {
+      for (int c : t.hands[h]) {
+        std::vector<std::string> views;
+        for (int s2 = 0; s2 < np_; ++s2) {
+          if (s2 == h) continue;
+          const Game& g2 = sim.seat(s2);
+          // The receiver of a pending reactive cannot know which of the reacter's
+          // cards is called until the reacter acts (§1d); that is by design.
+          bool blind = false;
+          for (const auto& w : g2.waiting) {
+            if (w.receiver == s2 && w.reacter == h) blind = true;
+          }
+          for (const auto& w : g2.pending_reactions) {
+            if (w && w->receiver == s2 && w->reacter == h) blind = true;
+          }
+          if (blind) continue;
+          views.push_back(g2.meta[c].status == CardStatus::CALLED_TO_PLAY
+                              ? set_str(g2.common.thoughts[c].inferred)
+                              : "-");
+        }
+        if (std::any_of(views.begin(), views.end(),
+                        [&](const std::string& v) { return v != views[0]; })) {
+          add(Issue{"div", "call", turn, h, c, json{{"views", views}}});
+        }
+      }
     }
     for (int a = 0; a < np_; ++a) {
       for (int b = a + 1; b < np_; ++b) {
@@ -530,6 +636,10 @@ void Diagnostics::check_strike(const Sim& sim, const Outcome& o, int turn) {
 }
 
 void Diagnostics::finish(const Sim& sim, const SimResult& r) {
+  add(Issue{"stat", "divergence", r.turns, -1, -1,
+            json{{"common_turns", div_common_turns_},
+                 {"pair_turns", div_pair_turns_},
+                 {"turns", r.turns}}});
   if (r.error) {
     add(Issue{r.error->kind, "error", r.error->turn + 1, r.error->seat, -1,
               json{{"what", r.error->what}}});

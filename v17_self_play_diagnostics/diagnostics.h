@@ -73,7 +73,9 @@ class Diagnostics {
   TrueState pre_truth_;
   // What the actor could name each card of its hand as, before acting.
   std::map<int, Identity> actor_named_;        // by its own reading
-  std::map<int, Identity> actor_named_common_;  // by the common reading
+  std::map<int, Identity> actor_named_common_;  // by every seat's common reading
+  // Per card of the actor's hand: per seat, did that seat's common reading name it?
+  std::map<int, std::vector<bool>> named_at_;
 
   // Landed plays, for the stack floors.
   struct Landed {
@@ -81,7 +83,8 @@ class Diagnostics {
     Identity id;
     int player;
     bool named_by_player;   // at play time, by the player's own reading
-    bool named_in_common;   // at play time, by the common reading
+    bool named_in_common;   // at play time, by every seat's common reading
+    std::vector<bool> named_at;  // at play time, by each seat's common reading
   };
   std::vector<Landed> landed_;
 
@@ -102,6 +105,12 @@ class Diagnostics {
   };
   std::map<int, PendingReaction> pending_;
 
+  // Divergence ONSETS: the view (common, or pair a-b) agreed before this action
+  // and does not after it.
+  std::vector<std::string> last_views_;
+  void note_onsets(const Sim& sim, const Outcome& o, int turn);
+  int div_common_turns_ = 0;  // actions after which the common views differed
+  int div_pair_turns_ = 0;    // ...or some pair view differed between its members
   std::map<std::tuple<std::string, std::string, int, int, int>, int> seen_;  // dedup
   std::vector<Issue> issues_;
 };

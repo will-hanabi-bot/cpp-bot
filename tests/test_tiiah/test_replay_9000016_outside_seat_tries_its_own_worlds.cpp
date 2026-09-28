@@ -6,7 +6,7 @@
 // outside the pair, and on every frame of theirs we could compute the b3 was not
 // playable, so until v17.1.0 we read the clue as a MISTAKE while they read a play.
 // An outside seat now also tries the worlds of its own hole cards, and the call
-// tells it what its o16 was.
+// tells it what its o16 was -- privately (v17.3.0: not into the rows).
 
 #include <gtest/gtest.h>
 
@@ -445,6 +445,8 @@ TEST(SelfPlayReplay9000016, TheOutsideSeatTriesItsOwnWorlds) {
   EXPECT_EQ(game.common.thoughts[0].inferred, hanabi::IdentitySet::single(kB3));
   EXPECT_FALSE(game.meta[16].superposed()) << "and our o16 was the b2";
   EXPECT_EQ(game.state.play_stacks[3], 2);
-  EXPECT_EQ(game.state.pairwise_play_stacks[0][3], 2) << "Alice watched our b2";
-  EXPECT_EQ(game.state.pairwise_play_stacks[2][3], 2) << "and so did Cathy";
+  // Our rows do NOT take it (v17.3.0): Alice and Cathy watched our b2, but they
+  // cannot know that we now know it, and a row is what both of a pair compute.
+  EXPECT_EQ(game.state.pairwise_play_stacks[0][3], 1) << "a private deduction";
+  EXPECT_EQ(game.state.pairwise_play_stacks[2][3], 1) << "stays out of the rows";
 }

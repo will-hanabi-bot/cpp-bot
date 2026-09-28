@@ -40,7 +40,7 @@ struct SimConfig {
   // Per-seat logs in the live format, `{log_dir}/{name}-{game_id}.log`. Empty
   // disables logging.
   std::string log_dir = "logs";
-  double endgame_timeout = 1.0;
+  double endgame_timeout = 6.0;
   // The bot's `/setall` mode. A TIIAH variant ignores it (`resolve_table_convention`).
   Convention convention_mode = Convention::REACTOR0;
   // Safety valve: abort a game that runs past this many turns.

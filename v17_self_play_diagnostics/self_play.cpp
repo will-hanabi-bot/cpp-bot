@@ -40,7 +40,7 @@ struct Args {
   std::string log_dir = "logs";
   std::string variant = "Throw It in a Hole (5 Suits)";
   int players = 3;
-  double endgame_timeout = 1.0;
+  double endgame_timeout = 6.0;
 };
 
 void usage() {
@@ -233,6 +233,15 @@ int main(int argc, char** argv) {
   std::map<std::string, std::map<std::string, Agg>> agg;
   int critical_total = 0;
   std::set<std::uint64_t> critical_games;
+  long div_turns = 0, div_common = 0, div_pair = 0;
+  for (const auto& r : records) {
+    for (const auto& is : r.issues) {
+      if (is.cls != "stat") continue;
+      div_turns += is.detail.value("turns", 0);
+      div_common += is.detail.value("common_turns", 0);
+      div_pair += is.detail.value("pair_turns", 0);
+    }
+  }
   for (const auto& r : records) {
     for (const auto& is : r.issues) {
       Agg& a = agg[is.cls][is.kind];
@@ -255,6 +264,11 @@ int main(int argc, char** argv) {
      << "; strikeouts: " << strikeouts << "; harness errors/crashes: " << errors << "\n";
   md << "- Critical issues (classes 1-4): " << critical_total << " in "
      << critical_games.size() << " games\n";
+  if (div_turns > 0) {
+    md << "- Seats disagree after " << (100.0 * div_common / div_turns)
+       << "% of actions on the common view, " << (100.0 * div_pair / div_turns)
+       << "% on some pair view\n";
+  }
   md << "- Wall time: " << static_cast<int>(wall) << " s with " << args.jobs << " jobs\n\n";
   md << "## Score histogram\n\n| score | games |\n|---|---|\n";
   for (auto it = hist.rbegin(); it != hist.rend(); ++it) {

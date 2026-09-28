@@ -30,13 +30,18 @@ build/self_play.exe --seeds 1..100 --jobs 12 \
 
 A game takes 0.3–7 s. A 100-game run takes under a minute at 12 jobs.
 
+A seed replays the same game, except where the endgame solver hits its wall-clock
+deadline. The harness gives it the live bot's 6 s (`--endgame-timeout`). Under a
+parallel run a solve that finishes near the deadline can go either way, so two runs
+of one build can differ in a few games. Compare runs in aggregate, and use
+`replay_log --rerun` on a single log to check one decision.
+
 ## What the simulator is
 
 `sim.{h,cpp}` stands in for the hanab.live server. It keeps the true deck, hands,
 stacks, clue tokens, strikes and score. It builds one `Game` per seat exactly as
 `BotClient::on_init` does: the convention comes from `resolve_table_convention`,
-the reactive-lock default is the variant's, and the endgame timeout is lowered to
-1 s. It feeds each seat the server's `action` JSON through the live client's own
+the reactive-lock default is the variant's, and the endgame timeout is the live 6 s. It feeds each seat the server's `action` JSON through the live client's own
 path: `action_from_json`, then `orient_action_for_engine`, then
 `Game::handle_action`. On its turn a seat's `take_action` is asked for a move, and
 the simulator resolves that move against the truth.
@@ -98,6 +103,9 @@ issue is reported once, at its first occurrence per (class, kind, seat, card).
 | **4** | `private_below`, `pair_below`, `common_below` | a stack view is below what every party to it saw land (see below) |
 | 4-above | `*_above` | a stack view is above the true stack; informational, but a strike risk |
 | 5 | `strike` | each strike, with the striker's reading and which teammates saw the card was dead |
+| div | `common`, `pair`, `call` | informational, the first time in a game that the seats disagree about the common view, one pair view between its two members, or which cards are called and what the common reading of a called card is (the receiver of a pending reactive is exempt for the reacter's hand) |
+| onset | `common`, `pair` | informational, every action after which a view that agreed across seats no longer does, with the action that did it; `analysis` groups these to find where divergence starts |
+| stat | `divergence` | one per game: how many actions left the common views, or some pair view, in disagreement |
 
 Classes **1–4** are critical, and they are what the stop criterion counts.
 
@@ -110,8 +118,13 @@ or the reacter's side of a reactive, a fix or a refusal re-call.
   means the player's own reading named it at play time, or a seat has since
   settled it for the team (`named_in_hole`). The player's PRIVATE settle does not
   count toward a pair view, because the other party cannot know of it, but it does
-  count toward the player's own private view. floor(P, suit) is the highest landed
-  rank every member of P saw.
+  count toward the player's own private view. For a pair view, the other member
+  must also be able to attribute the player's knowledge: its own common reading
+  named the card too. A pair view is one object that both members compute, so it
+  cannot hold what one of them has no way to know. The case is a reacter's blind
+  play that only the reacter and the giver can name. floor(P, suit) is the highest
+  landed rank every member of P saw.
+- **Named for the team** means `named_in_hole` holds the identity at EVERY seat; a name one seat wrote alone is that seat's.
 - **Common view: the best deductions all three can make.** A landed sN counts
   when the player's common reading named it at play time, or any seat has since
   settled it for the team (`ConvData::named_in_hole`).

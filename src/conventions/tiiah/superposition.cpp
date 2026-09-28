@@ -437,9 +437,10 @@ bool back_solve_own_plays(Game& game, const Game& prev, const Action& action) {
         if (game.state.holder_of(static_cast<int>(s)) != me) continue;
         if (!game.meta[s].superposition.contains(missing)) continue;
         settle(game, static_cast<int>(s), missing, /*shared=*/false);
-        // Every other seat watched us play it, so their rows hold it too — we
-        // simply could not write it down until now.
-        advance_pairwise(game, missing, me, /*self_knew=*/false);
+        // Not into any ROW (v17.3.0). Every other seat watched us play it, so it
+        // KNOWS the card -- but it cannot know that WE now know it, and a row is
+        // what the two of us both compute. Writing it here split the pair views
+        // (self-play 9000003 T20). Until v17.3.0 this advanced every row.
         solved = true;
         changed = true;
         break;
@@ -1535,11 +1536,8 @@ bool narrow_own_privately(Game& game, int order, const IdentitySet& allowed) {
   refute_worlds(game, order, kept);
   if (auto only = only_one(kept)) {
     settle(game, order, *only, /*shared=*/false);
-    // Every other seat watched the card go in, so their rows hold it too -- we
-    // simply could not write it down until now (as the back-solve does).
-    if (game.state.holder_of(order) == game.state.our_player_index) {
-      advance_pairwise(game, *only, game.state.our_player_index, /*self_knew=*/false);
-    }
+    // Not into any row: the other seats cannot know that we know it (see the
+    // back-solve, v17.3.0).
   }
   return true;
 }
