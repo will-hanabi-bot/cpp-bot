@@ -106,7 +106,16 @@ void Diagnostics::before_action(const Sim& sim) {
   const Game& ga = sim.seat(a);
   for (int o : t.hands[a]) {
     if (auto id = only(ga.players[a].thoughts[o].possibilities())) actor_named_[o] = *id;
-    if (auto id = only(ga.common.thoughts[o].possibilities())) actor_named_common_[o] = *id;
+    // Named in COMMON only if every seat's common reading names it: a seat's
+    // `common` can hold what only it and one partner know.
+    std::optional<Identity> all;
+    bool agree = true;
+    for (int s = 0; s < np_ && agree; ++s) {
+      auto id = only(sim.seat(s).common.thoughts[o].possibilities());
+      if (!id || (all && *all != *id)) agree = false;
+      all = id;
+    }
+    if (agree && all) actor_named_common_[o] = *all;
   }
 }
 
@@ -304,8 +313,17 @@ void Diagnostics::check_clue_reading(const Sim& sim, const Outcome& o, int turn)
   const bool agree =
       std::all_of(readings.begin(), readings.end(),
                   [&](const std::string& r) { return r == readings[0]; });
+  // Critical when it touches REACTIVE target selection: some seat reads the clue as
+  // reactive and another does not, or the giver and the clue's target disagree.
+  // Otherwise it is an outside seat reading a stable clue its own way -- reported,
+  // but not class 3.
+  const bool any_reactive =
+      std::any_of(readings.begin(), readings.end(),
+                  [](const std::string& r) { return r == "Reactive"; });
+  const bool pair_disagrees = readings[o.actor] != readings[o.clue_target];
   if (!agree) {
-    add(Issue{"3", "dispatch_disagreement", turn, o.actor, -1,
+    add(Issue{any_reactive || pair_disagrees ? "3" : "3-outside",
+              "dispatch_disagreement", turn, o.actor, -1,
               json{{"readings", readings},
                    {"clue_target", o.clue_target},
                    {"clue", (o.clue_kind == ClueKind::COLOUR ? "colour " : "rank ") +
@@ -458,6 +476,31 @@ void Diagnostics::check_stacks(const Sim& sim, int turn) {
     }
   };
 
+  // Views that are one thing by definition, held differently by different seats
+  // (informational, class "div"): the common view at every seat, and a pair view
+  // at both of its members.
+  {
+    std::vector<std::string> commons;
+    for (int s = 0; s < np_; ++s) {
+      std::string c;
+      for (int k : sim.seat(s).state.common_play_stacks) c += std::to_string(k);
+      commons.push_back(c);
+    }
+    if (std::any_of(commons.begin(), commons.end(),
+                    [&](const std::string& c) { return c != commons[0]; })) {
+      add(Issue{"div", "common", turn, -1, -1, json{{"views", commons}}});
+    }
+    for (int a = 0; a < np_; ++a) {
+      for (int b = a + 1; b < np_; ++b) {
+        const auto& ra = sim.seat(a).state.pairwise_play_stacks;
+        const auto& rb = sim.seat(b).state.pairwise_play_stacks;
+        if (b >= static_cast<int>(ra.size()) || a >= static_cast<int>(rb.size())) continue;
+        if (ra[b] != rb[a]) {
+          add(Issue{"div", "pair", turn, a, b, json{{"view_seat", b}}});
+        }
+      }
+    }
+  }
   const auto common_floor = floor_for({}, true);
   for (int s = 0; s < np_; ++s) {
     const State& st = sim.seat(s).state;

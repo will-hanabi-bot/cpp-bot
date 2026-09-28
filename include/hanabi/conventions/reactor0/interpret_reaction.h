@@ -67,7 +67,7 @@ bool is_lock_target(const ReactorWC& wc, int target_slot);
 // clue-time predictor reads it as its own.
 //
 // The turn comparison is `>=`, NOT `==`. `Game::simulate` routes to
-// `simulate_action` (`game.h:180`), which emits a leading `TurnAction` before
+// `simulate_action` (`game.h:186`), which emits a leading `TurnAction` before
 // `handle_action` runs the interpretation (`game.cpp:690-696`), and that stamps
 // `turn_count = num + 1` (`game.cpp:486`). So the WC is created one turn ahead
 // of the caller's `game.state.turn_count`. An exact compare therefore never

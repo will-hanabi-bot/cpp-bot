@@ -93,11 +93,31 @@ std::vector<int> reading_stacks(const State& s, int giver, int holder) {
 // A narrowing, never a widening: the pairwise reading is kept when our own view
 // leaves the card nothing to be, since that means our belief is the thing that
 // is wrong.
-void repin_own_call(const Game& prev, Game& game) {
+//
+// NOR does it drop what the GIVER could have meant (v17.2.0, the user's ruling).
+// Our belief can be ahead of the giver's by exactly the giver's own hole cards,
+// which we watched and it cannot name; a card dead on our stacks only because of
+// one of those is one the giver may well have called -- a duplicate it threw in
+// the hole without knowing. The holder keeps it, so the reading is true and a
+// partner who can see the card can fix the call (§1h). Self-play 9000001 T8:
+// Bob's `{g1,b1}` was the g1, his Rank 1 named Cathy's other g1, and Cathy read
+// `{r1,y1,b1,p1}`.
+void repin_own_call(const Game& prev, Game& game, int giver) {
   const State& s = game.state;
   if (s.pairwise_play_stacks.empty()) return;
   const int me = s.our_player_index;
   if (me < 0 || me >= static_cast<int>(s.hands.size())) return;
+  // Playable in some strike-free world of the giver's hole cards, on the frame the
+  // giver and we share.
+  IdentitySet giver_live = IdentitySet::empty();
+  if (giver >= 0 && giver < s.num_players && giver != me) {
+    const State base = s.with_stacks(s.stacks_known_to_both(giver, me))
+                           .with_band(s.evidence_known_to_both(giver, me));
+    const auto worlds = open_worlds(game, base, giver);
+    for (const OpenWorld* w : strike_free(worlds)) {
+      giver_live = giver_live.union_with(w->state.playable_set);
+    }
+  }
   for (int o : s.hands[me]) {
     if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
     if (o < static_cast<int>(prev.meta.size()) &&
@@ -108,8 +128,8 @@ void repin_own_call(const Game& prev, Game& game) {
     // their minimum, and a call on a card that is only live in one of them -- the
     // b3 of 2011397 T10, in the world where our o9 was the b2 -- must survive.
     // One world is the old `playable_set` exactly.
-    const IdentitySet kept =
-        game.common.thoughts[o].inferred.intersect(playable_in_some_own_world(game));
+    const IdentitySet kept = game.common.thoughts[o].inferred.intersect(
+        playable_in_some_own_world(game).union_with(giver_live));
     if (kept.is_empty() || kept == game.common.thoughts[o].inferred) continue;
     game.with_thought(o, [&kept](const Thought& t) {
       Thought out = t;
@@ -320,8 +340,18 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   //
   // After the dispatch, so only a stable clue can be one — the same discriminator
   // the refusal uses.
-  if (dead_call_fix(prev, game, action.target)) {
-    repin_own_call(prev, game);
+  if (auto fixed = dead_call_fix(prev, game, action.giver, action.target)) {
+    // The fix WITHDRAWS the call itself (v17.2.0). Rule 3 of the call invariants
+    // can no longer be left to do it: a call live in some shared world is not
+    // dead there (§1c, v16.29.0), and the dead identity of a duplicate is live in
+    // the world where the giver's hole card was something else.
+    const int turn = game.state.turn_count;
+    game.with_meta(*fixed, [turn](ConvData& m) {
+      m = m.cleared().reason(turn);
+      m.note_mark = NoteMark::RESET;
+      m.note_mark_turn = turn;
+    });
+    repin_own_call(prev, game, action.giver);
     return ClueInterp::FIX;
   }
 
@@ -439,7 +469,7 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // ...and the reading is the union over those worlds, whichever frame made the
   // call: the singleton `{b2}` told every seat o9 was the p2.
   read_stable_over_worlds(prev, game, action, view);
-  repin_own_call(prev, game);
+  repin_own_call(prev, game, action.giver);
   return interp;
 }
 

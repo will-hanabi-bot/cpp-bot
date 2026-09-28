@@ -684,7 +684,7 @@ is judged from Alice's own inference, not common knowledge.
    [tiiah/CONVENTION.md §2b](../tiiah/CONVENTION.md)): the clue that leaves the
    receiver the fewest identities for its called card
    (`ClueCandidate::receiver_reading_size`, first in `rung_1`,
-   `reactor0/decision.cpp:1094-1116`). That reading is the tiiah convention's, so it
+   `reactor0/decision.cpp:1145-1167`). That reading is the tiiah convention's, so it
    reaches this list through the optional `CandidateAnnotator` that `analyse_clues`
    calls with each candidate's hypo — the engine passes one under TIIAH and nothing
    otherwise, the field stays 0, and the term separates nothing.
@@ -781,7 +781,7 @@ is judged from Alice's own inference, not common knowledge.
        trash to the team that was not before — the all-trash rank clue that flags a
        new card, and equally a clue that narrows an ALREADY-clued card down to trash
        (which interpretation reads as FIX, REVEAL or STALL and flags nothing).
-       `read_stable` (`reactor0/decision.cpp:173-202`) compares
+       `read_stable` (`reactor0/decision.cpp:174-203`) compares
        `common.thinks_trash` before and after (v16.23.0); before that a colour clue
        revealing a clued card as trash came out shape `OTHER`, which no rung selects,
        and 3.7's lock won instead (replay 2011327 T22,

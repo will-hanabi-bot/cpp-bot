@@ -58,15 +58,26 @@ FixResult check_fix(const Game& prev, const Game& game, const ClueAction& action
 // names it — which is half the point, since the other cards in the hand are then free
 // to be whatever the giver wants touched.
 //
-// Why the SHARED view decides the deadness: that is the half of the claim every seat
-// holds alike, so every seat reads the clue the same way. The half only the giver has
-// is that THIS card is that identity, which is exactly what the clue transfers.
+// Why the PAIR's view decides the deadness (v17.2.0; the SHARED view until then): a
+// clue only has to mean one thing to the two seats it is between (tiiah §1.3), and
+// the pair can know a card is down that the third seat cannot -- the third seat's
+// own blind play, which both of them watched. That is the duplicate a fix exists
+// for: the giver of a call threw the other copy into the hole without knowing. A
+// third seat reads the pair's view as the shared one, the floor it can compute.
+// The half only the giver has is that THIS card is that identity, which is exactly
+// what the clue transfers.
 //
 // `before` and `after` are the pre- and post-clue games: the reader passes (prev,
 // game) and a giver weighing a candidate passes (game, hypo). Lives here rather than
 // in either convention because both of them ask it, and neither may reach into the
 // other. Nullopt outside Throw It in a Hole.
-std::optional<int> dead_call_fix(const Game& before, const Game& after, int clued);
+std::optional<int> dead_call_fix(const Game& before, const Game& after, int giver,
+                                 int clued);
+// With no giver: the deadness is asked of the SHARED view.
+inline std::optional<int> dead_call_fix(const Game& before, const Game& after,
+                                        int clued) {
+  return dead_call_fix(before, after, /*giver=*/-1, clued);
+}
 
 std::optional<IdentitySet> distribution_clue(const Game& prev, const Game& game,
                                                 const ClueAction& action, int focus);

@@ -121,9 +121,10 @@ struct BucketReading {
 };
 
 BucketReading bucket_over_worlds(const Game& game, const State& base, int holder,
-                                 int bucket, int except_order = -1) {
+                                 int bucket, int except_order = -1,
+                                 bool shared = false) {
   BucketReading out;
-  out.worlds = open_worlds(game, base, holder, /*cap=*/64, except_order);
+  out.worlds = open_worlds(game, base, holder, /*cap=*/64, except_order, shared);
   for (std::size_t w = 0; w < out.worlds.size(); ++w) {
     const IdentitySet here = IdentitySet::create([&](Identity i) {
       auto b = bucket_of(*game.state.variant, i.suit_index);
@@ -499,13 +500,16 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         }
       }
     }
+    const IdentitySet react_before = prev.common.thoughts[react_order].possibilities();
     if (!game.waiting.empty()) {
       game.waiting.front().react_order = react_order;
       game.waiting.front().receiver_target_order = target.order;
+      game.waiting.front().react_before = react_before;
     }
     if (game.pending_reactions[receiver]) {
       game.pending_reactions[receiver]->react_order = react_order;
       game.pending_reactions[receiver]->receiver_target_order = target.order;
+      game.pending_reactions[receiver]->react_before = react_before;
     }
     return ClueInterp::REACTIVE;
   }
@@ -515,7 +519,9 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
 namespace {
 // Defined with §1d's receiver reading, below.
 bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
-                    Identity seen);
+                    Identity seen, int react_order);
+bool finesse_from_the_card(const Game& game, const ReactorWC& wc,
+                           const IdentitySet& could, Identity seen, int react_order);
 }  // namespace
 
 // WHAT THE REACTER PLAYED, read by the RECEIVER once the reaction has resolved
@@ -568,7 +574,7 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   // red card could not be a purple -- read her card as `{r1,y2}`, so his shared
   // view and his row for Alice stayed on red 0 while the other two seats moved
   // to red 1.
-  if (proven_finesse(prev, game, wc, *seen)) {
+  if (proven_finesse(prev, game, wc, *seen, react_order)) {
     narrow_superposition(game, react_order, IdentitySet::single(*seen));
     return;
   }
@@ -587,7 +593,11 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   const State base =
       s.with_stacks(reacter_frame(game, wc.giver, wc.reacter, react_order))
           .with_band(s.evidence_known_to_both(wc.giver, wc.reacter));
-  const auto br = bucket_over_worlds(game, base, wc.reacter, *from, react_order);
+  // Over the SHARED sets of the reacter's hole cards (v17.2.0): the giver and the
+  // reacter predict this reading (`reaction_team_reading`), and must reach it
+  // from the same sets.
+  const auto br = bucket_over_worlds(game, base, wc.reacter, *from, react_order,
+                                     /*shared=*/true);
   if (!br.allowed.non_empty()) return;
   if (!narrow_superposition(game, react_order, br.allowed)) return;
   // A finesse pairing reads wider than it needs to: there the reacter knows its card
@@ -708,7 +718,7 @@ std::vector<OpenWorld> receiver_worlds(const Game& game, const ReactorWC& wc) {
 // finesse. Judged on the card's clue-given `possible`, which every seat holds
 // alike, and only for a plain play reaction (a double chuck is no pairing).
 bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
-                    Identity seen) {
+                    Identity seen, int react_order) {
   const State& s = game.state;
   if (wc.receiver < 0 || wc.receiver >= s.num_players) return false;
   const int target = new_play_call(prev, game, wc.receiver);
@@ -718,7 +728,26 @@ bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
   const IdentitySet& before = prev.common.thoughts[target].inferred;
   const IdentitySet& possible = game.common.thoughts[target].possible;
   const IdentitySet could = before.non_empty() ? before.intersect(possible) : possible;
-  const auto worlds = receiver_worlds(game, wc);
+  return finesse_from_the_card(game, wc, could, seen, react_order);
+}
+
+// The test itself, on a frame every seat computes alike (v17.2.0): the SHARED view,
+// over every seat's hole cards as the team reads them. The giver and the reacter
+// ask it too, to predict what the receiver will be able to name, so it cannot rest
+// on anybody's own belief.
+//
+// The reacter's card itself is left out of the worlds (`react_order`): its identity
+// is the one being asked about, and at the receiver's seat it is already in the
+// hole while at the other two it is not yet.
+bool finesse_from_the_card(const Game& game, const ReactorWC& wc,
+                           const IdentitySet& could, Identity seen, int react_order) {
+  const State& s = game.state;
+  std::vector<int> everyone;
+  for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+  const State base = s.common_evidence.empty() ? s.shared_view()
+                                               : s.shared_view().with_band(s.common_evidence);
+  const auto worlds =
+      open_worlds(game, base, everyone, 64, react_order, /*shared=*/true);
   const ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind,
                                               IdentitySet::single(seen));
   return could.intersect(rr.finesse).non_empty() &&
@@ -894,6 +923,54 @@ void annotate_candidate(const Game& game, const Game& hypo,
                                               react_live);
   c.receiver_reading_size =
       rr.allowed.intersect(hypo.common.thoughts[target].possible).length();
+}
+
+std::optional<std::pair<IdentitySet, int>> reaction_team_reading(const Game& game,
+                                                                 int player, int order,
+                                                                 Identity id) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return std::nullopt;
+  // The connection this play answers: the live one, or a deferred one.
+  const ReactorWC* wc = nullptr;
+  auto answers = [&](const ReactorWC& w) {
+    return w.reacter == player && w.react_order == order && w.react_before.non_empty();
+  };
+  if (!game.waiting.empty() && answers(game.waiting.front())) wc = &game.waiting.front();
+  for (const auto& pr : game.pending_reactions) {
+    if (!wc && pr && answers(*pr)) wc = &*pr;
+  }
+  if (!wc) return std::nullopt;
+  if (wc->receiver == s.our_player_index) return std::nullopt;  // it reads it itself
+  const auto from = bucket_of(*s.variant, id.suit_index);
+  if (!from) return std::nullopt;
+
+  // The finesse the receiver can prove, from its called card's public reading.
+  IdentitySet team = IdentitySet::empty();
+  const int target = wc->receiver_target_order;
+  bool finesse = false;
+  if (target >= 0 && target < static_cast<int>(game.common.thoughts.size())) {
+    const Thought& t = game.common.thoughts[target];
+    const IdentitySet could =
+        t.inferred.non_empty() ? t.inferred.intersect(t.possible) : t.possible;
+    finesse = finesse_from_the_card(game, *wc, could, id, order);
+  }
+  if (finesse) {
+    team = IdentitySet::single(id);
+  } else {
+    // Otherwise the bucket, on the frame the receiver reads it in: the shared view
+    // floored over every seat's hole cards, without this one (`reacter_frame`'s
+    // outside-seat branch).
+    std::vector<int> everyone;
+    for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+    const std::vector<int> frame = floor_over_worlds(
+        game, s.common_play_stacks, everyone, s.common_evidence, /*shared=*/true, order);
+    const State base = s.with_stacks(frame).with_band(s.common_evidence);
+    team = bucket_over_worlds(game, base, wc->reacter, *from, order, /*shared=*/true)
+               .allowed;
+  }
+  team = team.intersect(wc->react_before);
+  if (!team.contains(id)) return std::nullopt;  // not a reading we can predict
+  return std::make_pair(team, wc->receiver);
 }
 
 }  // namespace hanabi::tiiah

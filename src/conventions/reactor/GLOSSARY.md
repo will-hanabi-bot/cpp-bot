@@ -147,7 +147,7 @@ same reading. `include/hanabi/basics/game.h:73`; `player.h:1-8`.
 
 ### connectable
 Recursive check that a chain of plays can reach a target card before the
-receiver has to act. `src/basics/fix.cpp:157-183`.
+receiver has to act. `src/basics/fix.cpp:158-184`.
 
 ### Connection
 **⚠ Mostly unused.** The variant type `KnownConn | PlayableConn | PromptConn |
@@ -212,7 +212,7 @@ reading. Costs `−10` each in clue scoring (v1.7.0).
 
 ### distribution clue
 **⚠ Implemented but never invoked.** A clue whose only value is spreading
-duplicated criticals. `src/basics/fix.cpp:59-109`.
+duplicated criticals. `src/basics/fix.cpp:59-110`.
 
 ### effective_possible_for
 Narrows a card's `possible` set by visibility **from the holder's point of
@@ -453,7 +453,7 @@ an odd number of plays. `reactive_table.cpp:167-173`.
 a deferral there keeps the call; see its `CONVENTION.md` §1d.1.)
 
 Snapshot of `inferred` taken when an urgent call is stamped, so `check_missed`
-can revert it if the player doesn't act. `card.h:81`; `game.h:171-173`.
+can revert it if the player doesn't act. `card.h:81`; `game.h:177-179`.
 
 ### order
 Global deck index, monotonically increasing. Higher order = drawn later =
@@ -688,7 +688,7 @@ visible somewhere — the clue would teach nothing, so the branch is skipped.
 ### urgent
 `ConvData::urgent` — act on this card *this turn*. Set by reactive
 interpretations on the reacter's called slot; reverted by `check_missed` if
-the player doesn't act. `card.h:115`; `game.h:171-173`.
+the player doesn't act. `card.h:115`; `game.h:177-179`.
 
 ### USELESS
 An empty clue in a variant that permits them. `decide.cpp:70-71`.
@@ -706,7 +706,7 @@ Suit family matched by White, Gray, Light, Null. No colour clue touches them.
 ### zcs_turn (zero-clue-stall turn)
 The turn the team ran out of clue tokens. Cards drawn after it are excluded
 from the chop, so a player who drew during the stall isn't expected to discard
-them. `include/hanabi/basics/game.h:274`; set at `decide.cpp:411`, read by
+them. `include/hanabi/basics/game.h:280`; set at `decide.cpp:411`, read by
 `Game::chop` at `decide.cpp:797-803`. Under reactor0 (and TIIAH), a hand left
 with no chop at all because of it discards the FIRST card drawn during the stall
 rather than pitching blind — floor rung `12.discard_stall_drawn`, reactor0

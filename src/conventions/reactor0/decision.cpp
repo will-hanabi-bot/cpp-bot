@@ -16,6 +16,7 @@
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
+#include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/conventions/variants/reversed.h"
@@ -703,6 +704,55 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
   return game.common.thoughts[*recv_order].possibilities().length() != 1;
 }
 
+// THROW IT IN A HOLE: would this clue call to play a card WE may already have
+// played (v17.2.0)?
+//
+// Our stacks are the minimum across the worlds of our own hole cards, so a card
+// that is playable on them can still be a duplicate of one we threw in without
+// naming it. Calling it asks a partner to play into a strike in that world -- and
+// the partner who watched our card go in cannot even be told why, since the call
+// reads as sound on the frame we share. Self-play 9000001 T8: Bob's `{g1,b1}` was
+// the g1 and his Rank 1 called Cathy's other g1; 9000013 T5: his `{r1,y1}` was the
+// r1 and his reactive called Cathy's r1 as the reacter's card. Both struck.
+//
+// A candidate FILTER, like `calls_two_copies_to_play`: it reads our own sight of
+// the called card, which no other seat shares, so it changes which clues we give
+// and never what a clue means. Covers every card the clue newly calls to play and
+// a reactive's receiver target.
+bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  const auto worlds = hanabi::tiiah::open_worlds(game, s.private_base(),
+                                                 s.our_player_index);
+  if (worlds.size() <= 1) return false;  // nothing of ours in the hole
+  const auto live = hanabi::tiiah::strike_free(worlds);
+  auto dead_somewhere = [&](Identity id) {
+    if (variants::is_inverted_id(s, id)) return false;
+    for (const auto* w : live) {
+      if (w->state.is_basic_trash(id)) return true;
+    }
+    return false;
+  };
+  std::vector<int> called;
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == s.our_player_index) continue;
+    for (int o : s.hands[p]) {
+      if (hypo.meta[o].status == CardStatus::CALLED_TO_PLAY &&
+          game.meta[o].status != CardStatus::CALLED_TO_PLAY) {
+        called.push_back(o);
+      }
+    }
+  }
+  if (!hypo.waiting.empty() && hypo.waiting.front().receiver_target_order >= 0) {
+    called.push_back(hypo.waiting.front().receiver_target_order);
+  }
+  for (int o : called) {
+    auto id = s.deck[o].id();
+    if (id && dead_somewhere(*id)) return true;
+  }
+  return false;
+}
+
 // THROW IT IN A HOLE: would this clue be a REFUSAL (tiiah/CONVENTION.md §1c)?
 //
 // We are the reacter of a standing ordinary reactive, and we can see that the
@@ -753,7 +803,7 @@ bool clue_refuses_dead_target(const Game& game, const ClueAction& action) {
 // Variant-gated through `dead_call_fix`, so no reactor0 game can reach it.
 bool clue_fixes_dead_call(const Game& game, const Game& hypo,
                           const ClueAction& action) {
-  const auto order = dead_call_fix(game, hypo, action.target);
+  const auto order = dead_call_fix(game, hypo, action.giver, action.target);
   if (!order) return false;
   const auto seen = game.state.deck[*order].id();
   if (!seen) return false;  // our own hand: we cannot see it, so we cannot fix it
@@ -778,6 +828,7 @@ std::vector<ClueCandidate> analyse_clues(
       continue;  // undecodable: no rung may propose it
     }
     if (calls_two_copies_to_play(game, hypo)) continue;
+    if (calls_a_card_we_may_have_played(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), 0.0};
     // An undecodable REACTIVE is not a stall -- drop it, as a MISTAKE is dropped,

@@ -8,8 +8,10 @@
 #pragma once
 
 #include <optional>
+#include <utility>
 #include <vector>
 
+#include "hanabi/basics/identity_set.h"
 #include "hanabi/basics/identity.h"
 
 #include "hanabi/basics/action.h"
@@ -106,6 +108,18 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
 // connection that carries no receiver frame (the reverse arm).
 void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
                      int react_order);
+
+// THE TEAM's reading of a reacter's blind play, predicted at the GIVER's and the
+// REACTER's seats (v17.2.0): what the receiver will be able to name at reaction
+// time -- a proven finesse's connector, else the reacter's bucket on the shared
+// frame -- intersected with what the card was read as before the clue. Those two
+// seats know the card exactly (they saw the target); the team only knows this.
+// Nullopt when `order` is not the card a reaction of `player` answers, at the
+// receiver's own seat, or when the prediction does not contain `id`. The second
+// member is that reaction's receiver.
+std::optional<std::pair<IdentitySet, int>> reaction_team_reading(const Game& game,
+                                                                 int player, int order,
+                                                                 Identity id);
 
 // The frame a reactive's target is walked in: the MINIMUM across every world the
 // reacter can live in, from the giver's perspective (§1e, v16.24.0).

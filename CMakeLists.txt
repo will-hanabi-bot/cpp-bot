@@ -470,6 +470,9 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_9000002_receiver_proves_the_finesse.cpp
   tests/test_tiiah/test_replay_9000008_reacter_frame_leaves_its_card_out.cpp
   tests/test_tiiah/test_replay_9000016_outside_seat_tries_its_own_worlds.cpp
+  tests/test_tiiah/test_replay_9000001_holder_keeps_what_the_giver_could_mean.cpp
+  tests/test_tiiah/test_replay_9000013_giver_does_not_call_its_own_dupe.cpp
+  tests/test_tiiah/test_replay_9000031_reacter_card_named_as_far_as_the_receiver_can.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp
   tests/test_tiiah/test_shared_rule_six.cpp

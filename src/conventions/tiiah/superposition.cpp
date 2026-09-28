@@ -6,6 +6,7 @@
 
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/state.h"
+#include "hanabi/conventions/tiiah/interpret_reactive.h"
 
 namespace hanabi::tiiah {
 
@@ -1290,6 +1291,20 @@ void note_hidden_action(Game& game, const Action& raw) {
   // asked every world of ours -- so a strike is never booked into anybody's view.
   const bool ours = player == game.state.our_player_index;
   const std::optional<Identity> named = seen ? seen : known;
+
+  // A REACTION's card, at the giver's or the reacter's seat (v17.2.0). Those two
+  // name it exactly: they saw the target the walk paired it with. The receiver did
+  // not, and names it only as far as `reaction_team_reading` predicts -- so unless
+  // that is the one card, the card is theirs privately and NOT the team's, and the
+  // shared view carries the team's set for it (`shared_left`), exactly as after a
+  // private settle. Self-play 9000031 T3: the giver and the reacter moved the
+  // shared view to green 1 on the reacter's g1, and the receiver did not.
+  std::optional<std::pair<IdentitySet, int>> team;
+  if (known) {
+    team = reaction_team_reading(game, player, order, *known);
+    if (team && team->first.length() <= 1) team.reset();  // the receiver names it too
+  }
+
   if (named && game.state.is_playable(*named)) {
     std::vector<int> knowers;
     for (int p = 0; p < game.state.num_players; ++p) {
@@ -1299,11 +1314,22 @@ void note_hidden_action(Game& game, const Action& raw) {
       // `known`, which is what every seat watching it reads too.
       if (p == player && !known) continue;
       if (ours && !known) continue;
+      // Our own reaction's card is not the receiver's to share with us: they
+      // watched it, but cannot know that we knew it.
+      if (team && ours && p == team->second) continue;
       knowers.push_back(p);
     }
     game.with_state([&](State& st) { st = st.with_pairwise_at_least(*named, knowers); });
   }
 
+  if (known && team) {
+    const int turn = game.state.turn_count;
+    game.with_meta(order, [set = team->first, turn](ConvData& m) {
+      m.shared_left = set;
+      m.hole_turn = turn;
+    });
+    return;
+  }
   if (known) {
     game.with_meta(order, [k = *known](ConvData& m) {
       m.named_in_hole = IdentitySet::single(k);

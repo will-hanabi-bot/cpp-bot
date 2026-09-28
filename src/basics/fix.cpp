@@ -64,13 +64,14 @@ FixResult check_fix(const Game& prev, const Game& game, const ClueAction& action
   return FixResultNone{};
 }
 
-std::optional<int> dead_call_fix(const Game& before, const Game& after, int clued) {
+std::optional<int> dead_call_fix(const Game& before, const Game& after, int giver,
+                                 int clued) {
   const State& s = after.state;
   if (!s.variant->throw_it_in_a_hole) return std::nullopt;
   if (clued < 0 || clued >= static_cast<int>(s.hands.size())) return std::nullopt;
-  // The deadness is asked of the view every seat shares, which is what makes the
-  // clue mean one thing at all three of them.
-  const State shared = s.shared_view();
+  // The deadness is asked of the view the giver and the holder share -- the shared
+  // view, for a third seat, which cannot compute theirs.
+  const State shared = s.with_stacks(s.stacks_known_to_both(giver, clued));
   for (int order : s.hands[clued]) {
     if (order >= static_cast<int>(before.meta.size())) continue;
     if (order >= static_cast<int>(before.common.thoughts.size())) continue;

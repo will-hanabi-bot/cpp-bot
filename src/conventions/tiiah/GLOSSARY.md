@@ -137,7 +137,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:674-684`), read by
+(`src/conventions/tiiah/superposition.cpp:675-685`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -151,7 +151,7 @@ unbooked, since which card was which is exactly what is unknown.
 The stacks a reactive's target is walked in: the **minimum**, suit by suit, across
 every world the reacter can live in, from the giver's perspective (v16.24.0). For the
 pair it is their row; for an outside seat, the shared view floored over every seat's
-worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:173-187`.
+worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:174-188`.
 CONVENTION.md §1e. It replaced "assume none of the superposed cards were played".
 
 ### feasible world
@@ -160,7 +160,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:722-784`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:723-785`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 
 ### evidence / band
@@ -222,15 +222,24 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:406-460`. Rule 4
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:407-461`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past.
+
+### team reading
+What the WHOLE TEAM can name a reacter's blind play as: what the receiver will be able
+to reconstruct at reaction time (a proven finesse's connector, or the reacter's bucket
+on the shared frame), within the card's reading before the clue. The giver and the
+reacter know the card exactly; unless the team reading is that one card, they keep it
+privately and the shared view carries the team's set (v17.2.0).
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:928-974`.
+CONVENTION.md §1d.
 
 ### proven finesse
 A reactive pairing the RECEIVER can show was a finesse without seeing its own card. Its
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:710-726`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:720-755`. CONVENTION.md §1d.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the

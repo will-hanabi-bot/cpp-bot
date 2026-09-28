@@ -91,7 +91,8 @@ issue is reported once, at its first occurrence per (class, kind, seat, card).
 | **2** | `unactioned_at_end` | the game ended normally with a call standing that its holder had had a turn to play |
 | 2w | `idle` | warning: a truly playable call stood through two of its holder's turns |
 | 2-trash | `dropped`, `not_at_holder` | as above, but the card was truly trash by then |
-| **3** | `dispatch_disagreement` | the seats read a clue as different kinds (e.g. `Reactive` against `Mistake`) |
+| **3** | `dispatch_disagreement` | the seats read a clue as different kinds, where it touches reactive target selection: some seat reads `Reactive` and another does not, or the giver and the clue's target disagree |
+| 3-outside | `dispatch_disagreement` | only the seat outside a stable clue's pair reads it differently (informational) |
 | **3** | `pairing_mismatch` | the giver's and the reacter's waiting connections name different reacter or receiver cards |
 | **3** | `receiver_stamp_mismatch` | once the reacter acted, the receiver's newly called card is not the one the giver targeted |
 | **4** | `private_below`, `pair_below`, `common_below` | a stack view is below what every party to it saw land (see below) |

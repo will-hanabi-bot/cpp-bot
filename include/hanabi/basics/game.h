@@ -112,6 +112,12 @@ struct ReactorWC {
   // plays -- such a reaction is not recorded. Trailing, like the fields above.
   std::vector<int> receiver_frame;
   std::vector<int> receiver_called;
+  // THROW IT IN A HOLE: what the team read the REACTER's card as before this clue
+  // narrowed it (v17.2.0). The receiver never narrows it at clue time -- it cannot
+  // run the walk -- so this is the set it starts from at reaction time, and the
+  // giver and the reacter need it to predict what the receiver will be able to
+  // name (`tiiah::reaction_team_reading`). Empty where the walk did not run.
+  IdentitySet react_before = IdentitySet::empty();
 
   bool operator==(const ReactorWC&) const = default;
 };
