@@ -54,7 +54,7 @@ the ordinary rungs carry those turns. That is a deliberate hold, to be settled
 after the convention has been played in anger.
 
 Which convention a game runs is `Game::convention`, resolved at game init
-(`src/net/commands.cpp:378-393`). TIIAH is resolved from the **variant** and
+(`resolve_table_convention`, `src/basics/convention.cpp:23-28`, called from `src/net/commands.cpp:384-385`). TIIAH is resolved from the **variant** and
 never from `/setall`: only these 44 variants can be played under it, and no
 other convention can be played at them. `parse_convention` accepts the name
 `"tiiah"` so a snapshot round-trips, but `/setall tiiah` is not a way to select

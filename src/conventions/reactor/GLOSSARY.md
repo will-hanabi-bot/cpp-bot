@@ -24,7 +24,7 @@ Two orientation facts that most entries depend on:
 ### /allplays
 Chat toggle that promotes **colour** reactive clues to play+play, matching
 rank clues, so both players end up called to play. Default off.
-`include/hanabi/basics/game.h:98-102`; `src/net/commands.cpp:797-831`.
+`include/hanabi/basics/game.h:98-102`; `src/net/commands.cpp:1057-1106`.
 
 ### /settings
 Chat command that prints the variant's active reactive tables — the
@@ -491,7 +491,7 @@ The last three rows are the trap. The **server reports outcomes** while the
 **engine is button-oriented**, so an inbound `type: "play"` on an orange card
 means the player *chucked* it. `orient_action_for_engine`
 (`src/basics/action.cpp:56-72`) flips inverted-suit actions before dispatch;
-see the comment at `src/net/commands.cpp:393-397`. Note
+see the comment at `src/net/commands.cpp:549-553`. Note
 `PerformPlay` / `PerformDiscard` exist only **outbound** — inbound actions are
 `PlayAction` / `DiscardAction`.
 

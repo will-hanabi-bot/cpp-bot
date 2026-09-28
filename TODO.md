@@ -103,7 +103,7 @@ deliberately no "try the next slot" retry.
 ## 3. `[reactor0]` N-player support
 
 Reactor0 is specified and tested for 3 players only. Games with 4+ players
-fall back to reactor at game init (`src/net/commands.cpp:292-299`). Extending
+fall back to reactor at game init (`resolve_table_convention`, `src/basics/convention.cpp:23-28`). Extending
 it means auditing the anchor arithmetic at hand sizes 4 and 3, the colour
 value table's mod behaviour, and the reacter definition when the receiver is
 not the seat after the reacter.

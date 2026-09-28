@@ -18,7 +18,7 @@ giver, Bob the next player, Cathy the one after.
 ## §0 Status and relationship to reactor
 
 - Reactor0 is a **3-player** convention. Which convention a game runs is
-  `Game::convention`, resolved at game init (`src/net/commands.cpp:378-390`):
+  `Game::convention`, resolved at game init (`src/net/commands.cpp:384-385`, `resolve_table_convention` at `src/basics/convention.cpp:23-28`):
   a Throw It in a Hole variant runs `Convention::TIIAH` whatever the seat
   count; otherwise reactor0 selected AND exactly 3 players → reactor0;
   otherwise that game runs reactor. The choice is recorded in the `game_init`
@@ -112,8 +112,8 @@ giver, Bob the next player, Cathy the one after.
 - **`/allplays` is reactor-only.** It promotes reactor's colour reactives to
   play+play; reactor0's parity is fixed by clue kind, so the flag has no
   meaning here. It is never set on a reactor0 game
-  (`src/net/commands.cpp:292-302`), `chat_allplays` skips reactor0 games when
-  retro-applying (`:914-933`), and a reactor0 waiting connection always stores
+  (`src/net/commands.cpp:386-392`), `chat_allplays` skips reactor0 games when
+  retro-applying (`:1085-1098`), and a reactor0 waiting connection always stores
   `all_plays = false` (`interpret_reactive.cpp:1092`).
 
 ## §1a Dispatch — purely positional
@@ -467,10 +467,10 @@ at clue time, the same insulation `wc.rlocks` provides.
 
 **The settings persist between games.** They are stored bot-wide on
 `BotClient::reactive_overrides_` and copied into every new `Game` by `on_init`
-(`src/net/commands.cpp:325`), so a value set in the lobby — or inside an open
+(`src/net/commands.cpp:405`), so a value set in the lobby — or inside an open
 replay — holds for the games that follow, across game starts, reconnects and
 reattends. `/set` works from a PM or a table room, and inside a replay, which
-never appears in the lobby table list (`table_info`, `commands.cpp:824`, falls
+never appears in the lobby table list (`table_info`, `commands.cpp:958`, falls
 back to the game's own variant and seat count).
 
 **A change of variant resets them.** `ReactiveOverride::clue_value` is a raw

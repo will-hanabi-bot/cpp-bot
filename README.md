@@ -3,7 +3,7 @@
 A C++20 bot that plays [Hanabi](https://hanab.live) on hanab.live using the
 **Reactor** conventions — **reactor0** (the default, a minimalist 3-player
 convention) and **reactor** (the original), plus **tiiah** for the Throw It in a
-Hole variants, which it currently reads but does not play. It logs in over HTTPS, holds a WebSocket session, joins
+Hole variants (played since v16.6.0). It logs in over HTTPS, holds a WebSocket session, joins
 or creates tables, and plays full games — including an exact-win-probability
 endgame solver.
 
@@ -25,6 +25,7 @@ roughly 50× faster per primitive operation. See
 | [reactor/GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) | Every domain term, defined, with code references |
 | [tiiah/CONVENTION.md](src/conventions/tiiah/CONVENTION.md) | **The ruling reference** for Throw It in a Hole — the variant's engine rules, and the convention being built on them |
 | [tiiah/GLOSSARY.md](src/conventions/tiiah/GLOSSARY.md) | TIIAH terms: the hole, buckets, superposition |
+| [v17_self_play_diagnostics/README.md](v17_self_play_diagnostics/README.md) | The self-play harness: three bots play TIIAH offline, and detectors report reading errors |
 | [TODO.md](TODO.md) | Convention that is legal but not yet implemented |
 | [PLAN.md](PLAN.md) | Scoping document for work in flight (currently the reactor0 decision overhaul) |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for agents: version bumps, test policy, the bug-report workflow |

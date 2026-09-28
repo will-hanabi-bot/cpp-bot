@@ -94,7 +94,7 @@ each and makes the full suite take ~7 minutes instead of ~23 seconds.
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         341 tests,  7 s
-build/hanabi_tests.exe            # convention-neutral    390 tests,  1.4 s
+build/hanabi_tests.exe            # convention-neutral    397 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
 build/hanabi_decision_tests.exe   # decision quality      173 tests,  0.7 s
 build/hanabi_tiiah_tests.exe      # Throw It in a Hole    151 tests,  0.3 s
@@ -176,6 +176,30 @@ Three hygiene rules, each of which has cost a wasted run:
 
 Read **every** mover individually and say what each one is. A mover count with no
 readings is not a result.
+
+## Self-play diagnostics (v17)
+
+`v17_self_play_diagnostics/` holds a local harness in which three copies of the
+current build play Throw It in a Hole (5 Suits) against each other, with
+detectors for wrong inferences, calls never actioned, reactive-target
+disagreements and lagging stack views. Its `README.md` is the reference.
+
+```bash
+cmake --build build -j --target self_play
+build/self_play.exe --seeds 1..100 --jobs 12     --out v17_self_play_diagnostics/runs/<version>     --report v17_self_play_diagnostics/results/<version>.md
+```
+
+- Simulated games are `9000000 + seed`, and every seat logs to
+  `logs/sim-<seat>-<game_id>.log`. So the debugging workflow below
+  (`replay_log`, `show_turn.py`, `tiiah_stacks.py`, `bug_to_test.sh`) applies to
+  them unchanged, and a regression test from one is named
+  `test_replay_900xxxx_<slug>.cpp`.
+- In TIIAH, strikes and the score are **not public**. The simulator sends a miss
+  as an ordinary hidden `play` and ends the game on the third strike itself.
+- The simulator is variant-generic, with public stacks and strikes outside TIIAH,
+  but only TIIAH is run unless the user asks otherwise.
+- During the v17 work, every commit's 100-game run (seeds 1–100) is saved as
+  `results/<version>.md`.
 
 ## Test changes
 

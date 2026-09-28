@@ -20,6 +20,13 @@ bool is_reactor0_family(Convention c) {
 
 bool uses_reactor0_decisions(Convention c) { return is_reactor0_family(c); }
 
+Convention resolve_table_convention(bool throw_it_in_a_hole, int num_players,
+                                    Convention mode) {
+  if (throw_it_in_a_hole) return Convention::TIIAH;
+  return (mode == Convention::REACTOR0 && num_players == 3) ? Convention::REACTOR0
+                                                            : Convention::REACTOR;
+}
+
 std::optional<Convention> parse_convention(std::string_view s) {
   std::string lower;
   lower.reserve(s.size());

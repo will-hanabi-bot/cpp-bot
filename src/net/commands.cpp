@@ -381,12 +381,8 @@ void BotClient::on_init(const json& data) {
   // resolution is what keeps the bot from playing a TIIAH table by reactor's
   // rules, which is what it used to do — see `Game::take_action`.
   int np = static_cast<int>(game->state.names.size());
-  game->convention =
-      variant->throw_it_in_a_hole
-          ? Convention::TIIAH
-          : ((convention_mode_ == Convention::REACTOR0 && np == 3)
-                 ? Convention::REACTOR0
-                 : Convention::REACTOR);
+  game->convention = resolve_table_convention(variant->throw_it_in_a_hole, np,
+                                              convention_mode_);
   // /allplays is a reactor concept — it promotes colour reactives to
   // play+play. reactor0's parity is fixed by clue kind (colour = one play,
   // rank = even), so the flag has no meaning there and must never be set on

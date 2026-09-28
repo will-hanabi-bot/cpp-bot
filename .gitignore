@@ -10,3 +10,5 @@ compile_commands.json
 .env*
 # Agent worktrees — each is its own git repo, never part of this tree.
 .claude/worktrees/
+# Self-play raw output (results/ is committed).
+v17_self_play_diagnostics/runs/

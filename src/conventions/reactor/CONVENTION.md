@@ -741,7 +741,7 @@ A third orientation lurks on the wire. The **server reports outcomes** — an
 orange chuck of a playable card arrives as `type: "play"` — while the engine's
 `on_play` / `on_discard` are button-oriented, so `orient_action_for_engine`
 (`src/basics/action.cpp:56-72`) flips inverted-suit actions before dispatch
-(`src/net/commands.cpp:393-397`). An inbound `type: "play"` on an orange card
+(`src/net/commands.cpp:549-553`). An inbound `type: "play"` on an orange card
 therefore means the player *chucked* it.
 
 Every place the convention compensates, all in
@@ -1458,7 +1458,7 @@ bet on teammate behaviour rather than a worst-case assumption.
 
 Timing is instrumented via `hanabi::instr::ScopedTimer`
 (`include/hanabi/instrumentation/timer.h:65-83`), emitted as per-turn `TIMING`
-records (`src/net/commands.cpp:523-550`) and summarised by
+records (`src/net/commands.cpp:736-746`) and summarised by
 `scripts/log_summary.py`. Instrumented scopes: `take_action`,
 `reactor.eval_action`, `reactor.advance`, `reactor.eval_game`,
 `reactor.interpret_stable` / `interpret_reactive` (and the colour/rank
@@ -1467,7 +1467,7 @@ sub-paths), `reactor.react_play` / `react_discard`, `endgame.solve`,
 
 `take_action` runs on a dedicated compute thread against a snapshot, so
 network traffic cannot mutate state mid-decision
-(`src/net/commands.cpp:478-497`).
+(`src/net/commands.cpp:685-750`).
 
 ---
 

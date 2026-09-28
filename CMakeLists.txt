@@ -96,6 +96,17 @@ target_compile_definitions(hanabi_core PUBLIC
 )
 hanabi_set_warnings(hanabi_core)
 
+# Self-play harness (v17_self_play_diagnostics/README.md): a simulated server
+# driving one bot Game per seat, plus the issue detectors. A library so that
+# hanabi_tests can unit-test the wire it builds.
+add_library(hanabi_selfplay STATIC
+  v17_self_play_diagnostics/sim.cpp
+  v17_self_play_diagnostics/diagnostics.cpp
+)
+target_include_directories(hanabi_selfplay PUBLIC v17_self_play_diagnostics)
+target_link_libraries(hanabi_selfplay PUBLIC hanabi_core)
+hanabi_set_warnings(hanabi_selfplay)
+
 # --- Tests --------------------------------------------------------------
 enable_testing()
 include(GoogleTest)
@@ -153,9 +164,11 @@ add_executable(hanabi_tests
   tests/test_net/test_help_and_announce.cpp
   tests/test_net/test_set_persistence.cpp
   tests/test_net/test_game_lifecycle.cpp
+  tests/test_selfplay/test_sim_wire.cpp
+  tests/test_selfplay/test_diagnostics.cpp
 )
 target_include_directories(hanabi_tests PRIVATE tests)
-target_link_libraries(hanabi_tests PRIVATE hanabi_core GTest::gtest_main)
+target_link_libraries(hanabi_tests PRIVATE hanabi_core hanabi_selfplay GTest::gtest_main)
 hanabi_set_warnings(hanabi_tests)
 gtest_discover_tests(hanabi_tests PROPERTIES LABELS "core")
 
@@ -483,3 +496,8 @@ hanabi_set_warnings(bench_endgame)
 add_executable(replay_log apps/replay_log.cpp)
 target_link_libraries(replay_log PRIVATE hanabi_core)
 hanabi_set_warnings(replay_log)
+
+# Self-play: N seeded games between three bots, with the v17 issue detectors.
+add_executable(self_play v17_self_play_diagnostics/self_play.cpp)
+target_link_libraries(self_play PRIVATE hanabi_selfplay)
+hanabi_set_warnings(self_play)
