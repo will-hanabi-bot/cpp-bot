@@ -707,10 +707,24 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   }
 
   if (!allowed.non_empty()) return;
+  // The baseline comes from `prev` rather than from `old_inferred`: unlike
+  // `target_play`, `stamp_receiver_call` writes through `narrow_thought` and so
+  // leaves no `old_inferred` to roll back to. `prev` is the game before the
+  // reaction was processed, which is exactly the pre-stamp inference.
+  const IdentitySet& before = prev.common.thoughts[target].inferred;
   // Never empty the card: an inference that explains nothing is worse than the
-  // generic one the stamp already left (1i).
-  if (game.common.thoughts[target].possibilities().intersect(allowed).is_empty()) {
-    return;
+  // generic one the stamp already left (1i). Judged against what the card could be
+  // BEFORE the stamp (v16.26.0), not against the stamp's own set: that set is the
+  // single-frame, bucket-blind reading this function exists to replace, so it is
+  // routinely disjoint from the bucket reading. Replay 2011830 T16: will-bot69's
+  // o15 was stamped `{r2,y3,g3}` on the pair frame, its own base named the bucket-1
+  // `g4`, and the old guard kept the stamp -- which then read green as 3 in a world
+  // and refused the g5 it was called to play at T23.
+  {
+    const IdentitySet& possible = game.common.thoughts[target].possible;
+    const IdentitySet could =
+        before.non_empty() ? before.intersect(possible) : possible;
+    if (could.intersect(allowed).is_empty()) return;
   }
   // Undo the stamp helper's narrowing before applying ours, in the same spirit as
   // `reactor0::narrow_to_stamped_button` and the reacter's half above:
@@ -718,12 +732,6 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   // single-world reading this is here to widen, and `narrow_thought` alone could
   // never get past it. Rule 1 constrains the net effect of an interpretation, not
   // the writes inside it.
-  //
-  // The baseline comes from `prev` rather than from `old_inferred`: unlike
-  // `target_play`, `stamp_receiver_call` writes through `narrow_thought` and so
-  // leaves no `old_inferred` to roll back to. `prev` is the game before the
-  // reaction was processed, which is exactly the pre-stamp inference.
-  const IdentitySet& before = prev.common.thoughts[target].inferred;
   if (before.non_empty()) game.reset_thought_to(target, before);
   game.narrow_thought(target, allowed);
   record_conditional(game, target, worlds, support);

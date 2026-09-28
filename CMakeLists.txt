@@ -448,6 +448,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_stable_clue_over_worlds.cpp
   tests/test_tiiah/test_replay_2011475_dupes_strikes_and_the_shared_collapse.cpp
   tests/test_tiiah/test_dupes.cpp
+  tests/test_tiiah/test_replay_2011830_receiver_bucket_reading_not_the_stamp.cpp
+  tests/test_tiiah/test_receiver_reading_beats_the_stamp.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_bucket_legality.cpp
