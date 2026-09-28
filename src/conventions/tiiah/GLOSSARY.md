@@ -291,8 +291,9 @@ A `CALLED_TO_PLAY` card that is not playable yet and will be once the *receiver*
 has played what they already know — what a reverse-reactive finesse creates.
 Alive but not actionable: reactor0's dead-call invariant judges it against the
 stacks after those queued plays, and leaves the call itself out of that
-simulation (`src/conventions/reactor0/call_invariants.cpp:144-165`).
-CONVENTION.md §1c.
+simulation (`src/conventions/reactor0/call_invariants.cpp:167-206`). A call
+whose reading is a valid pitch in some strike-free world of the shared view is
+not dead either (v16.29.0). CONVENTION.md §1c.
 
 ### superposition
 The state of a player who has played a card without learning what it was: the

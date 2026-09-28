@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/variants/hole.h"
 
 namespace hanabi::reactor0 {
@@ -123,6 +125,27 @@ void enforce_single_discard_call(Game& game, const std::vector<int>& hand) {
   }
 }
 
+// Throw It in a Hole: every identity a Play press handles correctly in SOME
+// strike-free world of the SHARED view -- every seat's hole cards as the team
+// reads them, the replay `advance_common_from_worlds` floors the common view on
+// (tiiah/CONVENTION.md §1e). Shared rather than private so that the answer is
+// the same at every seat.
+IdentitySet pitch_candidates_in_shared_worlds(const Game& game) {
+  const State& s = game.state;
+  std::vector<int> everyone;
+  for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+  const State base = s.common_evidence.empty()
+                         ? s.shared_view()
+                         : s.shared_view().with_band(s.common_evidence);
+  const auto worlds =
+      hanabi::tiiah::open_worlds(game, base, everyone, 64, -1, /*shared=*/true);
+  IdentitySet out = IdentitySet::empty();
+  for (const auto* w : hanabi::tiiah::strike_free(worlds)) {
+    out = out.union_with(pitch_candidates(w->state));
+  }
+  return out;
+}
+
 // Rule 3: a call is only as good as the card. Once COMMON knowledge leaves the
 // stamped button with no identity it handles correctly, the call is dead and
 // every seat drops it -- which also takes the card out of the reacter-CTP and
@@ -143,6 +166,9 @@ void enforce_single_discard_call(Game& game, const std::vector<int>& hand) {
 // disagree about what is still standing.
 void drop_dead_play_calls(Game& game, const std::vector<int>& hand) {
   const IdentitySet live_allowed = pitch_candidates(game.state);
+  // Throw It in a Hole: what a Play press handles in SOME open world, computed
+  // only when a call first fails the cheap test below.
+  std::optional<IdentitySet> in_some_world;
   for (int o : hand) {
     if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
     IdentitySet allowed = live_allowed;
@@ -160,6 +186,21 @@ void drop_dead_play_calls(Game& game, const std::vector<int>& hand) {
     const Thought& t = game.common.thoughts[o];
     const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
     if (set.is_empty()) continue;
+    // ...and a reading live in a world the hole leaves open is not dead either
+    // (v16.29.0). Our belief is the MINIMUM across our worlds (§1e), so a call
+    // read over those worlds -- r3 if our hole card was the r2, y3 if it was the
+    // y2 -- can have no identity playable on it while every world has one.
+    // Replay 2012424 T34: will-bot67's o24 was called `{r3,y3}` by the reaction,
+    // on a belief of red 0 and yellow 1 that the play's collapse had not yet
+    // raised, and rule 3 erased the call; at T35 it discarded instead of playing
+    // the r3.
+    if (game.state.variant->throw_it_in_a_hole &&
+        set.intersect(allowed).is_empty()) {
+      if (!in_some_world) {
+        in_some_world = pitch_candidates_in_shared_worlds(game);
+      }
+      allowed = allowed.union_with(*in_some_world);
+    }
     if (set.intersect(allowed).is_empty()) erase_call(game, o);
   }
 }

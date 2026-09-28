@@ -1911,7 +1911,9 @@ enforcement from inside their `waiting` block.
    plays as well as the live ones, and leaves the call under test out of that
    simulation — counting it would spend its own identity and make it read dead
    exactly when it is most alive
-   (`src/conventions/reactor0/call_invariants.cpp:144-165`). Gated on
+   (`src/conventions/reactor0/call_invariants.cpp:167-206`). Since v16.29.0 it
+   also keeps a call whose reading is a valid pitch in some strike-free world of
+   the shared view (`:189-204`, helper `:128-147`; tiiah/CONVENTION.md §1c). Gated on
    `Variant::throw_it_in_a_hole`, so no other variant's calls change.
 2. **At most one discard call.** Unlike play calls, `CALLED_TO_DISCARD` does
    not stack: a new call replaces the standing one. Cards merely *revealed* to

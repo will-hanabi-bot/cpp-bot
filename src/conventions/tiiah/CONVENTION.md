@@ -41,7 +41,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0); the refusal given past the tier gate, and ranked (v16.27.0) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0); the receiver's reading no longer dropped for missing the stamp (v16.26.0); an undeferred call no longer dropped as stale (v16.28.0) |
-| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0); rule 6 against the shared view, and rows as floors (v16.23.0); the frame is the minimum across worlds, stable calls read in every world, world feasibility from reactions, play-order replay, evidence bands and a floored shared view (v16.24.0); the shared view settles on what every world agrees, the receiver's promise read on its own frame, rule 8 (a strike was already down) and hole requirements, notes in the team's reading (v16.25.0); a refusal with several candidates, and a watched dupe strike, floor the shared view (v16.27.0); the band never absorbs a named card, and rows do not strike on our private settles (v16.28.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0); rule 6 against the shared view, and rows as floors (v16.23.0); the frame is the minimum across worlds, stable calls read in every world, world feasibility from reactions, play-order replay, evidence bands and a floored shared view (v16.24.0); the shared view settles on what every world agrees, the receiver's promise read on its own frame, rule 8 (a strike was already down) and hole requirements, notes in the team's reading (v16.25.0); a refusal with several candidates, and a watched dupe strike, floor the shared view (v16.27.0); the band never absorbs a named card, and rows do not strike on our private settles (v16.28.0); a call live in some shared world is not dead (v16.29.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0; among reactive plays, the fewest receiver candidates (§2b, v16.28.0) |
 | The fix clue (§1h) | implemented (v16.20.0) |
@@ -273,13 +273,16 @@ the stacks cannot answer. Replay 2008422 is written up in §1d.
 Three things still read our belief where they arguably should not, all inside
 reactor0 and all out of reach of the swap: `common.hypo_stacks`, rebuilt from
 `play_stacks` by the elim layer; `Player::hypo_stacks`; and
-`reactor0::enforce_call_invariants` (`basics/decide.cpp:227-232`), which runs
+`reactor0::enforce_call_invariants` (`basics/decide.cpp:255-259`), which runs
 *after* the swap has unwound and so judges rules 3 and 4 — whether a standing
 call still has a button that works — against one seat's private stacks. Its own
 comment says a call "has to die for every seat at the same moment"
-(`reactor0/call_invariants.cpp:141-143`), so that one is a real gap rather than
-a tolerable one. The first two matter for delayed-play chains rather than for
-the call itself.
+(`reactor0/call_invariants.cpp:164-166`), so that one is a real gap rather than
+a tolerable one. Since v16.29.0, rule 3 keeps a call alive if any strike-free
+world of the shared view still allows it (§1c). That half is the same at every
+seat, but the private half still decides the rest, so the gap (TODO.md 52) is
+narrowed rather than closed. The first two matter for delayed-play chains rather
+than for the call itself.
 
 ### §1.2 A 5 pays nothing
 
@@ -471,12 +474,29 @@ only playable once the receiver has played what they already know, so the call
 stands while being unactionable. Reactor0's dead-call invariant would otherwise
 erase it the moment it was stamped, and under this variant it judges "dead"
 against the stacks after the queued plays as well as the live ones
-(`drop_dead_play_calls`, `src/conventions/reactor0/call_invariants.cpp:144-165`).
+(`drop_dead_play_calls`, `src/conventions/reactor0/call_invariants.cpp:167-206`).
 The call under test is **left out** of that simulation: counting it would spend
 its own identity, and it would read dead exactly when it is most alive
 (`stacks_after_queued_plays`'s `except_order`,
 `src/conventions/variants/hole.cpp:9-54`). Nothing follows for the holder's turn
 — the call is alive, not yet actionable.
+
+**A call is also alive in a WORLD** (v16.29.0). A reading made over the hole's
+worlds (§1d's receiver half, §1e's stable re-read) can name, say, the `r3` if our
+hole card was the `r2` and the `y3` if another was the `y2`. Our belief is the
+**minimum** across those worlds, so it can find no identity in the reading
+playable while every world has one. Before rule 3 calls a play call dead it
+therefore also asks whether any strike-free world of the **shared** view, meaning every
+seat's hole cards as the team reads them, makes one of the card's identities a
+valid pitch. If one does, the call stands
+(`src/conventions/reactor0/call_invariants.cpp:189-204`, with
+`pitch_candidates_in_shared_worlds` at `:128-147`).
+The shared worlds rather than our own, so the answer does not depend on the
+seat. Replay [2012424](https://hanab.live/shared-replay/2012424) T33: will-bot69's
+p1 called will-bot67's o24 as `{r3,y3}`, on a belief of red 0 and yellow 1 that
+the play's collapse had not yet raised. Rule 3 erased the call, and at T35
+will-bot67 discarded its chop instead of playing the r3
+(`tests/test_tiiah/test_replay_2012424_reaction_call_live_in_a_world.cpp`).
 
 ### §1d The reactive clue
 

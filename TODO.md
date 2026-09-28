@@ -1315,7 +1315,7 @@ card that strikes in *every* world, which a 20-candidate set cannot do.
 
 ## 52. `[engine]` A shared call is judged dead on a PRIVATE view
 
-`reactor0/call_invariants.cpp:126-165`. Rule 3, `drop_dead_play_calls`, erases a
+`reactor0/call_invariants.cpp:149-206`. Rule 3, `drop_dead_play_calls`, erases a
 standing CALLED_TO_PLAY when common knowledge can see the card is dead. Its own comment
 states the contract: *"Common knowledge only. The holder's own view may be narrower,
 but a call is a shared commitment and has to die for every seat at the same moment, or
@@ -1341,6 +1341,13 @@ Two consequences worth stating together:
   call to fix, so `clue_fixes_dead_call` declines. Verified — the fix clue is
   implemented and correct, and 2010512's strike still happens
   (`replay_log logs/will-bot69-2010512.log --turn 12 --rerun` still plays order 12).
+
+**Narrowed in v16.29.0, not closed.** Rule 3 now also keeps a call whose reading is a
+valid pitch in some strike-free world of the SHARED view
+(`pitch_candidates_in_shared_worlds`, `reactor0/call_invariants.cpp:128-147`). That half is the same at every seat, so a
+call that is live on the team's worlds lives everywhere (replay 2012424). What remains
+is the other direction: a call dead on the shared worlds that one seat's private belief
+still keeps, as in 2010512.
 
 The fix is `pitch_candidates(game.state.shared_view())` under the hole flag, keeping the
 queued-plays union as it is. It is small; what it needs is a corpus run, because rule 3
