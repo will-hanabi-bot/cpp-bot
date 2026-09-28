@@ -19,6 +19,9 @@ namespace hanabi {
 class Game;
 struct ReactorWC;
 }
+namespace hanabi::reactor0 {
+struct ClueCandidate;
+}
 
 namespace hanabi::tiiah {
 
@@ -107,5 +110,13 @@ void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
 // The frame a reactive's target is walked in: the MINIMUM across every world the
 // reacter can live in, from the giver's perspective (§1e, v16.24.0).
 std::vector<int> reacter_frame(const Game& game, int giver, int reacter);
+
+// The giver's prediction of how many identities the receiver of a REACTIVE_PLAY
+// candidate will read its called card as (§2, v16.28.0), written into
+// `ClueCandidate::receiver_reading_size`. `hypo` is the game with the clue given.
+// Passed to `reactor0::analyse_clues` as its annotator by the engine, since a
+// convention may not depend on a sibling (reactor0 cannot call this itself).
+void annotate_candidate(const Game& game, const Game& hypo,
+                        reactor0::ClueCandidate& c);
 
 }  // namespace hanabi::tiiah

@@ -11,6 +11,7 @@
 #include "hanabi/conventions/tiiah/buckets.h"
 #include "hanabi/conventions/tiiah/dupes.h"
 #include "hanabi/conventions/tiiah/superposition.h"
+#include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/variants/predicates.h"
@@ -571,6 +572,69 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   }
 }
 
+namespace {
+
+// §1d's reading of the receiver's card: the union of the BUCKET half and the
+// FINESSE half, per world, with the worlds that support each identity. Shared by
+// the reader (`narrow_receiver_call`) and the giver's prediction of it
+// (`annotate_candidate`), so the two cannot disagree about what a call says.
+// Not yet intersected with what the card could be; each caller does that with
+// its own view of the card.
+struct ReceiverReading {
+  IdentitySet allowed = IdentitySet::empty();
+  std::vector<std::pair<Identity, std::uint64_t>> support;
+};
+
+ReceiverReading receiver_reading(const Variant& variant,
+                                 const std::vector<OpenWorld>& worlds,
+                                 ClueKind kind, const IdentitySet& react_live) {
+  ReceiverReading out;
+  IdentitySet& allowed = out.allowed;
+  auto& support = out.support;
+  auto offer = [&](Identity i, std::size_t w) {
+    allowed = allowed.add(i);
+    auto it = std::find_if(support.begin(), support.end(),
+                           [i](const auto& pr) { return pr.first == i; });
+    if (it == support.end()) support.emplace_back(i, 1ULL << w);
+    else it->second |= (1ULL << w);
+  };
+
+  // The bucket half. Judged per world, so the playability filter is ours rather
+  // than inherited from the stamp's single-world set -- which matters, because
+  // `narrow_receiver_call`'s undo drops that set.
+  std::optional<int> from;
+  bool one_bucket = true;
+  for (Identity i : react_live) {
+    auto b = bucket_of(variant, i.suit_index);
+    if (!b) { one_bucket = false; break; }
+    if (!from) from = *b;
+    else if (*from != *b) { one_bucket = false; break; }
+  }
+  for (std::size_t w = 0; w < worlds.size(); ++w) {
+    if (one_bucket && from) {
+      const int want = kind == ClueKind::RANK ? (*from + 1) % 3 : (*from + 2) % 3;
+      const IdentitySet here = IdentitySet::create(
+          [&](Identity i) {
+            auto b = bucket_of(variant, i.suit_index);
+            return b && *b == want && worlds[w].state.is_playable(i);
+          },
+          static_cast<int>(variant.suits.size()) * 5);
+      for (Identity i : here) offer(i, w);
+    }
+    // The finesse half: the card that follows what the reacter played. Reversed
+    // suits run 5 -> 1, so the successor is `prev()` there -- `Identity::next()`
+    // raw would name a card that does not exist.
+    for (Identity i : react_live) {
+      const auto& st = variant.suits[i.suit_index].suit_type;
+      const auto nxt = st.reversed ? i.prev() : i.next();
+      if (nxt) offer(*nxt, w);
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
 // The RECEIVER's half of 1d's relation, applied when their call is made.
 //
 // The reacter's side is narrowed at clue time, by `interpret_reactive` above.
@@ -663,48 +727,10 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
                   : std::vector<int>{wc.receiver, wc.giver};
   const auto worlds = open_worlds(game, base, holders);
 
-  IdentitySet allowed = IdentitySet::empty();
-  std::vector<std::pair<Identity, std::uint64_t>> support;
-  auto offer = [&](Identity i, std::size_t w) {
-    allowed = allowed.add(i);
-    auto it = std::find_if(support.begin(), support.end(),
-                           [i](const auto& pr) { return pr.first == i; });
-    if (it == support.end()) support.emplace_back(i, 1ULL << w);
-    else it->second |= (1ULL << w);
-  };
-
-  // The bucket half. Judged per world, so the playability filter is ours rather
-  // than inherited from the stamp's single-world set -- which matters, because
-  // the undo below drops that set.
-  std::optional<int> from;
-  bool one_bucket = true;
-  for (Identity i : react_live) {
-    auto b = bucket_of(*s.variant, i.suit_index);
-    if (!b) { one_bucket = false; break; }
-    if (!from) from = *b;
-    else if (*from != *b) { one_bucket = false; break; }
-  }
-  for (std::size_t w = 0; w < worlds.size(); ++w) {
-    if (one_bucket && from) {
-      const int want = wc.clue.kind == ClueKind::RANK ? (*from + 1) % 3
-                                                      : (*from + 2) % 3;
-      const IdentitySet here = IdentitySet::create(
-          [&](Identity i) {
-            auto b = bucket_of(*s.variant, i.suit_index);
-            return b && *b == want && worlds[w].state.is_playable(i);
-          },
-          static_cast<int>(s.variant->suits.size()) * 5);
-      for (Identity i : here) offer(i, w);
-    }
-    // The finesse half: the card that follows what the reacter played. Reversed
-    // suits run 5 -> 1, so the successor is `prev()` there -- `Identity::next()`
-    // raw would name a card that does not exist.
-    for (Identity i : react_live) {
-      const auto& st = s.variant->suits[i.suit_index].suit_type;
-      const auto nxt = st.reversed ? i.prev() : i.next();
-      if (nxt) offer(*nxt, w);
-    }
-  }
+  const ReceiverReading rr =
+      receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
+  const IdentitySet& allowed = rr.allowed;
+  const auto& support = rr.support;
 
   if (!allowed.non_empty()) return;
   // The baseline comes from `prev` rather than from `old_inferred`: unlike
@@ -735,6 +761,47 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   if (before.non_empty()) game.reset_thought_to(target, before);
   game.narrow_thought(target, allowed);
   record_conditional(game, target, worlds, support);
+}
+
+// THE GIVER'S PREDICTION of the receiver's reading, for the tiebreak that
+// prefers the reactive leaving the receiver the fewest candidates (§2,
+// v16.28.0). The same §1d reading `narrow_receiver_call` will make, read as the
+// giver can: the reacter's card by sight, the frame the giver shares with the
+// receiver advanced by that card, the pair's worlds, and the target's
+// possibilities once this clue has landed.
+//
+// Replay 2011885 T32: Red and Rank 1 to will-bot69 both named yagami's n2 and
+// will-bot69's n3. Rank 1's bucket half added the r5, so will-bot69 would have
+// read {r5,n3}; the Red did not touch the card, which ruled the r5 out, and it
+// read {n3}. Tied everywhere else, the default tiebreak took the Rank 1.
+void annotate_candidate(const Game& game, const Game& hypo,
+                        reactor0::ClueCandidate& c) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return;
+  if (c.reading.shape != reactor0::ClueShape::REACTIVE_PLAY) return;
+  const int react_order = c.reading.reacter_side.order;
+  const int target = c.reading.receiver_side.order;
+  const int receiver = c.reading.receiver_side.holder;
+  const int giver = c.action.giver;
+  if (react_order < 0 || target < 0 || receiver < 0) return;
+  if (react_order >= static_cast<int>(hypo.common.thoughts.size()) ||
+      target >= static_cast<int>(hypo.common.thoughts.size())) {
+    return;
+  }
+  const auto seen = s.deck[react_order].id();
+  const IdentitySet react_live =
+      seen ? IdentitySet::single(*seen)
+           : hypo.common.thoughts[react_order].possibilities();
+  if (!react_live.non_empty()) return;
+  const State& hs = hypo.state;
+  State base = hs.with_stacks(hs.stacks_known_to_both(giver, receiver))
+                   .with_band(hs.evidence_known_to_both(giver, receiver));
+  if (seen && base.is_playable(*seen)) base = base.with_play(*seen);
+  const auto worlds = open_worlds(hypo, base, std::vector<int>{receiver, giver});
+  const ReceiverReading rr = receiver_reading(*s.variant, worlds, c.action.clue.kind,
+                                              react_live);
+  c.receiver_reading_size =
+      rr.allowed.intersect(hypo.common.thoughts[target].possible).length();
 }
 
 }  // namespace hanabi::tiiah

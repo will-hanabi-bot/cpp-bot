@@ -126,7 +126,7 @@ hand.
 
 ### 1a.3 The stable/reactive dispatcher
 
-`Game::interpret_clue` (`src/basics/decide.cpp:33-227`) decides which family
+`Game::interpret_clue` (`src/basics/decide.cpp:33-241`) decides which family
 applies. First match wins:
 
 | # | Condition | Route | Cite |
@@ -899,7 +899,7 @@ worse play.
 
 ## 2.1 The `take_action` ladder
 
-`Game::take_action` (`src/basics/decide.cpp:651-1138`). Each stage that
+`Game::take_action` (`src/basics/decide.cpp:665-1152`). Each stage that
 returns short-circuits the rest. It scores actions through the convention seam
 `eval_for`, which is `reactor::eval_action` for every convention as of v7.0.0:
 reactor0 no longer scores clues at all — its `choose_clue` picks one by rule
@@ -1196,7 +1196,7 @@ manufactured leaves with four or more strikes.
   (orange) card is simulated with the Discard button** —
   `variants::make_discard_for_simulation` (`:378-382`) — because that is what
   advances an inverted stack, and what `take_action` really issues
-  (`src/basics/decide.cpp:889-908`). Simulating it as `PerformPlay` ran the
+  (`src/basics/decide.cpp:903-922`). Simulating it as `PerformPlay` ran the
   game-rule inversion and scored every good chuck as a card thrown away
   (v5.0.0; replay 1957905 #31).
 - Locked → discard if clueless, else clue (`:398-405`). At 8 clues, forced
@@ -1401,7 +1401,7 @@ discards (`:314-330`).
 Plays: a chuck (`PerformDiscard`) only when the orange is known *and currently
 playable*, else the ordinary `PerformPlay` (`solver.cpp:201-203`). Discards:
 the sole candidate comes from `Game::find_all_discards`
-(`src/basics/decide.cpp:1128-1173`), which emits the **pitch**
+(`src/basics/decide.cpp:1142-1187`), which emits the **pitch**
 (`PerformPlay`) when every identity the holder thinks the card could be is
 inverted — knowing the suit is enough to know which button to press, and
 pressing Discard there would be a play attempt that strikes on trash. Keyed on

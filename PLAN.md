@@ -32,7 +32,7 @@ get_result            reactor0/state_eval.cpp:249-382   16 tuned literals
 clue_branch_value     reactor0/state_eval.cpp:384-389   damping + flat tempo tax
 eval_action           reactor0/state_eval.cpp:449-510   gate + advance() lookahead
         ↓
-Game::take_action argmax          src/basics/decide.cpp:1132-1137
+Game::take_action argmax          src/basics/decide.cpp:1146-1151
 ```
 
 The numbers are not reasonable-about. Replay 1961419 T11 is the worked example
@@ -102,7 +102,7 @@ plus the §2c rationale block `:216-235`.
 
 `receiver_is_safe` `:514-531`, `is_pointless_double_discard` `:533-559`,
 `is_stable_play_clue_for_bob` `:561-576`, `drop_pointless_double_discards`
-`:578-613`, and its engine seam `src/basics/decide.cpp:886-888`.
+`:578-613`, and its engine seam `src/basics/decide.cpp:900-902`.
 
 Deleted rather than ported: the new priority 2 **already** requires the discarded
 card be trash, a same-hand-dupe or visibly duped, so a pointless double discard is
@@ -187,8 +187,8 @@ The implementation should invent none of these:
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `reactor0/interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
-| chop | `Game::chop` | `src/basics/decide.cpp:432-461` |
-| safe discard button (inverted suits) | `discard_button_is_safe` | `src/basics/decide.cpp:938-958` |
+| chop | `Game::chop` | `src/basics/decide.cpp:446-475` |
+| safe discard button (inverted suits) | `discard_button_is_safe` | `src/basics/decide.cpp:952-972` |
 
 ---
 

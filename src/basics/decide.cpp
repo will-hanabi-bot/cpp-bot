@@ -40,6 +40,20 @@
 
 namespace hanabi {
 
+namespace {
+
+// What a convention layered on reactor0's clue list records per candidate that
+// reactor0 cannot compute itself (v16.28.0). Throw It in a Hole predicts how many
+// identities the receiver of a reactive will read its card as, which priority 1's
+// first tiebreak reads (tiiah/CONVENTION.md §2); every other convention passes
+// nothing.
+const reactor0::CandidateAnnotator* candidate_annotator(Convention convention) {
+  static const reactor0::CandidateAnnotator tiiah = tiiah::annotate_candidate;
+  return convention == Convention::TIIAH ? &tiiah : nullptr;
+}
+
+}  // namespace
+
 // --- Convention hooks: reactor implementation ----------------------------
 
 // Decide any held receiver-chuck inference. reactor0 only -- reactor applies all
@@ -1319,7 +1333,8 @@ PerformAction Game::take_action() const {
       // Cannot clue at all (no tokens, or we are the pending receiver). Nothing
       // to vet against, so the endgame's own answer stands as before.
       if (all_clues.empty()) return chosen;
-      auto cands = hanabi::reactor0::analyse_clues(*this, all_clues);
+      auto cands = hanabi::reactor0::analyse_clues(*this, all_clues,
+                                          candidate_annotator(convention));
       auto better = hanabi::reactor0::choose_endgame_clue(*this, cands);
       if (!better) {
         // Every candidate was dropped as undecodable or vetoed as predicting a
@@ -1537,7 +1552,8 @@ PerformAction Game::take_action() const {
         if (uses_reactor0_decisions(convention)) {
           auto all_clues = enumerate_clue_candidates();
           if (!all_clues.empty()) {
-            auto cands = hanabi::reactor0::analyse_clues(*this, all_clues);
+            auto cands = hanabi::reactor0::analyse_clues(*this, all_clues,
+                                          candidate_annotator(convention));
             if (auto vh = hanabi::reactor0::choose_very_high_clue(*this, cands)) {
               hanabi::logging::log_branch(
                   "endgame.timeout_precheck",
@@ -1596,7 +1612,8 @@ PerformAction Game::take_action() const {
 
   std::vector<hanabi::reactor0::ClueCandidate> r0_clues;
   if (uses_reactor0_decisions(convention) && !all_clues.empty()) {
-    r0_clues = hanabi::reactor0::analyse_clues(*this, all_clues);
+    r0_clues = hanabi::reactor0::analyse_clues(*this, all_clues,
+                                          candidate_annotator(convention));
     if (auto vh = hanabi::reactor0::choose_very_high_clue(*this, r0_clues)) {
       return *vh;
     }

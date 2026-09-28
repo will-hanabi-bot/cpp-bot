@@ -17,7 +17,7 @@ Two orientation facts that most entries depend on:
   newer, "right" = older.
 - **Alice / Bob / Cathy / Zelda** are positional, not identities: Alice is the
   player to move, Bob the next player, Cathy the one after, Zelda the previous
-  (`src/basics/decide.cpp:97-99`, `:419-421`).
+  (`src/basics/decide.cpp:111-113`, `:419-421`).
 
 ---
 
@@ -80,7 +80,7 @@ Python/Scala port and are never set.
 
 ### Bob
 The player after the current one. In a reactive clue Bob is normally the
-**reacter**. `src/basics/decide.cpp:97-99`.
+**reacter**. `src/basics/decide.cpp:111-113`.
 
 ### brownish
 Suit family matched by the substrings Brown, Muddy, Cocoa, Null. Rank clues

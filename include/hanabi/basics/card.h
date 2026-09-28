@@ -176,6 +176,13 @@ struct ConvData {
   // seat followed us, so the worlds every seat enumerates for the shared view
   // must keep the card with this set. Empty otherwise.
   IdentitySet shared_left = IdentitySet::empty();
+  // The identity the WHOLE TEAM named this hole card as (v16.28.0): the card was
+  // known when it was played, or a shared argument settled it since. Empty
+  // otherwise, and never set by a private settle. World replay reads it so that
+  // a view's band -- ranks it holds without naming the cards -- never absorbs a
+  // second card of an identity the team has already named (tiiah/CONVENTION.md
+  // §1e). Survives `cleared()`, like `superposition`.
+  IdentitySet named_in_hole = IdentitySet::empty();
 
   bool superposed() const { return superposition.non_empty(); }
 

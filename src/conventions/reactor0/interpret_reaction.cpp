@@ -401,10 +401,17 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   // So the reading is also vetted against the LIVE stacks, and a call nothing
   // in it can still satisfy is dropped rather than stamped.
   //
-  // This is inert on the undeferred path, and deliberately so rather than by a
-  // flag: when the reacter answers immediately no other seat has moved, so the
-  // rewound states ARE `prev.state` / `game.state`, `live` equals `allowed`, and
-  // the test cannot fire. It costs one set intersection to say so.
+  // Only a DEFERRED reaction is vetted (v16.28.0). Under reactor0 the test was
+  // inert on the undeferred path anyway -- no other seat has moved, so the
+  // rewound states ARE `prev.state` / `game.state` and `live` equals `allowed`.
+  // Under Throw It in a Hole it is not: the frame is the view the giver and the
+  // receiver SHARE, while `prev.state` / `game.state` are our own belief, and the
+  // two readings can be disjoint with nothing stale about either. Replay 2011887
+  // T19: will-bot69's call read {g1,b2} on the shared frame and {r2,g2,b3,n4} on
+  // its own stacks, was dropped as stale, and at T20 it discarded instead of
+  // playing the g3 it had just been called on. (TIIAH then reads the call
+  // properly, over its own worlds, in `tiiah::narrow_receiver_call`.)
+  const bool deferred = prev.state.turn_count > wc.turn + 1;
   const IdentitySet live = button == CardStatus::CALLED_TO_DISCARD
                                ? receiver_ctd_set(prev.state, game.state)
                                : receiver_ctp_set(prev.state, game.state);
@@ -427,7 +434,7 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   if (narrowed.non_empty()) {
     // Rule 5: the clue-time reading survives, but nothing in it is still
     // actionable. Forget the reaction rather than bomb on it.
-    if (narrowed.intersect(live).is_empty()) {
+    if (deferred && narrowed.intersect(live).is_empty()) {
       hanabi::logging::log_branch(
           "reactor0.deferred_reaction",
           {{"dropped", "stale_reading"}, {"order", order}});

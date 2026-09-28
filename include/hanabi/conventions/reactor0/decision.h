@@ -6,6 +6,7 @@
 // in, so each rule can be read against the spec line it implements.
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -236,12 +237,26 @@ struct ClueCandidate {
   //
   // Like `refuses_dead_target` this joins Precedence step 1 rather than a tier,
   // because a fix is not an alternative to anything: left ungiven it is a
-  // strike, so it has to be able to outrank our own pending reaction. Unlike the
-  // refusal it also exempts the candidate from the tier gate in
+  // strike, so it has to be able to outrank our own pending reaction. Like the
+  // refusal (since v16.27.0) it also exempts the candidate from the tier gate in
   // `clue_is_admissible`, which reads `tier` alone and would drop every fix an
   // OCCUPIED Alice could give.
   bool fixes_dead_call = false;
+  // Throw It in a Hole only: for a REACTIVE_PLAY, how many identities the
+  // RECEIVER will read its called card as, as the giver predicts it (0 when not
+  // computed). Priority 1's first tiebreak there: of two reactives calling the
+  // same cards, the one that leaves the receiver fewer candidates
+  // (tiiah/CONVENTION.md §2, v16.28.0). Filled in by the annotator the engine
+  // hands `analyse_clues`, because the reading is the tiiah convention's own.
+  int receiver_reading_size = 0;
 };
+
+// A per-candidate hook `analyse_clues` calls with the hypo it has just built, so
+// a convention layered on this list can record what only it knows how to compute
+// without paying for a second `simulate`. The engine passes one; reactor0 never
+// needs to, and a convention may not call into a sibling to fill a field itself.
+using CandidateAnnotator =
+    std::function<void(const Game& game, const Game& hypo, ClueCandidate& c)>;
 
 // One `Game::simulate` per candidate — the same cost the deleted `eval_action`
 // paid. Candidates whose interpretation is a MISTAKE are dropped here, matching
@@ -249,7 +264,8 @@ struct ClueCandidate {
 // decode.
 std::vector<ClueCandidate> analyse_clues(
     const Game& game,
-    const std::vector<std::pair<PerformAction, Action>>& all_clues);
+    const std::vector<std::pair<PerformAction, Action>>& all_clues,
+    const CandidateAnnotator* annotate = nullptr);
 
 // The tier gate of DECISION_MAKING.md "Decision phase 1" items 1 and 2, lifted
 // verbatim from the deleted `eval_action` so its boundaries do not move:

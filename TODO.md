@@ -217,7 +217,7 @@ right — but the branch has no test either way. Decide and pin it.
 ---
 
 *(Chop selecting the most recent CTD by `signal_turn` shipped in v1.11.0 —
-`Game::chop`, `src/basics/decide.cpp:419-446`, pinned by
+`Game::chop`, `src/basics/decide.cpp:433-460`, pinned by
 `tests/test_basics/test_chop.cpp`.)*
 
 ---
@@ -270,7 +270,7 @@ the versions that fixed them:
   direction), `player_known_plays`' consumer and `winnable_simpler`'s discard
   fallback.
 - v6.2.0 — the top-level discard candidate: `Game::find_all_discards`
-  (`src/basics/decide.cpp:1128-1173`) returned an unconditional
+  (`src/basics/decide.cpp:1142-1187`) returned an unconditional
   `PerformDiscard`, which on an orange is a chuck, and it is the solver's ONLY
   discard candidate. bug_report_5_0_0.txt. Plus two siblings found with it:
   `two_critical_play_action`'s unconditional `PerformPlay` (which pitched a
@@ -296,7 +296,7 @@ See [PLAN.md](PLAN.md) §11.
 
 ## 12. `[engine]` An unpinned playable orange is still pitched
 
-`src/basics/decide.cpp:889-908` routes a playable orange to `PerformDiscard`
+`src/basics/decide.cpp:903-922` routes a playable orange to `PerformDiscard`
 only when `thoughts[o].id(infer=true)` resolves to a **single** identity. A
 card that is empathy-*playable* but ambiguous between an inverted and a
 non-inverted suit (say `{o1, r1}` at zero stacks) falls through to
@@ -362,7 +362,7 @@ candidate pipeline:
   filter returns early in any inverted variant
   (`reactor0/state_eval.cpp:532`), which is exactly where a chuck can strike.
 - `find_all_clues`'s `reacter_critical_discard` guard
-  (`src/basics/decide.cpp:565-579`) tests `is_critical`, not "would strike",
+  (`src/basics/decide.cpp:579-593`) tests `is_critical`, not "would strike",
   and is unreachable from `take_action`, which builds its own pool at
   `:851-864`.
 
@@ -384,7 +384,7 @@ deleted scorer.
 `:437`, `:446`, `:451`), which sets `failed = inverted && !playable`. That is
 right for a CTD (a real chuck) but wrong for an ordinary discard: `take_action`
 routes a *known* orange through `PerformPlay` (a pitch,
-`src/basics/decide.cpp:1026-1044`) and drops candidates that could still be
+`src/basics/decide.cpp:1040-1058`) and drops candidates that could still be
 orange (`discard_button_is_safe`, `:938-958`). So the lookahead invents misplay
 strikes for discards the bot would never physically make, and mis-scores every
 inverted-variant line that reaches a discard.
@@ -465,7 +465,7 @@ do not.
 ## 19. `[engine]` An all-orange discard candidate is dropped where it could be pitched
 
 §2.3's chuck-safety filter (`discard_button_is_safe`,
-`src/basics/decide.cpp:938-958`) rejects any candidate whose `possible` contains
+`src/basics/decide.cpp:952-972`) rejects any candidate whose `possible` contains
 an inverted identity. That is exactly right for a set that *straddles* an
 inverted and a plain suit — neither button is safe there, so there is nothing to
 re-route to. But when **every** possibility is inverted, `PerformPlay` is a pitch
@@ -499,7 +499,7 @@ its own discards at v7.1.0.
 
 ## 20. `[engine]` The `locked_discard` fallback presses Discard with no inverted re-route
 
-`src/basics/decide.cpp:1128` — when `all_discards`, `all_clues` and `all_plays`
+`src/basics/decide.cpp:1142` — when `all_discards`, `all_clues` and `all_plays`
 are all empty, `take_action` returns a bare
 `PerformDiscard{m.locked_discard(...)}`. No pitch/chuck routing, unlike both the
 ordinary emission loop (`:1026-1044`) and `find_all_discards` (`:1176-1182`). On
@@ -515,7 +515,7 @@ bot must discard something — so the fix is to route the button, not to refuse.
 
 ## 21. `[engine]` `discard_button_is_safe` clause 2 trusts `inferred`, not `possible`
 
-`src/basics/decide.cpp:955` exempts a candidate when
+`src/basics/decide.cpp:969` exempts a candidate when
 `m.thoughts[o].id(/*infer=*/true)` resolves. `Thought::id`
 (`src/basics/card.cpp:29-44`) resolves on `possible.length() == 1` (sound) **or**
 `inferred.length() == 1` (not sound — an inference is a convention deduction that
@@ -1151,10 +1151,10 @@ and yagami's `p2`/`p3`/`p4` sets are far too wide for that. Verified:
 
 CONVENTION.md §1d. `tiiah::narrow_receiver_call` — the receiver's half of the
 bucket relation — is called from one place, `Game::interpret_play`
-(`src/basics/decide.cpp:636-644`). So it is skipped whenever the reacter's action
+(`src/basics/decide.cpp:650-658`). So it is skipped whenever the reacter's action
 reaches a seat as a **discard**, even though the reaction machinery below it gets
 the button right: `reacter_button_pressed`
-(`src/conventions/reactor0/interpret_reaction.cpp:523-533`) already knows that a
+(`src/conventions/reactor0/interpret_reaction.cpp:530-540`) already knows that a
 plain card can only reach a strike via the Play button, and stamps the receiver
 `CALLED_TO_PLAY` accordingly. Only the narrowing is missing, so the receiver keeps
 the generic "every playable the stacks allow" reading.
@@ -1181,14 +1181,14 @@ the comment at the seam (`decide.cpp:636-640`) deliberately avoided.
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:217`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:218`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
 what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
-REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:695-709`) —
+REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:702-716`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:246`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:247`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has
@@ -1467,3 +1467,24 @@ recorded in its `ReactionRecord`, and taking the one candidate that could have s
 would give the striker the same fact. Until then, will-bot69's shared view sits one step
 behind the other two seats' models of it, which only costs anything when will-bot69 is
 the one reading a later clue on that view.
+
+---
+
+## 59. `[tiiah]` Hole-card worlds are replayed on today's stacks, not on the stacks of their turn
+
+CONVENTION.md §1e. `enumerate_worlds` replays each hole card in play order (`hole_turn`),
+but onto the base view as it stands NOW -- which already holds every card that landed
+since, including plays made long after the hole card went in. A world in which the hole
+card was a card that could not have landed at the time then survives, because a later
+play has since filled the gap it needed.
+
+Replay 2011887: will-bot69's o9 `{r2,g2}` went into the hole at T5 with red on 0, so the
+r2 world is a strike and o9 was the g2. yagami's r1 at T15 is in every later base,
+though, so the r2 lands on it and the world stands; at T20 will-bot69 reads its called
+o21 as `{g2,g3,b3}` rather than `{g3}`, and its shared views stay behind (0013 against a
+true 1223). It still plays the card, so nothing was lost there, but every reading that
+rests on o9 is wider than it should be.
+
+The fix is to replay a hole card against the view as it stood at `hole_turn` and then
+add what landed after, in order. That needs a per-turn record of what each view knew,
+which nothing keeps today.

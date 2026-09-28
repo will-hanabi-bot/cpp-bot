@@ -762,7 +762,8 @@ bool clue_fixes_dead_call(const Game& game, const Game& hypo,
 
 std::vector<ClueCandidate> analyse_clues(
     const Game& game,
-    const std::vector<std::pair<PerformAction, Action>>& all_clues) {
+    const std::vector<std::pair<PerformAction, Action>>& all_clues,
+    const CandidateAnnotator* annotate) {
   hanabi::instr::ScopedTimer st("reactor0.analyse_clues");
   const State& s = game.state;
   std::vector<ClueCandidate> out;
@@ -907,6 +908,7 @@ std::vector<ClueCandidate> analyse_clues(
         break;
       }
     }
+    if (annotate && *annotate) (*annotate)(game, hypo, c);
     out.push_back(std::move(c));
   }
   return out;
@@ -1093,7 +1095,24 @@ const ClueCandidate* rung_1(const Game& g, const std::vector<ClueCandidate>& cs)
   Pool p = select(cs, [](const ClueCandidate& c) {
     return c.reading.shape == ClueShape::REACTIVE_PLAY;
   });
-  return settle(g, std::move(p), bob_card_chain(g, /*require_bob_plays=*/false));
+  // Throw It in a Hole puts one term ahead of the spec's chain: the reactive that
+  // leaves the RECEIVER the fewest candidates for its card (tiiah/CONVENTION.md
+  // §2, v16.28.0). Replay 2011885 T32: Red and Rank 1 called the same n2 and n3,
+  // but under Rank 1 the receiver would have read {r5,n3} and under Red {n3}.
+  // `receiver_reading_size` is 0 outside TIIAH, so the term is inert there.
+  int least = 0;
+  for (const ClueCandidate* c : p) {
+    const int n = c->receiver_reading_size;
+    if (n > 0 && (least == 0 || n < least)) least = n;
+  }
+  std::vector<Term> chain;
+  chain.push_back([least](const ClueCandidate& c) {
+    return least > 0 && c.receiver_reading_size == least;
+  });
+  for (Term& t : bob_card_chain(g, /*require_bob_plays=*/false)) {
+    chain.push_back(std::move(t));
+  }
+  return settle(g, std::move(p), chain);
 }
 
 // Priority 2's tiebreaks, shared with the endgame stall list's rung 4. The

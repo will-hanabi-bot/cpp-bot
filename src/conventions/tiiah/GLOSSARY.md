@@ -19,7 +19,7 @@ The shared engine reads a named playable thrown away as "you hold the other copy
 the card **was already played** — by us, since our stacks can only be short by
 what we threw in the hole — and it collapses our superpositions instead
 (`presume_discard_was_played`, CONVENTION.md §1e rule 7). `useful_dc` excludes a
-playable card in a hole variant (`src/basics/decide.cpp:517-526`). Replay 2011319.
+playable card in a hole variant (`src/basics/decide.cpp:531-540`). Replay 2011319.
 
 ### believed stacks
 `State::play_stacks` under TIIAH. We resolve each hidden action against the card
@@ -137,12 +137,12 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:621-631`), read by
+(`src/conventions/tiiah/superposition.cpp:674-684`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
 What the survivors agree on is the **floor**: the least advanced height any of them
-reaches, per suit (`world_floor`, `:542-557`). It raises a partner's row (v16.18.0)
+reaches, per suit (`world_floor`, `:655-670`). It raises a partner's row (v16.18.0)
 and, since v16.19.0, our own `play_stacks` — two cards each reading `{g1,b1}` were one
 of each, so both suits are on 1 even though neither card can be named. The copies stay
 unbooked, since which card was which is exactly what is unknown.
@@ -151,7 +151,7 @@ unbooked, since which card was which is exactly what is unknown.
 The stacks a reactive's target is walked in: the **minimum**, suit by suit, across
 every world the reacter can live in, from the giver's perspective (v16.24.0). For the
 pair it is their row; for an outside seat, the shared view floored over every seat's
-worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:172-184`.
+worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:173-185`.
 CONVENTION.md §1e. It replaced "assume none of the superposed cards were played".
 
 ### feasible world
@@ -160,7 +160,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:669-731`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:722-784`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 
 ### evidence / band
@@ -171,7 +171,20 @@ advances by the next card it can name (`State::pairwise_evidence`,
 view counts as down without knowing which card each was. A world replayed on a view
 absorbs a card whose rank falls in the band — once per rank — instead of striking it
 (`State::with_band`, `enumerate_worlds`). Without it a floor replayed on itself
-struck the very world that produced it (replay 2011327 T36).
+struck the very world that produced it (replay 2011327 T36). The band never absorbs an
+identity the team has *named in the hole* (v16.28.0): that card is a duplicate.
+
+### named in the hole
+A hole card the WHOLE TEAM can name — it was known when it was played, or a shared
+argument settled it since — recorded as `ConvData::named_in_hole` (v16.28.0). Never
+set by a private settle. World replay reads the set of them so that a view's band
+never absorbs a second card of a named identity (§1e; replay 2011885 T17).
+
+### row replay
+How a pairwise row replays hole-card worlds (`open_worlds(..., row)`, v16.28.0): our
+privately settled cards are left out, and a card too high to land is not a strike
+when the card it waits for could be one of them, as far as the pair can tell (§1e;
+replay 2011887 T18).
 
 ### passback
 The playable-dupe passback (§1j, v16.25.0): a seat that can name its card as X, and
@@ -209,7 +222,7 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:400-454`. Rule 4
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:406-460`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past.
 
 ### shared view
@@ -270,7 +283,7 @@ inverted card. Inverted playables and inverted finesses are otherwise skipped as
 reactive targets. The reacter's own card has to be **affordable to chuck** —
 inverted and playable, so the button plays it, or simply not critical — and a
 pairing that fails that is refused outright, since the reacter cannot see their
-own hand. `safe_to_chuck`, `src/conventions/tiiah/interpret_reactive.cpp:95-101`.
+own hand. `safe_to_chuck`, `src/conventions/tiiah/interpret_reactive.cpp:96-102`.
 CONVENTION.md §1d.
 
 ### delayed call

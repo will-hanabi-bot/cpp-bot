@@ -680,6 +680,15 @@ is judged from Alice's own inference, not common knowledge.
     5. Bob's card is a clue-regain card (5's in normal variants, 1 in reversed)
     6. Default tiebreak.
 
+   **Throw It in a Hole only** puts one term ahead of these (v16.28.0,
+   [tiiah/CONVENTION.md §2b](../tiiah/CONVENTION.md)): the clue that leaves the
+   receiver the fewest identities for its called card
+   (`ClueCandidate::receiver_reading_size`, first in `rung_1`,
+   `reactor0/decision.cpp:1094-1116`). That reading is the tiiah convention's, so it
+   reaches this list through the optional `CandidateAnnotator` that `analyse_clues`
+   calls with each candidate's hypo — the engine passes one under TIIAH and nothing
+   otherwise, the field stays 0, and the term separates nothing.
+
 2. **Alice has a reactive discard clue available where Bob plays a card**, where Cathy's discarded card is
    trash, a same-hand-dupe, or a good card that Alice sees at least one dupe of in
    any other player's hand (including her own). Tiebreak by the following:
@@ -1401,8 +1410,8 @@ button the receiver was promised.
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
-| chop | `Game::chop` | `src/basics/decide.cpp:673-702` |
-| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:938-958` |
+| chop | `Game::chop` | `src/basics/decide.cpp:687-716` |
+| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:952-972` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:115-132` |
 
 ## Not yet implemented

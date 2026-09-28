@@ -278,11 +278,14 @@ void settle(Game& game, int order, Identity id, bool shared) {
     });
     correct_frozen_frames(game, id);
   }
-  game.with_meta(order, [shared](ConvData& m) {
+  game.with_meta(order, [shared, id](ConvData& m) {
     // A private settle leaves the shared view's candidate set behind (v16.25.0):
     // no other seat followed us, so the shared worlds keep the card.
     if (!shared && m.shared_left.is_empty()) m.shared_left = m.superposition;
-    if (shared) m.shared_left = IdentitySet::empty();
+    if (shared) {
+      m.shared_left = IdentitySet::empty();
+      m.named_in_hole = IdentitySet::single(id);  // the team names it (v16.28.0)
+    }
     m.superposition = IdentitySet::empty();
   });
 }
@@ -296,7 +299,10 @@ void settle_shared_only(Game& game, int order, Identity id) {
     game.with_state([id](State& st) { st = st.with_common_play(id); });
   }
   advance_pairwise(game, id, /*player=*/-1, /*self_knew=*/true);
-  game.with_meta(order, [](ConvData& m) { m.shared_left = IdentitySet::empty(); });
+  game.with_meta(order, [id](ConvData& m) {
+    m.shared_left = IdentitySet::empty();
+    m.named_in_hole = IdentitySet::single(id);
+  });
 }
 
 // Keep only what the SURVIVING worlds still allow each of our hole cards to be,
@@ -493,7 +499,8 @@ bool s_reversed(const Game& game, int suit) {
 
 std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
                                         const std::vector<int>& holders, int cap,
-                                        int except_order, bool shared = false) {
+                                        int except_order, bool shared = false,
+                                        bool row = false) {
   // The candidate set a card carries in these worlds. The SHARED view also
   // carries the cards we settled privately, with the set it still allows.
   auto cands = [&game, shared](int o) -> const IdentitySet& {
@@ -525,6 +532,34 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
     return game.meta[a].hole_turn < game.meta[b].hole_turn;
   });
 
+  // What the team has already NAMED in the hole (v16.28.0). A band rank is a
+  // card the view holds without knowing which card it was; a named card is not
+  // that, so a world card of a named identity is a duplicate, not the band card.
+  IdentitySet named = IdentitySet::empty();
+  for (const ConvData& m : game.meta) named = named.union_with(m.named_in_hole);
+
+  // For a ROW: what the hole cards this replay leaves out -- settled by us in
+  // private, so not enumerated here -- could still be to the PAIR: their shared
+  // set, less what the pair rules out by sight (rule 3's pair form). Replay
+  // 2010329: our o3 `{r4,y1}` cannot be the r4 to the pair, both r4s being in
+  // will-bot69's hand, so it bridges nothing to a red 5.
+  IdentitySet unseen_links = IdentitySet::empty();
+  if (row) {
+    int partner = -1;
+    for (int h : holders) {
+      if (h != game.state.our_player_index) partner = h;
+    }
+    for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+      if (game.meta[o].shared_left.is_empty() || cands(o).non_empty()) continue;
+      const int who = game.state.holder_of(o);
+      if (std::find(holders.begin(), holders.end(), who) == holders.end()) continue;
+      for (Identity id : game.meta[o].shared_left) {
+        if (partner >= 0 && all_copies_visible_to_pair(game, o, id, partner)) continue;
+        unseen_links = unseen_links.add(id);
+      }
+    }
+  }
+
   for (int o : pending) {
     std::vector<OpenWorld> next;
     for (const OpenWorld& w : out) {
@@ -539,6 +574,13 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
         // floor, or by a known card above a gap, is not evidence that this card
         // struck. Replay 2011327 T36: a row at blue 3 by floor, replayed with its
         // own `{b3,b4}` card, struck the b3 world and left only the b4.
+        //
+        // Except an identity the team already NAMED (`named`, v16.28.0). Replay
+        // 2011885: will-bot69's known g3 landed at T16 above an unnamed g2, so the
+        // shared view held green 3 with a band of 2-3; will-bot67's `{g3,n1}` at
+        // T17 was absorbed as that g3 instead of striking as its duplicate, the
+        // n1 never reached the shared view, and at T32 no reactive through the
+        // brown suit could be read.
         const auto& band = base.band_floor;
         // The band is the BASE's -- between its evidence and its own height --
         // not whatever this world has since played onto it.
@@ -550,7 +592,7 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
                                        id.rank <= base.play_stacks[k]);
         if (n.state.is_playable(id)) {
           n.state = n.state.with_play(id);
-        } else if (in_band) {
+        } else if (in_band && !named.contains(id)) {
           if (n.absorbed.empty()) n.absorbed.assign(band.size(), 0u);
           const unsigned bit = 1u << id.rank;
           if (n.absorbed[k] & bit) {
@@ -558,6 +600,17 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
           } else {
             n.absorbed[k] |= bit;
           }
+        } else if (row && !s_reversed(game, k) &&
+                   id.rank > n.state.play_stacks[k] + 1 &&
+                   unseen_links.contains(Identity{k, n.state.play_stacks[k] + 1})) {
+          // A PAIRWISE ROW, and a card too HIGH to land -- but the card it is
+          // waiting for could be one of the hole cards this replay leaves out,
+          // because we settled them privately and the row never learned which
+          // they were (v16.28.0). That is not a strike the row can see; the
+          // world stays, and nothing lands. Replay 2011887 T18: will-bot69's
+          // own o6 was the g1, settled privately; replayed without it, its
+          // o9 = g2 struck on green 0, only o9 = r2 survived, and the row for
+          // will-bot67 claimed red 2 with red really on 1.
         } else {
           // A play that did not land struck instead, and the stacks stay put --
           // which is a world too, and `struck` is how rule 6 tells it apart.
@@ -575,9 +628,9 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
 
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
                                    const std::vector<int>& holders, int cap,
-                                   int except_order, bool shared) {
+                                   int except_order, bool shared, bool row) {
   std::vector<OpenWorld> out =
-      enumerate_worlds(game, base, holders, cap, except_order, shared);
+      enumerate_worlds(game, base, holders, cap, except_order, shared, row);
   // Only the worlds the targeting rules allow (§1e, v16.24.0) -- every one of them
   // kept when none survives, since the evidence is then contradicting itself and
   // is not a licence to assert that.
@@ -1118,7 +1171,13 @@ bool advance_rows_from_own_worlds(Game& game) {
         p < static_cast<int>(s.pairwise_evidence.size())
             ? s.pairwise_view(p).with_band(s.pairwise_evidence[p])
             : s.pairwise_view(p);
-    const auto worlds = open_worlds(game, base, {p, me});
+    // Read AS A ROW (v16.28.0): the cards we settled privately are not replayed
+    // -- the row may or may not count them already, and adding them costs the
+    // world cap -- but a card waiting on one of them is not a strike either.
+    // Replay 2011887 T18: without that, will-bot69's o9 = g2 struck for want of
+    // its privately named o6 (the g1), and the row for will-bot67 claimed red 2.
+    const auto worlds =
+        open_worlds(game, base, {p, me}, 64, -1, /*shared=*/false, /*row=*/true);
     if (worlds.size() <= 1) continue;
     const auto surviving = strike_free(worlds);
 
@@ -1245,6 +1304,9 @@ void note_hidden_action(Game& game, const Action& raw) {
   }
 
   if (known) {
+    game.with_meta(order, [k = *known](ConvData& m) {
+      m.named_in_hole = IdentitySet::single(k);
+    });
     // The player knew what they were playing, so every seat can follow it and
     // the shared view takes it (§1e rule 6's shared-view form, v16.23.0, when it
     // lands above that view). Our own believed view is advanced by the engine,

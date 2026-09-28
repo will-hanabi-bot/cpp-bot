@@ -17,8 +17,9 @@ every seat (§1.3), **49**, a finesse pairing read wider than it needs to be (§
 **50**, the world cap abandoning a whole floor (§1.3), **52**, a shared call judged dead on
 a private view — the reason 2010512's strike is still unfixed (§1h) — **53**, the
 envelope form of a negative-touch fix (§1h), **54**, rule 6's shared collapse not
-checking the condition rule 1 insists on (§1e), and **58**, the striker not learning
-what its own dupe strike was (§1e rule 8).
+checking the condition rule 1 insists on (§1e), **58**, the striker not learning
+what its own dupe strike was (§1e rule 8), and **59**, hole-card worlds replayed on
+today's stacks rather than on the stacks of their turn (§1e).
 
 Reading conventions, as in the other two documents: **slot 1 is the leftmost,
 newest card**; **Alice / Bob / Cathy** are positional — Alice is the clue giver,
@@ -39,10 +40,10 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
 | The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0); the refusal given past the tier gate, and ranked (v16.27.0) |
-| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0); the receiver's reading no longer dropped for missing the stamp (v16.26.0) |
-| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0); rule 6 against the shared view, and rows as floors (v16.23.0); the frame is the minimum across worlds, stable calls read in every world, world feasibility from reactions, play-order replay, evidence bands and a floored shared view (v16.24.0); the shared view settles on what every world agrees, the receiver's promise read on its own frame, rule 8 (a strike was already down) and hole requirements, notes in the team's reading (v16.25.0); a refusal with several candidates, and a watched dupe strike, floor the shared view (v16.27.0) |
+| The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0); the receiver's reading no longer dropped for missing the stamp (v16.26.0); an undeferred call no longer dropped as stale (v16.28.0) |
+| Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0); rule 6 against the shared view, and rows as floors (v16.23.0); the frame is the minimum across worlds, stable calls read in every world, world feasibility from reactions, play-order replay, evidence bands and a floored shared view (v16.24.0); the shared view settles on what every world agrees, the receiver's promise read on its own frame, rule 8 (a strike was already down) and hole requirements, notes in the team's reading (v16.25.0); a refusal with several candidates, and a watched dupe strike, floor the shared view (v16.27.0); the band never absorbs a named card, and rows do not strike on our private settles (v16.28.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
-| Decision making (§2) | implemented (v16.6.0), by delegation to reactor0 |
+| Decision making (§2) | implemented (v16.6.0), by delegation to reactor0; among reactive plays, the fewest receiver candidates (§2b, v16.28.0) |
 | The fix clue (§1h) | implemented (v16.20.0) |
 | Naming the called card (§2a) | implemented (v16.7.0) |
 
@@ -173,7 +174,7 @@ Three properties make the row the right object rather than a patch:
   its own player could name (the `known` case: a card the whole team could name
   is in every pair involving its player, because the partner watched it). And what
   they name is the card they WATCHED, not our copy of the player's reading
-  (`tiiah::note_hidden_action`, `tiiah/superposition.cpp:1191-1263`;
+  (`tiiah::note_hidden_action`, `tiiah/superposition.cpp:1250-1325`;
   `State::with_pairwise_at_least`, `state.cpp:222-239`). A play our own belief
   resolves as a STRIKE is booked into nobody's view. A row is never below the
   shared view (`State::with_rows_at_least_common`, `state.cpp:241-254`).
@@ -202,7 +203,7 @@ Three properties make the row the right object rather than a patch:
 but it can still reason about them. Across the worlds they leave open, §1e rule 6
 refutes the ones in which a play struck, and a height every survivor reaches is one
 the seat holds. `tiiah::advance_rows_from_own_worlds`
-(`tiiah/superposition.cpp:1101-1131`), run at the end of every
+(`tiiah/superposition.cpp:1154-1190`), run at the end of every
 `collapse_superpositions`, and `tests/test_tiiah/test_row_from_own_worlds.cpp`.
 
 **Our own belief takes the same floor (v16.19.0)**, by the same `world_floor` over our
@@ -244,13 +245,13 @@ concerns all hold:
 | What | Which view, and how |
 |---|---|
 | which slot a stable clue names (§1b) | the giver and the RECEIVER's pairwise view — `SharedStacks`, a scoped swap of `play_stacks` / `playable_set` / `trash_set` around the delegation (`tiiah/interpret_clue.cpp:30-58`, installed by `run_ladder` `:345-366`), plus a `prev` swapped to match |
-| which slots a reactive clue pairs (§1c, §1d) | the giver and the REACTER's, since the reacter is the seat that must act — `stacks_known_to_both` into `reacter_faces` / `stacks_after_queued_plays` (`reacter_frame`, `tiiah/interpret_reactive.cpp:172-184`, used at `:323-327`; `variants/hole.cpp:10-24`) |
-| what a reactive PROMISES the receiver (§1d) | the giver and the RECEIVER's, since the promise is about the receiver's card — `ReactorWC::clue_play_stacks`, bound at clue time (`tiiah/interpret_reactive.cpp:284`), corrected when we name one of our own hole plays (`correct_frozen_frames`, v16.21.0), and rewound by `reactor0::stamp_receiver_call` (`reactor0/interpret_reaction.cpp:365-390`) |
-| what a call SAYS the card is | the HOLDER's own belief when the holder is us — `repin_own_call` for a stable call (`tiiah/interpret_clue.cpp:96-121`) and the reacter's own reading of the pairing (`tiiah/interpret_reactive.cpp:449-499`) |
+| which slots a reactive clue pairs (§1c, §1d) | the giver and the REACTER's, since the reacter is the seat that must act — `stacks_known_to_both` into `reacter_faces` / `stacks_after_queued_plays` (`reacter_frame`, `tiiah/interpret_reactive.cpp:173-185`, used at `:324-328`; `variants/hole.cpp:10-24`) |
+| what a reactive PROMISES the receiver (§1d) | the giver and the RECEIVER's, since the promise is about the receiver's card — `ReactorWC::clue_play_stacks`, bound at clue time (`tiiah/interpret_reactive.cpp:285`), corrected when we name one of our own hole plays (`correct_frozen_frames`, v16.21.0), and rewound by `reactor0::stamp_receiver_call` (`reactor0/interpret_reaction.cpp:365-390`) |
+| what a call SAYS the card is | the HOLDER's own belief when the holder is us — `repin_own_call` for a stable call (`tiiah/interpret_clue.cpp:96-121`) and the reacter's own reading of the pairing (`tiiah/interpret_reactive.cpp:450-500`) |
 | the §1f pin | `shared_view()` directly (`tiiah/interpret_clue.cpp:209`) |
 | §1b's stall context | `Game::shared_in_endgame` (`tiiah/interpret_clue.cpp:334-336`) |
 | the stable orange ladder's pitch-vs-chuck test | `State::shared_pace` (`reactor0/interpret_clue.cpp:519`), reached by delegating |
-| the reaction's held negative (§1d) | asks the BUTTON, not the stacks — `Game::fire_reaction_elim` (`basics/decide.cpp:84-108`) |
+| the reaction's held negative (§1d) | asks the BUTTON, not the stacks — `Game::fire_reaction_elim` (`basics/decide.cpp:98-122`) |
 
 The swap costs nothing until the views actually differ — `SharedStacks::needed`
 — which is every game until somebody plays into the hole without knowing what
@@ -272,7 +273,7 @@ the stacks cannot answer. Replay 2008422 is written up in §1d.
 Three things still read our belief where they arguably should not, all inside
 reactor0 and all out of reach of the swap: `common.hypo_stacks`, rebuilt from
 `play_stacks` by the elim layer; `Player::hypo_stacks`; and
-`reactor0::enforce_call_invariants` (`basics/decide.cpp:213-218`), which runs
+`reactor0::enforce_call_invariants` (`basics/decide.cpp:227-232`), which runs
 *after* the swap has unwound and so judges rules 3 and 4 — whether a standing
 call still has a button that works — against one seat's private stacks. Its own
 comment says a call "has to die for every seat at the same moment"
@@ -366,7 +367,7 @@ Four things this rests on:
   normally *deferring*, and a deferral carries the reactive intent forward — so
   it is itself reactive. A refusal is stable. Without that test the two are the
   same event, since the engine already lets any clue by the reacter clear the
-  waiting connection (`basics/decide.cpp:196-199`), which is also why the arm
+  waiting connection (`basics/decide.cpp:210-213`), which is also why the arm
   reads `prev`.
 - **It is an ENVELOPE.** The signal is *that* the clue was stable and aimed at
   Cathy, so the clue still means whatever stable clue it is, and control falls
@@ -387,14 +388,14 @@ urgent return, which is the very thing being declined. The tier itself
 Two more things make it actually get given (v16.27.0):
 
 - **The tier gate does not apply to it** (`clue_is_admissible`,
-  `reactor0/decision.cpp:948`), as it does not to the fix (§1h). A refusal stamps
+  `reactor0/decision.cpp:950`), as it does not to the fix (§1h). A refusal stamps
   nothing, so it is always LOW, and an OCCUPIED reacter — which a reacter holding
   the urgent call always is — had every refusal rejected before its priority was
   consulted. Replay [2011854](https://hanab.live/shared-replay/2011854#27) T27:
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:1807-1819`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:1826-1838`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, and among those the one that names its card
   (`stable_play_chain`, the same term §2 uses). Only then the default tiebreak, which
@@ -432,7 +433,7 @@ Dispatch is decided by the position **before** the clue. Asking the post-clue
 game instead makes every play clue to Bob answer "Bob has a known play", because
 the clue itself just gave him one.
 
-`interpret_reactive` (`src/conventions/tiiah/interpret_reactive.cpp:243-510`)
+`interpret_reactive` (`src/conventions/tiiah/interpret_reactive.cpp:244-511`)
 installs the waiting connection, stamps the reacter's blind play and leaves the
 receiver's own call for reaction time — the resolution machinery is reactor0's,
 shared.
@@ -440,7 +441,7 @@ shared.
 **The target walk** (`receiver_targets`) runs over the **frame** — the minimum
 across every world the reacter can live in, from the giver's perspective
 (`reacter_frame`, §1e) — as it will stand *when the reacter acts* (`reacter_faces`,
-`src/conventions/tiiah/interpret_reactive.cpp:64-68`). Which stacks those are is
+`src/conventions/tiiah/interpret_reactive.cpp:65-69`). Which stacks those are is
 the one thing the two arms disagree about, and it follows from who moves
 first:
 
@@ -481,7 +482,7 @@ its own identity, and it would read dead exactly when it is most alive
 
 All reactive clues are **even parity**: whichever button the reacter presses, the
 receiver is called to the same one (`wc.even_parity = true`,
-`src/conventions/tiiah/interpret_reactive.cpp:264`). The two slots are picked by
+`src/conventions/tiiah/interpret_reactive.cpp:265`). The two slots are picked by
 the sum rule as in reactor0 — `react_slot + target_slot ≡ anchor (mod hand size)`
 (`interpret_reactive.cpp:334-335`) — and **the anchor is reactor0's**: the rank value
 for a rank clue, and the colour's value from the fixed table
@@ -497,7 +498,7 @@ stack cannot otherwise convey:
 
 **The finesse and the bucket relation are disjoint by definition**, so a clue is
 never both and there is no precedence between them to settle. `required_target_bucket`
-/ `bucket_relation_holds` (`src/conventions/tiiah/interpret_reactive.cpp:74-88`)
+/ `bucket_relation_holds` (`src/conventions/tiiah/interpret_reactive.cpp:75-89`)
 are the relation; the finesse is a target one away, whose *connector* is the one
 card that bridges to it (`interpret_reactive.cpp:351-360`).
 
@@ -532,7 +533,7 @@ on which stacks is a question §1.3 answers. The promise is about the receiver's
 card, so it binds to the row the giver and the receiver share:
 `ReactorWC::clue_play_stacks`, taken from
 `State::stacks_known_to_both(giver, receiver)` at clue time
-(`src/conventions/tiiah/interpret_reactive.cpp:284`) and rewound onto by
+(`src/conventions/tiiah/interpret_reactive.cpp:285`) and rewound onto by
 `reactor0::stamp_receiver_call` (`reactor0/interpret_reaction.cpp:365-390`).
 
 Until v16.18.0 it was the SHARED view, which is what all three seats know — so one
@@ -545,6 +546,19 @@ out `{r2,y2}` — red was on 3 and yellow on 2 by then, so both were trash, and
 reading. The card kept its bare rank-2 empathy and will-bot67 discarded its chop.
 Against the pair's row the promise is `{g2,b2}` and the call stands.
 `tests/test_tiiah/test_replay_2010329_the_frame_is_the_pair_not_the_team.cpp`.
+
+**Rule 5 now reads only a DEFERRED reaction** (v16.28.0,
+`reactor0/interpret_reaction.cpp:414`). The frame is a view two seats share and the
+live stacks it was vetted against are our own belief, so on the undeferred path the
+two can be disjoint with nothing stale about either — and the call was dropped before
+`narrow_receiver_call` could read it. Replay
+[2011887](https://hanab.live/shared-replay/2011887#19) T19: will-bot67's b2 called
+will-bot69's o21, the g3; on the shared frame (0013) the promise was `{g1,b2}`, on
+will-bot69's own stacks (1123) `{r2,g2,b3,n4}`, so Rule 5 dropped it and at T20
+will-bot69 discarded chop. It now plays the g3, read `{g2,g3,b3}` over its own
+worlds. (The two cases above lost their calls the same way; the frame fixes they
+describe stand on their own.)
+`tests/test_tiiah/test_replay_2011887_undeferred_call_not_dropped.cpp`.
 
 **And the frozen frame is CORRECTED when we name one of our own hole plays
 (v16.21.0).** Freezing it is v12.0.0's rule and stands — a deferred reaction must be
@@ -571,8 +585,8 @@ The relation has two ends, and the receiver reads theirs when the reaction
 resolves — not at clue time, because until the reacter acts they do not know
 which of their cards the sum rule names. Their card is the **union** of the same
 two readings, intersected with what it could already be
-(`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:600-738`,
-called from the engine seam at `src/basics/decide.cpp:657-680`):
+(`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:664-764`,
+called from the engine seam at `src/basics/decide.cpp:671-694`):
 
 - **the bucket** the reacter's sits one step from — one *lower* for a rank clue,
   one *higher* for a colour one, the relation above read backwards;
@@ -650,11 +664,11 @@ receiver learns which slot answered:
 > the relation is what put the card in it, so the two agree without the receiver
 > ever knowing its own target.
 
-`narrow_reacter_play` (`tiiah/interpret_reactive.cpp:537-572`), called from the
-engine seam just before `narrow_receiver_call` (`src/basics/decide.cpp:667-680`)
+`narrow_reacter_play` (`tiiah/interpret_reactive.cpp:538-573`), called from the
+engine seam just before `narrow_receiver_call` (`src/basics/decide.cpp:681-694`)
 since it can move the shared stacks the receiver's own reading then rests on. Both
-readers share `bucket_over_worlds` (`:136-163`); the narrowing and its settle are
-`tiiah::narrow_superposition` (`tiiah/superposition.cpp:472-484`), shared like §1e
+readers share `bucket_over_worlds` (`:137-164`); the narrowing and its settle are
+`tiiah::narrow_superposition` (`tiiah/superposition.cpp:478-490`), shared like §1e
 rules 1 and 2 because every seat computes it alike. A no-op at the giver's and the
 reacter's seats, where the clue-time reading already resolved the card.
 
@@ -681,7 +695,7 @@ them and lags the shared stacks rather than over-claiming. TODO.md 49.
 The reaction also lays a **negative** on the rest of the receiver's hand — *"if
 that slot had been playable, the clue would have named it instead"* — held until
 the receiver acts and then fired by `Game::fire_reaction_elim`
-(`src/basics/decide.cpp:54-152`). reactor0 picks between three strengths of it by
+(`src/basics/decide.cpp:68-166`). reactor0 picks between three strengths of it by
 asking which stack the receiver's action advanced (reactor0/CONVENTION.md §1d.2).
 
 **Here the stacks cannot answer that, and the button does.** A play goes into
@@ -741,7 +755,7 @@ right side of the line:
 | | who applies it | what it does |
 |---|---|---|
 | **legality** | the **giver**, alone | a pairing that is neither a finesse nor a bucket relation, and which the two players could not each name from their own empathy, makes the clue **illegal**. Alice may not give it (`interpret_reactive.cpp:396-401`) |
-| **inference** | every reader | what the reacter's and the receiver's cards ARE, from the bucket the *receiver's target* sits in — which every seat can see (`:365-390`, `narrow_receiver_call`) |
+| **inference** | every reader | what the reacter's and the receiver's cards ARE, from the bucket the *receiver's target* sits in — which every seat can see (`:366-391`, `narrow_receiver_call`) |
 
 So **the walk runs on shared information alone**, and every seat — the reacter
 included — lands on the same pairing. That is §1g: the relation is exactly the
@@ -762,7 +776,7 @@ the pairing the giver had skipped. One clue, two seats, two slots.
 #### Inverted targets, and the double chuck
 
 **Inverted suits are skipped** as reactive targets, playables and finesses
-alike (`receiver_targets`, `src/conventions/tiiah/interpret_reactive.cpp:202-233`),
+alike (`receiver_targets`, `src/conventions/tiiah/interpret_reactive.cpp:203-234`),
 unless they are **the only playables left in the receiver's hand** — that test is
 over the receiver's hand, not the whole table — in which case the clue is a
 **double chuck** instead: both players press **Discard**, which is the button
@@ -782,7 +796,7 @@ them to press Discard; a double chuck over a one-away target still names its
 connector. The receiver's own call comes from the ordinary even-parity mirror at
 resolution time (`receiver_button`, `src/conventions/reactor0/decision.cpp:98`),
 which reads the button the reacter actually pressed
-(`reacter_button_pressed`, `src/conventions/reactor0/interpret_reaction.cpp:514`)
+(`reacter_button_pressed`, `src/conventions/reactor0/interpret_reaction.cpp:521`)
 rather than the hook that fired.
 
 ### §1e Superposition
@@ -796,7 +810,7 @@ the reacter can live in, from the giver's perspective (v16.24.0).** Neither the
 giver nor the reacter can name their own hole cards, so each assignment of those
 cards is a set of stacks the reacter might hold, and only a height every one of
 them reaches is one the giver can count on. `reacter_frame`
-(`src/conventions/tiiah/interpret_reactive.cpp:172-184`) is that frame: for the pair
+(`src/conventions/tiiah/interpret_reactive.cpp:173-185`) is that frame: for the pair
 itself it is the pair's row, which `advance_rows_from_own_worlds` floors over both
 seats' worlds; for an outside seat it is the shared view floored on the fly over
 every seat's. `stacks_after_queued_plays` starts from it
@@ -814,7 +828,7 @@ below, then rules the second world out altogether, and the frame is 10131.)
 **Every view is the minimum across its seats' worlds**, which is the same rule
 asked of each view: the rows (`advance_rows_from_own_worlds`, v16.18.0), our own
 belief (`presume_own_plays_land`, v16.19.0) and, as of v16.24.0, the shared view —
-`advance_common_from_worlds` (`src/conventions/tiiah/superposition.cpp:1282-1306`),
+`advance_common_from_worlds` (`src/conventions/tiiah/superposition.cpp:1344-1368`),
 at the end of every `collapse_superpositions`, over every seat's hole cards. Every
 input is shared, so every seat writes the same floor.
 
@@ -826,7 +840,7 @@ it strikes:
 - **Play order, not card order.** Card order is draw order, and a card drawn early
   can be played late. `ConvData::hole_turn` (`include/hanabi/basics/card.h:173`) is
   stamped by `note_hidden_action` and `enumerate_worlds` sorts on it
-  (`superposition.cpp:494-572`). Replay 2011397: o8 went in at T11, after o9 at T8,
+  (`superposition.cpp:500-625`). Replay 2011397: o8 went in at T11, after o9 at T8,
   and (o9 = b2, o8 = b3) replayed as b3-then-b2 looked struck.
 - **The band.** A view's floors, and a card named above a gap, raise it past what
   it can NAME in sequence. Each view therefore keeps an **evidence** vector that
@@ -840,12 +854,34 @@ it strikes:
   her at blue 3, and the next pass struck the (p3, b3) world and lifted blue to 4.
   `State::with_band`, `private_base`, `with_pairwise_floor`, `with_common_floor`
   (`state.cpp:182-277`).
+- **But never an identity the team has NAMED** (v16.28.0). A band rank is a card the
+  view holds without naming it; a hole card the whole team named — known when it was
+  played, or settled by a shared argument since — is not that, and a world card of the
+  same identity is its duplicate, so it strikes. The name is kept on the card as
+  `ConvData::named_in_hole` (`include/hanabi/basics/card.h:179-185`), written by
+  `note_hidden_action`'s known branch, `settle(..., shared)` and `settle_shared_only`.
+  Replay [2011885](https://hanab.live/shared-replay/2011885#17): will-bot69's o4, known
+  to be the g3, landed at T16 above an unnamed g2 (its own o18), so the shared view held
+  green 3 with a band over 2–3; at T17 will-bot67's `{g3,n1}` was absorbed as that g3
+  instead of striking, the n1 never reached the shared view, and at T32 brown still
+  read 0 — so will-bot67 could not see yagami's n2 and will-bot69's n3 as a reactive,
+  and discarded. `tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp`,
+  `tests/test_tiiah/test_world_replay_band.cpp`.
+- **A pairwise row leaves our private settles out, but does not strike on them**
+  (v16.28.0, `open_worlds(..., row)`, used by `advance_rows_from_own_worlds`). A hole
+  card of ours we settled privately is not replayed on a row: the row may or may not
+  already count it, and adding it costs the world cap. So a card too high to land is
+  not a strike when the card it waits for could be one of those left out — their shared
+  set, less what the pair rules out by sight (rule 3's pair form). Replay
+  [2011887](https://hanab.live/shared-replay/2011887#18) T18: will-bot69's o9
+  `{r2,g2}` struck as the g2 for want of its privately named o6 (the g1), only o9 = r2
+  survived, and its row for will-bot67 claimed red 2 with red on 1. It reads 1013 now.
 
 #### The shared view settles on what every world agrees (v16.25.0)
 
 Never presume a strike, asked of the SHARED view over every seat's hole cards
 jointly: what every strike-free world agrees a card WAS, the team knows it was.
-`advance_common_from_worlds` (`src/conventions/tiiah/superposition.cpp:1282-1306`)
+`advance_common_from_worlds` (`src/conventions/tiiah/superposition.cpp:1344-1368`)
 prunes to those worlds, shared, as well as raising the floor. Replay
 [2011475](https://hanab.live/shared-replay/2011475#25): yagami's o4 went into the hole
 at T4 as `{g1,b1}` (the g1). Nothing names it until will-bot67's T24 play (o23,
@@ -859,14 +895,14 @@ a card no other seat can name, and could strike a sound world for want of it. So
 private settle or narrowing leaves `ConvData::shared_left` behind
 (`include/hanabi/basics/card.h`) — the set every other seat still allows — and the
 shared-view callers (`open_worlds(..., shared=true)`) enumerate the card with it.
-`prune_to_worlds` (`:318-380`) narrows `shared_left` on a shared argument and our own
-set on a private one, and `settle_shared_only` (`:292-300`) teaches the shared view and
+`prune_to_worlds` (`:324-386`) narrows `shared_left` on a shared argument and our own
+set on a private one, and `settle_shared_only` (`:295-306`) teaches the shared view and
 the rows a card we had already named ourselves.
 
 **A reactive's promise is read on what the RECEIVER knows** (v16.25.0). At the
 receiver's own seat that is its belief; at every other seat it is the frame the giver
 and the receiver share — `narrow_receiver_call`
-(`src/conventions/tiiah/interpret_reactive.cpp:600-738`), holders {receiver, giver}.
+(`src/conventions/tiiah/interpret_reactive.cpp:664-764`), holders {receiver, giver}.
 Replaying the receiver's hole cards on OUR belief strikes the world in which they are
 what we watched them be: at 2011475 T18 will-bot67 read yagami's called o21 as
 `{r4,b1}`, the g1 world gone because it had seen her o4 land as the g1. It is
@@ -882,20 +918,20 @@ bots, which read as though her superposition had collapsed on the spot
 A strike arrives as a failed discard with its identity withheld, but every seat except
 the striker watched the card. If it looks playable on our stacks, our stacks are short
 — by a card of ours in the hole — and the worlds in which it is not already down are
-refuted (`presume_discard_was_played`, `superposition.cpp:886-956`, with no "named"
+refuted (`presume_discard_was_played`, `superposition.cpp:939-1009`, with no "named"
 requirement: the card physically failed to land). The conclusion is the watchers', so
 it prunes privately.
 
 Which hole card it was need not be decidable card by card, so the joint fact is kept:
 a `HoleRequirement` (`include/hanabi/basics/game.h`) says "one of these cards WAS X",
-and `world_feasible` (`:669-731`) drops any world that breaks it. Rule 7 records one
+and `world_feasible` (`:722-784`) drops any world that breaks it. Rule 7 records one
 too. Replay [2011475](https://hanab.live/shared-replay/2011475#47) T43: yagami's b3
 struck with blue on 2 in will-bot67's belief, and its own o7 `{b3,p3}` and o33
 `{g5,b3}` left (g5,b3) and (b3,p3) — blue on 3 either way. At T47 it gave a rank 2
 revealing trash instead of the Blue for will-bot69's b4; it gives the Blue now.
 
 **Rule 8's shared form: a watched dupe strike is common knowledge** (v16.27.0,
-`strike_was_a_watched_dupe`, `superposition.cpp:845-882`). The form above is about
+`strike_was_a_watched_dupe`, `superposition.cpp:898-935`). The form above is about
 *our* hole cards and stays private. A strike can also tell the whole table something:
 when the card is X, X is already down on our own stacks, the shared view has X's suit
 at X.rank−1 or above (so no seat can read the strike as "not playable yet" — a 1
@@ -903,7 +939,7 @@ always qualifies), and the copy that is down is a hole card we can name as X **h
 by a seat other than the striker**. Both watchers saw X strike, and the striker —
 who cannot see what struck — watched the other copy go in, so every seat knows X is
 down. The shared view is floored at X on its suit, every pairwise row with it
-(`team_learns_already_played`, `:745-756`), and a `HoleRequirement` records that one
+(`team_learns_already_played`, `:798-809`), and a `HoleRequirement` records that one
 of the superpositions admitting X was the copy; the worlds collapse the rest when
 they fit under the cap. Replay [2011854](https://hanab.live/shared-replay/2011854#41):
 yagami's o24 `{r3,p1,p2}` was the p1, and at T28 will-bot69's o29 — a second p1 —
@@ -921,16 +957,16 @@ receiver's hand at clue time, the cards the walk passed over as already called, 
 frame the receiver could reconstruct (the shared view then, the same at every seat)
 and the card the reacter's answer named by the sum rule. `record_reaction`
 (`interpret_reactive.cpp:186-200`), from the reaction seam in `Game::interpret_play`
-(`src/basics/decide.cpp:668-674`), only on the ordinary arm — on the reverse arm the
+(`src/basics/decide.cpp:682-688`), only on the ordinary arm — on the reverse arm the
 receiver moves first and the frame rests on plays it cannot name.
 
-`world_feasible` (`superposition.cpp:669-731`) then asks, of every record whose
+`world_feasible` (`superposition.cpp:722-784`) then asks, of every record whose
 receiver held two or more of a world's cards: the called card, if it is one of
 them, must be direct or one away in that world; no other of them may be a direct
 playable to its left, nor a direct playable at all when the called card is a
 finesse; and none may be a finesse to its left when the called card is one too.
 `open_worlds` drops infeasible worlds (keeping them all if none survives), and
-`prune_infeasible_worlds` (`:1308-1332`) settles on the survivors, shared, at the
+`prune_infeasible_worlds` (`:1370-1394`) settles on the survivors, shared, at the
 start of every collapse.
 
 Replay 2011397 T6: will-bot67's Green reactive, yagami reacting, and her slot 1
@@ -973,7 +1009,7 @@ worlds it contradicts die and the candidates with no world left go with them
 the collapse below and from `settle` before it clears the set).
 
 Two limits, both deliberate. The enumeration is **capped at 64 worlds**
-(`enumerate_worlds` / `open_worlds`, `:441-530`) and reads the call flat beyond that, because a
+(`enumerate_worlds` / `open_worlds`, `:500-625`) and reads the call flat beyond that, because a
 partial list of worlds would be a conditional set missing some of its own
 conditions — worse than an unconditional one. And the collapse now runs to a
 **fixpoint**, since settling one card can refute another's worlds, leave *it* a
@@ -983,7 +1019,7 @@ cascade that happened to run in increasing order.
 **A STABLE call is read in every world too (v16.24.0).** The stable ladder reads a
 clue on one frame, the minimum across the worlds of the two seats' hole cards; in
 each of those worlds it names a different card. `read_stable_over_worlds`
-(`superposition.cpp:1026-1099`) re-reads a card the clue has just called to play in
+(`superposition.cpp:1079-1152`) re-reads a card the clue has just called to play in
 every strike-free world of the GIVER's and the TARGET's hole cards — theirs only: a
 third seat's hole cards are not ambiguous to the pair, who watched them go in — and
 writes the union, the next card of each named suit in each world, with the
@@ -1009,14 +1045,14 @@ discard of the p1 settles o5.
 
 The set is stamped on the card's `ConvData` (`include/hanabi/basics/card.h:169`)
 at the moment of the play, by `note_hidden_action`
-(`src/conventions/tiiah/superposition.cpp:1191-1263`), and is built from
+(`src/conventions/tiiah/superposition.cpp:1250-1325`), and is built from
 **`common`** — the one view all three seats compute alike, which is what lets
 everyone hold the same set on the player's behalf. A play whose common empathy
 already names one identity is no superposition at all: the player knew, so the
 SHARED stacks advance with it.
 
 **Collapsing** (`collapse_superpositions`,
-`src/conventions/tiiah/superposition.cpp:1336-1433`). A candidate leaves a
+`src/conventions/tiiah/superposition.cpp:1398-1495`). A candidate leaves a
 superposition when:
 
 1. another player plays a card of that identity;
@@ -1053,7 +1089,7 @@ with our own eyes, so the plain form moves our belief and no row: a partner cann
 follow an argument about cards it cannot see. But a copy in a hand **neither of the
 pair holds** is one both of us see, and each of us can see that the other sees it
 — so that much of the count is the pair's, and their row may take the answer.
-`all_copies_visible_to_pair` (`src/conventions/tiiah/superposition.cpp:458-470`)
+`all_copies_visible_to_pair` (`src/conventions/tiiah/superposition.cpp:464-476`)
 is the plain form with one more hand struck out, which makes it strictly the
 stronger test: whatever a row learns this way, our own belief has already learned.
 Replay 2010329 — our order 3 read `{r4,y1}` with both `r4` copies in will-bot69's
@@ -1070,7 +1106,7 @@ will-bot69's next blue and will-bot67 can see it is a `b4`, so the two of them
 hold blue on 3; will-bot67 has it on 2, so the card it threw at T29 was the `b3`.
 It then re-reads the call itself, which is how order 34 comes out `{b4}` rather
 than the shared view's `{b3}`. `back_solve_own_plays`
-(`src/conventions/tiiah/superposition.cpp:400-454`) keeps it narrow on purpose:
+(`src/conventions/tiiah/superposition.cpp:406-460`) keeps it narrow on purpose:
 only a STABLE call, since a reactive one can name a card that is one away rather
 than playable, and only a plain suit, since the arithmetic is a plain prefix.
 
@@ -1078,7 +1114,7 @@ than playable, and only a plain suit, since the arithmetic is a plain prefix.
 being HIGHER up its suit than we thought; the refusal learns from one being
 BEHIND the stacks altogether. Both reduce to the same accounting: a seat's own
 stacks can only be short by what that seat threw in the hole.
-`collapse_refused_target` (`src/conventions/tiiah/superposition.cpp:760-784`),
+`collapse_refused_target` (`src/conventions/tiiah/superposition.cpp:813-837`),
 driven from §1c's `read_refusal` rather than from the collapse pass, because the
 evidence is the clue being given rather than anything about the cards. Shared,
 like rules 1 and 2: every seat watches the refusal.
@@ -1087,7 +1123,7 @@ When **several** of the giver's hole cards admit the refused card, none is settl
 (v16.27.0): the refusal says one of them was it, not which. The shared view and every
 row are floored at the refused card on its suit — a card that is down has its whole
 suit prefix down — and a `HoleRequirement` over those cards keeps the joint fact for
-the worlds (`team_learns_already_played`, `:745-756`, shared with rule 8's shared
+the worlds (`team_learns_already_played`, `:798-809`, shared with rule 8's shared
 form). Settling the first by card order was a guess, and replay
 [2011854](https://hanab.live/shared-replay/2011854#27) T27 shows the cost: yagami's
 o5 `{r1,y1,b1,p1}` (the b1), o18 `{r1,g1,p1}` and o24 `{r3,p1,p2}` (the p1) all
@@ -1105,7 +1141,7 @@ evidence about **us**:
 > refuted. Narrow our superpositions to what survives, settle the ones that come
 > out singletons, and the play lands.
 
-`presume_play_lands` (`src/conventions/tiiah/superposition.cpp:786-822`), called
+`presume_play_lands` (`src/conventions/tiiah/superposition.cpp:839-875`), called
 from `Game::handle_action` **before** `resolve_hidden_action`, since its answer is
 what the resolution's "dead" test then reads (§1.1). It reuses `open_worlds`
 whole, so chains and the 64-world cap come for free.
@@ -1139,7 +1175,7 @@ shared view needs a form whose every input is shared:
 > put the card on top. Whether or not a world names the gap, the team watched a
 > card it could name go down, and presumes it landed.
 
-`known_play_lands_in_common` (`src/conventions/tiiah/superposition.cpp:1156-1187`),
+`known_play_lands_in_common` (`src/conventions/tiiah/superposition.cpp:1215-1246`),
 from `note_hidden_action`'s known branch. It narrows with `prune_to_worlds(...,
 shared=true)` and raises every row to at least the new shared height.
 
@@ -1156,21 +1192,21 @@ the fix all three seats hold `22121` at T22 and `43133` at T38.
 
 Rule 6's OTHER form stays **private**, and the split is the whole of it: a partner's
 play is a public event, while our own plays are judged against our own belief, which no
-partner can reproduce. `prune_to_worlds` (`:318-380`) takes the flag.
+partner can reproduce. `prune_to_worlds` (`:324-386`) takes the flag.
 
 **And the same rule, asked of our OWN plays (v16.18.0).** A card we threw in the
 hole landed or struck and nobody told us which, so it gets the same default: it
 landed. Every world in which one of our own hole cards failed is refuted, as long
 as some world has none failing — and when every world has a strike in it, the
 strike is not an assumption anybody made and there is nothing to refute.
-`presume_own_plays_land` (`:958-998`) over `strike_free` (`:621-631`), which is the
+`presume_own_plays_land` (`:1011-1051`) over `strike_free` (`:674-684`), which is the
 `OpenWorld::struck` flag `open_worlds` now sets; both forms share the narrowing
-half, `prune_to_worlds` (`:318-380`).
+half, `prune_to_worlds` (`:324-386`).
 
 **And the height every survivor reaches is one we HOLD (v16.19.0).** Narrowing the
 cards is only half of it: two cards each reading `{g1,b1}` were one of each, so green
 and blue are both on 1 — a fact about the stacks that no fact about either card
-carries. `world_floor` (`:602-617`) is that height, and `presume_own_plays_land`
+carries. `world_floor` (`:655-670`) is that height, and `presume_own_plays_land`
 raises `play_stacks` to it. A row has had the same treatment since v16.18.0 (§1.3),
 and until now our own belief did not, which left us reading our own cards on stacks we
 could prove were too low.
@@ -1213,14 +1249,14 @@ follows.
 **Rule 7: a named playable thrown away was already played (v16.22.0).** It is rule
 6's discard twin. A partner sees every card in the hole but their own, so when they
 throw a card the whole team had named — pinned in `common` before the discard, the
-same test `useful_dc` asks (`src/basics/decide.cpp:515-530`) — and it looks playable
+same test `useful_dc` asks (`src/basics/decide.cpp:529-544`) — and it looks playable
 to us, our stacks are short, and they can only be short by what we threw in the hole:
 
 > Ask which strike-free worlds our own hole cards leave open would have the card
 > already played. If any would, those are the only worlds left. If none would, the
 > partner simply threw a useful card, and nothing is refuted.
 
-`presume_discard_was_played` (`src/conventions/tiiah/superposition.cpp:886-956`),
+`presume_discard_was_played` (`src/conventions/tiiah/superposition.cpp:939-1009`),
 called from `Game::handle_action` beside `presume_play_lands`
 (`src/basics/game.cpp:593-597`), before the dispatch, so `interpret_discard` reads
 the advanced stacks. It narrows through `prune_to_worlds` with `shared=true`, for rule
@@ -1231,7 +1267,7 @@ candidate sets are built from `common`.
 playable thrown away as "you hold the other copy" (reactor0 GLOSSARY, *sarcastic
 discard / gentleman's discard*), and with no copy visible it falls back on "then it
 is in mine". Here the same discard means rule 7 instead, so `useful_dc` excludes a
-playable card in a hole variant (`src/basics/decide.cpp:517-526`). A sarcastic
+playable card in a hole variant (`src/basics/decide.cpp:531-540`). A sarcastic
 reading of a useful card that is NOT playable is unchanged.
 
 Replay [2011319](https://hanab.live/shared-replay/2011319#14) is the case.
@@ -1252,7 +1288,7 @@ stored set is left as it stands. That split is what keeps a reacter's target
 choice predictable: it is made on the shared rule, not on what one seat can see.
 
 When one candidate is left the card leaves the map and the stack it belongs to
-advances (`settle`, `:252-282`). A card that did not land is gone all the same,
+advances (`settle`, `:252-291`). A card that did not land is gone all the same,
 so it is booked as spent — our accounting has to know, or every count built on
 `base_count` stays wrong for the rest of the game. In the example above, Bob
 sees Alice put CTP on a purple 1, drops `p1`, is left with `{t1}`, and knows
@@ -1338,7 +1374,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 3 — `rung_2b` (`reactor0/decision.cpp:1380-1384`), logged as `2b.fix`. Step 1
+and rung 3 — `rung_2b` (`reactor0/decision.cpp:1399-1403`), logged as `2b.fix`. Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
 (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm of `clue_tier`,
@@ -1374,7 +1410,7 @@ but is wider → that card is exactly X, for every seat, and rule 7 stays silent
 discard explained itself.
 
 `dupe_passback` / `read_passback` (`src/conventions/tiiah/dupes.cpp:57-110`), the first
-from `Game::take_action` ahead of the pending reaction (`src/basics/decide.cpp:1603-1612`),
+from `Game::take_action` ahead of the pending reaction (`src/basics/decide.cpp:1620-1629`),
 the second from `Game::handle_action` ahead of rule 7 (`src/basics/game.cpp:604-608`).
 
 Replay [2011475](https://hanab.live/shared-replay/2011475#20): at T18 will-bot69's
@@ -1388,13 +1424,13 @@ at T20 will-bot67 now throws its r4 instead.
 A reactive's reacter may find that the card the pairing names is already down: the
 giver threw it into the hole without knowing. The reacter **discards** it instead of
 playing (`discharge_instead` and the stamp in `tiiah::interpret_reactive`,
-`src/conventions/tiiah/interpret_reactive.cpp:404-425` — our own stacks refuse the play
+`src/conventions/tiiah/interpret_reactive.cpp:405-426` — our own stacks refuse the play
 button, so the discard button is stamped). The RECEIVER still **plays** its target when
 the thrown card X is a candidate of one of the GIVER's hole cards, and that hole card
 settles to X for every seat; otherwise the discard reads as an ordinary reaction
 (`discharge_hole_card` / `find_discharge`, `dupes.cpp:112-141`, found in
 `Game::handle_action` before rule 7 can settle the same hole card, and resolved through
-`reactor0::react_discard(..., as_play=true)`, `src/basics/decide.cpp:546-566`).
+`reactor0::react_discard(..., as_play=true)`, `src/basics/decide.cpp:560-580`).
 
 The example, replay [2011475](https://hanab.live/shared-replay/2011475#7): will-bot69's
 T6 Rank 2 to will-bot67 made yagami the reacter, and the card it named in her hand was
@@ -1480,6 +1516,32 @@ convention moves.
 It is a TIEBREAK, not a veto: it orders the stable-play pool and never changes
 which rung fires, so a clue that names its card cannot displace a better rung.
 
+### §2b Among reactive plays, the fewest candidates for the receiver (v16.28.0)
+
+**Priority 1's first tiebreak: of the reactive play clues, take the one that leaves
+the RECEIVER the fewest identities for its called card.** It is §2a's argument asked
+of a reactive: the receiver's reading is §1d's union of the bucket and the finesse,
+intersected with what the clue leaves the card, and a clue whose touch — or miss —
+rules out part of that union says more for the same two plays.
+
+Replay [2011885](https://hanab.live/shared-replay/2011885#32) T32: Red and Rank 1 to
+will-bot69 both paired yagami's n2 with will-bot69's n3, and both are legal. Under
+Rank 1 the bucket half adds the r5, so will-bot69 would read `{r5,n3}`; the Red did
+not touch the n3, which rules the r5 out, and it reads `{n3}`. Every other term tied,
+and the default tiebreak had taken the Rank 1.
+
+The prediction is `tiiah::annotate_candidate`
+(`src/conventions/tiiah/interpret_reactive.cpp:777-805`), which reads the reacter's
+card by sight, the frame the giver shares with the receiver advanced by that card, and
+the pair's worlds, through the same `receiver_reading` helper (`:588-634`) that
+`narrow_receiver_call` uses — so the giver and the reader cannot disagree about what a
+call says. It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
+(`src/conventions/reactor0/decision.cpp:1094-1116`) reads first. reactor0 cannot call
+into this convention, so `reactor0::analyse_clues` takes an optional
+`CandidateAnnotator` and the engine passes this one under TIIAH
+(`candidate_annotator`, `src/basics/decide.cpp:49-52`); outside TIIAH the field stays
+0 and the term separates nothing.
+
 ## Test coverage
 
 | File | What it pins |
@@ -1516,6 +1578,9 @@ which rung fires, so a clue that names its card cannot displace a better rung.
 | `tests/test_tiiah/test_replay_2011830_receiver_bucket_reading_not_the_stamp.cpp` | the live game: will-bot69's o15 read `{g4}` (not `{r2,y3,g3}`), green on 4 in its belief, and the called g5 played at T23 |
 | `tests/test_tiiah/test_refusal_and_dupe_strike.cpp` | §1c and §1e rules 5 and 8 — a refusal given while occupied; several giver hole cards admitting the refused card leaving them open, a requirement kept and the shared view floored; a dupe strike floored when the striker watched the copy go in, and not when the copy was its own |
 | `tests/test_tiiah/test_replay_2011854_refusal_and_the_dupe_strike.cpp` | the live game: at T27 will-bot67 refuses with Purple, o20 stays called `{g4}`, will-bot69's p2 is called and the shared view is on purple 1 with red still 2; at T42 the p1 strike is on the shared view and will-bot67 plays the b4 |
+| `tests/test_tiiah/test_replay_2011887_undeferred_call_not_dropped.cpp` | §1d and §1e — the live game: will-bot67's b2 calls will-bot69's g3 and the call survives Rule 5, will-bot69 plays it at T20, and its row for will-bot67 no longer claims the r2 |
+| `tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp` | §1e and §2b — the live game: o15 settles as the n1 once the g3 is named, brown is on 1 for everyone (and will-bot69's row for yagami no longer claims the r3), and at T32 will-bot67 gives the Red over the Rank 1 |
+| `tests/test_tiiah/test_world_replay_band.cpp` | §1e — the band absorbing an unnamed card but striking a named one, and a row not striking a card that waits on our private settle |
 | `tests/test_tiiah/test_known_play_floor.cpp` | §1.3 and §1e rule 6's shared-view form — a known play above every view reaching them all and settling the hole card under it, the same shared view from the seat that made the play, the rows taking the WATCHED card over a misread, and a strike raising nothing |
 | `tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp` | the live game the prefix rule cost: every one of will-bot67's views at `22121` on T22, and on T38 its belief at `43133` with the views it shares with yagami at the minimum of her two worlds, `43132` (v16.24.0), and no reactive Yellow pairing a trash p1 |
 | `tests/test_tiiah/test_decision_making/test_replay_2011327_trash_reveal_over_lock.cpp` | reactor0 §3.3 read through TIIAH — Red revealing a clued r2 as trash is given instead of a rank 5 lock |
