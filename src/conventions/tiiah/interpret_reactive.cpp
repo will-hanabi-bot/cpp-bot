@@ -230,6 +230,29 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
   // Playables before finesses, each leftmost-first — reactor0's Phase A before
   // Phase B, which is the order every seat walks.
   direct.insert(direct.end(), one_away.begin(), one_away.end());
+  // EVERY TARGET GOTTEN (v18.5.0): when nothing uncalled is left to get, the walk
+  // runs again as if nothing had been gotten -- as outside TIIAH -- and takes the
+  // leftmost called playable, then the leftmost called finesse target. Human
+  // diagnostic 2013726 T38 (v18_human_vs_bot_diagnostics/2013726.md): black's only
+  // target is a g4 an earlier reactive already called, and a human gives Brown to
+  // black to get blue's n5 against it. On a frame that has simulated the
+  // receiver's own called plays (the reverse arm), those cards read as played and
+  // drop out here by themselves.
+  if (direct.empty()) {
+    std::vector<ReceiverTarget> called_direct;
+    std::vector<ReceiverTarget> called_one_away;
+    for (int o : s.hands[receiver]) {
+      if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      auto id = s.deck[o].id();
+      if (!id) continue;
+      if (s.variant->suits[id->suit_index].suit_type.inverted) continue;
+      const int away = after.playable_away(*id);
+      if (away == 0) called_direct.push_back({o, *id, away});
+      if (away == 1) called_one_away.push_back({o, *id, away});
+    }
+    direct = std::move(called_direct);
+    direct.insert(direct.end(), called_one_away.begin(), called_one_away.end());
+  }
   // "Unless they are the only playables left", judged over the RECEIVER's hand:
   // then the inverted ones are all there is, and the clue is a double chuck.
   if (direct.empty()) return inverted;

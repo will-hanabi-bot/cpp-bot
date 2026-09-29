@@ -435,6 +435,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_presumed_landing.cpp
   tests/test_tiiah/test_reverse_reactive.cpp
   tests/test_tiiah/test_role_inversion.cpp
+  tests/test_tiiah/test_all_targets_gotten.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
   tests/test_tiiah/test_receiver_bucket.cpp
   tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp

@@ -243,7 +243,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:937-983`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:960-1006`.
 CONVENTION.md §1d.
 
 ### proven finesse
@@ -251,7 +251,7 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:729-764`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:752-787`. CONVENTION.md §1d.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -297,6 +297,13 @@ The clue-to-Cathy half of the *reverse-reactive position*: Bob holds a *standing
 play* and Cathy does not, so a clue to Cathy is STABLE rather than reactor0's
 ordinary reactive (v18.2.0). `inverted_stable`,
 `src/conventions/variants/hole.cpp:99-107`; replay 2013645 T11. CONVENTION.md §1c.
+
+### gotten
+A card already called to play: a reactive's target walk passes over it, since a
+new reactive has to get something new. When every playable and finesse target in
+the receiver's hand is gotten, the walk takes the leftmost gotten one instead
+(v18.5.0; human diagnostic 2013726 T38). `receiver_targets`,
+`src/conventions/tiiah/interpret_reactive.cpp:206-260`. CONVENTION.md §1c.
 
 ### reverse reactive
 The second of TIIAH's two dispatches. When Bob holds a *standing play* and Cathy
