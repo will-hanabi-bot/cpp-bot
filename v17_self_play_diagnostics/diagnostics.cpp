@@ -87,6 +87,32 @@ void Diagnostics::add(Issue i) {
   auto [it, fresh] = seen_.emplace(key, 0);
   ++it->second;
   if (!fresh) return;  // first occurrence only
+  if (i.cls == "1" && cur_) {
+    // Where the wrong inference came from: the action just processed, and the
+    // wrong seat's part in it.
+    const Outcome& o = *cur_;
+    std::string action, role;
+    switch (o.kind) {
+      case Outcome::Kind::CLUE: action = "clue"; break;
+      case Outcome::Kind::PLAY_LANDED: action = "play"; break;
+      case Outcome::Kind::PLAY_MISSED: action = "miss"; break;
+      case Outcome::Kind::DISCARD: action = "discard"; break;
+    }
+    if (o.kind == Outcome::Kind::CLUE) {
+      role = i.seat == o.actor ? "giver" : i.seat == o.clue_target ? "target" : "outside";
+    } else {
+      role = i.seat == o.actor ? "player" : "watcher";
+    }
+    json origin{{"action", action}, {"actor", o.actor}, {"role", role}};
+    if (o.kind == Outcome::Kind::CLUE) {
+      origin["clue_target"] = o.clue_target;
+      origin["stable"] = o.clue_target == (o.actor + 1) % np_;
+      origin["disagree"] = cur_disagree_;
+    } else {
+      origin["same_card"] = o.order == i.order;
+    }
+    i.detail["origin"] = origin;
+  }
   if (i.seat >= 0 && i.seat < static_cast<int>(log_paths_.size()) &&
       !log_paths_[i.seat].empty()) {
     // The STATE a rerun reconstructs at turn N is the position BEFORE turn N's
@@ -158,6 +184,17 @@ void Diagnostics::before_action(const Sim& sim) {
 
 void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
   const int turn = o.turn + 1;
+  cur_ = &o;
+  cur_disagree_ = false;
+  if (o.kind == Outcome::Kind::CLUE) {
+    std::string first;
+    for (int s = 0; s < np_; ++s) {
+      const auto& mh = sim.seat(s).move_history;
+      const std::string r = mh.empty() ? "?" : interp_str(mh.back());
+      if (s == 0) first = r;
+      else if (r != first) cur_disagree_ = true;
+    }
+  }
   if (o.kind == Outcome::Kind::PLAY_LANDED) {
     Landed l{o.order, *o.id, o.actor, false, false, std::vector<bool>(np_, false)};
     if (auto it = named_at_.find(o.order); it != named_at_.end()) l.named_at = it->second;
@@ -213,6 +250,7 @@ void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
   }
   check_stacks(sim, turn);
   note_onsets(sim, o, turn);
+  cur_ = nullptr;
 }
 
 void Diagnostics::note_onsets(const Sim& sim, const Outcome& o, int turn) {

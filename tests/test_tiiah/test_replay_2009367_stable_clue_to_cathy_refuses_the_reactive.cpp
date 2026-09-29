@@ -839,13 +839,17 @@ TEST(TiiahReplay2009367Refusal, StableClueToCathyRefusesTheReactive) {
   EXPECT_EQ(*interp, hanabi::ClueInterp::LOCK)
       << "read as a refusal AND as the clue it is -- not swallowed by the signal";
 
-  // And it changes the turn. Knowing purple is on 1 -- and so that the r2 is
-  // still out there -- will-bot67 plays its slot 1, order 16, which is the b1
-  // with blue on 0. In the game it played order 14 instead, a y3 with yellow on
-  // 1, and struck.
+  // And it changes the turn. will-bot69's T8 Rank 4 to yagami is a reactive that we
+  // answer, and since v18.0.0 we answer it by REFUSING it. Knowing purple is on 1,
+  // the card it names on will-bot69's stacks is already down, so we give yagami a
+  // stable clue, which outranks the reaction (Precedence step 1). Until v18 we could
+  // not: yagami's standing call counted as a known play, so a clue from us to yagami
+  // sat in the reverse position and read as a reactive, and we reacted with order 16
+  // instead. A known play is now read only from clue touches on the shared view, and
+  // yagami's called b1 is not one.
   hanabi::PerformAction action = game.take_action();
-  const auto* play = std::get_if<hanabi::PerformPlay>(&action);
-  ASSERT_NE(play, nullptr);
-  EXPECT_EQ(play->target, 16)
-      << "a playable b1 rather than the y3 the stale stacks talked it into";
+  const auto* rank = std::get_if<hanabi::PerformRank>(&action);
+  const auto* colour = std::get_if<hanabi::PerformColour>(&action);
+  ASSERT_TRUE(rank || colour) << "a refusal is a clue";
+  EXPECT_EQ(rank ? rank->target : colour->target, 0) << "aimed at yagami, the receiver";
 }

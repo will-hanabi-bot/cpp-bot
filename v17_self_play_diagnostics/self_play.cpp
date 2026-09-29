@@ -8,7 +8,12 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <csignal>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -30,6 +35,49 @@ using nlohmann::json;
 using namespace hanabi::selfplay;
 
 namespace {
+
+// The seed each worker thread is playing, so a crash can say which game it was in.
+thread_local std::uint64_t g_current_seed = 0;
+
+void on_crash(int sig) {
+  std::fprintf(stderr, "\nCRASH (signal %d) while playing seed %llu\n", sig,
+               static_cast<unsigned long long>(g_current_seed));
+#ifdef _WIN32
+  const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleA(nullptr));
+  void* frames[24];
+  const USHORT n = CaptureStackBackTrace(0, 24, frames, nullptr);
+  for (USHORT k = 0; k < n; ++k) {
+    std::fprintf(stderr, "  frame %u: image offset 0x%llx\n", k,
+                 static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(frames[k]) - base));
+  }
+#endif
+  std::fflush(stderr);
+  std::_Exit(128 + sig);
+}
+
+#ifdef _WIN32
+// An access violation on a worker thread never reaches `signal()` on Windows; the
+// unhandled-exception filter runs on the faulting thread, so it can name the seed.
+LONG WINAPI on_unhandled(EXCEPTION_POINTERS* info) {
+  const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleA(nullptr));
+  const auto at = reinterpret_cast<std::uintptr_t>(info->ExceptionRecord->ExceptionAddress);
+  std::fprintf(stderr,
+               "\nCRASH (exception 0x%lx at %p, image offset 0x%llx) while playing seed %llu\n",
+               static_cast<unsigned long>(info->ExceptionRecord->ExceptionCode),
+               info->ExceptionRecord->ExceptionAddress,
+               static_cast<unsigned long long>(at - base),
+               static_cast<unsigned long long>(g_current_seed));
+  // A few return addresses up the faulting thread's stack, as image offsets.
+  void* frames[16];
+  const USHORT n = CaptureStackBackTrace(0, 16, frames, nullptr);
+  for (USHORT k = 0; k < n; ++k) {
+    std::fprintf(stderr, "  frame %u: image offset 0x%llx\n", k,
+                 static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(frames[k]) - base));
+  }
+  std::fflush(stderr);
+  return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
 
 struct Args {
   std::uint64_t seed_from = 1;
@@ -113,6 +161,11 @@ std::string md_escape(std::string s) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  std::signal(SIGSEGV, on_crash);
+#ifdef _WIN32
+  SetUnhandledExceptionFilter(on_unhandled);
+#endif
+  std::signal(SIGABRT, on_crash);
   Args args;
   try {
     if (!parse(argc, argv, args)) {
@@ -153,6 +206,7 @@ int main(int argc, char** argv) {
       try {
         Sim sim(cfg);
         Diagnostics diag(sim);
+        g_current_seed = cfg.seed;
         rec.result = sim.run(diag.hooks());
         diag.finish(sim, rec.result);
         rec.issues = diag.issues();
@@ -260,6 +314,36 @@ int main(int argc, char** argv) {
     }
   }
 
+  // Wrong inferences: how many cards ever carry one at some seat, and where each
+  // card's first one came from (the `origin` every class-1 issue is stamped with).
+  auto origin_key = [](const Issue& is) {
+    const json o = is.detail.value("origin", json::object());
+    if (o.empty()) return std::string("?");
+    std::string k = o.value("action", std::string("?"));
+    if (k == "clue") k += o.value("stable", false) ? " (stable)" : " (reactive)";
+    k += ", wrong at " + o.value("role", std::string("?"));
+    if (o.value("disagree", false)) k += ", seats disagree";
+    if (o.contains("same_card")) {
+      k += o.value("same_card", false) ? ", the card itself" : ", another card";
+    }
+    return k;
+  };
+  std::map<std::pair<std::uint64_t, int>, const Issue*> first_wrong;
+  std::map<std::string, int> wrong_events_by_origin;
+  int wrong_events = 0;
+  for (const auto& r : records) {
+    for (const auto& is : r.issues) {
+      if (is.cls != "1") continue;
+      ++wrong_events;
+      ++wrong_events_by_origin[origin_key(is)];
+      const auto key = std::make_pair(r.result.seed, is.order);
+      auto it = first_wrong.find(key);
+      if (it == first_wrong.end() || is.turn < it->second->turn) first_wrong[key] = &is;
+    }
+  }
+  std::map<std::string, int> wrong_cards_by_origin;
+  for (const auto& [key, is] : first_wrong) ++wrong_cards_by_origin[origin_key(*is)];
+
   std::ostringstream md;
   md << "# Self-play results — " << hanabi::kBotVersion << "\n\n";
   md << "- Variant: " << args.variant << ", " << args.players << " players, seeds "
@@ -269,6 +353,10 @@ int main(int argc, char** argv) {
      << "; strikeouts: " << strikeouts << "; harness errors/crashes: " << errors << "\n";
   md << "- Critical issues (classes 1-4): " << critical_total << " in "
      << critical_games.size() << " games\n";
+  md << "- Wrong inferences (class 1): " << wrong_events << " events; "
+     << first_wrong.size() << " cards ever read wrongly ("
+     << (records.empty() ? 0.0 : 100.0 * first_wrong.size() / records.size())
+     << " per 100 games)\n";
   if (div_turns > 0) {
     md << "- Seats disagree after " << (100.0 * div_common / div_turns)
        << "% of actions on the common view, " << (100.0 * div_pair / div_turns)
@@ -278,6 +366,21 @@ int main(int argc, char** argv) {
   md << "## Score histogram\n\n| score | games |\n|---|---|\n";
   for (auto it = hist.rbegin(); it != hist.rend(); ++it) {
     md << "| " << it->first << " | " << it->second << " |\n";
+  }
+  md << "\n## Where wrong inferences come from\n\n"
+        "Each card's FIRST wrong inference, and every class-1 event, by the action that "
+        "produced it and the part the wrong seat played in it.\n\n"
+        "| origin | cards (first) | events |\n|---|---|---|\n";
+  {
+    std::vector<std::pair<int, std::string>> rows;
+    for (const auto& [k, n] : wrong_cards_by_origin) rows.emplace_back(n, k);
+    for (const auto& [k, n] : wrong_events_by_origin) {
+      if (!wrong_cards_by_origin.count(k)) rows.emplace_back(0, k);
+    }
+    std::sort(rows.rbegin(), rows.rend());
+    for (const auto& [n, k] : rows) {
+      md << "| " << k << " | " << n << " | " << wrong_events_by_origin[k] << " |\n";
+    }
   }
   md << "\n## Issues by class\n\n| class | kind | occurrences | games |\n|---|---|---|---|\n";
   for (const auto& [cls, kinds] : agg) {

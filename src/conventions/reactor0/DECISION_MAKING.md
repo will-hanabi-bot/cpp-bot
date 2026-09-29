@@ -820,8 +820,13 @@ is judged from Alice's own inference, not common knowledge.
    deck — does not reach a critical one. Self-play 9000021 T9: Alice held the last
    p5 on chop, no clue could ditch around it, and Cathy played her called b1; Alice
    threw the p5 on T10. Over 500 self-play games 55 played out differently, and the games
-   that ended 25/25 went from 31 to 34 with none lost
-   (`tests/test_tiiah/test_decision_making/test_replay_9000021_critical_chop_locked_when_nothing_ditches.cpp`).
+   that ended 25/25 went from 31 to 34 with none lost. The rung logs
+   `reactor0.rung_3_10_critical_chop_lock` when it fires, since every §3 rung
+   reports `3.bob_chop`. The test is self-play 9000026 T4, a rank-5 lock over Bob's
+   last b5
+   (`tests/test_tiiah/test_decision_making/test_replay_9000026_critical_chop_locked_when_nothing_ditches.cpp`).
+   It replaced the 9000021 test in v18.0.0, whose recorded history v18 reads
+   differently.
 
    **Missing connectors** of a card `X` = the number of identities strictly
    between the top of `X`'s stack and `X` that are **not** visible to Alice in any

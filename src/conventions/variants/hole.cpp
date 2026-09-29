@@ -33,7 +33,11 @@ State stacks_after_queued_plays(const Game& game,
   while (advanced) {
     advanced = false;
     for (int p : hands) {
-      for (int o : hypo.hands[p]) {
+      // The hand from `game`, never from `hypo`: `hypo` is reassigned below, and
+      // iterating one of its own vectors across that reassignment read freed
+      // memory (v18.0.0). A simulated play moves no card, so the hands are the
+      // same.
+      for (int o : game.state.hands[p]) {
         if (except_order && o == *except_order) continue;
         auto id = game.state.deck[o].id();
         if (!id || !hypo.is_playable(*id)) continue;
@@ -56,24 +60,26 @@ State stacks_after_queued_plays(const Game& game,
 
 bool has_known_play(const Game& game, int player) {
   const State& s = game.state;
+  // Only what every seat computes ALIKE (v18.0.0): the card's clue-touch empathy
+  // (`possible`, which every seat derives from the same public clues), judged on
+  // the shared view. A card is a known play when every identity its touches still
+  // allow is playable there.
+  //
+  // Call statuses, inferences and a seat's own stacks are all left out, because
+  // each of them can differ between seats, and the reverse position decides how
+  // every seat reads the next clue. Through v17 a standing call counted (v17.4.0),
+  // and so did an inference that was all playable on the seat's belief. Over 500
+  // self-play games the seats then read about one clue in ten as different kinds,
+  // and four in ten of those disagreements involved a seat in the reverse position.
+  // Read this way, 25/25 went from 26 to 31 of 300 (6 s endgame), and cards ever
+  // read wrongly from 461 to 408 per 100 games.
+  const State shared = s.shared_view();
   for (int o : s.hands[player]) {
-    const IdentitySet live = game.common.thoughts[o].possibilities();
-    if (!live.non_empty()) continue;
-    // A CALLED card qualifies while ONE good playable survives in it: the call
-    // is the promise, and the rest of the set is the superposition it was given
-    // under. An unstamped card has to be playable on every identity it could
-    // still be, which is what `known` means without a call behind it.
-    //
-    // A STANDING call is a known play whatever our own stacks say (v17.4.0). The
-    // call is the team's promise, every seat holds it, and the call invariants
-    // already withdraw a call that is dead in every world the team can see
-    // (`drop_dead_play_calls`). Judging it on our belief made the dispatch depend
-    // on one seat's hole cards: self-play 9000009 T28, Cathy's belief had blue on 2
-    // and so counted Bob's called b3 as a known play, Alice and Bob had blue on 1
-    // and did not, and Cathy answered Alice's Rank 5 lock as a reverse reactive --
-    // blind-playing a g1 into a strike.
-    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) return true;
-    if (live.forall([&s](Identity i) { return s.is_playable(i); })) return true;
+    const IdentitySet& touched = game.common.thoughts[o].possible;
+    if (touched.non_empty() &&
+        touched.forall([&shared](Identity i) { return shared.is_playable(i); })) {
+      return true;
+    }
   }
   return false;
 }

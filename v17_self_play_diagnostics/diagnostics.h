@@ -76,6 +76,11 @@ class Diagnostics {
   // Before the action: every seat's common reading of each card in the actor's hand.
   std::map<int, std::vector<IdentitySet>> pre_actor_common_;
   std::vector<bool> pre_urgent_;
+  // The action being checked, while `after_action` runs: every class-1 issue is
+  // stamped with it as its origin. `cur_disagree_` is whether the seats read the
+  // clue as different kinds.
+  const Outcome* cur_ = nullptr;
+  bool cur_disagree_ = false;
   // Per seat, before the action: does the actor's clue sit in the REVERSE position?
   std::vector<bool> pre_reverse_;
   // What the actor could name each card of its hand as, before acting.

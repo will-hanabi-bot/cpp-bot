@@ -36,6 +36,13 @@ parallel run a solve that finishes near the deadline can go either way, so two r
 of one build can differ in a few games. Compare runs in aggregate, and use
 `replay_log --rerun` on a single log to check one decision.
 
+If a game crashes, the harness prints the seed it was playing and a stack of image
+offsets before it exits. Pass them to `addr2line -f -C -e build/self_play.exe` after
+adding the image base, which is `0x140000000`. A `-D_GLIBCXX_ASSERTIONS` build, in a
+separate build directory, turns an out-of-bounds access into an immediate abort at
+the faulting line. That is how v18.0.0 found a use-after-free in
+`stacks_after_queued_plays`, which had crashed about one multi-threaded run in four.
+
 ## What the simulator is
 
 `sim.{h,cpp}` stands in for the hanab.live server. It keeps the true deck, hands,
@@ -109,6 +116,18 @@ issue is reported once, at its first occurrence per (class, kind, seat, card).
 | stat | `called_play` | every play of a card its holder held `CALLED_TO_PLAY`: whether it landed, whether it was the reacter's urgent call, whether the holder's reading held the truth, and how many cards stood superposed (all, and the holder's own) |
 
 Classes **1–4** are critical, and they are what the stop criterion counts.
+
+**Where wrong inferences come from.** Every class-1 issue carries an `origin`: the
+action just processed (`clue`, `play`, `miss` or `discard`), its actor and, for a
+clue, its target. It also records whether the clue was stable, and whether the
+three seats read it as different kinds. It records the wrong seat's part too:
+`giver`, `target` or `outside` for a clue, and `player` or `watcher` for a play or
+a discard.
+
+The report counts **cards ever read wrongly**, which is each card with a class-1
+issue at any seat, per 100 games. It tabulates each card's first wrong inference,
+and every class-1 event, by origin. That table is where to look for which rule to
+change.
 
 Every call is tracked for class 2, whatever made it: a stable clue, the receiver's
 or the reacter's side of a reactive, a fix or a refusal re-call.

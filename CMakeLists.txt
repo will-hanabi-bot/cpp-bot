@@ -387,7 +387,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_trash_reveal_over_lock.cpp
-  tests/test_tiiah/test_decision_making/test_replay_9000021_critical_chop_locked_when_nothing_ditches.cpp
+  tests/test_tiiah/test_decision_making/test_replay_9000026_critical_chop_locked_when_nothing_ditches.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
@@ -440,7 +440,6 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp
   tests/test_tiiah/test_replay_2008217_receiver_misses_the_bucket.cpp
   tests/test_tiiah/test_replay_2008422_receiver_play_in_the_hole_is_not_a_discard.cpp
-  tests/test_tiiah/test_replay_2008489_reacter_reads_its_own_stacks.cpp
   tests/test_tiiah/test_replay_2009367_bucket_reading_depends_on_our_hole_card.cpp
   tests/test_tiiah/test_replay_2009367_stable_clue_to_cathy_refuses_the_reactive.cpp
   tests/test_tiiah/test_replay_2010246_illegal_bucket_pairing_not_retargeted.cpp

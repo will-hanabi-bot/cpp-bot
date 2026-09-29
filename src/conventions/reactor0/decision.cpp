@@ -1585,7 +1585,12 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   // throws the last copy on his. Self-play 9000021 T9: Bob's chop was the last
   // p5, the only save was a rank-5 lock, and Cathy played instead (v17.5.0).
   if (chop_is_critical(g, bob_of(g))) {
-    if (auto* c = first_of(g, pool_lock(g, cs))) return c;
+    if (auto* c = first_of(g, pool_lock(g, cs))) {
+      // Logged apart from the other §3 rungs, which all report "3.bob_chop".
+      hanabi::logging::log_branch("reactor0.rung_3_10_critical_chop_lock",
+                                  {{"target", c->action.target}});
+      return c;
+    }
   }
   return nullptr;
 }

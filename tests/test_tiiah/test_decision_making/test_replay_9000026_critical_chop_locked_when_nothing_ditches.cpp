@@ -1,12 +1,15 @@
 // A critical chop that nothing can ditch around is LOCKED (reactor0
 // DECISION_MAKING.md rung 3.10, v17.5.0).
 //
-// Self-play 9000021 T9 (v17_self_play_diagnostics, seed 21), sim-cathy to act.
-// Alice, her Bob, holds the last p5 on chop with no safe action. No reactive or
-// stable clue can make Alice throw another card (3.8, 3.9), and neither lock rung
-// above them applies (3.6 wants every card critical, 3.7 three close to playing),
-// so §3 used to fall through: Cathy played her called b1 and Alice threw the p5 on
-// T10. A rank 5 touches the p5 and Alice's lock slot, locking her hand.
+// Self-play 9000026 T4 (v17_self_play_diagnostics, seed 26), sim-alice to act. Bob
+// holds the last b5 on chop, with an r5, a g4, a g5 and a clued y3 behind it, and
+// has no safe action. No reactive or stable clue can make him throw another card
+// instead (3.8, 3.9), and neither lock rung above them applies: 3.6 wants every
+// card critical, and 3.7 wants three close to playing. A rank 5 touches the b5, the
+// r5 and the g5, reaches Bob's lock slot, and locks his hand. The trace names the
+// rung: `reactor0.rung_3_10_critical_chop_lock`. This replaces the v17.5.0 test on
+// self-play 9000021, whose recorded history v18.0.0 reads differently.
+
 #include <gtest/gtest.h>
 
 #include <variant>
@@ -18,35 +21,24 @@
 #include "replay_helpers.h"
 #include "test_harness.h"
 
-TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
+TEST(CriticalChopLocked9000026, RankFiveLocksBobOverTheLastB5) {
   const char* kSnapshotJson = R"json(
 {
-  "bot": "sim-cathy",
+  "bot": "sim-alice",
   "ch": "STATE",
-  "current_player_index": 2,
+  "current_player_index": 0,
   "debug": {
-    "cards_left": 32,
-    "clue_tokens": 5,
+    "cards_left": 34,
+    "clue_tokens": 6,
     "common_play_stacks": [
-      0,
       0,
       1,
       0,
+      0,
       0
     ],
-    "current_player_index": 2,
-    "discards": [
-      {
-        "order": 15,
-        "rank": 2,
-        "suit": 1
-      },
-      {
-        "order": 0,
-        "rank": 4,
-        "suit": 4
-      }
-    ],
+    "current_player_index": 0,
+    "discards": [],
     "endgame_turns": null,
     "hands": [
       {
@@ -54,14 +46,11 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
           {
             "clued": false,
             "focused": false,
-            "id": [
-              4,
-              5
-            ],
-            "inferred": 33554431,
+            "id": null,
+            "inferred": 33554400,
             "info_lock": null,
-            "order": 17,
-            "possible": 33554431,
+            "order": 4,
+            "possible": 33554400,
             "slot": 1,
             "status": "NONE",
             "trash": false,
@@ -70,14 +59,11 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
           {
             "clued": false,
             "focused": false,
-            "id": [
-              1,
-              4
-            ],
-            "inferred": 27060025,
+            "id": null,
+            "inferred": 33554400,
             "info_lock": null,
-            "order": 4,
-            "possible": 27060025,
+            "order": 3,
+            "possible": 33554400,
             "slot": 2,
             "status": "NONE",
             "trash": false,
@@ -86,30 +72,24 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
           {
             "clued": false,
             "focused": false,
-            "id": [
-              3,
-              5
-            ],
-            "inferred": 27060025,
+            "id": null,
+            "inferred": 33554400,
             "info_lock": null,
-            "order": 3,
-            "possible": 27060025,
+            "order": 2,
+            "possible": 33554400,
             "slot": 3,
             "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
-            "clued": true,
+            "clued": false,
             "focused": false,
-            "id": [
-              3,
-              3
-            ],
-            "inferred": 4329604,
+            "id": null,
+            "inferred": 33554400,
             "info_lock": null,
-            "order": 2,
-            "possible": 4329604,
+            "order": 1,
+            "possible": 33554400,
             "slot": 4,
             "status": "NONE",
             "trash": false,
@@ -118,16 +98,13 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
           {
             "clued": true,
             "focused": true,
-            "id": [
-              0,
-              2
-            ],
-            "inferred": 2164802,
-            "info_lock": null,
-            "order": 1,
-            "possible": 2164802,
+            "id": null,
+            "inferred": 1,
+            "info_lock": 1,
+            "order": 0,
+            "possible": 31,
             "slot": 5,
-            "status": "NONE",
+            "status": "CALLED_TO_PLAY",
             "trash": false,
             "urgent": false
           }
@@ -138,34 +115,18 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
       {
         "cards": [
           {
-            "clued": true,
-            "focused": false,
-            "id": [
-              0,
-              4
-            ],
-            "inferred": 8659208,
-            "info_lock": null,
-            "order": 9,
-            "possible": 8659208,
-            "slot": 1,
-            "status": "CHOP_MOVED",
-            "trash": false,
-            "urgent": false
-          },
-          {
             "clued": false,
             "focused": false,
             "id": [
-              0,
-              3
+              3,
+              5
             ],
-            "inferred": 24895223,
+            "inferred": 33554431,
             "info_lock": null,
-            "order": 8,
-            "possible": 24895223,
-            "slot": 2,
-            "status": "CHOP_MOVED",
+            "order": 15,
+            "possible": 33554431,
+            "slot": 1,
+            "status": "NONE",
             "trash": false,
             "urgent": false
           },
@@ -176,28 +137,44 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
               0,
               5
             ],
-            "inferred": 24895223,
+            "inferred": 33553439,
+            "info_lock": null,
+            "order": 9,
+            "possible": 33553439,
+            "slot": 2,
+            "status": "NONE",
+            "trash": false,
+            "urgent": false
+          },
+          {
+            "clued": false,
+            "focused": false,
+            "id": [
+              2,
+              4
+            ],
+            "inferred": 33553439,
             "info_lock": null,
             "order": 7,
-            "possible": 24895223,
+            "possible": 33553439,
             "slot": 3,
-            "status": "CHOP_MOVED",
+            "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
-            "clued": true,
+            "clued": false,
             "focused": false,
             "id": [
-              4,
-              4
+              2,
+              5
             ],
-            "inferred": 8659208,
+            "inferred": 33553439,
             "info_lock": null,
             "order": 6,
-            "possible": 8659208,
+            "possible": 33553439,
             "slot": 4,
-            "status": "CHOP_MOVED",
+            "status": "NONE",
             "trash": false,
             "urgent": false
           },
@@ -205,15 +182,15 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
             "clued": true,
             "focused": false,
             "id": [
-              3,
-              4
+              1,
+              3
             ],
-            "inferred": 8659208,
+            "inferred": 992,
             "info_lock": null,
             "order": 5,
-            "possible": 8659208,
+            "possible": 992,
             "slot": 5,
-            "status": "CHOP_MOVED",
+            "status": "NONE",
             "trash": false,
             "urgent": false
           }
@@ -226,50 +203,62 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
           {
             "clued": false,
             "focused": false,
-            "id": null,
-            "inferred": 32538623,
+            "id": [
+              3,
+              2
+            ],
+            "inferred": 33554431,
             "info_lock": null,
-            "order": 16,
-            "possible": 32538623,
+            "order": 14,
+            "possible": 33554431,
             "slot": 1,
             "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
-            "clued": true,
-            "focused": true,
-            "id": null,
-            "inferred": 32768,
-            "info_lock": 32768,
-            "order": 14,
-            "possible": 1015808,
+            "clued": false,
+            "focused": false,
+            "id": [
+              2,
+              1
+            ],
+            "inferred": 33554431,
+            "info_lock": null,
+            "order": 13,
+            "possible": 33554431,
             "slot": 2,
-            "status": "CALLED_TO_PLAY",
+            "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
             "clued": false,
             "focused": false,
-            "id": null,
-            "inferred": 32506879,
+            "id": [
+              0,
+              3
+            ],
+            "inferred": 33554431,
             "info_lock": null,
-            "order": 13,
-            "possible": 32506879,
+            "order": 12,
+            "possible": 33554431,
             "slot": 3,
             "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
-            "clued": true,
+            "clued": false,
             "focused": false,
-            "id": null,
-            "inferred": 31744,
+            "id": [
+              1,
+              2
+            ],
+            "inferred": 33554431,
             "info_lock": null,
             "order": 11,
-            "possible": 31744,
+            "possible": 33554431,
             "slot": 4,
             "status": "NONE",
             "trash": false,
@@ -278,11 +267,14 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
           {
             "clued": false,
             "focused": false,
-            "id": null,
-            "inferred": 32506879,
+            "id": [
+              2,
+              1
+            ],
+            "inferred": 33554431,
             "info_lock": null,
             "order": 10,
-            "possible": 32506879,
+            "possible": 33554431,
             "slot": 5,
             "status": "NONE",
             "trash": false,
@@ -304,30 +296,10 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
     "move_history": [
       {
         "k": "clue",
-        "v": "Lock"
-      },
-      {
-        "k": "clue",
         "v": "Play"
       },
       {
-        "k": "clue",
-        "v": "Discard"
-      },
-      {
-        "k": "discard",
-        "v": "None"
-      },
-      {
-        "k": "clue",
-        "v": "Stall"
-      },
-      {
         "k": "play",
-        "v": "None"
-      },
-      {
-        "k": "discard",
         "v": "None"
       },
       {
@@ -339,20 +311,20 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
       [
         0,
         0,
-        1,
+        0,
         0,
         0
       ],
       [
         0,
-        0,
         1,
+        0,
         0,
         0
       ],
       [
         0,
-        0,
+        1,
         0,
         0,
         0
@@ -361,134 +333,133 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
     "pending_reactions": [],
     "play_stacks": [
       0,
-      0,
       1,
+      0,
       0,
       0
     ],
     "strikes": 0,
-    "turn_count": 9,
+    "turn_count": 4,
     "waiting": []
   },
-  "game_id": 9000021,
+  "game_id": 9000026,
   "replay": {
     "actions": [
       {
         "order": 0,
         "p": 0,
-        "rank": 4,
-        "suit": 4,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 1,
         "p": 0,
-        "rank": 2,
-        "suit": 0,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 2,
         "p": 0,
-        "rank": 3,
-        "suit": 3,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 3,
         "p": 0,
-        "rank": 5,
-        "suit": 3,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 4,
         "p": 0,
-        "rank": 4,
-        "suit": 1,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 5,
         "p": 1,
-        "rank": 4,
-        "suit": 3,
+        "rank": 3,
+        "suit": 1,
         "t": "draw"
       },
       {
         "order": 6,
         "p": 1,
-        "rank": 4,
-        "suit": 4,
+        "rank": 5,
+        "suit": 2,
         "t": "draw"
       },
       {
         "order": 7,
         "p": 1,
-        "rank": 5,
-        "suit": 0,
+        "rank": 4,
+        "suit": 2,
         "t": "draw"
       },
       {
         "order": 8,
         "p": 1,
-        "rank": 3,
-        "suit": 0,
+        "rank": 1,
+        "suit": 1,
         "t": "draw"
       },
       {
         "order": 9,
         "p": 1,
-        "rank": 4,
+        "rank": 5,
         "suit": 0,
         "t": "draw"
       },
       {
         "order": 10,
         "p": 2,
-        "rank": -1,
-        "suit": -1,
+        "rank": 1,
+        "suit": 2,
         "t": "draw"
       },
       {
         "order": 11,
         "p": 2,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 1,
         "t": "draw"
       },
       {
         "order": 12,
         "p": 2,
-        "rank": -1,
-        "suit": -1,
+        "rank": 3,
+        "suit": 0,
         "t": "draw"
       },
       {
         "order": 13,
         "p": 2,
-        "rank": -1,
-        "suit": -1,
+        "rank": 1,
+        "suit": 2,
         "t": "draw"
       },
       {
         "order": 14,
         "p": 2,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 3,
         "t": "draw"
       },
       {
         "giver": 0,
-        "kind": "R",
+        "kind": "C",
         "list": [
-          9,
-          6,
+          8,
           5
         ],
         "t": "clue",
         "target": 1,
-        "value": 4
+        "value": 1
       },
       {
         "clues": 7,
@@ -502,18 +473,21 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
         "t": "turn"
       },
       {
-        "giver": 1,
-        "kind": "C",
-        "list": [
-          12,
-          11
-        ],
-        "t": "clue",
-        "target": 2,
-        "value": 2
+        "order": 8,
+        "p": 1,
+        "rank": -1,
+        "suit": -1,
+        "t": "play"
       },
       {
-        "clues": 6,
+        "order": 15,
+        "p": 1,
+        "rank": 5,
+        "suit": 3,
+        "t": "draw"
+      },
+      {
+        "clues": 7,
         "max": 25,
         "score": 0,
         "t": "status"
@@ -525,16 +499,16 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
       },
       {
         "giver": 2,
-        "kind": "R",
+        "kind": "C",
         "list": [
-          1
+          0
         ],
         "t": "clue",
         "target": 0,
-        "value": 2
+        "value": 0
       },
       {
-        "clues": 5,
+        "clues": 6,
         "max": 25,
         "score": 0,
         "t": "status"
@@ -543,185 +517,58 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
         "cpi": 0,
         "num": 3,
         "t": "turn"
-      },
-      {
-        "failed": false,
-        "order": 0,
-        "p": 0,
-        "rank": 4,
-        "suit": 4,
-        "t": "discard"
-      },
-      {
-        "order": 15,
-        "p": 0,
-        "rank": 2,
-        "suit": 1,
-        "t": "draw"
-      },
-      {
-        "clues": 6,
-        "max": 25,
-        "score": 0,
-        "t": "status"
-      },
-      {
-        "cpi": 1,
-        "num": 4,
-        "t": "turn"
-      },
-      {
-        "giver": 1,
-        "kind": "R",
-        "list": [
-          2
-        ],
-        "t": "clue",
-        "target": 0,
-        "value": 3
-      },
-      {
-        "clues": 5,
-        "max": 25,
-        "score": 0,
-        "t": "status"
-      },
-      {
-        "cpi": 2,
-        "num": 5,
-        "t": "turn"
-      },
-      {
-        "order": 12,
-        "p": 2,
-        "rank": -1,
-        "suit": -1,
-        "t": "play"
-      },
-      {
-        "order": 16,
-        "p": 2,
-        "rank": -1,
-        "suit": -1,
-        "t": "draw"
-      },
-      {
-        "clues": 5,
-        "max": 25,
-        "score": 0,
-        "t": "status"
-      },
-      {
-        "cpi": 0,
-        "num": 6,
-        "t": "turn"
-      },
-      {
-        "failed": false,
-        "order": 15,
-        "p": 0,
-        "rank": 2,
-        "suit": 1,
-        "t": "discard"
-      },
-      {
-        "order": 17,
-        "p": 0,
-        "rank": 5,
-        "suit": 4,
-        "t": "draw"
-      },
-      {
-        "clues": 6,
-        "max": 25,
-        "score": 0,
-        "t": "status"
-      },
-      {
-        "cpi": 1,
-        "num": 7,
-        "t": "turn"
-      },
-      {
-        "giver": 1,
-        "kind": "C",
-        "list": [
-          14
-        ],
-        "t": "clue",
-        "target": 2,
-        "value": 3
-      },
-      {
-        "clues": 5,
-        "max": 25,
-        "score": 0,
-        "t": "status"
-      },
-      {
-        "cpi": 2,
-        "num": 8,
-        "t": "turn"
       }
     ],
     "all_plays": false,
     "convention": "tiiah",
     "deck": [
+      null,
+      null,
+      null,
+      null,
+      null,
       [
-        4,
-        4
-      ],
-      [
-        0,
-        2
-      ],
-      [
-        3,
+        1,
         3
       ],
       [
-        3,
+        2,
         5
+      ],
+      [
+        2,
+        4
       ],
       [
         1,
-        4
-      ],
-      [
-        3,
-        4
-      ],
-      [
-        4,
-        4
+        1
       ],
       [
         0,
         5
       ],
-      [
-        0,
-        3
-      ],
-      [
-        0,
-        4
-      ],
-      null,
-      null,
       [
         2,
         1
       ],
-      null,
-      null,
       [
         1,
         2
       ],
-      null,
       [
-        4,
+        0,
+        3
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        3,
+        2
+      ],
+      [
+        3,
         5
       ]
     ],
@@ -742,20 +589,20 @@ TEST(CriticalChopLocked9000021, RankFiveLocksAliceOverTheLastP5) {
       "starting_player": 0,
       "variant_name": "Throw It in a Hole (5 Suits)"
     },
-    "our_player_index": 2,
+    "our_player_index": 0,
     "rlocks": true,
     "variant": "Throw It in a Hole (5 Suits)",
     "zcs_turn": -1
   },
-  "ts": "2026-09-29T01:14:57.836",
-  "turn": 9
+  "ts": "2026-09-29T08:34:45.328",
+  "turn": 4
 }
   )json";
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   hanabi::PerformAction action = game.take_action();
   const auto* rank = std::get_if<hanabi::PerformRank>(&action);
-  ASSERT_NE(rank, nullptr) << "it played its called b1 here before";
-  EXPECT_EQ(rank->target, 0);
-  EXPECT_EQ(rank->value, 5) << "touching the p5 on chop and the lock slot";
+  ASSERT_NE(rank, nullptr) << "a lock, not a play or a discard";
+  EXPECT_EQ(rank->target, 1);
+  EXPECT_EQ(rank->value, 5) << "touching the b5 on chop and Bob's lock slot";
 }
