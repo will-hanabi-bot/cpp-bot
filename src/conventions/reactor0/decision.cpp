@@ -1489,17 +1489,6 @@ namespace {
 // touching the most useful cards is the one to give. Empty outside TIIAH, since
 // nothing sets the flag there.
 const ClueCandidate* rung_2b(const Game& g, const std::vector<ClueCandidate>& cs) {
-  // A COLOUR fix first (v18.6.0). It names the suit of every card it touches, so
-  // a touched card that duplicates a partner's called card can be passed back
-  // (§1j); a rank fix leaves it ambiguous. Human diagnostic 2013726 T5
-  // (v18_human_vs_bot_diagnostics/2013726.md): green's 2 fixed blue's dead
-  // `{r1,b2}` but left blue's b2 reading `{r2,b2}`, where Blue would have named it.
-  if (auto* c = first_of(g, select(cs, [](const ClueCandidate& c) {
-                           return c.fixes_dead_call &&
-                                  c.action.clue.kind == ClueKind::COLOUR;
-                         }))) {
-    return c;
-  }
   return first_of(g, select(cs, [](const ClueCandidate& c) {
                     return c.fixes_dead_call;
                   }));

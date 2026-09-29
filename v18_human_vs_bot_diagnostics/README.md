@@ -21,7 +21,7 @@ elsewhere.
 
 | Game | Variant | Human seat | Items | Status |
 |---|---|---|---|---|
-| [2013726](2013726.md) | Throw It in a Hole & Brown (4 Suits), tiiah | yagami_black | T3, T5, T17, T27, T30, T38 (sample line) | T30 fixed (v18.3.0), T27 (v18.4.0), T38 (v18.5.0), T5 colour-first (v18.6.0), T17 (v18.7.0); open: T5 no-fix, T27 reacter reading; T3 not to be fixed |
+| [2013726](2013726.md) | Throw It in a Hole & Brown (4 Suits), tiiah | yagami_black | T3, T5, T17, T27, T30, T38 (sample line) | T30 fixed (v18.3.0), T27 (v18.4.0), T38 (v18.5.0), T17 (v18.7.0); open: T27 reacter reading; T3 and T5 need no change |
 
 ## Template
 

@@ -717,13 +717,11 @@ is judged from Alice's own inference, not common knowledge.
    ([tiiah/CONVENTION.md §1h](../tiiah/CONVENTION.md), v16.20.0). A partner holds a
    standing call on a card Alice can see is dead, their own reading still admits a
    good identity beside it, and this clue narrows that card to exactly the dead one.
-   A **colour** fix comes before a rank fix (v18.6.0): it names the suit of every
-   card it touches, so a touched card that duplicates a partner's called card can
-   be passed back (tiiah §1j). A rank fix leaves the touched cards ambiguous.
-   Tiebreak within each: the default. Motivating case: human diagnostic 2013726 T5
-   (`v18_human_vs_bot_diagnostics/2013726.md`). Green's 2 fixed blue's dead
-   `{r1,b2}` but left blue's b2 reading `{r2,b2}`; the Blue that also fixed it named
-   the b2 (`tests/test_tiiah/test_decision_making/test_replay_2013726_fix_with_colour_before_rank.cpp`).
+   Tiebreak: the default. Human diagnostic 2013726 T5
+   (`v18_human_vs_bot_diagnostics/2013726.md`) is a fix given this way and judged
+   correct by the reviewer. Green's 2 fixes blue's dead `{r1,b2}` (the r1, already
+   down). v18.6.0 briefly preferred a colour fix instead and was reverted in
+   v18.8.0 (`tests/test_tiiah/test_decision_making/test_replay_2013726_fix_dead_call_with_two.cpp`).
 
    Labelled **2b** rather than renumbered, so the ~60 references to "priority 3",
    "3.1"–"3.9" and "§4" across these documents and `decision.cpp`'s comments keep

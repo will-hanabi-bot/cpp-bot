@@ -1,11 +1,12 @@
-// TIIAH replay 2013726 (reactor0/DECISION_MAKING.md rung 2b, v18.6.0). Throw It in
+// TIIAH replay 2013726 (reactor0/DECISION_MAKING.md rung 2b; v18.8.0). Throw It in
 // a Hole & Brown (4 Suits). Seats: 0 yagami_black (human), 1 yagami_green (us),
 // 2 yagami_blue.
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2013726.md T5: "a 2 clue is
-// strictly worse than a blue clue which yagami_blue can pass back if yagami_green's
-// CTP card is indeed blue 2." When a fix is given, a colour fix comes first.
-// (Whether a fix was needed here at all is recorded as open in the diagnostic.)
+// Human diagnostic v18_human_vs_bot_diagnostics/2013726.md T5, as corrected by the
+// reviewer: "the fix does need to be given, and in that situation 2 is actually the
+// better clue to give." Blue's o14 is called as `{r1,b2}` and is the r1, already
+// down; without a fix blue plays it into a strike. v18.6.0 preferred a colour fix
+// (Blue) and was reverted in v18.8.0; this pins the 2.
 
 #include <gtest/gtest.h>
 
@@ -21,7 +22,7 @@
 
 // Variant: Throw It in a Hole & Brown (4 Suits). 3 players, our_player_index=1.
 
-TEST(TiiahFixColourFirst2013726, BlueFixesBeforeTwo) {
+TEST(TiiahFixDeadCall2013726, TwoFixesBluesDeadCall) {
   // Reconstruct exactly the Game the live bot saw at turn 5.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
@@ -641,12 +642,10 @@ TEST(TiiahFixColourFirst2013726, BlueFixesBeforeTwo) {
   // stacks green and blue share: a dead call, and a fix is on.
   ASSERT_EQ(game.meta[14].status, hanabi::CardStatus::CALLED_TO_PLAY);
 
-  // Blue and 2 both fix it -- each leaves o14 on `{r1}` -- but Blue names the suit
-  // of blue's o11, the b2, so it can be passed back if green's own `{r2,b2}` turns
-  // out to be the b2. The 2 would leave o11 reading `{r2,b2}`.
+  // The fix is given, and it is the 2.
   hanabi::PerformAction action = game.take_action();
-  const auto* colour = std::get_if<hanabi::PerformColour>(&action);
-  ASSERT_NE(colour, nullptr) << "a colour fix, not the rank 2";
-  EXPECT_EQ(colour->target, 2) << "to blue";
-  EXPECT_EQ(colour->value, 2) << "Blue";
+  const auto* rank = std::get_if<hanabi::PerformRank>(&action);
+  ASSERT_NE(rank, nullptr) << "the rank 2 fix";
+  EXPECT_EQ(rank->target, 2) << "to blue";
+  EXPECT_EQ(rank->value, 2);
 }

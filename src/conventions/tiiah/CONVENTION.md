@@ -455,7 +455,7 @@ Two more things make it actually get given (v16.27.0):
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:1942-1954`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:1931-1943`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, and among those the one that names its card
   (`stable_play_chain`, the same term §2 uses). Only then the default tiebreak, which
@@ -1602,8 +1602,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 3 — `rung_2b` (`reactor0/decision.cpp:1491-1506`), logged as `2b.fix`, with a
-colour fix before a rank fix (v18.6.0, human diagnostic 2013726 T5). Step 1
+and rung 3 — `rung_2b` (`reactor0/decision.cpp:1491-1495`), logged as `2b.fix`. Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
 (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm of `clue_tier`,

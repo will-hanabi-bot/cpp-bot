@@ -387,7 +387,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_trash_reveal_over_lock.cpp
-  tests/test_tiiah/test_decision_making/test_replay_2013726_fix_with_colour_before_rank.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2013726_fix_dead_call_with_two.cpp
   tests/test_tiiah/test_decision_making/test_own_dupe_filter.cpp
   tests/test_tiiah/test_decision_making/test_replay_2013726_save_playable_chop_despite_own_dupe.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
