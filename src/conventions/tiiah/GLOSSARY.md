@@ -243,7 +243,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:928-974`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:937-983`.
 CONVENTION.md §1d.
 
 ### proven finesse
@@ -251,7 +251,7 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:720-755`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:729-764`. CONVENTION.md §1d.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -316,7 +316,8 @@ A reactive clue on which both named cards are played — both players press the
 because reactive clues are all even parity. What the two cards ARE is carried by
 the clue kind: rank means the receiver's target is one bucket higher than the
 reacter's, colour one bucket lower, either wrapping — or the clue is a finesse,
-or both players know their own identity exactly. CONVENTION.md §1d.
+or both players know their own identity exactly, or it is the endgame (pace ≤ 1,
+v18.4.0), where any pairing is legal to give. CONVENTION.md §1d.
 
 ### double chuck
 What a reactive clue becomes when the receiver's only playables are on inverted

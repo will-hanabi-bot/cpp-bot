@@ -397,7 +397,16 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       // So the giver simply may not give it, and every reader walks on shared
       // information alone. The bucket remains what tells a reader what their card
       // IS -- that half is below, and unchanged.
+      //
+      // Except in the ENDGAME, pace <= 1 (v18.4.0): there a pairing may break the
+      // bucket relation whatever the players can name, and each reads it by §1d's
+      // core rule -- the bucket and a finesse if they leave anything, else any
+      // playable. Human diagnostic 2013726 T27
+      // (v18_human_vs_bot_diagnostics/2013726.md): 4 to green gets black's r4 and
+      // green's `{g1,n3}`, and was illegal here, so blue gave a Red instead.
+      const bool endgame = state.pace() <= 1;
       if (action.giver == state.our_player_index && !connector && !double_chuck &&
+          !endgame &&
           !bucket_relation_holds(*state.variant, action.clue.kind, *actual,
                                  target.id) &&
           !both_know_their_own(game, react_order, target.order)) {
