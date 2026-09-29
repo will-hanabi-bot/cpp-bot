@@ -71,7 +71,7 @@ bool is_lock_target(const ReactorWC& wc, int target_slot);
 //
 // The turn comparison is `>=`, NOT `==`. `Game::simulate` routes to
 // `simulate_action` (`game.h:186`), which emits a leading `TurnAction` before
-// `handle_action` runs the interpretation (`game.cpp:690-696`), and that stamps
+// `handle_action` runs the interpretation (`game.cpp:700-706`), and that stamps
 // `turn_count = num + 1` (`game.cpp:486`). So the WC is created one turn ahead
 // of the caller's `game.state.turn_count`. An exact compare therefore never
 // matches and silently disables whatever it guards — which is precisely how VH1

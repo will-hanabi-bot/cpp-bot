@@ -205,6 +205,18 @@ bool presume_own_plays_land(Game& game);
 // ours (see `open_worlds`). Rows only ever advance. Returns whether one moved.
 bool advance_rows_from_own_worlds(Game& game);
 
+// CORE RULE 2 AT OUR OWN SEAT (v18.9.0): what we read our own CALLED card as when
+// the team's reading of it is one our own eyes rule out -- every copy of it is in
+// view. The bucket and finesse reading being empty for us, the card is any
+// playable: the identities it could still be that are playable on our stacks,
+// less the identity of the receiver's target when we are the reacter (the pair
+// would both play it). `possible` when that leaves nothing, or when the card is
+// not our own called card, or outside the variant. `Game::elim` asks it where our
+// view of a card would otherwise fall back to everything. Human diagnostic
+// 2013726 T27 (v18_human_vs_bot_diagnostics/2013726.md): black's reaction card
+// read `{n3}` by the bucket, black sees both n3s, and so knows it holds the r4.
+IdentitySet own_called_fallback(const Game& game, int order, const IdentitySet& possible);
+
 // Narrow one superposition to `allowed`, and settle it when that leaves a single
 // identity (v16.19.0).
 //

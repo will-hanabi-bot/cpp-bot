@@ -558,7 +558,7 @@ rewinds.
 The response is `game.rewind(wc.turn, InterpAction{ClueInterp::REACTIVE})`
 (`:283-284`, `:344-345`), which replays the game from `base` with the earlier
 clue forced into the reactive reading. Rewind depth is capped at 4
-(`src/basics/game.cpp:585`). When a rewind succeeds the replay has already
+(`src/basics/game.cpp:595`). When a rewind succeeds the replay has already
 processed the current action end-to-end, so the caller must not touch it again
 — that is what `react_play` / `react_discard` returning `true` signals
 (`include/hanabi/conventions/reactor/interpret_reaction.h:44-49`).

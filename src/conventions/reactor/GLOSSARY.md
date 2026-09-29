@@ -224,7 +224,7 @@ for the giver and the reacter. See *POV invariance*.
 ### elim
 Umbrella for the post-action inference pass: `card_elim`, optional
 `good_touch_elim`, link refresh, and hypo-stack recomputation.
-`src/basics/game.cpp:463-563`.
+`src/basics/game.cpp:463-573`.
 
 ### elim_* matrices
 The four functions that eliminate identities from the receiver's slots *left
@@ -586,7 +586,7 @@ Suits that play 5→4→3→2→1. Copy counts flip to `{1,2,2,2,3}`. Orthogonal
 ### rewind
 Replay the game from `base` with an `InterpAction` injected at a given turn,
 used to re-interpret an earlier clue. Depth-capped at 4.
-`src/basics/game.cpp:567-645`.
+`src/basics/game.cpp:577-655`.
 
 ### sacrifice
 A non-critical card discarded when nothing is trash — the last-resort

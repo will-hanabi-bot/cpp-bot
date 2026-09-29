@@ -1134,6 +1134,21 @@ bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& act
   return changed;
 }
 
+IdentitySet own_called_fallback(const Game& game, int order, const IdentitySet& possible) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return possible;
+  if (order < 0 || order >= static_cast<int>(game.meta.size())) return possible;
+  if (game.meta[order].status != CardStatus::CALLED_TO_PLAY) return possible;
+  if (s.holder_of(order) != s.our_player_index) return possible;
+  IdentitySet out = possible.filter([&s](Identity i) { return s.is_playable(i); });
+  for (const ReactorWC& wc : game.waiting) {
+    if (wc.reacter != s.our_player_index || wc.react_order != order) continue;
+    if (wc.receiver_target_order < 0) continue;
+    if (auto target = s.deck[wc.receiver_target_order].id()) out = out.difference(*target);
+  }
+  return out.non_empty() ? out : possible;
+}
+
 bool advance_rows_from_own_worlds(Game& game) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return false;

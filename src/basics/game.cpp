@@ -556,6 +556,16 @@ std::optional<Identity> hidden_own_play_id(const Game& game, const Action& act) 
   }
   const IdentitySet live = game.common.thoughts[order].possibilities();
   if (live.length() != 1) return std::nullopt;
+  // Unless we can see that the team's name for it is wrong (v18.9.0): every copy
+  // of that identity is in view. Then the card is what OUR view names -- core
+  // rule 2's fallback, `tiiah::own_called_fallback` -- or unnamed, but never the
+  // identity we can rule out. Human diagnostic 2013726 T27.
+  const Thought& mine = game.players[game.state.our_player_index].thoughts[order];
+  if (!mine.possible.contains(live.head())) {
+    const IdentitySet ours = mine.possibilities();
+    if (ours.length() == 1) return ours.head();
+    return std::nullopt;
+  }
   return live.head();
 }
 
@@ -739,8 +749,15 @@ void Game::elim(std::optional<int> except_) {
     for (int o : common.dirty) {
       Thought& t = p.thoughts[o];
       const Thought& c_t = common.thoughts[o];
-      IdentitySet new_inferred =
-          c_t.inferred.intersect(t.possible).when_empty(t.possible);
+      IdentitySet new_inferred = c_t.inferred.intersect(t.possible);
+      if (new_inferred.is_empty()) {
+        // Our own called card whose team reading we can rule out is ANY PLAYABLE,
+        // not anything (tiiah core rule 2, v18.9.0); every other empty reading
+        // falls back to the whole empathy, as before.
+        new_inferred = static_cast<int>(pi) == state.our_player_index
+                           ? hanabi::tiiah::own_called_fallback(*this, o, t.possible)
+                           : t.possible;
+      }
       std::optional<IdentitySet> new_info_lock;
       if (c_t.info_lock) {
         IdentitySet ids = c_t.info_lock->intersect(t.possible);
