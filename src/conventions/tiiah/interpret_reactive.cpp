@@ -569,11 +569,11 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   // A FINESSE THE RECEIVER CAN PROVE (v17.1.0). The reacter read a finesse
   // pairing as the connector alone, so when the called card cannot be any card
   // of the bucket half in any world, the pairing was a finesse and the reacter
-  // knew exactly the card we watched it play. Replay 9000002 T7 (self-play):
-  // Cathy's Red named Bob's r2, Alice answered with the r1, and Bob -- whose
-  // red card could not be a purple -- read her card as `{r1,y2}`, so his shared
-  // view and his row for Alice stayed on red 0 while the other two seats moved
-  // to red 1.
+  // knew exactly the card we watched it play. E.g. Cathy's Red names Bob's r2
+  // and Alice answers with the r1; Bob, whose red card cannot be a purple, would
+  // otherwise read her card as `{r1,y2}`, so his shared view and his row for
+  // Alice would stay on red 0 while the other two seats moved to red 1.
+  //
   if (proven_finesse(prev, game, wc, *seen, react_order)) {
     narrow_superposition(game, react_order, IdentitySet::single(*seen));
     return;
@@ -586,10 +586,10 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   // With its BAND, since worlds are replayed on it (v16.24.0).
   //
   // WITHOUT the card being read (v17.1.0). It is in the hole by now, so the shared
-  // view floored across worlds would count it as already down. Replay 9000008 T32
-  // (self-play): Bob's g3 answered a Red, Cathy's frame read green 3 rather than
-  // 2, the bucket reading came out `{g4}`, and the card was settled for the team
-  // as the g4 -- her row for the giver went to green 4 with green really on 3.
+  // view floored across worlds would count it as already down. E.g. a g3
+  // answering a Red would make the frame read green 3 rather than 2, the bucket
+  // reading come out `{g4}`, and the card settle for the team as the g4 -- a row
+  // for the giver going to green 4 with green really on 3.
   const State base =
       s.with_stacks(reacter_frame(game, wc.giver, wc.reacter, react_order))
           .with_band(s.evidence_known_to_both(wc.giver, wc.reacter));

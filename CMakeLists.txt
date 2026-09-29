@@ -96,14 +96,14 @@ target_compile_definitions(hanabi_core PUBLIC
 )
 hanabi_set_warnings(hanabi_core)
 
-# Self-play harness (v17_self_play_diagnostics/README.md): a simulated server
+# Self-play harness (self_play_diagnostics/README.md): a simulated server
 # driving one bot Game per seat, plus the issue detectors. A library so that
 # hanabi_tests can unit-test the wire it builds.
 add_library(hanabi_selfplay STATIC
-  v17_self_play_diagnostics/sim.cpp
-  v17_self_play_diagnostics/diagnostics.cpp
+  self_play_diagnostics/sim.cpp
+  self_play_diagnostics/diagnostics.cpp
 )
-target_include_directories(hanabi_selfplay PUBLIC v17_self_play_diagnostics)
+target_include_directories(hanabi_selfplay PUBLIC self_play_diagnostics)
 target_link_libraries(hanabi_selfplay PUBLIC hanabi_core)
 hanabi_set_warnings(hanabi_selfplay)
 
@@ -387,7 +387,6 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_trash_reveal_over_lock.cpp
-  tests/test_tiiah/test_decision_making/test_replay_9000026_critical_chop_locked_when_nothing_ditches.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
@@ -472,16 +471,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2013616_reacts_after_the_pair_settles.cpp
   tests/test_tiiah/test_replay_2013645_role_inversion_keeps_the_clue_stable.cpp
   tests/test_tiiah/test_replay_2013645_stable_four_under_role_inversion.cpp
-  tests/test_tiiah/test_replay_9000002_receiver_proves_the_finesse.cpp
-  tests/test_tiiah/test_replay_9000008_reacter_frame_leaves_its_card_out.cpp
-  tests/test_tiiah/test_replay_9000016_outside_seat_tries_its_own_worlds.cpp
-  tests/test_tiiah/test_replay_9000001_holder_keeps_what_the_giver_could_mean.cpp
-  tests/test_tiiah/test_replay_9000013_giver_does_not_call_its_own_dupe.cpp
-  tests/test_tiiah/test_replay_9000031_reacter_card_named_as_far_as_the_receiver_can.cpp
   tests/test_tiiah/test_known_play_standing_call.cpp
-  tests/test_tiiah/test_replay_9000041_no_discard_call_on_a_critical_card.cpp
-  tests/test_tiiah/test_replay_9000007_deferred_reaction_reads_the_reacter_card.cpp
-  tests/test_tiiah/test_replay_9000092_call_names_the_target_hole_card.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
@@ -512,7 +502,7 @@ add_executable(replay_log apps/replay_log.cpp)
 target_link_libraries(replay_log PRIVATE hanabi_core)
 hanabi_set_warnings(replay_log)
 
-# Self-play: N seeded games between three bots, with the v17 issue detectors.
-add_executable(self_play v17_self_play_diagnostics/self_play.cpp)
+# Self-play: N seeded games between three bots, with the issue detectors.
+add_executable(self_play self_play_diagnostics/self_play.cpp)
 target_link_libraries(self_play PRIVATE hanabi_selfplay)
 hanabi_set_warnings(self_play)

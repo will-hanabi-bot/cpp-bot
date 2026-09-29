@@ -99,9 +99,9 @@ std::vector<int> reading_stacks(const State& s, int giver, int holder) {
 // which we watched and it cannot name; a card dead on our stacks only because of
 // one of those is one the giver may well have called -- a duplicate it threw in
 // the hole without knowing. The holder keeps it, so the reading is true and a
-// partner who can see the card can fix the call (§1h). Self-play 9000001 T8:
-// Bob's `{g1,b1}` was the g1, his Rank 1 named Cathy's other g1, and Cathy read
-// `{r1,y1,b1,p1}`.
+// partner who can see the card can fix the call (§1h). E.g. Bob's `{g1,b1}` was
+// the g1, his Rank 1 named Cathy's other g1, and Cathy reads `{r1,y1,b1,p1}`
+// rather than a dead call.
 void repin_own_call(const Game& prev, Game& game, int giver) {
   const State& s = game.state;
   if (s.pairwise_play_stacks.empty()) return;
@@ -426,9 +426,9 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   //
   // An OUTSIDE seat also tries the worlds of its own hole cards (v17.1.0): the pair
   // watched those go in, so a world of them is one the pair may well be in, and
-  // the call can rest on it. Replay 9000016 T9 (self-play): Cathy's Blue named
-  // Alice's b3 on the b2 Bob had blind-played at T8; Bob could not name his own
-  // b2, found no call on any frame of theirs, and read a MISTAKE.
+  // the call can rest on it. E.g. Cathy's Blue names Alice's b3 on the b2 Bob
+  // blind-played a turn earlier; Bob cannot name his own b2, so without this he
+  // finds no call on any frame of theirs and reads a MISTAKE.
   if (!called_something(game)) {
     std::vector<int> holders{action.giver, action.target};
     const int me = before_ladder.state.our_player_index;
@@ -461,11 +461,11 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       // when every card it calls is one we can already name, though. The giver
       // judges the call against the card it SEES, and we against our empathy, so
       // with an unnamed card the worlds that make the call at our seat can be
-      // ones the giver never meant -- self-play 9000028 T11 read a trash reveal as
-      // a play call on `{g2,g3,g4,g5}` and would have settled our o12 on the g1 it
-      // was not. Self-play 9000092 T17: Bob's Blue on our known b2 made a call only
-      // where our o13 `{b1,p1}` was the b1, and without this we sat on the b2 and
-      // threw a g4 and a g5 in its place.
+      // ones the giver never meant -- a trash reveal can read as a play call on
+      // `{g2,g3,g4,g5}` and settle our hole card on a g1 it was not. With a named
+      // card it is sound: a Blue on our known b2 is a call only where our `{b1,p1}`
+      // hole card was the b1, and without this we would sit on the b2 and throw
+      // other cards in its place.
       auto calls_named_cards = [&]() {
         for (int o : game.state.hands[action.target]) {
           if (game.meta[o].status != CardStatus::CALLED_TO_PLAY ||

@@ -96,8 +96,8 @@ cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         341 tests,  7 s
 build/hanabi_tests.exe            # convention-neutral    397 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
-build/hanabi_decision_tests.exe   # decision quality      176 tests,  0.7 s
-build/hanabi_tiiah_tests.exe      # Throw It in a Hole    166 tests,  0.3 s
+build/hanabi_decision_tests.exe   # decision quality      175 tests,  0.7 s
+build/hanabi_tiiah_tests.exe      # Throw It in a Hole    157 tests,  0.3 s
 ```
 
 Pick the scope from the report's `Convention:` field:
@@ -177,29 +177,49 @@ Three hygiene rules, each of which has cost a wasted run:
 Read **every** mover individually and say what each one is. A mover count with no
 readings is not a result.
 
-## Self-play diagnostics (v17)
+## Human-vs-bot diagnostics
 
-`v17_self_play_diagnostics/` holds a local harness in which three copies of the
+`v18_human_vs_bot_diagnostics/` holds games that an expert human played with the
+bot and then annotated turn by turn: what a strong player does, and why the bot's
+move fell short. One file per game (`<database_id>.md`), indexed in its
+`README.md`, with the human's words verbatim.
+
+**These are the motivating examples for convention and decision-making changes.**
+- Every change to what a clue means or to how the bot decides must be aligned
+  with them.
+- A change that makes the bot play against a diagnostic there is a regression,
+  whatever else it improves.
+- When a change answers an item, cite the document and turn
+  (`v18_human_vs_bot_diagnostics/<id>.md` T<N>) in the commit message and next to
+  the rule in `CONVENTION.md` / `DECISION_MAKING.md`, and set the item's
+  **Status** in the document to the version that fixed it.
+- When the user sends a new annotated game, add a document for it in the same
+  format before changing any code.
+
+## Self-play diagnostics
+
+`self_play_diagnostics/` holds a local harness in which three copies of the
 current build play Throw It in a Hole (5 Suits) against each other, with
 detectors for wrong inferences, calls never actioned, reactive-target
-disagreements and lagging stack views. Its `README.md` is the reference.
+disagreements and lagging stack views. Its `README.md` is the reference. It checks
+that a change does not damage play elsewhere. It does not define good play; the
+human diagnostics above do.
 
 ```bash
 cmake --build build -j --target self_play
-build/self_play.exe --seeds 1..100 --jobs 12     --out v17_self_play_diagnostics/runs/<version>     --report v17_self_play_diagnostics/results/<version>.md
+build/self_play.exe --seeds 1..100 --jobs 12     --out self_play_diagnostics/runs/<version>     --report self_play_diagnostics/results/<version>.md
 ```
 
 - Simulated games are `9000000 + seed`, and every seat logs to
-  `logs/sim-<seat>-<game_id>.log`. So the debugging workflow below
-  (`replay_log`, `show_turn.py`, `tiiah_stacks.py`, `bug_to_test.sh`) applies to
-  them unchanged, and a regression test from one is named
-  `test_replay_900xxxx_<slug>.cpp`.
+  `logs/sim-<seat>-<game_id>.log`. The debugging workflow below
+  (`replay_log`, `show_turn.py`, `tiiah_stacks.py`) applies to them unchanged.
 - In TIIAH, strikes and the score are **not public**. The simulator sends a miss
   as an ordinary hidden `play` and ends the game on the third strike itself.
 - The simulator is variant-generic, with public stacks and strikes outside TIIAH,
   but only TIIAH is run unless the user asks otherwise.
-- During the v17 work, every commit's 100-game run (seeds 1–100) is saved as
-  `results/<version>.md`.
+- Each version's 100-game run (seeds 1–100) is saved as `results/<version>.md`.
+  To compare with the previous version, freeze its `build/self_play.exe` under
+  another name before rebuilding, and run both on the same seeds.
 
 ## Test changes
 

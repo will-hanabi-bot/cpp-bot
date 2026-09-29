@@ -25,7 +25,8 @@ roughly 50× faster per primitive operation. See
 | [reactor/GLOSSARY.md](src/conventions/reactor/GLOSSARY.md) | Every domain term, defined, with code references |
 | [tiiah/CONVENTION.md](src/conventions/tiiah/CONVENTION.md) | **The ruling reference** for Throw It in a Hole — the variant's engine rules, and the convention being built on them |
 | [tiiah/GLOSSARY.md](src/conventions/tiiah/GLOSSARY.md) | TIIAH terms: the hole, buckets, superposition |
-| [v17_self_play_diagnostics/README.md](v17_self_play_diagnostics/README.md) | The self-play harness: three bots play TIIAH offline, and detectors report reading errors |
+| [v18_human_vs_bot_diagnostics/README.md](v18_human_vs_bot_diagnostics/README.md) | Games an expert human annotated turn by turn: the motivating examples every convention and decision change is aligned with |
+| [self_play_diagnostics/README.md](self_play_diagnostics/README.md) | The self-play harness: three bots play TIIAH offline, and detectors report reading errors |
 | [TODO.md](TODO.md) | Convention that is legal but not yet implemented |
 | [PLAN.md](PLAN.md) | Scoping document for work in flight (currently the reactor0 decision overhaul) |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for agents: version bumps, test policy, the bug-report workflow |

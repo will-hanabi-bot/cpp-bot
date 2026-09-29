@@ -31,8 +31,8 @@ std::optional<Identity> Thought::id(bool infer, bool symmetric, bool partial) co
   if (!symmetric && suit_index != -1) return Identity(suit_index, rank);
   if (infer && inferred.length() == 1) return inferred.head();
   // An EMPTY `possible` names nothing (v17.4.0): `head()` throws on it, and a
-  // Throw It in a Hole elimination can empty a set. Self-play seed 207 crashed
-  // `take_action` with "Couldn't convert ordinal to identity".
+  // Throw It in a Hole elimination can empty a set, which crashed a self-play game
+  // in `take_action` with "Couldn't convert ordinal to identity".
   if (partial && possible.non_empty()) {
     Identity head = possible.head();
     if (possible.forall([&](Identity i) { return i.suit_index == head.suit_index; })) {

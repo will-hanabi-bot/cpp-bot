@@ -656,8 +656,8 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
       // one that was DEFERRED (v17.4.0). Until then a deferred reaction skipped
       // it, so the receiver never narrowed the reacter's card and its call kept
       // the generic reading -- and those went into the hole wider at the
-      // receiver's seat than at the other two (self-play 9000007 T9: Alice held
-      // Cathy's o15 as all 23 identities, Bob and Cathy as `{r1,y1}`).
+      // receiver's seat than at the other two (the receiver held the reacter's
+      // card as every identity, the other seats as the bucket reading).
       if (deferred.receiver >= 0 && state.variant->throw_it_in_a_hole) {
         hanabi::tiiah::record_reaction(prev, *this, deferred, action.order);
         hanabi::tiiah::narrow_reacter_play(prev, *this, deferred, action.order);

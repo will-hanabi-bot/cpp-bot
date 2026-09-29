@@ -56,8 +56,8 @@ bool uses_reactor0_decisions(Convention c);
 // under it, and no other convention can be played at them. Otherwise reactor0
 // is a 3-player convention, so any other seat count falls back to reactor.
 //
-// Extracted from `BotClient::on_init` (v17.0.0) so the self-play harness
-// (`v17_self_play_diagnostics/`) resolves a table exactly as the live bot does.
+// Extracted from `BotClient::on_init` so the self-play harness
+// (`self_play_diagnostics/`) resolves a table exactly as the live bot does.
 Convention resolve_table_convention(bool throw_it_in_a_hole, int num_players,
                                     Convention mode);
 

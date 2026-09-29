@@ -1,4 +1,4 @@
-// Issue detectors for the self-play harness (v17_self_play_diagnostics/README.md).
+// Issue detectors for the self-play harness (self_play_diagnostics/README.md).
 //
 //   1  a card's inference (or possible set, or hole superposition) excludes its
 //      true identity;

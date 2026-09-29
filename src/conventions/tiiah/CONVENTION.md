@@ -276,9 +276,9 @@ called: a duplicate it threw in the hole without knowing. So `repin_own_call` ke
 every identity that is playable in some strike-free world of the giver's hole cards,
 on the frame the two of them share (`tiiah/interpret_clue.cpp:82-141`). The reading
 then stays true, and a partner who can see the card can fix the call (§1h). If
-nobody does, the holder plays as before. Self-play 9000001 T8: Bob's `{g1,b1}` was
-the g1, his Rank 1 named Cathy's other g1, and she read `{r1,y1,b1,p1}`
-(`tests/test_tiiah/test_replay_9000001_holder_keeps_what_the_giver_could_mean.cpp`).
+nobody does, the holder plays as before. For example, Bob's `{g1,b1}` was the g1,
+his Rank 1 named Cathy's other g1, and she reads `{r1,y1,b1,p1}` rather than an
+empty or dead call.
 The reacter's own reading of a reactive (§1d) is unchanged.
 
 The reaction's negative was the third entry in that table only as of v16.11.0,
@@ -349,10 +349,10 @@ answers the question the same way.
 position decides how every seat reads the next clue, so any input that can differ
 between seats splits the dispatch. (Role inversion, below, does count a standing
 call, but it only ever makes a clue stable.)
-- Through v16 the test used the seat's own stacks. Self-play 9000009 T28: Cathy's
-  belief had blue on 2, so she counted Bob's called b3 as a known play, while Alice
-  and Bob had blue on 1. Cathy read Alice's Rank 5 lock to Bob as a reverse reactive
-  and blind-played a g1 into a strike.
+- Through v16 the test used the seat's own stacks. A seat whose belief had blue on
+  2 counted Bob's called b3 as a known play while the others, with blue on 1, did
+  not, so one seat read a lock to Bob as a reverse reactive and blind-played into a
+  strike.
 - v17.4.0 counted every standing call instead. But call statuses differ between
   seats too: a receiver's or a reacter's call is stamped at some seats and not at
   others. Over 500 self-play games about one clue in ten was read as different
@@ -783,10 +783,10 @@ The test is `proven_finesse` (`tiiah/interpret_reactive.cpp:720-732`), over
 `finesse_from_the_card` (`:742-755`). It runs over the same two halves `receiver_reading`
 builds, on the shared view over every seat's hole cards. That is a frame the giver and the
 reacter compute alike, so they can predict the answer (v17.2.0). It is applied first in
-`narrow_reacter_play` (`:569-580`). Replay 9000002 T7 (self-play) is the case: Cathy's Red named Bob's r2 and
-Alice answered with the r1. Bob's red card cannot be a purple, so he now names her card
-the r1 rather than `{r1,y2}`. Until then his shared view and his row for Alice stayed on
-red 0 while theirs moved (`tests/test_tiiah/test_replay_9000002_receiver_proves_the_finesse.cpp`).
+`narrow_reacter_play` (`:569-580`). For example, Cathy's Red names Bob's r2 and Alice
+answers with the r1. Bob's red card cannot be a purple, so he names her card the r1
+rather than `{r1,y2}`; without it his shared view and his row for Alice stay on red 0
+while theirs move.
 When the card could be either half, the bucket set is still taken (TODO.md 49).
 
 **The giver and the reacter name the card only as far as the receiver can**
@@ -806,10 +806,9 @@ privately (`tiiah/superposition.cpp:1286-1328`):
 
 The test that proves a finesse, and the bucket reading, run on a frame every seat
 computes alike: the shared view over every seat's hole cards, as the team reads them
-(`finesse_from_the_card`, `:742-755`), and leave the card itself out. Self-play
-9000031 T3: the giver and the reacter moved the shared view to green 1 on the
-reacter's g1, the receiver did not, and the three shared views never agreed again
-(`tests/test_tiiah/test_replay_9000031_reacter_card_named_as_far_as_the_receiver_can.cpp`).
+(`finesse_from_the_card`, `:742-755`), and leave the card itself out. Otherwise the
+giver and the reacter move the shared view on the reacter's card (a g1, say) while
+the receiver does not, and the three shared views never agree again.
 
 **A deferred reaction is read the same way** (v17.4.0). A reacter who clues first
 answers later, through `pending_reactions`, when no live connection is left. Until
@@ -817,18 +816,16 @@ v17.4.0 that path skipped `record_reaction`, `narrow_reacter_play` and
 `narrow_receiver_call`. The fix runs them for a deferred play too
 (`src/basics/decide.cpp:655-667`). The reacter's card is read even when the receiver's
 target has already left its hand, since the relation reads the reacter's side from
-the card alone (`reactor0::resolve_deferred_reaction`, `no_target`). Self-play 9000007 T9:
-Alice was the receiver of a reaction Cathy had deferred, and her target had been
-played. She held Cathy's o15 as all 23 identities, while Bob and Cathy held
-`{r1,y1}`.
+the card alone (`reactor0::resolve_deferred_reaction`, `no_target`). Without that, a
+receiver of a deferred reaction whose target had already been played held the
+reacter's card as every identity, while the other two seats held the bucket reading.
 
 **The frame leaves the card being read out (v17.1.0).** By reaction time the reacter's
 card is itself in the hole. A frame floored across worlds would count it as already
 down, and read it one card too far. `reacter_frame` takes an `except_order` for this
-(`:173-187`), and `narrow_reacter_play` passes the card (`:582-591`). In replay 9000008 T32
-(self-play), Bob's g3 answered a Red. Cathy's frame read green 3 instead of 2, the
-reading came out `{g4}`, and her row for the giver went to green 4
-(`tests/test_tiiah/test_replay_9000008_reacter_frame_leaves_its_card_out.cpp`).
+(`:173-187`), and `narrow_reacter_play` passes the card (`:582-591`). Without it, a g3
+answering a Red made the frame read green 3 instead of 2, the reading came out
+`{g4}`, and a row went to green 4.
 
 #### What the receiver's OTHER slots learn, and whose eyes that is NOT
 
@@ -1020,10 +1017,10 @@ it strikes:
   `note_hidden_action` (`:1317-1328`), whose card the giver and the reacter name
   exactly while the team holds a wider set (§1d). The row has then counted that
   card, and replaying it would strike its own identity as a duplicate
-  (`enumerate_worlds`, `superposition.cpp:528-537`). Self-play 9000023 T4 is the
-  case the reaction branch covers. The reacter's o0, called as the r1, had already
-  been booked on the reacter–giver row by `with_pairwise_at_least`. Replayed with its
-  team set, the r1 world struck, and the row claimed yellow 2 with yellow on 1. Replay
+  (`enumerate_worlds`, `superposition.cpp:528-537`). The reaction branch matters for a
+  reacter's card called as the r1: it is already booked on the reacter–giver row by
+  `with_pairwise_at_least`, and replayed with its team set, its r1 world would strike
+  and the row claim the other identity (a y2, say) with yellow on 1. Replay
   [2013616](https://hanab.live/shared-replay/2013616#20) is the case:
   - will-bot69 had settled its o6 `{r1,g1}` as the r1 privately, since it could see
     both other g1s, and left the card out of its row replay.
@@ -1201,10 +1198,9 @@ the pair's own cards makes the call, the third seat also enumerates its own hole
 only the worlds that make the call, privately. This is rule 4's shape, and what it learns
 the pair already knew. The narrowing is `narrow_own_privately`
 (`superposition.cpp:1520-1538`). It moves our belief and no row (v17.3.0): the other
-seats watched the card, but they cannot know that we now know it. Replay 9000016 T9 (self-play): Cathy's Blue named
-Alice's b3 on the b2 Bob had blind-played at T8. Bob could not name his b2, so on
-every frame of theirs he found no call and read a MISTAKE
-(`tests/test_tiiah/test_replay_9000016_outside_seat_tries_its_own_worlds.cpp`).
+seats watched the card, but they cannot know that we now know it. The case: Cathy's
+Blue names Alice's b3 on the b2 Bob blind-played a turn earlier. Bob cannot name his
+b2, so on every frame of theirs he would find no call and read a MISTAKE.
 
 **So does the target, when it can name the card called (v17.5.0).** The giver watched
 the target's hole cards go in, so a call that the ladder makes in only some worlds of
@@ -1213,13 +1209,12 @@ outside seat does (`interpret_clue.cpp:455-494`). The condition is that every ca
 clue calls is one the target can already name from its empathy. The giver judges a
 call against the card it can see and the target against its empathy, so with an
 unnamed card the worlds that make the call at the target's seat can be ones the giver
-never meant. Self-play 9000028 T11 is that case: Bob's Green was a trash reveal to him,
-but to Cathy it was a play call on an unnamed `{g2,g3,g4,g5}`, made only in the world
-where her o12 was the g1. It was the b1. Self-play 9000092 T17 is the case the rule is
-for. Bob's Blue made Cathy's o12 a known b2 and called it, which is a call only where
-her o13 `{b1,p1}` was the b1. Her belief kept blue on 0, so the call never looked
-playable, and she discarded a g4 on T18 and the last g5 on T21. Now she plays the b2
-(`tests/test_tiiah/test_replay_9000092_call_names_the_target_hole_card.cpp`).
+never meant: a Green that is a trash reveal to the giver can be, to the target, a
+play call on an unnamed `{g2,g3,g4,g5}` made only in the world where one of its hole
+cards was the g1. The rule is for a card the target CAN name. A Blue that makes the
+target's card a known b2 and calls it is a call only where the target's `{b1,p1}` hole
+card was the b1; without the rule the target's belief keeps blue on 0, the call never
+looks playable, and it discards instead of playing the b2.
 
 And our OWN call keeps an
 identity playable in any world of our own hole cards (`repin_own_call`,
@@ -1307,8 +1302,8 @@ than playable, and only a plain suit, since the arithmetic is a plain prefix.
 watched our card go in and knows what it was, but none of them can know that we now
 know it too. A row is one view the two seats of a pair both compute, so it may not
 hold that. Until v17.3.0 the back-solve raised every row, and the pair views split on
-the spot. Self-play 9000003 T20 is the case: Alice's back-solve on Bob's R2 to Cathy
-raised her rows to red 1, while Bob's and Cathy's rows for her stayed on red 0. Across
+the spot: Alice's back-solve on Bob's R2 to Cathy raised her rows to red 1, while
+Bob's and Cathy's rows for her stayed on red 0. Across
 seeds 1–100 this cut the actions that start a pair-view disagreement from 552 to 503.
 The row still replays such a card, but only with the set every seat holds for it
 (v18.1.0, §1e "worlds are replayed"), so a later argument that both seats of the
@@ -1765,9 +1760,8 @@ in some strike-free world of our own hole cards. That is
 `calls_a_card_we_may_have_played` (`reactor0/decision.cpp:722-754`), a candidate filter
 in `analyse_clues` beside `calls_two_copies_to_play` (`:831`). Like that one, it reads
 the giver's sight, so it changes which clues are given and never what a clue means.
-Self-play 9000001 T8 and 9000013 T5 both struck this way
-(`tests/test_tiiah/test_replay_9000013_giver_does_not_call_its_own_dupe.cpp`). On seeds
-1–100 it took the mean score from 14.75 to 17.53 and strikeouts from 69 to 47.
+Without it, a giver whose own `{g1,b1}` or `{r1,y1}` hole card was the very card it
+called on a partner produced a strike. On seeds 1–100 it took the mean score from 14.75 to 17.53 and strikeouts from 69 to 47.
 
 ### §2d Never call a critical card to discard (v17.4.0)
 
@@ -1776,8 +1770,8 @@ this variant a critical card lost is 25/25 lost. So a clue is not offered when i
 newly calls a partner to discard a card we can see is critical
 (`calls_a_critical_card_to_discard`, `reactor0/decision.cpp:768-782`, a candidate
 filter in `analyse_clues` at `:860`). An inverted card is left out, because its
-Discard button plays it. Self-play 9000041 T25: Alice's Rank 3 to Bob read as a
-discard call on the only y5. Across seeds 1–100, 13 of the 70 critical cards
+Discard button plays it. For example, a Rank 3 to Bob could read as a discard call on
+the only y5. Across seeds 1–100, 13 of the 70 critical cards
 thrown away had been called to discard. After the filter there were none.
 
 ## Test coverage

@@ -1,7 +1,7 @@
 // Self-play simulator: a stand-in for the hanab.live server, driving one bot
 // `Game` per seat through the same action path the live client uses.
 //
-// See v17_self_play_diagnostics/README.md. The simulator is variant-generic;
+// See self_play_diagnostics/README.md. The simulator is variant-generic;
 // what each seat is shown is keyed on `Variant::throw_it_in_a_hole`:
 //
 //   * TIIAH: every play reaches every seat as a hidden `play` (suit/rank -1),

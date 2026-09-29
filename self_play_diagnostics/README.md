@@ -1,18 +1,19 @@
-# v17 self-play diagnostics
+# Self-play diagnostics
 
 A local harness that has three copies of the current bot play **Throw It in a Hole
 (5 Suits)** against each other, and a set of detectors that report where the
-bots' readings go wrong. It is the v17 experiment: fix what it finds, commit, and
-rerun, until the critical classes below are zero and at least 25 of 100 games
-reach 25/25.
+bots' readings go wrong. It is used to check that a change does not damage play
+elsewhere: run the previous version and the candidate on the same seeds and compare.
+What good play *is* comes from the human diagnostics in
+`v18_human_vs_bot_diagnostics/`, not from these numbers.
 
 ## Running it
 
 ```bash
 cmake --build build -j --target self_play
 build/self_play.exe --seeds 1..100 --jobs 12 \
-    --out v17_self_play_diagnostics/runs/<version> \
-    --report v17_self_play_diagnostics/results/<version>.md
+    --out self_play_diagnostics/runs/<version> \
+    --report self_play_diagnostics/results/<version>.md
 ```
 
 | Flag | Default | Meaning |
@@ -156,11 +157,13 @@ or the reacter's side of a reactive, a fix or a refusal re-call.
 - Outside TIIAH every stack is public, and the check is simply that each seat's
   stacks equal the truth.
 
-## Stop criterion
+## How it is used
 
-A 100-game run on seeds 1–100 with **zero class 1–4 issues** and **at least 25
-games at 25/25**. It is then confirmed on seeds 101–200, as a check against
-fixing to the seeds.
+To compare a candidate with the previous version, freeze the previous
+`build/self_play.exe` under another name before rebuilding. Then run both on the
+same seeds (seeds 1–300 at the live 6 s endgame is the usual check) and compare
+25/25, the cards ever read wrongly, and strikeouts. A version's own 100-game run on
+seeds 1–100 is saved as `results/<version>.md`.
 
 ## Tests
 

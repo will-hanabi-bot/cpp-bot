@@ -443,7 +443,7 @@ bool back_solve_own_plays(Game& game, const Game& prev, const Action& action) {
         // Not into any ROW (v17.3.0). Every other seat watched us play it, so it
         // KNOWS the card -- but it cannot know that WE now know it, and a row is
         // what the two of us both compute. Writing it here split the pair views
-        // (self-play 9000003 T20). Until v17.3.0 this advanced every row.
+        // on the spot. Until v17.3.0 this advanced every row.
         solved = true;
         changed = true;
         break;
@@ -1289,8 +1289,8 @@ void note_hidden_action(Game& game, const Action& raw) {
   // not, and names it only as far as `reaction_team_reading` predicts -- so unless
   // that is the one card, the card is theirs privately and NOT the team's, and the
   // shared view carries the team's set for it (`shared_left`), exactly as after a
-  // private settle. Self-play 9000031 T3: the giver and the reacter moved the
-  // shared view to green 1 on the reacter's g1, and the receiver did not.
+  // private settle. Otherwise the giver and the reacter move the shared view on
+  // the reacter's card (a g1, say), and the receiver does not.
   std::optional<std::pair<IdentitySet, int>> team;
   if (known) {
     team = reaction_team_reading(game, player, order, *known);

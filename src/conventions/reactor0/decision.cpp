@@ -711,9 +711,9 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
 // that is playable on them can still be a duplicate of one we threw in without
 // naming it. Calling it asks a partner to play into a strike in that world -- and
 // the partner who watched our card go in cannot even be told why, since the call
-// reads as sound on the frame we share. Self-play 9000001 T8: Bob's `{g1,b1}` was
-// the g1 and his Rank 1 called Cathy's other g1; 9000013 T5: his `{r1,y1}` was the
-// r1 and his reactive called Cathy's r1 as the reacter's card. Both struck.
+// reads as sound on the frame we share. E.g. Bob's `{g1,b1}` was the g1 and his
+// Rank 1 called Cathy's other g1; or his `{r1,y1}` was the r1 and his reactive
+// called Cathy's r1 as the reacter's card. Both strike.
 //
 // A candidate FILTER, like `calls_two_copies_to_play`: it reads our own sight of
 // the called card, which no other seat shares, so it changes which clues we give
@@ -757,9 +757,9 @@ bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo) {
 // see is critical (v17.4.0)?
 //
 // A discard call throws the card away -- nobody is asked whether it is safe, and
-// in this variant a critical card lost is 25/25 lost. Self-play 9000041 T25:
-// Alice's Rank 3 to Bob read as a discard call on his o26, the only y5, and Bob
-// chucked it the next turn. Across seeds 1-100, 13 of the 70 critical cards thrown
+// in this variant a critical card lost is 25/25 lost. E.g. a Rank 3 to Bob that
+// reads as a discard call on his only y5 has Bob chuck it the next turn. Across
+// seeds 1-100 of self-play, 13 of the 70 critical cards thrown
 // away had been called to discard.
 //
 // A candidate FILTER like the two above: it reads our sight of the called card,
@@ -1582,8 +1582,8 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   // 3.10 -- still only when BOB'S CHOP IS CRITICAL: nothing above can make him
   // throw another card, so a lock is the last clue that keeps the chop. Falling
   // through here hands the turn to phase 2 while Bob, who has no safe action,
-  // throws the last copy on his. Self-play 9000021 T9: Bob's chop was the last
-  // p5, the only save was a rank-5 lock, and Cathy played instead (v17.5.0).
+  // throws the last copy on his: e.g. Bob's chop is the last p5, the only save is
+  // a rank-5 lock, and without this rung Alice plays instead (v17.5.0).
   if (chop_is_critical(g, bob_of(g))) {
     if (auto* c = first_of(g, pool_lock(g, cs))) {
       // Logged apart from the other §3 rungs, which all report "3.bob_chop".

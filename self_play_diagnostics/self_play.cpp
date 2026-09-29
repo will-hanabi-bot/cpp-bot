@@ -1,9 +1,9 @@
 // self_play: run N seeded self-play games and report the issues the detectors
-// find. See v17_self_play_diagnostics/README.md.
+// find. See self_play_diagnostics/README.md.
 //
 //   build/self_play.exe --seeds 1..100 --jobs 12 \
-//       --out v17_self_play_diagnostics/runs/v17.0.0 \
-//       --report v17_self_play_diagnostics/results/v17.0.0.md
+//       --out self_play_diagnostics/runs/v18.2.0 \
+//       --report self_play_diagnostics/results/v18.2.0.md
 
 #include <algorithm>
 #include <atomic>
