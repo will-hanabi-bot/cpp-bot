@@ -718,8 +718,14 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
 // A candidate FILTER, like `calls_two_copies_to_play`: it reads our own sight of
 // the called card, which no other seat shares, so it changes which clues we give
 // and never what a clue means. Covers every card the clue newly calls to play and
-// a reactive's receiver target.
-bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo) {
+// a reactive's receiver target, except `spared` (v18.7.0): Bob's chop when he is
+// stuck with it (§3's precondition), where the choice is between a possible dupe
+// and a certain loss. Human diagnostic 2013726 T17
+// (v18_human_vs_bot_diagnostics/2013726.md): green's own `{r3,g1}` hole card
+// vetoed every clue calling blue's playable g1 on chop, and blue threw it; v16.29.0,
+// before this filter, gave the 1.
+bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo,
+                                     int spared) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return false;
   const auto worlds = hanabi::tiiah::open_worlds(game, s.private_base(),
@@ -747,6 +753,7 @@ bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo) {
     called.push_back(hypo.waiting.front().receiver_target_order);
   }
   for (int o : called) {
+    if (o == spared) continue;
     auto id = s.deck[o].id();
     if (id && dead_somewhere(*id)) return true;
   }
@@ -846,6 +853,11 @@ std::vector<ClueCandidate> analyse_clues(
   const State& s = game.state;
   std::vector<ClueCandidate> out;
   out.reserve(all_clues.size());
+  // Bob's chop, when he is stuck with it: the one card the dupe filter spares.
+  int spared = -1;
+  if (s.variant->throw_it_in_a_hole && priority_3_applies(game)) {
+    if (auto c = game.chop(bob_of(game))) spared = *c;
+  }
   for (const auto& [perform, action] : all_clues) {
     if (!std::holds_alternative<ClueAction>(action)) continue;
     const auto& ca = std::get<ClueAction>(action);
@@ -856,7 +868,7 @@ std::vector<ClueCandidate> analyse_clues(
       continue;  // undecodable: no rung may propose it
     }
     if (calls_two_copies_to_play(game, hypo)) continue;
-    if (calls_a_card_we_may_have_played(game, hypo)) continue;
+    if (calls_a_card_we_may_have_played(game, hypo, spared)) continue;
     if (calls_a_critical_card_to_discard(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), 0.0};

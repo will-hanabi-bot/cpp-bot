@@ -39,7 +39,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | The engine rules (§1) | implemented; the three stack views (v16.12.0); a row reads its own seat's worlds (v16.18.0) |
 | Buckets (§1a) | implemented |
 | Stable clues (§1b) | implemented, by delegation to reactor0 |
-| The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0); the refusal given past the tier gate, and ranked (v16.27.0); the known play behind the position read from clue touches on the shared view, alike at every seat (v18.0.0); in the endgame (pace ≤ 1) a pairing may break the bucket relation (v18.4.0); with every target gotten, the walk takes the leftmost called one (v18.5.0); role inversion — a standing call on Bob keeps a clue to Cathy stable (v18.2.0); the reverse position keyed on a standing play again (v18.3.0, human diagnostic 2013726 T30) |
+| The dispatch, both arms (§1c) | reverse implemented (v16.2.0), ordinary (v16.8.0); the refusal (v16.14.0); the refusal given past the tier gate, and ranked (v16.27.0); the known play behind the position read from clue touches on the shared view, alike at every seat (v18.0.0); in the endgame (pace ≤ 1) a pairing may break the bucket relation (v18.4.0); with every target gotten, the walk takes the leftmost called one (v18.5.0); the own-dupe filter spares a stuck Bob's chop (v18.7.0); role inversion — a standing call on Bob keeps a clue to Cathy stable (v18.2.0); the reverse position keyed on a standing play again (v18.3.0, human diagnostic 2013726 T30) |
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0); the receiver's reading no longer dropped for missing the stamp (v16.26.0); an undeferred call no longer dropped as stale (v16.28.0); a finesse the receiver can prove, and the reacter's frame without its own card (v17.1.0); the reacter's card named for the team only as far as the receiver can (v17.2.0); a deferred reaction read the same way (v17.4.0) |
 | Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0); rule 6 against the shared view, and rows as floors (v16.23.0); the frame is the minimum across worlds, stable calls read in every world, world feasibility from reactions, play-order replay, evidence bands and a floored shared view (v16.24.0); the shared view settles on what every world agrees, the receiver's promise read on its own frame, rule 8 (a strike was already down) and hole requirements, notes in the team's reading (v16.25.0); a refusal with several candidates, and a watched dupe strike, floor the shared view (v16.27.0); the band never absorbs a named card (v16.28.0); a call live in some shared world is not dead (v16.29.0); an outside seat tries its own hole cards for a stable call (v17.1.0); a private deduction about our own hole cards stays out of the rows (v17.3.0); the target of a call on a card it can name settles its own hole cards (v17.5.0); a row replays our private settles with the set both seats of the pair hold (v18.1.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
@@ -439,7 +439,7 @@ Four things this rests on:
   first and there is nothing to refuse yet.
 
 **The bot gives it too**, because a human partner can name a dead card just as
-easily. `clue_refuses_dead_target` (`reactor0/decision.cpp:792-815`) marks the
+easily. `clue_refuses_dead_target` (`reactor0/decision.cpp:799-822`) marks the
 candidates, and they join **Precedence step 1** — `choose_very_high_clue` — rather
 than a rung: refusing is done *instead of* reacting, and every rung sits below the
 urgent return, which is the very thing being declined. The tier itself
@@ -448,14 +448,14 @@ urgent return, which is the very thing being declined. The tier itself
 Two more things make it actually get given (v16.27.0):
 
 - **The tier gate does not apply to it** (`clue_is_admissible`,
-  `reactor0/decision.cpp:1030`), as it does not to the fix (§1h). A refusal stamps
+  `reactor0/decision.cpp:1042`), as it does not to the fix (§1h). A refusal stamps
   nothing, so it is always LOW, and an OCCUPIED reacter — which a reacter holding
   the urgent call always is — had every refusal rejected before its priority was
   consulted. Replay [2011854](https://hanab.live/shared-replay/2011854#27) T27:
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:1930-1942`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:1942-1954`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, and among those the one that names its card
   (`stable_play_chain`, the same term §2 uses). Only then the default tiebreak, which
@@ -1576,7 +1576,7 @@ The condition divides in two, and where each half sits is the whole design:
 `dead_call_fix` (`src/basics/fix.cpp:67-88`) is the shared half, read by
 `tiiah::interpret_clue` (`tiiah/interpret_clue.cpp:349-362`) **after** the dispatch,
 so only a stable clue can be one — the discriminator §1c's refusal uses. The giver's
-half is `clue_fixes_dead_call` (`reactor0/decision.cpp:832-839`). It lives in the
+half is `clue_fixes_dead_call` (`reactor0/decision.cpp:839-846`). It lives in the
 engine's fix module rather than in either convention because both of them ask it and
 neither may reach into the other.
 
@@ -1602,7 +1602,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 3 — `rung_2b` (`reactor0/decision.cpp:1479-1494`), logged as `2b.fix`, with a
+and rung 3 — `rung_2b` (`reactor0/decision.cpp:1491-1506`), logged as `2b.fix`, with a
 colour fix before a rank fix (v18.6.0, human diagnostic 2013726 T5). Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
@@ -1765,7 +1765,7 @@ card by sight, the frame the giver shares with the receiver advanced by that car
 the pair's worlds, through the same `receiver_reading` helper (`:588-634`) that
 `narrow_receiver_call` uses — so the giver and the reader cannot disagree about what a
 call says. It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
-(`src/conventions/reactor0/decision.cpp:1174-1196`) reads first. reactor0 cannot call
+(`src/conventions/reactor0/decision.cpp:1186-1208`) reads first. reactor0 cannot call
 into this convention, so `reactor0::analyse_clues` takes an optional
 `CandidateAnnotator` and the engine passes this one under TIIAH
 (`candidate_annotator`, `src/basics/decide.cpp:49-52`); outside TIIAH the field stays
@@ -1780,18 +1780,33 @@ watched our card go in cannot be told why, because the call reads as sound on th
 we share. So a clue is not offered when it newly calls to play a card, whether the
 stable target, the reacter's card or a reactive's receiver target, that is basic trash
 in some strike-free world of our own hole cards. That is
-`calls_a_card_we_may_have_played` (`reactor0/decision.cpp:722-754`), a candidate filter
-in `analyse_clues` beside `calls_two_copies_to_play` (`:831`). Like that one, it reads
+`calls_a_card_we_may_have_played` (`reactor0/decision.cpp:727-761`), a candidate filter
+in `analyse_clues` beside `calls_two_copies_to_play` (`:640`). Like that one, it reads
 the giver's sight, so it changes which clues are given and never what a clue means.
 Without it, a giver whose own `{g1,b1}` or `{r1,y1}` hole card was the very card it
 called on a partner produced a strike. On seeds 1–100 it took the mean score from 14.75 to 17.53 and strikeouts from 69 to 47.
+
+**Except Bob's chop, when Bob is stuck with it (v18.7.0).** When §3's precondition
+holds (`priority_3_applies`: Bob's chop is at risk or playable, and he has no safe
+action), the filter spares Bob's chop (`analyse_clues`, `reactor0/decision.cpp:856-860`, applied at `:871`).
+The choice there is between a possible duplicate and a certain loss, and a human
+saves the card.
+
+The motivating case is human diagnostic 2013726 T17
+(`v18_human_vs_bot_diagnostics/2013726.md`). Blue's chop was a playable g1, and
+blue had nothing to clue. Green's own `{r3,g1}` hole card vetoed every clue
+calling it, so green played its b3 and blue threw the g1. v16.29.0, before the
+filter, gave the 1. Tests:
+`tests/test_tiiah/test_decision_making/test_own_dupe_filter.cpp` (the veto, and the
+chop spared) and
+`tests/test_tiiah/test_decision_making/test_replay_2013726_save_playable_chop_despite_own_dupe.cpp`.
 
 ### §2d Never call a critical card to discard (v17.4.0)
 
 A discard call throws the card away without anyone checking it is safe, and in
 this variant a critical card lost is 25/25 lost. So a clue is not offered when it
 newly calls a partner to discard a card we can see is critical
-(`calls_a_critical_card_to_discard`, `reactor0/decision.cpp:768-782`, a candidate
+(`calls_a_critical_card_to_discard`, `reactor0/decision.cpp:775-789`, a candidate
 filter in `analyse_clues` at `:860`). An inverted card is left out, because its
 Discard button plays it. For example, a Rank 3 to Bob could read as a discard call on
 the only y5. Across seeds 1–100, 13 of the 70 critical cards
