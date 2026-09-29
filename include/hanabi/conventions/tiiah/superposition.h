@@ -64,9 +64,10 @@ struct OpenWorld {
 // privately stay in them with the set every other seat still allows
 // (`ConvData::shared_left`), since no other seat followed us.
 //
-// `row` asks for them as a PAIRWISE ROW reads them (v16.28.0): a card too high to
-// land is not a strike when the card it waits for could be one of the hole cards
-// left out of the replay because we settled them privately (their shared set).
+// `row` asks for them as a PAIRWISE ROW reads them (v18.1.0), with `shared`: a
+// card we settled privately is left out once `base` already counts the identity we
+// settled it as (`ConvData::private_named`), because the row has then counted
+// that card, and replaying it would strike it as a duplicate of itself.
 std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
                                    const std::vector<int>& holders, int cap = 64,
                                    int except_order = -1, bool shared = false,

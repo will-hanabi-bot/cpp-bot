@@ -94,10 +94,12 @@ TEST(TiiahSharedRuleSix, APartnersRescuedPlayIsSharedEvidence) {
   }
 }
 
-// The control: rule 6 asked of our OWN plays reads our own belief, which no partner can
-// reproduce, so it moves our stacks and nothing else. Bob's `g1` lands on its own here,
-// so the partner form never fires and only the own-play form does.
-TEST(TiiahSharedRuleSix, OurOwnCollapseStaysPrivate) {
+// The control: rule 6 asked of our OWN plays reads our own belief, which Bob cannot
+// reproduce, since he cannot see his own g1. So it moves our stacks, not the shared view
+// and not Bob's row. Bob's `g1` lands on its own here, so the partner form never fires
+// and only the own-play form does. Cathy watched both cards and holds our `{g1,b1}`
+// too, so her row's world replay makes the same argument (v18.1.0).
+TEST(TiiahSharedRuleSix, OurOwnCollapseReachesOnlyTheRowThatWatchedIt) {
   SetupOptions opts = opts_for();
   opts.hands[1] = {"g1", "y4", "g4", "b4", "p4"};
   Game g = setup(std::move(opts));
@@ -122,9 +124,10 @@ TEST(TiiahSharedRuleSix, OurOwnCollapseStaysPrivate) {
   EXPECT_EQ(g.state.play_stacks[3], 1) << "our own belief has the blue";
   EXPECT_EQ(g.state.common_play_stacks[3], 0)
       << "but the argument rests on our own stacks, so the shared view may not take it";
-  for (size_t p = 0; p < g.state.pairwise_play_stacks.size(); ++p) {
-    EXPECT_EQ(g.state.pairwise_play_stacks[p][3], 0) << "nor any row, row " << p;
-  }
+  EXPECT_EQ(g.state.pairwise_play_stacks[static_cast<int>(TestPlayer::BOB)][3], 0)
+      << "nor Bob's row: he cannot see the g1 he threw";
+  EXPECT_EQ(g.state.pairwise_play_stacks[static_cast<int>(TestPlayer::CATHY)][3], 1)
+      << "Cathy watched both cards, and replays ours with the same {g1,b1}";
 }
 
 // The frozen frame is an estimate of what the giver could see, and our own hole plays

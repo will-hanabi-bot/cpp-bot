@@ -283,9 +283,11 @@ void settle(Game& game, int order, Identity id, bool shared) {
     // A private settle leaves the shared view's candidate set behind (v16.25.0):
     // no other seat followed us, so the shared worlds keep the card.
     if (!shared && m.shared_left.is_empty()) m.shared_left = m.superposition;
+    if (!shared) m.private_named = IdentitySet::single(id);  // v18.1.0
     if (shared) {
       m.shared_left = IdentitySet::empty();
       m.named_in_hole = IdentitySet::single(id);  // the team names it (v16.28.0)
+      m.private_named = IdentitySet::empty();
     }
     m.superposition = IdentitySet::empty();
   });
@@ -303,6 +305,7 @@ void settle_shared_only(Game& game, int order, Identity id) {
   game.with_meta(order, [id](ConvData& m) {
     m.shared_left = IdentitySet::empty();
     m.named_in_hole = IdentitySet::single(id);
+    m.private_named = IdentitySet::empty();
   });
 }
 
@@ -522,6 +525,16 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
     if (o == except_order) continue;
     const int who = game.state.holder_of(o);
     if (std::find(holders.begin(), holders.end(), who) == holders.end()) continue;
+    // A ROW already counting the identity we settled this card as privately has
+    // counted this card (v18.1.0): replayed again, its world of that identity would
+    // strike as a duplicate of itself. Replay 2010329: will-bot67's o3, settled as
+    // the y1 and booked on yagami's row by the pair's own argument (rule 3's pair
+    // form), replayed as `{r4,y1}` on that row, struck the y1 world, and the row
+    // claimed red 4.
+    if (row && game.meta[o].private_named.non_empty() &&
+        base.is_basic_trash(*game.meta[o].private_named.begin())) {
+      continue;
+    }
     pending.push_back(o);
     product *= static_cast<std::size_t>(cands(o).length());
     if (product > static_cast<std::size_t>(cap)) return out;  // read it flat
@@ -539,28 +552,6 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
   // that, so a world card of a named identity is a duplicate, not the band card.
   IdentitySet named = IdentitySet::empty();
   for (const ConvData& m : game.meta) named = named.union_with(m.named_in_hole);
-
-  // For a ROW: what the hole cards this replay leaves out -- settled by us in
-  // private, so not enumerated here -- could still be to the PAIR: their shared
-  // set, less what the pair rules out by sight (rule 3's pair form). Replay
-  // 2010329: our o3 `{r4,y1}` cannot be the r4 to the pair, both r4s being in
-  // will-bot69's hand, so it bridges nothing to a red 5.
-  IdentitySet unseen_links = IdentitySet::empty();
-  if (row) {
-    int partner = -1;
-    for (int h : holders) {
-      if (h != game.state.our_player_index) partner = h;
-    }
-    for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
-      if (game.meta[o].shared_left.is_empty() || cands(o).non_empty()) continue;
-      const int who = game.state.holder_of(o);
-      if (std::find(holders.begin(), holders.end(), who) == holders.end()) continue;
-      for (Identity id : game.meta[o].shared_left) {
-        if (partner >= 0 && all_copies_visible_to_pair(game, o, id, partner)) continue;
-        unseen_links = unseen_links.add(id);
-      }
-    }
-  }
 
   for (int o : pending) {
     std::vector<OpenWorld> next;
@@ -602,17 +593,6 @@ std::vector<OpenWorld> enumerate_worlds(const Game& game, const State& base,
           } else {
             n.absorbed[k] |= bit;
           }
-        } else if (row && !s_reversed(game, k) &&
-                   id.rank > n.state.play_stacks[k] + 1 &&
-                   unseen_links.contains(Identity{k, n.state.play_stacks[k] + 1})) {
-          // A PAIRWISE ROW, and a card too HIGH to land -- but the card it is
-          // waiting for could be one of the hole cards this replay leaves out,
-          // because we settled them privately and the row never learned which
-          // they were (v16.28.0). That is not a strike the row can see; the
-          // world stays, and nothing lands. Replay 2011887 T18: will-bot69's
-          // own o6 was the g1, settled privately; replayed without it, its
-          // o9 = g2 struck on green 0, only o9 = r2 survived, and the row for
-          // will-bot67 claimed red 2 with red really on 1.
         } else {
           // A play that did not land struck instead, and the stacks stay put --
           // which is a world too, and `struck` is how rule 6 tells it apart.
@@ -1174,13 +1154,24 @@ bool advance_rows_from_own_worlds(Game& game) {
         p < static_cast<int>(s.pairwise_evidence.size())
             ? s.pairwise_view(p).with_band(s.pairwise_evidence[p])
             : s.pairwise_view(p);
-    // Read AS A ROW (v16.28.0): the cards we settled privately are not replayed
-    // -- the row may or may not count them already, and adding them costs the
-    // world cap -- but a card waiting on one of them is not a strike either.
-    // Replay 2011887 T18: without that, will-bot69's o9 = g2 struck for want of
-    // its privately named o6 (the g1), and the row for will-bot67 claimed red 2.
+    // Over the sets BOTH seats of the pair hold (v18.1.0): `shared_left` for a card
+    // we narrowed or settled privately, its `superposition` otherwise. `p` replays
+    // our hole cards with the team's set, since it cannot know our private
+    // deduction, so we have to replay them the same way or the two copies of the
+    // row part. Replay 2013616: will-bot69 had settled its o6 `{r1,g1}` as the r1
+    // privately and left it out of this replay, while will-bot67 replayed it. Once
+    // both had watched yagami's o23 land as a g1, the g1 world struck at
+    // will-bot67's seat and its row went to red 1; will-bot69's stayed on red 0.
+    // The T19 Green was then paired on two different rows, and will-bot69 read it
+    // as a MISTAKE.
+    //
+    // Read AS A ROW (v16.28.0): a card waiting on one we settled privately is not a
+    // strike either. Replay 2011887 T18: without that, will-bot69's o9 = g2 struck
+    // for want of its privately named o6 (the g1), and the row for will-bot67
+    // claimed red 2. Replaying our settled cards with their shared set now covers
+    // that case too.
     const auto worlds =
-        open_worlds(game, base, {p, me}, 64, -1, /*shared=*/false, /*row=*/true);
+        open_worlds(game, base, {p, me}, 64, -1, /*shared=*/true, /*row=*/true);
     if (worlds.size() <= 1) continue;
     const auto surviving = strike_free(worlds);
 
@@ -1325,8 +1316,12 @@ void note_hidden_action(Game& game, const Action& raw) {
 
   if (known && team) {
     const int turn = game.state.turn_count;
-    game.with_meta(order, [set = team->first, turn](ConvData& m) {
+    // Named privately, like a private settle (v18.1.0): the rows of the seats that
+    // can name it took it above, and a row's world replay must not count it again.
+    const IdentitySet mine = named ? IdentitySet::single(*named) : IdentitySet::empty();
+    game.with_meta(order, [set = team->first, turn, mine](ConvData& m) {
       m.shared_left = set;
+      m.private_named = mine;
       m.hole_turn = turn;
     });
     return;

@@ -4,11 +4,13 @@
 //   * A view's BAND -- ranks it holds without naming the cards -- absorbs a world
 //     card as one of those cards, but never an identity the team has already
 //     NAMED in the hole: that is a duplicate, and the world strikes.
-//   * A PAIRWISE ROW leaves out the hole cards we settled privately; a card too
-//     high to land is then not a strike when one of those could be the card it
-//     waits for -- unless the pair can rule that identity out by sight.
+//   * A PAIRWISE ROW replays the hole cards we settled privately with the set both
+//     seats hold (v18.1.0), so a card waiting on one of them lands in the world
+//     where it is the card it waits for. It leaves such a card out once the row
+//     already counts the identity we settled it as.
 #include <gtest/gtest.h>
 
+#include <utility>
 #include <vector>
 
 #include "hanabi/basics/card.h"
@@ -58,6 +60,33 @@ bool struck_where(const std::vector<hanabi::tiiah::OpenWorld>& worlds, int order
   return false;
 }
 
+// Whether the world making exactly these assignments struck.
+bool struck_in(const std::vector<hanabi::tiiah::OpenWorld>& worlds,
+               const std::vector<std::pair<int, Identity>>& assigned) {
+  for (const hanabi::tiiah::OpenWorld& w : worlds) {
+    bool all = true;
+    for (const auto& want : assigned) {
+      bool found = false;
+      for (const auto& have : w.assignment) {
+        if (have == want) found = true;
+      }
+      if (!found) all = false;
+    }
+    if (all) return w.struck;
+  }
+  ADD_FAILURE() << "no world makes those assignments";
+  return false;
+}
+
+bool replays(const std::vector<hanabi::tiiah::OpenWorld>& worlds, int order) {
+  for (const hanabi::tiiah::OpenWorld& w : worlds) {
+    for (const auto& [o, x] : w.assignment) {
+      if (o == order) return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 // Bob's {g3,y1} goes into the hole; the view holds green 3 over a band of 2-3.
@@ -79,10 +108,11 @@ TEST(TiiahWorldReplayBand, ANamedIdentityIsNotAbsorbedByTheBand) {
   EXPECT_TRUE(struck_where(named, bobs, kG3)) << "the g3 is named: this one is its dupe";
 }
 
-// Our own hole card, settled privately as the g1, is left out of a row's replay
-// with its shared set {r3,g1}. Our other hole card, a {r2,g2}, is replayed on a
-// row with green 0: its g2 world is waiting for a g1 the left-out card may be, so
-// it is not a strike. Replay 2011887 T18, where striking it let the row claim r2.
+// Our own hole card, settled privately as the g1, is replayed on a row with its
+// shared set {r3,g1}, as our partner replays it (v18.1.0). Our other hole card, a
+// {r2,g2}, went in after it; on a row with green 0, its g2 lands in the world where
+// the settled card is the g1. Replay 2011887 T18, where striking it let the row claim
+// r2.
 TEST(TiiahWorldReplayBand, ARowDoesNotStrikeACardWaitingOnOurPrivateSettle) {
   Game g = position();
   const int settled = order_at(g, TestPlayer::ALICE, 1);
@@ -100,7 +130,33 @@ TEST(TiiahWorldReplayBand, ARowDoesNotStrikeACardWaitingOnOurPrivateSettle) {
   EXPECT_TRUE(struck_where(flat, open, kG2)) << "guard: read flat, the g2 strikes";
 
   const auto as_row = hanabi::tiiah::open_worlds(g, base, std::vector<int>{0, 2}, 64,
-                                                 -1, /*shared=*/false, /*row=*/true);
-  EXPECT_FALSE(struck_where(as_row, open, kG2))
-      << "the g1 it waits for may be our privately settled card";
+                                                 -1, /*shared=*/true, /*row=*/true);
+  EXPECT_FALSE(struck_in(as_row, {{settled, Identity{2, 1}}, {open, kG2}}))
+      << "the g1 it waits for is our privately settled card, in that card's g1 world";
+}
+
+// Our own hole card, settled privately as the g1, keeps its shared set {r3,g1} for a
+// row's replay. The row leaves it out once it already counts the g1 (v18.1.0): it has
+// then counted this card, and the card's g1 world would strike as a duplicate of
+// itself. Replay 2010329, where that let a row claim red 4.
+TEST(TiiahWorldReplayBand, ARowLeavesOutAPrivateSettleItAlreadyCounts) {
+  Game g = position();
+  const int settled = order_at(g, TestPlayer::ALICE, 1);
+  g = hidden_action(std::move(g), TestPlayer::ALICE, 1, /*reached_the_hole=*/true);
+  const Identity g1{2, 1};
+  g.with_meta(settled, [g1](ConvData& m) {
+    m.superposition = IdentitySet::empty();
+    m.shared_left = ids({kR3, g1});
+    m.private_named = IdentitySet::single(g1);
+  });
+  const std::vector<int> pair{0, 2};
+
+  const auto uncounted = hanabi::tiiah::open_worlds(
+      g, g.state.with_stacks({1, 0, 0, 0, 0}), pair, 64, -1, /*shared=*/true, /*row=*/true);
+  EXPECT_TRUE(replays(uncounted, settled))
+      << "on green 0 the row has not counted it, so it is replayed with {r3,g1}";
+
+  const auto counted = hanabi::tiiah::open_worlds(
+      g, g.state.with_stacks({1, 0, 1, 0, 0}), pair, 64, -1, /*shared=*/true, /*row=*/true);
+  EXPECT_FALSE(replays(counted, settled)) << "the row's green 1 is this card";
 }

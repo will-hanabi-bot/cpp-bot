@@ -183,6 +183,13 @@ struct ConvData {
   // second card of an identity the team has already named (tiiah/CONVENTION.md
   // §1e). Survives `cleared()`, like `superposition`.
   IdentitySet named_in_hole = IdentitySet::empty();
+  // The identity WE name this hole card as PRIVATELY (v18.1.0), beside
+  // `shared_left`: a private settle, or a reaction's card that the giver and the
+  // reacter name exactly. Empty otherwise, and cleared when a shared argument names
+  // it. A pairwise row's world replay enumerates such a card with its shared set, so
+  // that a partner's row and ours agree. It must skip the card once the row already
+  // counts this identity, or the card is counted twice.
+  IdentitySet private_named = IdentitySet::empty();
 
   bool superposed() const { return superposition.non_empty(); }
 

@@ -137,7 +137,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:676-686`), read by
+(`src/conventions/tiiah/superposition.cpp:656-666`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -160,7 +160,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:724-786`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:704-766`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 
 ### evidence / band
@@ -181,10 +181,21 @@ set by a private settle. World replay reads the set of them so that a view's ban
 never absorbs a second card of a named identity (§1e; replay 2011885 T17).
 
 ### row replay
-How a pairwise row replays hole-card worlds (`open_worlds(..., row)`, v16.28.0): our
-privately settled cards are left out, and a card too high to land is not a strike
-when the card it waits for could be one of them, as far as the pair can tell (§1e;
-replay 2011887 T18).
+How a pairwise row replays hole-card worlds (`open_worlds(..., shared=true, row=true)`,
+v18.1.0). Both seats' hole cards are replayed with the sets both seats hold, so a
+card we settled privately goes in with its `shared_left`. The exception is a card
+whose *private name* the row already counts: that card is left out, since the row
+has counted it already. Before v18.1.0 our private settles were left out altogether
+(v16.28.0), and the two copies of a row could reach different heights (§1e; replay
+2013616 T20).
+
+### private name
+The identity WE name a hole card as privately (v18.1.0), recorded as
+`ConvData::private_named` beside `shared_left`. It is written by
+`settle(..., shared=false)`, and by `note_hidden_action` for a reaction's card that the
+giver and the reacter name exactly while the team holds a wider set (the *team
+reading*). A shared argument that names the card clears it. Only the *row replay*
+reads it: a card whose private name the row already counts is left out.
 
 ### passback
 The playable-dupe passback (§1j, v16.25.0): a seat that can name its card as X, and
@@ -222,7 +233,7 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:407-462`. Rule 4
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:410-465`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past. What it
 learns is private: it moves our belief and no pairwise row (v17.3.0).
 
