@@ -163,6 +163,26 @@ void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
     landed_.push_back(l);
   }
   if (o.kind == Outcome::Kind::PLAY_MISSED) check_strike(sim, o, turn);
+  // Every urgent (reacter) blind play: did it land, did the reacter's reading hold
+  // the truth, and how much hole uncertainty stood at the reacter's seat?
+  if ((o.kind == Outcome::Kind::PLAY_LANDED || o.kind == Outcome::Kind::PLAY_MISSED) &&
+      o.order < static_cast<int>(pre_status_[o.actor].size()) &&
+      pre_status_[o.actor][o.order] == CardStatus::CALLED_TO_PLAY) {
+    const Game& ga = sim.seat(o.actor);
+    int superposed = 0, own_superposed = 0;
+    for (int c = 0; c < static_cast<int>(ga.meta.size()); ++c) {
+      if (c == o.order || !ga.meta[c].superposed()) continue;
+      ++superposed;
+      if (ga.state.holder_of(c) == o.actor) ++own_superposed;
+    }
+    issues_.push_back(Issue{"stat", "called_play", turn, o.actor, o.order,
+                            json{{"landed", o.kind == Outcome::Kind::PLAY_LANDED},
+                                 {"urgent", ga.meta[o.order].urgent},
+                                 {"reading_had_truth",
+                                  ga.common.thoughts[o.order].inferred.contains(*o.id)},
+                                 {"superposed", superposed},
+                                 {"own_superposed", own_superposed}}});
+  }
   // A card the team could no longer get back: the reachable max score fell.
   if (o.order >= 0 && sim.truth().max_score(*variant_) < pre_truth_.max_score(*variant_)) {
     const Game& ga = sim.seat(o.actor);
@@ -752,6 +772,12 @@ void Diagnostics::check_strike(const Sim& sim, const Outcome& o, int turn) {
                  {"signal_turn", m.signal_turn ? *m.signal_turn : -1},
                  {"clued", pre_state_[o.actor].deck[o.order].clued},
                  {"caller", callers},
+                 {"belief_rank", pre_state_[o.actor].play_stacks[o.id->suit_index]},
+                 {"common_rank", pre_state_[o.actor].common_play_stacks.empty() ? -1 : pre_state_[o.actor].common_play_stacks[o.id->suit_index]},
+                 {"true_rank", pre_truth_.stacks[o.id->suit_index]},
+                 {"deck_left", static_cast<int>(pre_truth_.deck.size()) - pre_truth_.next_order},
+                 {"final_round", pre_truth_.final_turn.has_value()},
+                 {"clues", pre_truth_.clues},
                  {"teammates_saw_dead", saw_dead}}});
 }
 

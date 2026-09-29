@@ -809,6 +809,19 @@ is judged from Alice's own inference, not common knowledge.
        here, and the `**` relaxation has nothing to reach.
     9. If Bob's chop is critical, give a stable discard that stamps CTD on a non-critical card in Bob's
        hand. Same **ditch-target rule**.
+    10. If Bob's chop is critical, give a lock clue to Bob (v17.5.0). No clue-count
+        condition, like 3.8 and 3.9: a lock is illegal at 0 tokens anyway.
+
+   **3.10 is the lock the 3.7–3.9 amendment took off the bottom of §3, restored for
+   a critical chop only.** When 3.8 and 3.9 find nothing to make Bob throw instead,
+   the chop is the last copy and Bob has no safe action, so falling through to the
+   play/discard phase loses that card on his next turn. The amendment's reason to
+   fall through — replay 1973281 T19, an endangered chop with its twin still in the
+   deck — does not reach a critical one. Self-play 9000021 T9: Alice held the last
+   p5 on chop, no clue could ditch around it, and Cathy played her called b1; Alice
+   threw the p5 on T10. Over 500 self-play games 55 played out differently, and the games
+   that ended 25/25 went from 31 to 34 with none lost
+   (`tests/test_tiiah/test_decision_making/test_replay_9000021_critical_chop_locked_when_nothing_ditches.cpp`).
 
    **Missing connectors** of a card `X` = the number of identities strictly
    between the top of `X`'s stack and `X` that are **not** visible to Alice in any
@@ -922,7 +935,7 @@ is judged from Alice's own inference, not common knowledge.
    That is no longer true, and the difference is worth being precise about.
    Every rung that can end §3 now carries a condition of its own: 3.6 needs
    Bob's whole hand critical, 3.7 needs three cards close to playing *and* two
-   vetoes, and **3.8 and 3.9 both need Bob's chop to be critical**. Critical is
+   vetoes, and **3.8, 3.9 and 3.10 all need Bob's chop to be critical**. Critical is
    strictly narrower than the test that got us into §3 — that one is
    `at_risk_chop`, which also fires for a card whose only other copy is still
    unseen in the deck. So a chop that is endangered but replaceable now walks
@@ -1341,9 +1354,10 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | "can the receiver name the card this clue calls?" | `ClueCandidate::names_its_card`, filled in `analyse_clues` |
 | "is this a STABLE clue to Bob?" (§3.1/3.3/3.5/3.9, §4.1-4.4, §4.7) | `is_stable_to_bob`, which asks `clue_is_reactive` |
 | §3.7's veto on Bob cluing Cathy | `has_colour_play_clue_for` |
-| §3.7 / §3.8 / §3.9's chop test | `chop_is_critical` (`facts.h`) |
+| §3.7 / §3.8 / §3.9 / §3.10's chop test | `chop_is_critical` (`facts.h`) |
 | the §3.8 / §4.8 reactive ditch | `rung_reactive_ditch` |
 | §3.9's stable ditch | `rung_stable_ditch` |
+| the §3.6 / §3.7 / §3.10 lock | `pool_lock` |
 
 ### Whose hand a rung is talking about
 

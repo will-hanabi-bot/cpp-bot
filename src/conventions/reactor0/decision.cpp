@@ -1575,9 +1575,17 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
     }
   }
   // 3.9 -- the stable counterpart of 3.8, on the same condition. Was a lock
-  // before the amendment; a lock now only comes from 3.6 or 3.7.
+  // before the amendment; a lock now comes from 3.6, 3.7 or 3.10 below.
   if (chop_is_critical(g, bob_of(g))) {
     if (auto* c = rung_stable_ditch(g, cs)) return c;
+  }
+  // 3.10 -- still only when BOB'S CHOP IS CRITICAL: nothing above can make him
+  // throw another card, so a lock is the last clue that keeps the chop. Falling
+  // through here hands the turn to phase 2 while Bob, who has no safe action,
+  // throws the last copy on his. Self-play 9000021 T9: Bob's chop was the last
+  // p5, the only save was a rank-5 lock, and Cathy played instead (v17.5.0).
+  if (chop_is_critical(g, bob_of(g))) {
+    if (auto* c = first_of(g, pool_lock(g, cs))) return c;
   }
   return nullptr;
 }

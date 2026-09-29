@@ -449,7 +449,29 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       // A call that rests on our own hole cards tells us what they were, as the
       // back-solve does (§1e rule 4): only the worlds that make it are ours. What
       // we learn is private -- the pair already knew.
-      if (!calling.empty() && holders.size() > 2) {
+      //
+      // The TARGET learns it too (v17.5.0): the giver watched our hole cards go in,
+      // so a call that makes sense in only some of their worlds says which. Only
+      // when every card it calls is one we can already name, though. The giver
+      // judges the call against the card it SEES, and we against our empathy, so
+      // with an unnamed card the worlds that make the call at our seat can be
+      // ones the giver never meant -- self-play 9000028 T11 read a trash reveal as
+      // a play call on `{g2,g3,g4,g5}` and would have settled our o12 on the g1 it
+      // was not. Self-play 9000092 T17: Bob's Blue on our known b2 made a call only
+      // where our o13 `{b1,p1}` was the b1, and without this we sat on the b2 and
+      // threw a g4 and a g5 in its place.
+      auto calls_named_cards = [&]() {
+        for (int o : game.state.hands[action.target]) {
+          if (game.meta[o].status != CardStatus::CALLED_TO_PLAY ||
+              prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+            continue;
+          }
+          if (game.common.thoughts[o].possible.length() != 1) return false;
+        }
+        return true;
+      };
+      if (!calling.empty() &&
+          (holders.size() > 2 || (me == action.target && calls_named_cards()))) {
         bool narrowed = false;
         for (const auto& [ord, unused] : calling.front()->assignment) {
           (void)unused;

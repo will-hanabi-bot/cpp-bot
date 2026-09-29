@@ -102,10 +102,11 @@ issue is reported once, at its first occurrence per (class, kind, seat, card).
 | **3** | `receiver_stamp_mismatch` | once the reacter acted, the receiver's newly called card is not the one the giver targeted |
 | **4** | `private_below`, `pair_below`, `common_below` | a stack view is below what every party to it saw land (see below) |
 | 4-above | `*_above` | a stack view is above the true stack; informational, but a strike risk |
-| 5 | `strike` | each strike, with the striker's reading and which teammates saw the card was dead |
+| 5 | `strike` | each strike, with the striker's reading, who called the card, which teammates saw the card was dead, the striker's belief and shared rank for the suit against the true one, and whether the deck had run out |
 | div | `common`, `pair`, `call` | informational, the first time in a game that the seats disagree about the common view, one pair view between its two members, or which cards are called and what the common reading of a called card is (the receiver of a pending reactive is exempt for the reacter's hand) |
 | onset | `common`, `pair` | informational, every action after which a view that agreed across seats no longer does, with the action that did it; `analysis` groups these to find where divergence starts |
 | stat | `divergence` | one per game: how many actions left the common views, or some pair view, in disagreement |
+| stat | `called_play` | every play of a card its holder held `CALLED_TO_PLAY`: whether it landed, whether it was the reacter's urgent call, whether the holder's reading held the truth, and how many cards stood superposed (all, and the holder's own) |
 
 Classes **1–4** are critical, and they are what the stop criterion counts.
 

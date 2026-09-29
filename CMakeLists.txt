@@ -387,6 +387,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_trash_reveal_over_lock.cpp
+  tests/test_tiiah/test_decision_making/test_replay_9000021_critical_chop_locked_when_nothing_ditches.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
@@ -476,6 +477,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_known_play_standing_call.cpp
   tests/test_tiiah/test_replay_9000041_no_discard_call_on_a_critical_card.cpp
   tests/test_tiiah/test_replay_9000007_deferred_reaction_reads_the_reacter_card.cpp
+  tests/test_tiiah/test_replay_9000092_call_names_the_target_hole_card.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
