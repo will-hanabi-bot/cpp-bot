@@ -1188,7 +1188,7 @@ what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
 The deferral's Rule 3 reads the same field to ask a different question — was the
 REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:702-716`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:250`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:273`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has
