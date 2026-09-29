@@ -352,6 +352,53 @@ bool sets_up_a_partner(const Game& game, Identity id) {
 
 namespace {
 
+// Which card a LOCKED hand throws at fewer than 8 tokens (v17.6.0): the one least
+// likely to be critical, then the one most likely to be trash, leftmost first. Each
+// card's reading is weighed by the copies this seat cannot place, narrowed by sight
+// as `is_chuckable` narrows it. A card whose Discard would certainly strike (a dead
+// inverted card) is never the one thrown.
+std::optional<int> locked_hand_throw(const Game& game, int alice) {
+  const State& s = game.state;
+  auto weight = [&](Identity i) {
+    const int ord = i.to_ord();
+    int left = s.card_count[ord] - s.base_count[ord];
+    for (int p = 0; p < s.num_players; ++p) {
+      if (p == alice) continue;
+      for (int o : s.hands[p]) {
+        if (s.deck[o].id() == i) --left;
+      }
+    }
+    return std::max(left, 0);
+  };
+  std::optional<int> best;
+  double best_crit = 2.0, best_trash = -1.0;
+  for (int o : s.hands[alice]) {
+    if (chuck_would_strike(game, alice, o)) continue;
+    const Thought& t = game.players[alice].thoughts[o];
+    IdentitySet set = t.inferred.non_empty() ? t.inferred : t.possible;
+    const IdentitySet seen = sight_narrowed(game, o);
+    if (set.intersect(seen).non_empty()) set = set.intersect(seen);
+    double total = 0, crit = 0, trash = 0;
+    for (Identity i : set) {
+      const double w = weight(i);
+      total += w;
+      if (s.is_basic_trash(i)) {
+        trash += w;
+      } else if (s.is_critical(i)) {
+        crit += w;
+      }
+    }
+    if (total <= 0) continue;
+    const double c = crit / total, tr = trash / total;
+    if (c < best_crit - 1e-9 || (c < best_crit + 1e-9 && tr > best_trash + 1e-9)) {
+      best_crit = c;
+      best_trash = tr;
+      best = o;
+    }
+  }
+  return best;
+}
+
 // Every rung returns through here, so a trace always names the rung that fired
 // and the button it pressed. Decision phase 2 had no branch logging at all
 // until this was added, which made "why did it pitch that?" unanswerable from a
@@ -555,8 +602,19 @@ std::optional<PerformAction> choose_action(const Game& game) {
         return taken(game, "12.discard_stall_drawn", *first_drawn, false);
       }
     }
-    // A locked hand has no chop. Pitch the leftmost card rather than return
-    // nothing -- `take_action` must produce a move.
+    // A LOCKED hand has no chop, and below 8 tokens it throws the card least
+    // likely to be critical (v17.6.0). It used to pitch its leftmost card blind,
+    // and a blind pitch that misses throws the card away as surely as a discard
+    // does, with a strike on top. Over 500 self-play games that pitch missed 140
+    // times in 181. Pitching only a card read as at least even odds to play still
+    // missed 45 in 72, so it never pitches here. A card it knows is playable is on
+    // the pitch list and never reaches this rung. At 8 tokens a discard is
+    // illegal, so the leftmost is pitched.
+    if (s.clue_tokens < 8) {
+      if (auto o = locked_hand_throw(game, alice)) {
+        return taken(game, "12.locked_throw_least_critical", *o, false);
+      }
+    }
     return taken(game, "12.locked_no_chop", s.hands[alice].front(), true);
   }
   if (s.clue_tokens == 8) return taken(game, "13.pitch_chop_at_eight", *chop, true);

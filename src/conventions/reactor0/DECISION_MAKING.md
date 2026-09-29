@@ -1289,14 +1289,31 @@ list by priority:
     safety promise), so a hand whose other cards are all clued has no chop at all.
     Such a hand is not locked: Alice **discards the first card drawn during the
     stall** (the lowest `turn_drawn` among the unclued status-`NONE` cards drawn
-    after `zcs_turn`) — `12.discard_stall_drawn` (`reactor0/calls.cpp:533-561`). It
+    after `zcs_turn`) — `12.discard_stall_drawn` (`reactor0/calls.cpp:580-609`). It
     keys on the card having been drawn during the stall, not on the current token
     count, and it is skipped at 8 clues (a discard is illegal) and when the discard
-    would certainly strike. Only a hand with no such card is really locked, and
-    pitches its leftmost card (`12.locked_no_chop`). Replay 2011327 T32: will-bot67's
+    would certainly strike. Replay 2011327 T32: will-bot67's
     four clued cards were all chop-moved and order 30 was drawn one turn after the
     team hit zero clues; it pitched order 30, a b1 with blue on 2, into a strike.
     `tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp`.
+
+    **A hand with no such card is really locked, and below 8 tokens it throws the
+    card least likely to be critical** (v17.6.0, `12.locked_throw_least_critical`,
+    `reactor0/calls.cpp:610-617`, choosing through `locked_hand_throw`,
+    `:355-400`). Each card's reading, narrowed by sight as the chuck list narrows
+    it, is weighed by the copies Alice cannot place. The card thrown has the
+    smallest share of critical identities; ties go to the largest share of trash,
+    then the leftmost. A card whose Discard would certainly strike is never the
+    one. At 8 tokens a discard is illegal and the leftmost card is pitched
+    (`12.locked_no_chop`, `:618`).
+
+    Until v17.6.0 the locked hand always pitched its leftmost card. A blind pitch
+    that misses throws the card away as surely as a discard does, and strikes on
+    top. Over 500 self-play games it missed 140 times in 181. A variant that
+    pitched a card read as at least even odds to play still missed 45 times in 72,
+    so this rung never pitches below 8 tokens. Over the same 500 games the change
+    took strikeouts from 222 to 173 and the mean score from 17.74 to 18.51
+    (`tests/test_reactor0/test_decision_making/test_locked_hand_throw.cpp`).
 13. If Alice is at 8 clues where she has no known CTPs or CTDs, she should pitch
     her chop card instead (as reaching this point means she also did not have a
     clue to give).

@@ -107,6 +107,14 @@ void Diagnostics::before_action(const Sim& sim) {
     pre_state_.push_back(g.state);
   }
   pre_truth_ = t;
+  pre_actor_common_.clear();
+  for (int c : t.hands[t.current]) {
+    for (int s = 0; s < np_; ++s) pre_actor_common_[c].push_back(sim.seat(s).common.thoughts[c].inferred);
+  }
+  pre_urgent_.clear();
+  for (int c = 0; c < static_cast<int>(sim.seat(t.current).meta.size()); ++c) {
+    pre_urgent_.push_back(sim.seat(t.current).meta[c].urgent);
+  }
   pre_inferred_.clear();
   for (int h = 0; h < np_; ++h) {
     for (int c : t.hands[h]) {
@@ -274,10 +282,20 @@ void Diagnostics::note_onsets(const Sim& sim, const Outcome& o, int turn) {
                               : CardStatus::NONE;
     for (std::size_t k = 0; k < now.size(); ++k) {
       if (last_views_[k] == "=" && now[k] == "!") {
-        issues_.push_back(Issue{"onset", k == 0 ? "common" : "pair", turn, o.actor, o.order,
-                                json{{"action", kind},
-                                     {"status", std::string(name(st))},
-                                     {"view", static_cast<int>(k)}}});
+        json d{{"action", kind},
+               {"status", std::string(name(st))},
+               {"view", static_cast<int>(k)}};
+        if (o.order >= 0 && pre_actor_common_.count(o.order)) {
+          json reads = json::array();
+          for (const IdentitySet& r : pre_actor_common_[o.order]) reads.push_back(set_str(r));
+          d["pre_common_readings"] = reads;
+          d["urgent"] = o.order < static_cast<int>(pre_urgent_.size()) && pre_urgent_[o.order];
+          if (o.id) d["truth"] = id_str(*o.id);
+          json commons = json::array();
+          for (int s = 0; s < np_; ++s) commons.push_back(str(sim.seat(s).state.common_play_stacks));
+          d["commons_after"] = commons;
+        }
+        issues_.push_back(Issue{"onset", k == 0 ? "common" : "pair", turn, o.actor, o.order, d});
       }
     }
   }

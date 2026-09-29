@@ -815,13 +815,13 @@ before Alice has at least one clue" part.
 **Settled in v16.23.0: a lock that leaves NO chop.** When every card that
 predates the lock is clued, the promise has nothing to protect, and the ruling is
 that Alice discards the first card drawn during the stall rather than pitching
-slot 1 blind (`12.discard_stall_drawn`, `calls.cpp:533-561`; replay 2011327 T32,
+slot 1 blind (`12.discard_stall_drawn`, `calls.cpp:580-609`; replay 2011327 T32,
 DECISION_MAKING.md rung 12). What follows is the case that is still open: a locked
 card that EXISTS, and a nameable trash card competing with it.
 
 What is undefined is what happens when Alice holds a card she can *name* as
 trash while the lock is on. Phase 2's chuck and pitch rungs all sit **above**
-the `12.discard_chop` floor (`calls.cpp:494`, `:577`), so any chuck candidate
+the `12.discard_chop` floor (`calls.cpp:541`, `:635`), so any chuck candidate
 pre-empts the locked chop. v10.4.0 made that far more common by removing the
 `possible`-must-agree guard from `is_chuckable`, and the two readings genuinely
 conflict:

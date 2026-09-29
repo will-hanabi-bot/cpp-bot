@@ -6,8 +6,8 @@
 // cards are all clued therefore has no chop at all, and the floor used to pitch
 // slot 1 blind. The ruling: a card drawn during the stall is discarded instead,
 // the FIRST one drawn if there are several. At 8 tokens a discard is illegal and
-// the pitch stands; with no stall-drawn card the hand really is locked and the
-// pitch stands too.
+// the pitch stands; with no stall-drawn card the hand really is locked, and
+// below 8 tokens it throws the card least likely to be critical (v17.6.0).
 //
 // Replay 2011327 T32 is the case: will-bot67 pitched order 30, drawn at T29 one
 // turn after the team hit zero clues, into a strike.
@@ -83,13 +83,14 @@ TEST(Reactor0StallDrawnCard, AtEightCluesItIsStillPitched) {
       << "a discard is illegal at 8 tokens";
 }
 
-TEST(Reactor0StallDrawnCard, AHandThatIsReallyLockedStillPitchesSlotOne) {
+TEST(Reactor0StallDrawnCard, AHandThatIsReallyLockedThrowsItsLeastCriticalCard) {
   Game g = position(/*tokens=*/1, 7, 6);
   for (int slot : {1, 2}) g.state.deck[order_at(g, TestPlayer::ALICE, slot)].clued = true;
   ASSERT_FALSE(g.chop(0).has_value());
-  EXPECT_EQ(played(hanabi::reactor0::choose_action(g)),
+  EXPECT_EQ(discarded(hanabi::reactor0::choose_action(g)),
             order_at(g, TestPlayer::ALICE, 1))
-      << "every card clued: nothing was drawn in the stall to throw";
+      << "every card clued and nothing drawn in the stall: throw rather than pitch "
+         "blind, and with five alike readings the leftmost goes";
 }
 
 TEST(Reactor0StallDrawnCard, ACardDrawnBeforeTheLockIsStillTheChop) {
