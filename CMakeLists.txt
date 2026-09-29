@@ -471,6 +471,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2013616_reacts_after_the_pair_settles.cpp
   tests/test_tiiah/test_replay_2013645_role_inversion_keeps_the_clue_stable.cpp
   tests/test_tiiah/test_replay_2013645_stable_four_under_role_inversion.cpp
+  tests/test_tiiah/test_replay_2013726_reverse_reactive_finesse_on_a_called_play.cpp
   tests/test_tiiah/test_known_play_standing_call.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp

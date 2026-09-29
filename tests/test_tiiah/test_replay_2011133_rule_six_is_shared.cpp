@@ -1062,11 +1062,7 @@ TEST(TiiahReplay2011133, RuleSixIsShared) {
   // 1. The collapse itself, which already worked -- pinned so the rest has a floor.
   EXPECT_FALSE(game.meta[13].superposed())
       << "the b2 only lands in the world where order 13 was the b1";
-  // Green reads 1 since v18.0.0. The known play behind the reverse position is now
-  // read from clue touches on the shared view, so yagami's T7 Rank 1 to will-bot69
-  // is no longer a reverse reactive that calls our order 10 as `{g2,b2}`. Blue is
-  // what this test is about, and it is unchanged.
-  const std::vector<int> belief{0, 2, 1, 2, 1};
+  const std::vector<int> belief{0, 2, 2, 2, 1};
   EXPECT_EQ(game.state.play_stacks, belief) << "our own blue is on 2: our b1, then the b2";
 
   // 2. What v16.21.0 adds: the conclusion is one every seat reaches, so the SHARED view

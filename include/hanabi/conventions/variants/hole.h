@@ -47,25 +47,25 @@ State stacks_after_queued_plays(const Game& game,
 
 // Does this seat hold a KNOWN PLAY? A card whose clue-touch empathy (`possible`
 // in `common`) allows only identities playable on the shared view (v18.0.0).
-// Read from what every seat computes alike. It decides the reverse-reactive
-// position. tiiah/CONVENTION.md §1c.
+// Read from what every seat computes alike. Part of a STANDING play, below.
+// tiiah/CONVENTION.md §1c.
 bool has_known_play(const Game& game, int player);
 
-// Does this seat hold a STANDING PLAY (v18.2.0)? A known play, or any card
+// Does this seat hold a STANDING PLAY (v18.2.0)? A known play, or a CLUED card
 // stamped CALLED_TO_PLAY, whatever its inference: a stable play clue stamps the
-// call, and every seat stamps it alike. It decides ROLE INVERSION only.
+// call, and every seat stamps it alike (v18.3.0: clued only). It decides the reverse-reactive position
+// (v18.3.0), and with it role inversion.
 bool has_standing_play(const Game& game, int player);
 
 // ROLE INVERSION (v18.2.0): this clue goes to the giver's Cathy and is STABLE,
-// because Bob holds a standing play and Cathy does not, or because the table is
-// in the reverse-reactive position. Without it a clue to Cathy is reactor0's
-// ordinary reactive. It only ever makes a clue to Cathy stable: whether a clue
-// to Bob is a reverse reactive is still `reverse_reactive_position`'s question.
-// Asked of the position BEFORE the clue. tiiah/CONVENTION.md §1c.
+// because the table is in the reverse-reactive position. Without it a clue to
+// Cathy is reactor0's ordinary reactive. Since v18.3.0 it is exactly the
+// clue-to-Cathy half of `reverse_reactive_position`. Asked of the position BEFORE
+// the clue. tiiah/CONVENTION.md §1c.
 bool inverted_stable(const Game& prev, int giver, int target);
 
 // Is the table in the REVERSE-REACTIVE POSITION (§1c)? The giver's Bob holds a
-// known play and the giver's Cathy does not. Asked of the position BEFORE the
+// standing play and the giver's Cathy does not (v18.3.0). Asked of the position BEFORE the
 // clue, and of the seats as the GIVER names them, not as we do.
 //
 // The position is what decides which seat's clue carries the reaction — TIIAH

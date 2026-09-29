@@ -1415,7 +1415,7 @@ convention, both in `read_clue` (v16.6.0):
   one unreadable.
 - **which of the two acts first** — usually the reacter, on the very next turn,
   so their card is judged against the stacks as they stand. TIIAH's REVERSE
-  reactive swaps that: the receiver holds the known play that made the clue
+  reactive swaps that: the receiver holds the standing play that made the clue
   reactive and plays it first, so the reacter's card is judged against the
   stacks after those queued plays. Without that, a delayed connector reads as
   a strike and the clue is priced as a double discard rather than a double

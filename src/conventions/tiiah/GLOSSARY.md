@@ -280,33 +280,34 @@ name different slots (replay 2010246 T2). For readers it is purely the
 
 ### known play
 A card whose clue-touch empathy (`possible` in `common`) allows only identities
-playable on the **shared view** (v18.0.0). Nothing else counts, because every seat
-must reach the same answer: not a call status, not an inference, not a seat's own
-stacks. A standing call is not a known play on its own. The reverse-reactive
-position keys on it, because it decides which seat's clue carries the reaction.
-`has_known_play`, `src/conventions/variants/hole.cpp:61-85`. CONVENTION.md §1c.
+playable on the **shared view** (v18.0.0). Inferences and a seat's own stacks do
+not count, because every seat must reach the same answer. One half of a *standing
+play*, which is what the dispatch asks.
+`has_known_play`, `src/conventions/variants/hole.cpp:61-80`. CONVENTION.md §1c.
 
 ### standing play
-A *known play*, or any card called to play, whatever its inference and touches
-(v18.2.0). A stable colour clue stamps its call by the nature of the clue, and
-every seat stamps it alike. Only *role inversion* reads it.
-`has_standing_play`, `src/conventions/variants/hole.cpp:87-100`. CONVENTION.md §1c.
+A *known play*, or a **clued** card called to play, whatever its inference and
+touches (v18.2.0; clued only since v18.3.0, since an unclued card called by a
+reaction is stamped at some seats and not others). A stable colour clue stamps its call by the nature of the clue, and
+every seat stamps it alike. It decides the *reverse-reactive position* (v18.3.0).
+`has_standing_play`, `src/conventions/variants/hole.cpp:82-97`. CONVENTION.md §1c.
 
 ### role inversion
-Bob holds a *standing play* and Cathy does not, so a clue to Cathy is STABLE rather
-than reactor0's ordinary reactive (v18.2.0). It never makes a clue reactive: a clue
-to Bob is a *reverse reactive* only when Bob holds a *known play*. `inverted_stable`,
-`src/conventions/variants/hole.cpp:102-109`; replay 2013645 T11. CONVENTION.md §1c.
+The clue-to-Cathy half of the *reverse-reactive position*: Bob holds a *standing
+play* and Cathy does not, so a clue to Cathy is STABLE rather than reactor0's
+ordinary reactive (v18.2.0). `inverted_stable`,
+`src/conventions/variants/hole.cpp:99-107`; replay 2013645 T11. CONVENTION.md §1c.
 
 ### reverse reactive
-The second of TIIAH's two dispatches. When Bob holds a known play and Cathy does
-not — the *reverse-reactive position* — a clue to **Bob** is reactive, with
+The second of TIIAH's two dispatches. When Bob holds a *standing play* and Cathy
+does not — the *reverse-reactive position* (v18.3.0; a touch-known play only from
+v18.0.0 to v18.2.0) — a clue to **Bob** is reactive, with
 **Cathy** reacting and Bob receiving, and a clue to **Cathy** is stable. Outside
 that position reactor0's positional rule stands: a clue to Cathy is the reactive
 one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:111-127`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:109-132`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch

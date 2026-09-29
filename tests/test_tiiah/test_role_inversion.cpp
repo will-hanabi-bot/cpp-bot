@@ -1,12 +1,11 @@
-// Role inversion (tiiah/CONVENTION.md §1c, v18.2.0).
+// Role inversion (tiiah/CONVENTION.md §1c, v18.2.0; v18.3.0).
 //
 // A clue to the giver's Cathy is reactor0's ordinary reactive, with Bob reacting,
-// unless the roles are inverted: Bob holds a STANDING play -- any card called to
-// play, whatever its touches still allow -- and Cathy does not. Then the clue to
-// Cathy is stable. That is all it changes. Whether a clue to Bob is a reverse
-// reactive still asks for a touch-known play (v18.0.0), so a called card whose
-// touches allow unplayable identities makes the clue to Bob stable as well.
-// Replay 2013645 T11.
+// unless the roles are inverted: Bob holds a STANDING play -- a clued card called
+// to play, whatever its touches still allow -- and Cathy does not. Then the clue
+// to Cathy is stable. Since v18.3.0 the same position makes a clue to Bob a
+// reverse reactive, with Cathy reacting (human diagnostic 2013726 T30). Replay
+// 2013645 T11.
 #include <gtest/gtest.h>
 
 #include <optional>
@@ -93,22 +92,29 @@ TEST(TiiahRoleInversion, AStandingCallOnBobKeepsAClueToCathyStable) {
   EXPECT_TRUE(g.waiting.empty()) << "nobody is asked to react";
 }
 
-// Role inversion creates no reverse reactive: the clue to Bob stays stable,
-// because his call is not a touch-known play.
-TEST(TiiahRoleInversion, AClueToBobStaysStable) {
+// The same position is the reverse-reactive one (v18.3.0): Bob's colour-called
+// card is a standing play, so a clue to Bob is a reverse reactive, with Cathy
+// reacting and Bob receiving.
+TEST(TiiahRoleInversion, AClueToBobIsAReverseReactive) {
   Game g = setup(inversion_opts());
   call_by_colour(g, order_at(g, TestPlayer::BOB, 1), Identity{3, 3});
 
-  EXPECT_FALSE(reactor::variants::reverse_reactive_position(g, 0));
+  EXPECT_TRUE(reactor::variants::reverse_reactive_position(g, 0));
   EXPECT_FALSE(reactor::variants::inverted_stable(g, 0, 1))
       << "role inversion only ever speaks about a clue to Cathy";
-  EXPECT_FALSE(reactor0::dispatch_is_reactive(
+  EXPECT_TRUE(reactor0::dispatch_is_reactive(
       g, rank_clue(TestPlayer::ALICE, TestPlayer::BOB, 4)));
 
   g = take_turn(std::move(g), "Alice clues 4 to Bob");
 
-  EXPECT_NE(interp_of(g), ClueInterp::REACTIVE);
-  EXPECT_TRUE(g.waiting.empty());
+  // Read as a reactive, not as the stable clue it was until v18.3.0. This Bob has
+  // no second playable for the walk to find, so the reading is a MISTAKE; what the
+  // test pins is the dispatch.
+  const auto interp = interp_of(g);
+  EXPECT_TRUE(interp == ClueInterp::REACTIVE || interp == ClueInterp::MISTAKE);
+  ASSERT_FALSE(g.waiting.empty());
+  EXPECT_EQ(g.waiting.front().reacter, 2) << "Cathy reacts";
+  EXPECT_EQ(g.waiting.front().receiver, 1) << "Bob receives";
 }
 
 // A two-sided test, like the reverse position: once Cathy holds a call too, the
