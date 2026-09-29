@@ -142,6 +142,8 @@ struct SimResult {
   int game_id = 0;
   int score = 0;
   int max_score = 0;
+  int reachable = 0;  // the max score still reachable when the game ended
+  int clues = 0, plays = 0, misses = 0, discards = 0;  // actions taken
   int strikes = 0;
   int turns = 0;
   EndCondition end = EndCondition::NORMAL;
@@ -183,6 +185,7 @@ class Sim {
   std::vector<std::string> log_paths_;
   TrueState truth_;
   std::optional<SimError> error_;
+  int n_clues_ = 0, n_plays_ = 0, n_misses_ = 0, n_discards_ = 0;
 };
 
 }  // namespace hanabi::selfplay

@@ -175,12 +175,12 @@ Variant flag making every card of a given rank single-copy, hence critical.
 `CardStatus::CALLED_TO_DISCARD`. The convention has designated this card as
 the one to discard. **⚠ A physical action label**: it means "press the discard
 button", which on an inverted (Orange) suit is a *play* attempt.
-`card.h:25`; `decide.cpp:687-689`.
+`card.h:25`; `decide.cpp:701-703`.
 
 ### CTP — called to play
 `CardStatus::CALLED_TO_PLAY`. Queued to be played. Same physical-label caveat
 as CTD: on an inverted suit, pressing play sends the card to the discard pile.
-`card.h:24`; `decide.cpp:684-686`.
+`card.h:24`; `decide.cpp:698-700`.
 
 ### dark suits
 Black, Dark, Gray, Cocoa — one copy each, so always critical.
@@ -622,7 +622,7 @@ won't be discarded. `src/basics/player_game.cpp:248-276`.
 ### signal_turn
 The turn a CTP/CTD was first stamped. The queue-order tiebreaker throughout —
 plays go in signal order, and only the newest CTD is discardable.
-`card.h:121`; `decide.cpp:793-805`, `:932-956`.
+`card.h:121`; `decide.cpp:807-819`, `:932-956`.
 
 ### special rank
 A rank with variant-specific clue-touch behaviour, combined with `rainbow_s` /
@@ -707,7 +707,7 @@ Suit family matched by White, Gray, Light, Null. No colour clue touches them.
 The turn the team ran out of clue tokens. Cards drawn after it are excluded
 from the chop, so a player who drew during the stall isn't expected to discard
 them. `include/hanabi/basics/game.h:280`; set at `decide.cpp:411`, read by
-`Game::chop` at `decide.cpp:797-803`. Under reactor0 (and TIIAH), a hand left
+`Game::chop` at `decide.cpp:811-817`. Under reactor0 (and TIIAH), a hand left
 with no chop at all because of it discards the FIRST card drawn during the stall
 rather than pitching blind — floor rung `12.discard_stall_drawn`, reactor0
 DECISION_MAKING.md (v16.23.0).

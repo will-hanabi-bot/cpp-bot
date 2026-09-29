@@ -6,13 +6,17 @@ Usage: scripts/shift_citations.py <source-file> [--base REV] [--apply]
 Reads `git diff -U0 REV -- <source-file>` (REV defaults to HEAD), builds the
 old-line -> new-line map for every line outside a changed hunk, and rewrites
 each citation of that file in the repo's .md files (and in code comments under
-src/, include/, tests/). A citation is `<path>:A` or `<path>:A-B` where <path>
+src/ and include/; tests/ is skipped, since editing an existing test needs approval). A citation is `<path>:A` or `<path>:A-B` where <path>
 ends with the file's name; a bare `name.cpp:N` is resolved by the directory
 the citing doc lives in when two files share a name (e.g. the tiiah and the
 reactor0 `interpret_reactive.cpp`).
 
 A citation with an endpoint INSIDE a changed hunk cannot be mapped mechanically;
 it is listed as NEEDS REVIEW and left alone. Without --apply nothing is written.
+
+Run it BEFORE writing any new citation into the docs: it reads every citation as
+pointing at the base revision, so one already written against the new lines would
+be shifted a second time.
 """
 import argparse
 import os
@@ -79,8 +83,10 @@ def main():
     pat = re.compile(r"([A-Za-z0-9_./-]*" + re.escape(name) + r"):(\d+)(?:-(\d+))?")
     docs = []
     for d, dirs, files in os.walk(ROOT):
+        # tests/ is left alone: an edit to an existing test, even a comment, is
+        # listed and approved first (CLAUDE.md "Test changes").
         dirs[:] = [x for x in dirs if x not in (".git", "build", ".claude", "logs", "_deps",
-                                                  "Testing", "runs")]
+                                                  "Testing", "runs", "tests")]
         for f in files:
             if f.endswith((".md", ".cpp", ".h", ".py")):
                 docs.append(os.path.join(d, f))

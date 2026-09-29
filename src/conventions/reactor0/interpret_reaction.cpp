@@ -636,7 +636,7 @@ void retire_pending_reaction(Game& game, int player_index) {
 }
 
 bool resolve_deferred_reaction(const Game& prev, Game& game, int player_index,
-                               int order, bool was_play) {
+                               int order, bool was_play, ReactorWC* resolved) {
   if (!is_reactor0_family(game.convention)) return false;
   // Find what this seat owes. Indexed by receiver, so scan for the entry whose
   // REACTER just acted. At most one can match: reacter = giver + 1, and a giver's
@@ -726,10 +726,15 @@ bool resolve_deferred_reaction(const Game& prev, Game& game, int player_index,
   if (!slots) {
     hanabi::logging::log_branch("reactor0.deferred_reaction",
                                 {{"dropped", "no_target"}});
+    // The receiver's card has gone, but this IS the reacter answering: what the
+    // reacter played is still read off the relation (Throw It in a Hole, v17.4.0),
+    // so the caller is handed the connection all the same.
+    if (resolved) *resolved = wc;
     return true;
   }
   resolve_reaction(prev, game, wc, slots->second,
                    reacter_button_pressed(prev, game, order, was_play), order);
+  if (resolved) *resolved = wc;
   return true;
 }
 

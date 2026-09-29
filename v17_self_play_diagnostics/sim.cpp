@@ -410,6 +410,12 @@ SimResult Sim::run(const SimHooks& hooks) {
 
     auto outcome = resolve(actor, perform);
     if (!outcome) break;
+    switch (outcome->kind) {
+      case Outcome::Kind::CLUE: ++n_clues_; break;
+      case Outcome::Kind::PLAY_LANDED: ++n_plays_; break;
+      case Outcome::Kind::PLAY_MISSED: ++n_misses_; break;
+      case Outcome::Kind::DISCARD: ++n_discards_; break;
+    }
 
     // The draw.
     std::optional<Identity> drawn_id;
@@ -458,6 +464,11 @@ SimResult Sim::run(const SimHooks& hooks) {
   r.game_id = cfg_.game_id;
   r.score = t.score;
   r.max_score = max_possible;
+  r.reachable = t.max_score(v);
+  r.clues = n_clues_;
+  r.plays = n_plays_;
+  r.misses = n_misses_;
+  r.discards = n_discards_;
   r.strikes = t.strikes;
   r.turns = t.turn;
   r.end = t.ended.value_or(EndCondition::TERMINATED);

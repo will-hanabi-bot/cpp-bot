@@ -41,8 +41,11 @@ bool react_discard(const Game& prev, Game& game, int player_index, int order,
 // `was_play` is the HOOK, not the outcome -- the button, as everywhere else in
 // this file. Returns true if a pending reaction was consumed (either resolved or
 // deliberately dropped), so callers can log it; the action itself is unaffected.
+// `resolved`, when given, receives the connection that was actually RESOLVED (not
+// one that was dropped), for the Throw It in a Hole reading that follows it.
 bool resolve_deferred_reaction(const Game& prev, Game& game, int player_index,
-                               int order, bool was_play);
+                               int order, bool was_play,
+                               ReactorWC* resolved = nullptr);
 
 // Retire what `player_index` owed without resolving it, because the live
 // `waiting` path is about to resolve the very same reaction. Undeferred

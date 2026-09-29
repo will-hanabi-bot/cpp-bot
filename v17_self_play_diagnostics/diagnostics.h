@@ -71,6 +71,10 @@ class Diagnostics {
   std::vector<std::vector<CardStatus>> pre_status_;
   std::vector<State> pre_state_;
   TrueState pre_truth_;
+  // Before the action: each card's common reading at its two non-holder seats.
+  std::map<int, std::pair<IdentitySet, IdentitySet>> pre_inferred_;
+  // Per seat, before the action: does the actor's clue sit in the REVERSE position?
+  std::vector<bool> pre_reverse_;
   // What the actor could name each card of its hand as, before acting.
   std::map<int, Identity> actor_named_;        // by its own reading
   std::map<int, Identity> actor_named_common_;  // by every seat's common reading

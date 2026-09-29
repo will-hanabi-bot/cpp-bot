@@ -63,10 +63,16 @@ bool has_known_play(const Game& game, int player) {
     // is the promise, and the rest of the set is the superposition it was given
     // under. An unstamped card has to be playable on every identity it could
     // still be, which is what `known` means without a call behind it.
-    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) {
-      if (live.exists([&s](Identity i) { return s.is_playable(i); })) return true;
-      continue;
-    }
+    //
+    // A STANDING call is a known play whatever our own stacks say (v17.4.0). The
+    // call is the team's promise, every seat holds it, and the call invariants
+    // already withdraw a call that is dead in every world the team can see
+    // (`drop_dead_play_calls`). Judging it on our belief made the dispatch depend
+    // on one seat's hole cards: self-play 9000009 T28, Cathy's belief had blue on 2
+    // and so counted Bob's called b3 as a known play, Alice and Bob had blue on 1
+    // and did not, and Cathy answered Alice's Rank 5 lock as a reverse reactive --
+    // blind-playing a g1 into a strike.
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) return true;
     if (live.forall([&s](Identity i) { return s.is_playable(i); })) return true;
   }
   return false;

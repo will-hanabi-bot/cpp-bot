@@ -644,12 +644,26 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   // just below owns the undeferred case -- when it covers this actor, retire the
   // durable copy so the same reaction cannot fire twice.
   if (is_reactor0_family(convention)) {
+    ReactorWC deferred;
+    deferred.receiver = -1;
     if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
       hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
     } else if (hanabi::reactor0::resolve_deferred_reaction(
                    prev, *this, action.player_index_v, action.order,
-                   /*was_play=*/true)) {
+                   /*was_play=*/true, &deferred)) {
       hanabi::reactor0::enforce_call_invariants(*this);
+      // Throw It in a Hole: the same reading the live path gives a reaction, for
+      // one that was DEFERRED (v17.4.0). Until then a deferred reaction skipped
+      // it, so the receiver never narrowed the reacter's card and its call kept
+      // the generic reading -- and those went into the hole wider at the
+      // receiver's seat than at the other two (self-play 9000007 T9: Alice held
+      // Cathy's o15 as all 23 identities, Bob and Cathy as `{r1,y1}`).
+      if (deferred.receiver >= 0 && state.variant->throw_it_in_a_hole) {
+        hanabi::tiiah::record_reaction(prev, *this, deferred, action.order);
+        hanabi::tiiah::narrow_reacter_play(prev, *this, deferred, action.order);
+        hanabi::tiiah::narrow_receiver_call(prev, *this, deferred, action.order);
+        hanabi::reactor0::enforce_call_invariants(*this);
+      }
     }
   }
 

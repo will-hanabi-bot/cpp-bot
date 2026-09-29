@@ -753,6 +753,34 @@ bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo) {
   return false;
 }
 
+// THROW IT IN A HOLE: would this clue call a partner to DISCARD a card we can
+// see is critical (v17.4.0)?
+//
+// A discard call throws the card away -- nobody is asked whether it is safe, and
+// in this variant a critical card lost is 25/25 lost. Self-play 9000041 T25:
+// Alice's Rank 3 to Bob read as a discard call on his o26, the only y5, and Bob
+// chucked it the next turn. Across seeds 1-100, 13 of the 70 critical cards thrown
+// away had been called to discard.
+//
+// A candidate FILTER like the two above: it reads our sight of the called card,
+// so it changes which clues are given and never what one means. An inverted
+// card is left alone -- its discard button plays it.
+bool calls_a_critical_card_to_discard(const Game& game, const Game& hypo) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == s.our_player_index) continue;
+    for (int o : s.hands[p]) {
+      if (hypo.meta[o].status != CardStatus::CALLED_TO_DISCARD) continue;
+      if (game.meta[o].status == CardStatus::CALLED_TO_DISCARD) continue;
+      const auto id = s.deck[o].id();
+      if (!id || variants::is_inverted_id(s, *id)) continue;
+      if (s.is_critical(*id)) return true;
+    }
+  }
+  return false;
+}
+
 // THROW IT IN A HOLE: would this clue be a REFUSAL (tiiah/CONVENTION.md §1c)?
 //
 // We are the reacter of a standing ordinary reactive, and we can see that the
@@ -829,6 +857,7 @@ std::vector<ClueCandidate> analyse_clues(
     }
     if (calls_two_copies_to_play(game, hypo)) continue;
     if (calls_a_card_we_may_have_played(game, hypo)) continue;
+    if (calls_a_critical_card_to_discard(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), 0.0};
     // An undecodable REACTIVE is not a stall -- drop it, as a MISTAKE is dropped,

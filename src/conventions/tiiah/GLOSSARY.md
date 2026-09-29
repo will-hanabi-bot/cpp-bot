@@ -270,9 +270,11 @@ name different slots (replay 2010246 T2). For readers it is purely the
 ### known play
 A card stamped `CALLED_TO_PLAY` whose inference still holds at least one good
 playable identity, **or** a card whose global empathy is entirely playable
-identities. Read from `common`, so every seat agrees. It is what the
-dispatch keys on — it is what decides which seat's clue carries the reaction.
-`has_known_play`, `src/conventions/variants/hole.cpp:57-73`. CONVENTION.md §1c.
+identities. Read from `common`, so every seat agrees; a standing call qualifies
+as it stands (v17.4.0), since rule 3 keeps only calls live in the team's worlds.
+It is what the dispatch keys on — it is what decides which seat's clue carries the
+reaction. `has_known_play`, `src/conventions/variants/hole.cpp:57-79`.
+CONVENTION.md §1c.
 
 ### reverse reactive
 The second of TIIAH's two dispatches. When Bob holds a known play and Cathy does
@@ -282,7 +284,7 @@ that position reactor0's positional rule stands: a clue to Cathy is the reactive
 one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:75-91`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:81-97`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch

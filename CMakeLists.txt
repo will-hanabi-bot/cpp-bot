@@ -473,6 +473,9 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_9000001_holder_keeps_what_the_giver_could_mean.cpp
   tests/test_tiiah/test_replay_9000013_giver_does_not_call_its_own_dupe.cpp
   tests/test_tiiah/test_replay_9000031_reacter_card_named_as_far_as_the_receiver_can.cpp
+  tests/test_tiiah/test_known_play_standing_call.cpp
+  tests/test_tiiah/test_replay_9000041_no_discard_call_on_a_critical_card.cpp
+  tests/test_tiiah/test_replay_9000007_deferred_reaction_reads_the_reacter_card.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp
   tests/test_tiiah/test_shared_rule_six.cpp

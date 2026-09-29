@@ -4,12 +4,19 @@
 #include <utility>
 
 #include "hanabi/basics/interp.h"
+#include "hanabi/conventions/variants/hole.h"
 
 namespace hanabi::selfplay {
 
 using nlohmann::json;
 
 namespace {
+
+std::string str_of(const std::vector<int>& v) {
+  std::string c;
+  for (int k : v) c += std::to_string(k);
+  return c;
+}
 
 bool is_call(CardStatus s) {
   return s == CardStatus::CALLED_TO_PLAY || s == CardStatus::CALLED_TO_DISCARD;
@@ -100,6 +107,24 @@ void Diagnostics::before_action(const Sim& sim) {
     pre_state_.push_back(g.state);
   }
   pre_truth_ = t;
+  pre_inferred_.clear();
+  for (int h = 0; h < np_; ++h) {
+    for (int c : t.hands[h]) {
+      std::vector<int> others;
+      for (int s = 0; s < np_; ++s) {
+        if (s != h) others.push_back(s);
+      }
+      pre_inferred_[c] = {sim.seat(others[0]).common.thoughts[c].inferred,
+                          sim.seat(others[1]).common.thoughts[c].inferred};
+    }
+  }
+  pre_reverse_.assign(np_, false);
+  if (variant_->throw_it_in_a_hole) {
+    for (int s = 0; s < np_; ++s) {
+      pre_reverse_[s] =
+          hanabi::reactor::variants::reverse_reactive_position(sim.seat(s), t.current);
+    }
+  }
   actor_named_.clear();
   actor_named_common_.clear();
   named_at_.clear();
@@ -138,6 +163,19 @@ void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
     landed_.push_back(l);
   }
   if (o.kind == Outcome::Kind::PLAY_MISSED) check_strike(sim, o, turn);
+  // A card the team could no longer get back: the reachable max score fell.
+  if (o.order >= 0 && sim.truth().max_score(*variant_) < pre_truth_.max_score(*variant_)) {
+    const Game& ga = sim.seat(o.actor);
+    const auto& th = ga.common.thoughts[o.order];
+    add(Issue{"lost", o.kind == Outcome::Kind::DISCARD ? "discarded" : "struck", turn,
+              o.actor, o.order,
+              json{{"truth", id_str(*o.id)},
+                   {"status", std::string(name(pre_status_[o.actor][o.order]))},
+                   {"clued", pre_state_[o.actor].deck[o.order].clued},
+                   {"inferred", set_str(th.inferred)},
+                   {"clues", pre_truth_.clues},
+                   {"lost", pre_truth_.max_score(*variant_) - sim.truth().max_score(*variant_)}}});
+  }
   check_inferences(sim, turn);
   check_calls(sim, o, turn);
   if (o.kind == Outcome::Kind::CLUE) {
@@ -151,6 +189,35 @@ void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
 
 void Diagnostics::note_onsets(const Sim& sim, const Outcome& o, int turn) {
   if (!variant_->throw_it_in_a_hole) return;
+  // The TEAM's set for every hole card, which the shared view is built from: the
+  // name the team gave it, else the set the shared view keeps for a card we
+  // settled privately, else its superposition. One thing at every seat.
+  {
+    const TrueState& t = sim.truth();
+    for (int ord = 0; ord < static_cast<int>(t.deck.size()); ++ord) {
+      if (t.holder[ord] < 0) continue;
+      std::vector<std::string> sets;
+      bool any = false;
+      for (int s = 0; s < np_; ++s) {
+        const Game& g = sim.seat(s);
+        if (ord >= static_cast<int>(g.meta.size())) { sets.push_back("?"); continue; }
+        const ConvData& m = g.meta[ord];
+        IdentitySet team = m.named_in_hole.non_empty() ? m.named_in_hole
+                           : m.shared_left.non_empty() ? m.shared_left
+                                                       : m.superposition;
+        if (team.non_empty()) any = true;
+        sets.push_back(team.non_empty() ? set_str(team) : "-");
+      }
+      if (!any) continue;
+      if (std::any_of(sets.begin(), sets.end(),
+                      [&](const std::string& x) { return x != sets[0]; })) {
+        add(Issue{"div", "holeset", turn, t.holder[ord], ord,
+                  json{{"sets", sets}, {"truth", id_str(t.deck[ord])},
+                       {"action_actor", o.actor}, {"action_order", o.order},
+                       {"action", o.kind == Outcome::Kind::CLUE ? "clue" : "card"}}});
+      }
+    }
+  }
   auto str = [](const std::vector<int>& v) {
     std::string c;
     for (int k : v) c += std::to_string(k);
@@ -379,11 +446,46 @@ void Diagnostics::check_clue_reading(const Sim& sim, const Outcome& o, int turn)
     add(Issue{any_reactive || pair_disagrees ? "3" : "3-outside",
               "dispatch_disagreement", turn, o.actor, -1,
               json{{"readings", readings},
+                   {"reverse_position",
+                    json::array({static_cast<bool>(pre_reverse_[0]),
+                                 static_cast<bool>(pre_reverse_[1]),
+                                 static_cast<bool>(pre_reverse_[2])})},
                    {"clue_target", o.clue_target},
                    {"clue", (o.clue_kind == ClueKind::COLOUR ? "colour " : "rank ") +
                                 std::to_string(o.clue_value)}}});
   }
   if (!variant_->throw_it_in_a_hole) return;
+  // Reading ONSETS: cards whose common reading this clue left different at two
+  // non-holder seats that had agreed on it before (informational).
+  {
+    const TrueState& t = sim.truth();
+    for (int h = 0; h < np_; ++h) {
+      for (int c : t.hands[h]) {
+        std::vector<int> others;
+        for (int s = 0; s < np_; ++s) {
+          if (s != h) others.push_back(s);
+        }
+        const auto& g0 = sim.seat(others[0]);
+        const auto& g1 = sim.seat(others[1]);
+        const bool now_differ =
+            g0.common.thoughts[c].inferred != g1.common.thoughts[c].inferred;
+        if (!now_differ) continue;
+        bool differed_before = false;
+        if (auto it = pre_inferred_.find(c); it != pre_inferred_.end()) {
+          differed_before = it->second.first != it->second.second;
+        }
+        if (differed_before) continue;
+        issues_.push_back(Issue{"onset", "reading", turn, h, c,
+                                json{{"giver_reading", readings[o.actor]},
+                                     {"giver", o.actor},
+                                     {"target", o.clue_target},
+                                     {"holder_is_target", h == o.clue_target},
+                                     {"a", set_str(g0.common.thoughts[c].inferred)},
+                                     {"b", set_str(g1.common.thoughts[c].inferred)},
+                                     {"truth", id_str(t.deck[c])}}});
+      }
+    }
+  }
   if (readings[o.actor] != "Reactive") return;
 
   const ReactorWC* g = latest_wc_from(sim.seat(o.actor), o.actor);
@@ -397,7 +499,12 @@ void Diagnostics::check_clue_reading(const Sim& sim, const Outcome& o, int turn)
                    {"giver_react_order", g->react_order},
                    {"giver_target", g->receiver_target_order},
                    {"reacter_react_order", r ? r->react_order : -2},
-                   {"reacter_target", r ? r->receiver_target_order : -2}}});
+                   {"reacter_target", r ? r->receiver_target_order : -2},
+                   // The frame each walked in: its row for the other, BEFORE the clue.
+                   {"giver_row", str_of(pre_state_[o.actor].stacks_known_to_both(
+                                     o.actor, g->reacter))},
+                   {"reacter_row", str_of(pre_state_[g->reacter].stacks_known_to_both(
+                                       g->reacter, o.actor))}}});
   }
   if (g->receiver_target_order >= 0) {
     pending_[g->receiver] = PendingReaction{o.actor, g->reacter, g->receiver,
@@ -628,10 +735,23 @@ void Diagnostics::check_strike(const Sim& sim, const Outcome& o, int turn) {
     if (s == o.actor) continue;
     if (!pre_state_[s].is_playable(*o.id)) saw_dead.push_back(s);
   }
+  const ConvData& m = g.meta[o.order];
+  // Who called it, and did the CALLER's own reading of the card hold the truth?
+  json callers = json::object();
+  if (m.by) {
+    const Game& gb = sim.seat(*m.by);
+    callers["by"] = *m.by;
+    callers["by_reading"] = set_str(gb.common.thoughts[o.order].inferred);
+    callers["by_had_truth"] = gb.common.thoughts[o.order].inferred.contains(*o.id);
+  }
   add(Issue{"5", "strike", turn, o.actor, o.order,
             json{{"truth", id_str(*o.id)},
                  {"status", std::string(name(pre_status_[o.actor][o.order]))},
                  {"inferred", set_str(g.common.thoughts[o.order].inferred)},
+                 {"urgent", m.urgent},
+                 {"signal_turn", m.signal_turn ? *m.signal_turn : -1},
+                 {"clued", pre_state_[o.actor].deck[o.order].clued},
+                 {"caller", callers},
                  {"teammates_saw_dead", saw_dead}}});
 }
 
