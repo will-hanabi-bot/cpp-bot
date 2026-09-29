@@ -114,7 +114,7 @@ giver, Bob the next player, Cathy the one after.
   meaning here. It is never set on a reactor0 game
   (`src/net/commands.cpp:386-392`), `chat_allplays` skips reactor0 games when
   retro-applying (`:1085-1098`), and a reactor0 waiting connection always stores
-  `all_plays = false` (`interpret_reactive.cpp:1092`).
+  `all_plays = false` (`interpret_reactive.cpp:1126`).
 
 ## §1a Dispatch — purely positional
 
@@ -403,7 +403,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
 
 ## §1d Reactive — the clue value is the anchor
 
-`reactor0::interpret_reactive` (`interpret_reactive.cpp:1053-1136`). There is
+`reactor0::interpret_reactive` (`interpret_reactive.cpp:1087-1170`). There is
 no reactive focus. The anchor is:
 
 > **react_slot + target_slot ≡ anchor (mod hand size)** where

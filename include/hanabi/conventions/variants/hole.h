@@ -45,11 +45,24 @@ State stacks_after_queued_plays(const Game& game,
                                 std::optional<int> except_order = std::nullopt,
                                 const std::vector<int>* base = nullptr);
 
-// Does this seat hold a KNOWN PLAY? A card stamped CALLED_TO_PLAY whose
-// inference still contains a playable identity, or a card whose global empathy
-// is entirely playable identities. Read from `common`, so every seat answers it
-// the same way. tiiah/CONVENTION.md §1c.
+// Does this seat hold a KNOWN PLAY? A card whose clue-touch empathy (`possible`
+// in `common`) allows only identities playable on the shared view (v18.0.0).
+// Read from what every seat computes alike. It decides the reverse-reactive
+// position. tiiah/CONVENTION.md §1c.
 bool has_known_play(const Game& game, int player);
+
+// Does this seat hold a STANDING PLAY (v18.2.0)? A known play, or any card
+// stamped CALLED_TO_PLAY, whatever its inference: a stable play clue stamps the
+// call, and every seat stamps it alike. It decides ROLE INVERSION only.
+bool has_standing_play(const Game& game, int player);
+
+// ROLE INVERSION (v18.2.0): this clue goes to the giver's Cathy and is STABLE,
+// because Bob holds a standing play and Cathy does not, or because the table is
+// in the reverse-reactive position. Without it a clue to Cathy is reactor0's
+// ordinary reactive. It only ever makes a clue to Cathy stable: whether a clue
+// to Bob is a reverse reactive is still `reverse_reactive_position`'s question.
+// Asked of the position BEFORE the clue. tiiah/CONVENTION.md §1c.
+bool inverted_stable(const Game& prev, int giver, int target);
 
 // Is the table in the REVERSE-REACTIVE POSITION (§1c)? The giver's Bob holds a
 // known play and the giver's Cathy does not. Asked of the position BEFORE the

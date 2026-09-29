@@ -435,6 +435,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_conditional_reading.cpp
   tests/test_tiiah/test_presumed_landing.cpp
   tests/test_tiiah/test_reverse_reactive.cpp
+  tests/test_tiiah/test_role_inversion.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
   tests/test_tiiah/test_receiver_bucket.cpp
   tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp
@@ -469,6 +470,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2011887_undeferred_call_not_dropped.cpp
   tests/test_tiiah/test_replay_2012424_reaction_call_live_in_a_world.cpp
   tests/test_tiiah/test_replay_2013616_reacts_after_the_pair_settles.cpp
+  tests/test_tiiah/test_replay_2013645_role_inversion_keeps_the_clue_stable.cpp
+  tests/test_tiiah/test_replay_2013645_stable_four_under_role_inversion.cpp
   tests/test_tiiah/test_replay_9000002_receiver_proves_the_finesse.cpp
   tests/test_tiiah/test_replay_9000008_reacter_frame_leaves_its_card_out.cpp
   tests/test_tiiah/test_replay_9000016_outside_seat_tries_its_own_worlds.cpp

@@ -1055,6 +1055,12 @@ bool dispatch_is_reactive(const Game& game, const ClueAction& action) {
       variants::reverse_reactive_position(game, action.giver)) {
     return action.target == bob;
   }
+  // Role inversion (v18.2.0): Bob holds a standing call and Cathy does not, so a
+  // clue to Cathy is stable too. The reading side makes the same test.
+  if (s.variant->throw_it_in_a_hole &&
+      variants::inverted_stable(game, action.giver, action.target)) {
+    return false;
+  }
   return clue_is_reactive(s, action, bob);
 }
 

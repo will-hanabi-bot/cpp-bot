@@ -14,7 +14,7 @@ The right-hand side of the reactive slot arithmetic
 is the **clue value** — the rank for rank clues, the *colour value* for
 colour clues. Stored in `ReactorWC::focus_slot` (the field name is
 reactor's; reactor0 never computes a focus).
-`src/conventions/reactor0/interpret_reactive.cpp:1058-1061`.
+`src/conventions/reactor0/interpret_reactive.cpp:1107-1119`.
 Not to be confused with *clue tier*, which is how worthwhile **giving** a clue
 is. "Value" in reactor0 always means this anchor.
 

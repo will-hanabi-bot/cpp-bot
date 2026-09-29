@@ -282,9 +282,21 @@ name different slots (replay 2010246 T2). For readers it is purely the
 A card whose clue-touch empathy (`possible` in `common`) allows only identities
 playable on the **shared view** (v18.0.0). Nothing else counts, because every seat
 must reach the same answer: not a call status, not an inference, not a seat's own
-stacks. A standing call is not a known play on its own. It is what the dispatch
-keys on, because it decides which seat's clue carries the reaction.
+stacks. A standing call is not a known play on its own. The reverse-reactive
+position keys on it, because it decides which seat's clue carries the reaction.
 `has_known_play`, `src/conventions/variants/hole.cpp:61-85`. CONVENTION.md §1c.
+
+### standing play
+A *known play*, or any card called to play, whatever its inference and touches
+(v18.2.0). A stable colour clue stamps its call by the nature of the clue, and
+every seat stamps it alike. Only *role inversion* reads it.
+`has_standing_play`, `src/conventions/variants/hole.cpp:87-100`. CONVENTION.md §1c.
+
+### role inversion
+Bob holds a *standing play* and Cathy does not, so a clue to Cathy is STABLE rather
+than reactor0's ordinary reactive (v18.2.0). It never makes a clue reactive: a clue
+to Bob is a *reverse reactive* only when Bob holds a *known play*. `inverted_stable`,
+`src/conventions/variants/hole.cpp:102-109`; replay 2013645 T11. CONVENTION.md §1c.
 
 ### reverse reactive
 The second of TIIAH's two dispatches. When Bob holds a known play and Cathy does
@@ -294,7 +306,7 @@ that position reactor0's positional rule stands: a clue to Cathy is the reactive
 one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:87-103`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:111-127`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch

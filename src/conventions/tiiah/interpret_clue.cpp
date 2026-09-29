@@ -316,7 +316,13 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
                                   /*receiver=*/bob);
       }
       // ...and a clue to Cathy is stable, which is the whole point of the flip.
-    } else if (cathy != action.giver && action.target != bob) {
+    } else if (cathy != action.giver && action.target != bob &&
+               !hanabi::reactor::variants::inverted_stable(prev, action.giver,
+                                                           action.target)) {
+      // ROLE INVERSION (v18.2.0): a clue to Cathy is also stable when Bob holds a
+      // STANDING play -- any called card, not only a touch-known one -- and
+      // Cathy does not. That is the only thing it changes: a clue to Bob stays
+      // stable in that position too. Replay 2013645 T11.
       return interpret_reactive(prev, game, action, /*reacter=*/bob,
                                 /*receiver=*/cathy);
     }

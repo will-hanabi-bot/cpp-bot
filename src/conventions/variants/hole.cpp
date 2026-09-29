@@ -84,6 +84,30 @@ bool has_known_play(const Game& game, int player) {
   return false;
 }
 
+bool has_standing_play(const Game& game, int player) {
+  // Any standing call counts, not just a card whose touches name it playable
+  // (v18.2.0). A stable colour clue stamps a call by the nature of the clue, and
+  // every seat stamps it alike. Replay 2013645 T11: yagami's T8 Blue had called
+  // will-bot69's o12 as the b3, but its touches still allowed b1-b5, so under the
+  // touch-only test will-bot69 held no known play. yagami's 4 to will-bot67 was
+  // read as an ordinary reactive, and will-bot69 blind-played an r3 as the
+  // reaction into a strike.
+  if (has_known_play(game, player)) return true;
+  for (int o : game.state.hands[player]) {
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) return true;
+  }
+  return false;
+}
+
+bool inverted_stable(const Game& prev, int giver, int target) {
+  const State& s = prev.state;
+  const int bob = s.next_player_index(giver);
+  const int cathy = s.next_player_index(bob);
+  if (cathy == giver || target != cathy) return false;
+  if (reverse_reactive_position(prev, giver)) return true;
+  return has_standing_play(prev, bob) && !has_standing_play(prev, cathy);
+}
+
 bool reverse_reactive_position(const Game& prev, int giver) {
   const State& s = prev.state;
   const int bob = s.next_player_index(giver);
