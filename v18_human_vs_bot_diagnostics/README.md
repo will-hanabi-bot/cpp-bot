@@ -23,6 +23,7 @@ elsewhere.
 |---|---|---|---|---|
 | [2013726](2013726.md) | Throw It in a Hole & Brown (4 Suits), tiiah | yagami_black | T3, T5, T17, T27, T30, T38 (sample line) | T30 fixed (v18.3.0), T27 (v18.4.0), T38 (v18.5.0), T17 (v18.7.0); T27 reacter reading (v18.9.0); open: T27 shared-view booking; T3 and T5 need no change |
 | [2013963](2013963.md) | Throw It in a Hole & Pink (5 Suits), tiiah | yagami_black | T10 (a reverse-reactive finesse on a settled call) | fixed (v18.10.0) |
+| [2014076](2014076.md) | Throw It in a Hole & Brown (6 Suits), tiiah | yagami_light | T14 (deferred collapse on a re-touched clued card), T18 (occupied Alice saves Bob's playable chop) | T14 fixed (v18.12.0); open: T18 |
 
 ## Template
 

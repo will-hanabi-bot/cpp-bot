@@ -137,7 +137,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:656-666`), read by
+(`src/conventions/tiiah/superposition.cpp:672-682`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -160,7 +160,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:704-766`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:720-782`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 
 ### evidence / band
@@ -233,7 +233,7 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:410-465`. Rule 4
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:426-481`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past. What it
 learns is private: it moves our belief and no pairwise row (v17.3.0).
 
@@ -395,3 +395,14 @@ row can never learn what our own belief has not.
 At one remaining candidate the card leaves the map and the stack it belongs to
 advances. `collapse_superpositions`, `src/conventions/tiiah/superposition.cpp`.
 CONVENTION.md §1e.
+
+### deferred collapse
+A collapse that waits for a card's holder to act (v18.12.0). A COLOUR clue can call
+a card that was **already clued** and is playable in only some worlds of the hole
+cards. The clue may be asking for that card to be thrown as the dupe, so it is not
+yet evidence that the team still needs the identity. Nobody collapses on it: the
+outside seat's world narrowing is skipped, and so is the second collapsing rule.
+The holder's play of the card is evidence in its own right. Its discard is §1e rule
+7's shared form: only the worlds in which the card was trash survive, at every seat.
+A call on a card **not** clued before is not deferred. CONVENTION.md §1e, human
+diagnostic 2014076 T14.

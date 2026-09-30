@@ -479,7 +479,26 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
         }
         return true;
       };
-      if (!calling.empty() &&
+      // Except a COLOUR clue whose call re-touches a card that was already clued
+      // (v18.12.0, the reviewer's rule): playable in the worlds that make the call,
+      // trash in the others, so it may be asking for the dupe to be thrown. The
+      // collapse waits for the holder -- a play is evidence by itself, and a
+      // discard is rule 7's shared form. Human diagnostic 2014076 T14.
+      auto retouches_a_clued_card = [&]() {
+        if (action.clue.kind != ClueKind::COLOUR) return false;
+        for (int o : game.state.hands[action.target]) {
+          if (game.meta[o].status == CardStatus::CALLED_TO_PLAY &&
+              prev.meta[o].status != CardStatus::CALLED_TO_PLAY &&
+              prev.state.deck[o].clued) {
+            return true;
+          }
+        }
+        return false;
+      };
+      if (!calling.empty() && calling.size() < worlds.size() &&
+          retouches_a_clued_card()) {
+        // Deferred: no narrowing yet.
+      } else if (!calling.empty() &&
           (holders.size() > 2 || (me == action.target && calls_named_cards()))) {
         bool narrowed = false;
         for (const auto& [ord, unused] : calling.front()->assignment) {

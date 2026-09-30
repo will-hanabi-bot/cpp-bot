@@ -169,12 +169,28 @@ Evidence evidence_from(const Game& prev, const Game& game, const Action& action)
   }
   if (const auto* clue = std::get_if<ClueAction>(&action)) {
     ev.from = clue->giver;
+    // The identities some hole card could still be.
+    IdentitySet in_the_hole = IdentitySet::empty();
+    for (const ConvData& m : game.meta) in_the_hole = in_the_hole.union_with(m.superposition);
     // A card this clue newly called to play, whose identity every seat can
     // name. Calling it says the team still needs it.
     for (size_t o = 0; o < game.meta.size() && o < prev.meta.size(); ++o) {
       if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
       if (prev.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
       if (auto id = only_one(game.common.thoughts[o].possibilities())) {
+        // Except a COLOUR clue re-touching a card that was already clued, whose
+        // identity a hole card could still be (v18.12.0, the reviewer's rule):
+        // playable in some worlds and trash in others, so the clue may be asking
+        // for the card to be thrown as the dupe. The evidence waits for the holder:
+        // a play is evidence by itself, and a discard is rule 7's -- the card was
+        // already played. Human diagnostic 2014076 T14: light's Red on blue's r2,
+        // clued by the T12 2, struck r2 from green's `{r1,r2}` at every seat; blue
+        // then threw it, and green's hole cards could not be un-collapsed.
+        const auto* prev_card = o < prev.state.deck.size() ? &prev.state.deck[o] : nullptr;
+        if (clue->clue.kind == ClueKind::COLOUR && prev_card && prev_card->clued &&
+            in_the_hole.contains(*id)) {
+          continue;
+        }
         ev.ids.push_back(*id);
       }
     }
@@ -924,6 +940,35 @@ void presume_discard_was_played(Game& game, const Action& raw) {
   const auto* dc = std::get_if<DiscardAction>(&raw);
   if (!dc) return;
   const int me = s.our_player_index;
+  // The SHARED form (v18.12.0), at every seat, the discarder's included: a card the
+  // team had NAMED (its common reading is that one identity) thrown away. Every seat
+  // saw the naming and the throw, so every seat learns the identity was already
+  // played. Asked over the strike-free worlds of every seat's hole cards on the
+  // shared view: when the card is trash in some of them, only those survive the
+  // throw. When it is trash in all or none, nothing is learnt here. This is how a
+  // deferred re-touch resolves when the holder throws the card (the reviewer's
+  // rule, human diagnostic 2014076 T16: blue threw the r2 light's Red had
+  // re-touched, so green's `{r1,r2}` was the r2 at every seat). The private form
+  // below is the same argument over our own hole cards.
+  if (!dc->failed && dc->order >= 0 &&
+      dc->order < static_cast<int>(game.common.thoughts.size())) {
+    if (auto named = only_one(game.common.thoughts[dc->order].possibilities())) {
+      std::vector<int> everyone;
+      for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+      const State base = s.common_evidence.empty()
+                             ? s.shared_view()
+                             : s.shared_view().with_band(s.common_evidence);
+      const auto all = open_worlds(game, base, everyone, 64, -1, /*shared=*/true);
+      const auto live = strike_free(all);
+      std::vector<const OpenWorld*> thrown;
+      for (const OpenWorld* w : live) {
+        if (w->state.is_basic_trash(*named)) thrown.push_back(w);
+      }
+      if (!thrown.empty() && thrown.size() < live.size()) {
+        prune_to_worlds(game, all, thrown, /*shared=*/true);
+      }
+    }
+  }
   if (dc->player_index_v == me) return;  // our own hole cards are what we cannot see
   const int order = dc->order;
   if (order < 0 || order >= static_cast<int>(game.common.thoughts.size())) return;
