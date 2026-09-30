@@ -262,7 +262,7 @@ The priority of evaluation on a given player (Alice)'s turn is:
 Two things outrank the phases below, and one thing sits between them:
 
 0.  Endgame.  The forced-endgame rules and the exact solver run first
-    (`decide.cpp:1091`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
+    (`decide.cpp:1116`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
     additionally needs `pace() <= num_players` (`:990`); the forced rules do
     not.  They are unchanged by this spec, with one guard on top: a CERTAIN
     play outranks a speculative one — see below.  The endgame decides
@@ -384,7 +384,7 @@ Two things outrank the phases below, and one thing sits between them:
 num_suits + 1` counts the points still missing, not how close the deck is to
 empty, so on a 6-suit variant it opens around the halfway mark and stays open;
 303 turns in the log corpus sat inside it with 8–16 cards left. The second gate
-is `pace() <= num_players` (`decide.cpp:1240`), which scales with the seat count
+is `pace() <= num_players` (`decide.cpp:1265`), which scales with the seat count
 because pace already does — at 3 seats it is exactly `pace() <= 3`. The
 forced-endgame rules sit ABOVE it and keep running on the points condition
 alone; a closed gate falls through to the phases below.
@@ -1469,8 +1469,8 @@ button the receiver was promised.
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
-| chop | `Game::chop` | `src/basics/decide.cpp:701-730` |
-| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:966-986` |
+| chop | `Game::chop` | `src/basics/decide.cpp:723-755` |
+| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:991-1011` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:115-132` |
 
 ## Not yet implemented

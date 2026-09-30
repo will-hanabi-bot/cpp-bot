@@ -370,6 +370,10 @@ discard. There the BUTTON decides it, and a receiver play draws the
 passed-over-slots-only negative in every seat (v16.11.0, tiiah/CONVENTION.md
 §1d).
 
+A **withdrawn** target disarms it (v18.14.0, `Game::disarm_reaction_elim`). Once
+the call on the target has been erased, or fixed in TIIAH, what the receiver does
+with that card no longer answers the reaction. §1d.2.
+
 Each negative is earned only if the **alternative existed** — the clue could
 only have named receiver slot `S` by sending the reacter to his slot
 `calc_slot(V, S, H)`, so if that slot of his could not have carried the reading,

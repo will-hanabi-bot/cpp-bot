@@ -126,28 +126,28 @@ hand.
 
 ### 1a.3 The stable/reactive dispatcher
 
-`Game::interpret_clue` (`src/basics/decide.cpp:33-241`) decides which family
+`Game::interpret_clue` (`src/basics/decide.cpp:33-255`) decides which family
 applies. First match wins:
 
 | # | Condition | Route | Cite |
 |---|---|---|---|
 | 0 | Clear `urgent` flags the giver was supposed to act on but didn't; drop a pending WC whose reacter is the giver, remembering `was_deferring` | — | `decide.cpp:35`, `:43-48` |
 | 1 | A rewind forced `next_interp` | forced reactive or stable | `decide.cpp:59-69` |
-| 2 | Empty clue, and the variant allows empty clues | `USELESS` | `decide.cpp:70-71` |
-| 3 | **Deferral**: the pending reactive's reacter clued instead of reacting | reactive(Bob) | `decide.cpp:72-77` |
-| 4 | **Re-tasking**: a reactive is pending on X, X is this clue's Bob, and the clue is not aimed at X — the newest clue supersedes | reactive(Bob) | `decide.cpp:78-94` |
-| 5 | **Stall context**: giver obviously locked, or `in_endgame()`, or `clue_tokens == 8`. If the clue targets Cathy and Bob is unloaded → reactive(Bob); else stable with `stall=true` | stall / reactive | `decide.cpp:95-107` |
-| 6 | **Default**: find the reacter — scan players from the giver forward for the first whose previously-obvious playables were *all* invalidated by the clue | see below | `decide.cpp:109-140` |
+| 2 | Empty clue, and the variant allows empty clues | `USELESS` | `decide.cpp:84-85` |
+| 3 | **Deferral**: the pending reactive's reacter clued instead of reacting | reactive(Bob) | `decide.cpp:86-91` |
+| 4 | **Re-tasking**: a reactive is pending on X, X is this clue's Bob, and the clue is not aimed at X — the newest clue supersedes | reactive(Bob) | `decide.cpp:92-108` |
+| 5 | **Stall context**: giver obviously locked, or `in_endgame()`, or `clue_tokens == 8`. If the clue targets Cathy and Bob is unloaded → reactive(Bob); else stable with `stall=true` | stall / reactive | `decide.cpp:109-121` |
+| 6 | **Default**: find the reacter — scan players from the giver forward for the first whose previously-obvious playables were *all* invalidated by the clue | see below | `decide.cpp:123-154` |
 
 Rule 4 deserves emphasis: **a player's next action always answers the newest
 clue**. If a reactive is pending on Bob and someone then clues anyone other
 than Bob, Bob's response decodes the *new* clue, and the old waiting
-connection is discarded (`decide.cpp:78-94`; replay 1916791 T27).
+connection is discarded (`decide.cpp:92-108`; replay 1916791 T27).
 
-The reacter search at `decide.cpp:120-140` carries a **vacuous-truth guard**:
+The reacter search at `decide.cpp:134-154` carries a **vacuous-truth guard**:
 a player with no prior obvious playables trivially satisfies "kept none of
 them". That vacuous match is suppressed only when it would name the clue's
-own target as reacter while the target isn't Bob (`decide.cpp:133-136`) —
+own target as reacter while the target isn't Bob (`decide.cpp:147-150`) —
 otherwise a reactive-shaped clue would be misrouted to stable and
 `ref_discard` would stamp a spurious CTD on the receiver (replay 1899623 T16).
 
@@ -155,16 +155,16 @@ Terminal routes once the search finishes:
 
 | Case | Route | Cite |
 |---|---|---|
-| No reacter + a `check_fix` hit on Bob | `FIX` | `decide.cpp:155-156` |
-| No reacter + target ≠ Bob | stable (with the `bad_stable` escape hatch) | `decide.cpp:157-170` |
-| No reacter + target == Bob | reactive(Bob) — degenerate, scores `MISTAKE`, which is how the giver's eval rejects unreadable clue shapes | `decide.cpp:171-178` |
-| reacter == target | stable | `decide.cpp:179-180` |
-| `check_fix` hit that was in the target's prior playables | `FIX` | `decide.cpp:192-193` |
-| otherwise | reactive(reacter) | `decide.cpp:195-196` |
+| No reacter + a `check_fix` hit on Bob | `FIX` | `decide.cpp:169-170` |
+| No reacter + target ≠ Bob | stable (with the `bad_stable` escape hatch) | `decide.cpp:171-184` |
+| No reacter + target == Bob | reactive(Bob) — degenerate, scores `MISTAKE`, which is how the giver's eval rejects unreadable clue shapes | `decide.cpp:185-192` |
+| reacter == target | stable | `decide.cpp:193-194` |
+| `check_fix` hit that was in the target's prior playables | `FIX` | `decide.cpp:206-207` |
+| otherwise | reactive(reacter) | `decide.cpp:209-210` |
 
 Finally, a post-check: the number of newly-signalled CTPs is counted before
 and after `elim()`; if elimination destroyed any of them, the move is
-**overwritten as `MISTAKE`** (`decide.cpp:204-223`).
+**overwritten as `MISTAKE`** (`decide.cpp:218-237`).
 
 ### 1a.4 Stable interpretations
 
@@ -265,11 +265,11 @@ identities out of `inferred` before stamping `CALLED_TO_DISCARD` (`:254-255`).
 - **receiver** — `action.target`, the player physically clued.
 - **reacter** — the player whose next play or discard decodes the clue.
   Normally **Bob**, the giver's next player; the only exception is the
-  reacter search at `decide.cpp:120-140`.
+  reacter search at `decide.cpp:134-154`.
 
 `reacter == receiver` is a legal degenerate case that resolves to `MISTAKE`;
 this is deliberate, and is how the giver's evaluation rejects clue shapes the
-partners could not read cleanly (`decide.cpp:171-178`).
+partners could not read cleanly (`decide.cpp:185-192`).
 
 #### The slot arithmetic
 
@@ -456,12 +456,12 @@ feeds a convention decision has to be expressible from common knowledge.
 This principle recurs throughout: `target_play`'s reactive path uses
 `common.thoughts[target].id()` instead of `state.deck[target].id()`
 (`interpret_clue.cpp:208-227`), and the critical-discard filter lives in
-clue *selection* rather than inside `target_discard` (`decide.cpp:538-567`).
+clue *selection* rather than inside `target_discard` (`decide.cpp:552-581`).
 
 ### 1a.6 Resolving the reaction
 
 **A bomb resets reactor's convention state.** `Game::interpret_discard`'s failed
-branch (`decide.cpp:249-273`) restores `inferred` to `possible`, drops
+branch (`decide.cpp:263-287`) restores `inferred` to `possible`, drops
 `info_lock` / `old_inferred`, clears every ConvData and empties `waiting`, for
 every card in every hand that is not explicitly `CALLED_TO_PLAY`. A strike under
 reactor means a finesse or dupe chain was misread, so the chain that produced
@@ -474,7 +474,7 @@ miscommunication — see `reactor0/DECISION_MAKING.md`, "Inferred sets survive a
 strike".
 
 When the reacter finally plays or discards, `Game::interpret_play` /
-`interpret_discard` (`decide.cpp:272-284`, `:319-327`) route into
+`interpret_discard` (`decide.cpp:286-298`, `:319-327`) route into
 `react_play` / `react_discard` (`interpret_reaction.cpp:249-369`).
 
 `calc_target_slot` (`:26-43`) maps the played/discarded order back to a
@@ -589,7 +589,7 @@ colour clue whose ref-play target is actually playable and whose new touches
 are all useful (or all-possibly-basic-trash), or a rank clue whose ref-discard
 target is actually basic trash and whose new touches are all useful.
 
-Note the asymmetry, spelled out at `decide.cpp:157-170`: Cathy **cannot** run
+Note the asymmetry, spelled out at `decide.cpp:171-184`: Cathy **cannot** run
 this check on a clue given to herself, because it depends on seeing her own
 hand. She reads stable provisionally; if she was wrong, Bob's unexpected
 reaction triggers the response-inversion rewind.
@@ -613,13 +613,13 @@ reaction triggers the response-inversion rewind.
     only as the clue-scoring term of §2.4 and via `bad_touch_result`.
 
   The contrast matters: `CardStatus::SARCASTIC` and `GENTLEMANS_DISCARD` **are**
-  live (`decide.cpp:307-316`, `game.cpp:523-524`). They are not port leftovers.
+  live (`decide.cpp:321-330`, `game.cpp:523-524`). They are not port leftovers.
   Both are gated on the discarded card's identity having been **known** before
   the throw (`useful_dc`, `decide.cpp`) — see GLOSSARY, *sarcastic discard*.
 - **Some conventional rules live outside the `interpret_*` files** — notably
-  the critical-discard clue filter (`decide.cpp:538-567`), most-recent-CTD
-  enforcement (`decide.cpp:946-970`), and the force-play override
-  (`decide.cpp:992-1056`). They are covered in §2.
+  the critical-discard clue filter (`decide.cpp:552-581`), most-recent-CTD
+  enforcement (`decide.cpp:971-995`), and the force-play override
+  (`decide.cpp:1017-1081`). They are covered in §2.
 
 ---
 
@@ -733,7 +733,7 @@ This is the most invasive variant in the codebase. For an inverted suit the
 (`src/basics/game.cpp:229-248`, `:312-326`).
 
 Critically: **`CALLED_TO_PLAY` and `CALLED_TO_DISCARD` name buttons, not
-outcomes** (`decide.cpp:706-722`). CTP means *pitch*, CTD means *chuck*, and the
+outcomes** (`decide.cpp:728-747`). CTP means *pitch*, CTD means *chuck*, and the
 game rule decides where the card lands. So to get an orange card onto its stack
 the convention must stamp **CTD**.
 
@@ -899,7 +899,7 @@ worse play.
 
 ## 2.1 The `take_action` ladder
 
-`Game::take_action` (`src/basics/decide.cpp:679-1166`). Each stage that
+`Game::take_action` (`src/basics/decide.cpp:1070-2041`). Each stage that
 returns short-circuits the rest. It scores actions through the convention seam
 `eval_for`, which is `reactor::eval_action` for every convention as of v7.0.0:
 reactor0 no longer scores clues at all — its `choose_clue` picks one by rule
@@ -911,7 +911,7 @@ reactor's to evaluate.
 |---|---|---|
 | 0 | **Compute** (not yet return) the urgent action: the first card in our hand with `meta.urgent`, converted to a Play or Discard. Guarded by empathy sanity checks — never play a card whose every possibility is basic trash, never discard one whose every possibility is critical. | `:658-736` |
 | 0b | **Urgent Bob-protection override.** If we can clue, a reactive is pending with us as reacter, the receiver isn't Bob, Bob is unloaded, and Bob's chop is *actually* critical from our full visibility → replace our urgent action with the best clue to Bob. | `:672-693` |
-| 1 | **Endgame fork**, when `rem_score() <= num_suits + 1`: first `forced_endgame_action`, then — only if `pace() <= num_players` as well — the endgame solver. | `decide.cpp:906`, `:990` |
+| 1 | **Endgame fork**, when `rem_score() <= num_suits + 1`: first `forced_endgame_action`, then — only if `pace() <= num_players` as well — the endgame solver. | `decide.cpp:931`, `:990` |
 | 2 | **Return the urgent action.** Note the ordering: the endgame solver *outranks* the convention's urgent signal. | `:760` |
 | 3–5 | Build the candidate lists: plays, clues, discards. | `:762-1044` |
 | 6 | Discard gating. | `:931-1044` |
@@ -1196,7 +1196,7 @@ manufactured leaves with four or more strikes.
   (orange) card is simulated with the Discard button** —
   `variants::make_discard_for_simulation` (`:378-382`) — because that is what
   advances an inverted stack, and what `take_action` really issues
-  (`src/basics/decide.cpp:917-936`). Simulating it as `PerformPlay` ran the
+  (`src/basics/decide.cpp:942-961`). Simulating it as `PerformPlay` ran the
   game-rule inversion and scored every good chuck as a card thrown away
   (v5.0.0; replay 1957905 #31).
 - Locked → discard if clueless, else clue (`:398-405`). At 8 clues, forced
@@ -1242,7 +1242,7 @@ mild bias making "a clue exists" attractive.
 
 ## 2.8 Enumerating clues: `find_all_clues`
 
-`decide.cpp:495-609`. Used by the endgame solver and forced-endgame, **not**
+`decide.cpp:509-623`. Used by the endgame solver and forced-endgame, **not**
 by `take_action`'s main path. It simulates each clue and:
 
 - drops `MISTAKE`s (`:492-495`);
@@ -1259,7 +1259,7 @@ by `take_action`'s main path. It simulates each clue and:
 ## 2.9 Endgame
 
 **Triggers.** `take_action` forks to the endgame when
-`rem_score() <= num_suits + 1` (`decide.cpp:906`). Inside that fork the
+`rem_score() <= num_suits + 1` (`decide.cpp:931`). Inside that fork the
 **solver has a second gate, `pace() <= num_players`** (`:990`); the
 forced-endgame rules sit above it and run on the points condition alone.
 
@@ -1383,8 +1383,8 @@ probability** (`Fraction`), not score. Key parameters:
 
 | Parameter | Value | Cite |
 |---|---|---|
-| Time budget at the call site | **6 seconds** (class default is 30) | `decide.cpp:714`; `include/hanabi/endgame/solver.h:47` |
-| Accept threshold | win rate **≥ 1/100** | `decide.cpp:722` |
+| Time budget at the call site | **6 seconds** (class default is 30) | `decide.cpp:739`; `include/hanabi/endgame/solver.h:47` |
+| Accept threshold | win rate **≥ 1/100** | `decide.cpp:747` |
 | Recursion depth cap | 20 — each `simulate_action` costs 10–50 ms through the convention pipeline | `solver.cpp:443` |
 | Bail-out | more than **3** fully-unseen useful identities → give up | `solver.cpp:604-610` |
 | Consecutive-clue cap | `num_players + 1` since the last draw | `solver.cpp:148-164` |
@@ -1401,7 +1401,7 @@ discards (`:314-330`).
 Plays: a chuck (`PerformDiscard`) only when the orange is known *and currently
 playable*, else the ordinary `PerformPlay` (`solver.cpp:201-203`). Discards:
 the sole candidate comes from `Game::find_all_discards`
-(`src/basics/decide.cpp:1156-1201`), which emits the **pitch**
+(`src/basics/decide.cpp:1181-1226`), which emits the **pitch**
 (`PerformPlay`) when every identity the holder thinks the card could be is
 inverted — knowing the suit is enough to know which button to press, and
 pressing Discard there would be a play attempt that strikes on trash. Keyed on
@@ -1440,7 +1440,7 @@ Concrete protections:
   `advance()` turns pessimistic — taking `min` rather than `max` — as soon as
   any candidate teammate play strikes (`:382-384`).
 - Post-strike, the discard handler clears convention info **except** on
-  explicitly CTP'd cards (`decide.cpp:239-264`), pinned by
+  explicitly CTP'd cards (`decide.cpp:253-278`), pinned by
   `tests/test_basics/test_strike_preserves_ctp.cpp`.
 - Critical protection: the `−20`-per-lost-point term, the CTD-on-critical
   penalty, the `find_all_clues` critical guard, the urgent Bob-protection
@@ -1448,7 +1448,7 @@ Concrete protections:
   and `locked_discard`'s critical minimisation.
 
 **Where the bot accepts risk**: it will take an endgame line at a 1% win rate
-(`decide.cpp:722`); it scores playing an unknown-identity card at `+1.5`, the
+(`decide.cpp:747`); it scores playing an unknown-identity card at `+1.5`, the
 highest non-endgame play value (`state_eval.cpp:513`); `anxiety_play`
 (`player_game.cpp:441-470`) gambles on the highest playable-probability card
 when locked; and `advance()`'s `clue_prob` model is an explicit probabilistic

@@ -243,6 +243,10 @@ class Game {
     std::vector<IdentitySet> trash_elim;    // trash at clue time
   };
   PendingReactionElim pending_reaction_elim;
+  // Forget the held negative when the call on its target is WITHDRAWN (v18.14.0):
+  // what the receiver later does with that card is no longer an answer to the
+  // reaction. No-op unless `order` is the armed target.
+  void disarm_reaction_elim(int order);
   // Decide any held receiver-chuck inference (reactor0 only). Called after every
   // interpretation -- the deciding fact can arrive from any of them.
   void resolve_deferred_elims();

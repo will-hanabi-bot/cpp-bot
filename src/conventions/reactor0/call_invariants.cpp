@@ -48,6 +48,9 @@ void erase_call(Game& game, int order) {
     m.note_mark = NoteMark::RESET;
     m.note_mark_turn = turn;
   });
+  // ...and a reaction's held negative waiting on this card no longer applies
+  // (§1d.2, v18.14.0).
+  game.disarm_reaction_elim(order);
 }
 
 // Rule 1: CTP cards run newest slot -> oldest in play order.

@@ -19,7 +19,7 @@ The shared engine reads a named playable thrown away as "you hold the other copy
 the card **was already played** — by us, since our stacks can only be short by
 what we threw in the hole — and it collapses our superpositions instead
 (`presume_discard_was_played`, CONVENTION.md §1e rule 7). `useful_dc` excludes a
-playable card in a hole variant (`src/basics/decide.cpp:531-540`). Replay 2011319.
+playable card in a hole variant (`src/basics/decide.cpp:545-554`). Replay 2011319.
 
 ### believed stacks
 `State::play_stacks` under TIIAH. We resolve each hidden action against the card
@@ -357,7 +357,7 @@ A `CALLED_TO_PLAY` card that is not playable yet and will be once the *receiver*
 has played what they already know — what a reverse-reactive finesse creates.
 Alive but not actionable: reactor0's dead-call invariant judges it against the
 stacks after those queued plays, and leaves the call itself out of that
-simulation (`src/conventions/reactor0/call_invariants.cpp:167-206`). A call
+simulation (`src/conventions/reactor0/call_invariants.cpp:170-209`). A call
 whose reading is a valid pitch in some strike-free world of the shared view is
 not dead either (v16.29.0). CONVENTION.md §1c.
 

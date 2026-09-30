@@ -264,6 +264,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_deferred_elim.cpp
   tests/test_reactor0/test_reaction_elim_filter.cpp
   tests/test_reactor0/test_reaction_negative_keeps_inference.cpp
+  tests/test_reactor0/test_withdrawn_target_disarms_negative.cpp
   tests/test_reactor0/test_reactive_bluff.cpp
   tests/test_reactor0/test_misc/test_replay_1983205_synesthesia_rank_map_wraps.cpp
   tests/test_reactor0/test_misc/test_replay_1969696_reversed_orange_clue_is_a_chuck.cpp
@@ -485,6 +486,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2013726_reverse_reactive_finesse_on_a_called_play.cpp
   tests/test_tiiah/test_replay_2013963_reverse_reactive_finesse_on_a_settled_call.cpp
   tests/test_tiiah/test_replay_2014076_deferred_collapse_on_a_retouched_card.cpp
+  tests/test_tiiah/test_replay_2014402_finesse_read_before_dead_call_check.cpp
   tests/test_tiiah/test_known_play_standing_call.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp

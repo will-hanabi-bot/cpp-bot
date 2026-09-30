@@ -67,6 +67,20 @@ void Game::resolve_deferred_elims() {
   // card's identity to settle. See `Game::fire_reaction_elim`.
 }
 
+// A withdrawn target disarms its negative (reactor0/CONVENTION.md §1d.2,
+// v18.14.0). Every row of `fire_reaction_elim` reads the receiver's action on the
+// target as its answer to the reaction -- "they discarded it, so they had no
+// playable". Once the call on that card has been withdrawn (a dead call erased by
+// the call invariants, or a fix), the receiver throws it because the team now
+// reads it as dead, and the answer is to a different question. Replay 2014402 T27:
+// green threw its erased o10, and the "receiver discarded" row stripped every
+// playable and one-away out of its hand, leaving o29 `{y5,g2,g3,g5}` at every seat.
+void Game::disarm_reaction_elim(int order) {
+  if (pending_reaction_elim.active && pending_reaction_elim.target_order == order) {
+    pending_reaction_elim = PendingReactionElim{};
+  }
+}
+
 void Game::fire_reaction_elim(const Game& prev, int player_index, int order,
                               bool pressed_play) {
   if (!is_reactor0_family(convention)) return;
@@ -674,12 +688,12 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
                                            action.order, waiting.front())
             : react_play(prev, *this, action.player_index_v, action.order,
                          waiting.front());
-    if (is_reactor0_family(convention)) {
-      hanabi::reactor0::enforce_call_invariants(*this);
-    }
     if (rewound) {
       // The rewind already replayed the action end-to-end (including
       // with_move + elim); skip the post-react bookkeeping.
+      if (is_reactor0_family(convention)) {
+        hanabi::reactor0::enforce_call_invariants(*this);
+      }
       return;
     }
     // Throw It in a Hole: the receiver's call has just been made, and §1d's
@@ -687,6 +701,14 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
     // than inside `stamp_receiver_call`, which is shared code and must not
     // reach into a convention for the buckets — and while `waiting.front()`
     // still holds the connection it needs.
+    //
+    // BEFORE the call invariants, as on the deferred path above (v18.14.0). The
+    // shared stamp reads the call on the frame the giver and the receiver share,
+    // and that frame can lag the reacter's own card: it may name the very card the
+    // reacter just played, which rule 3 then erases as dead before the finesse
+    // half below could read the card after it. Replay 2014402 T26: black's i2
+    // answered blue's 4 on green's i3; the stamp read `{i2}` on the pair's pink 0,
+    // rule 3 erased it, and at T27 green threw the i3 away as a dead i2.
     if (!waiting.empty()) {
       // ...and so does the REACTER's own card, for the one seat that could not
       // read it at clue time. The receiver returns before the target walk runs,
@@ -704,6 +726,9 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
                                          action.order);
       hanabi::tiiah::narrow_receiver_call(prev, *this, waiting.front(),
                                           action.order);
+    }
+    if (is_reactor0_family(convention)) {
+      hanabi::reactor0::enforce_call_invariants(*this);
     }
   }
   with_move(PlayInterp::NONE, /*overwrite=*/true);

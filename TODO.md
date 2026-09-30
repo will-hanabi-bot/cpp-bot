@@ -217,7 +217,7 @@ right — but the branch has no test either way. Decide and pin it.
 ---
 
 *(Chop selecting the most recent CTD by `signal_turn` shipped in v1.11.0 —
-`Game::chop`, `src/basics/decide.cpp:433-460`, pinned by
+`Game::chop`, `src/basics/decide.cpp:447-474`, pinned by
 `tests/test_basics/test_chop.cpp`.)*
 
 ---
@@ -270,7 +270,7 @@ the versions that fixed them:
   direction), `player_known_plays`' consumer and `winnable_simpler`'s discard
   fallback.
 - v6.2.0 — the top-level discard candidate: `Game::find_all_discards`
-  (`src/basics/decide.cpp:1156-1201`) returned an unconditional
+  (`src/basics/decide.cpp:1181-1226`) returned an unconditional
   `PerformDiscard`, which on an orange is a chuck, and it is the solver's ONLY
   discard candidate. bug_report_5_0_0.txt. Plus two siblings found with it:
   `two_critical_play_action`'s unconditional `PerformPlay` (which pitched a
@@ -296,7 +296,7 @@ See [PLAN.md](PLAN.md) §11.
 
 ## 12. `[engine]` An unpinned playable orange is still pitched
 
-`src/basics/decide.cpp:917-936` routes a playable orange to `PerformDiscard`
+`src/basics/decide.cpp:942-961` routes a playable orange to `PerformDiscard`
 only when `thoughts[o].id(infer=true)` resolves to a **single** identity. A
 card that is empathy-*playable* but ambiguous between an inverted and a
 non-inverted suit (say `{o1, r1}` at zero stacks) falls through to
@@ -306,7 +306,7 @@ stamps and the §1c orange-only rank stamp sidestep this by narrowing
 inverted variant does not.
 
 **Scope, after v7.1.0: reactor only.** Reactor0 no longer reaches
-`decide.cpp:903-922` — `choose_action` picks its play or discard first. Its
+`decide.cpp:928-947` — `choose_action` picks its play or discard first. Its
 phase-2 pitch list excludes any card whose `possible` contains an inverted
 identity, so the ambiguous `{o1, r1}` case is chucked or left alone rather than
 pitched (`reactor0/calls.cpp`, and the regression test
@@ -362,7 +362,7 @@ candidate pipeline:
   filter returns early in any inverted variant
   (`reactor0/state_eval.cpp:532`), which is exactly where a chuck can strike.
 - `find_all_clues`'s `reacter_critical_discard` guard
-  (`src/basics/decide.cpp:579-593`) tests `is_critical`, not "would strike",
+  (`src/basics/decide.cpp:593-607`) tests `is_critical`, not "would strike",
   and is unreachable from `take_action`, which builds its own pool at
   `:851-864`.
 
@@ -384,7 +384,7 @@ deleted scorer.
 `:437`, `:446`, `:451`), which sets `failed = inverted && !playable`. That is
 right for a CTD (a real chuck) but wrong for an ordinary discard: `take_action`
 routes a *known* orange through `PerformPlay` (a pitch,
-`src/basics/decide.cpp:1054-1072`) and drops candidates that could still be
+`src/basics/decide.cpp:1079-1097`) and drops candidates that could still be
 orange (`discard_button_is_safe`, `:938-958`). So the lookahead invents misplay
 strikes for discards the bot would never physically make, and mis-scores every
 inverted-variant line that reaches a discard.
@@ -465,7 +465,7 @@ do not.
 ## 19. `[engine]` An all-orange discard candidate is dropped where it could be pitched
 
 §2.3's chuck-safety filter (`discard_button_is_safe`,
-`src/basics/decide.cpp:966-986`) rejects any candidate whose `possible` contains
+`src/basics/decide.cpp:991-1011`) rejects any candidate whose `possible` contains
 an inverted identity. That is exactly right for a set that *straddles* an
 inverted and a plain suit — neither button is safe there, so there is nothing to
 re-route to. But when **every** possibility is inverted, `PerformPlay` is a pitch
@@ -477,7 +477,7 @@ filter drops those too, which is safe but leaves a free pitch on the table.
 left on the table there. Fixing the shared predicate should fix both.
 
 The precedent for the tighter test already exists: `Game::find_all_discards`
-(`decide.cpp:1190-1196`) uses `poss.forall(inverted)` over a
+(`decide.cpp:1215-1221`) uses `poss.forall(inverted)` over a
 `common ∩ per-player` intersection, and `variants::can_pitch_for_free`
 (`src/conventions/variants/inverted.cpp:104-110`) is the stricter all-inverted
 **and** all-basic-trash form used by the urgent-CTP exemption.
@@ -499,7 +499,7 @@ its own discards at v7.1.0.
 
 ## 20. `[engine]` The `locked_discard` fallback presses Discard with no inverted re-route
 
-`src/basics/decide.cpp:1156` — when `all_discards`, `all_clues` and `all_plays`
+`src/basics/decide.cpp:1181` — when `all_discards`, `all_clues` and `all_plays`
 are all empty, `take_action` returns a bare
 `PerformDiscard{m.locked_discard(...)}`. No pitch/chuck routing, unlike both the
 ordinary emission loop (`:1026-1044`) and `find_all_discards` (`:1176-1182`). On
@@ -515,7 +515,7 @@ bot must discard something — so the fix is to route the button, not to refuse.
 
 ## 21. `[engine]` `discard_button_is_safe` clause 2 trusts `inferred`, not `possible`
 
-`src/basics/decide.cpp:983` exempts a candidate when
+`src/basics/decide.cpp:1008` exempts a candidate when
 `m.thoughts[o].id(/*infer=*/true)` resolves. `Thought::id`
 (`src/basics/card.cpp:29-47`) resolves on `possible.length() == 1` (sound) **or**
 `inferred.length() == 1` (not sound — an inference is a convention deduction that
@@ -806,9 +806,9 @@ player who drew them is not expected to throw them, and the promise is that the
 locked card is safe to lose.
 
 The lock itself is implemented. `Game::zcs_turn` records the turn the team ran
-dry (`decide.cpp:411`), `chop`'s second pass skips any card drawn after it
-(`decide.cpp:811-817`), and `reset_zcs` fires only on an action taken from a
-state that still had a clue (`decide.cpp:410`, `:608`, `:670`) — so a discard
+dry (`decide.cpp:425`), `chop`'s second pass skips any card drawn after it
+(`decide.cpp:836-842`), and `reset_zcs` fires only on an action taken from a
+state that still had a clue (`decide.cpp:424`, `:608`, `:670`) — so a discard
 that buys the token back does not clear it, which is the "until the player
 before Alice has at least one clue" part.
 
@@ -1151,7 +1151,7 @@ and yagami's `p2`/`p3`/`p4` sets are far too wide for that. Verified:
 
 CONVENTION.md §1d. `tiiah::narrow_receiver_call` — the receiver's half of the
 bucket relation — is called from one place, `Game::interpret_play`
-(`src/basics/decide.cpp:652-672`). So it is skipped whenever the reacter's action
+(`src/basics/decide.cpp:666-686`). So it is skipped whenever the reacter's action
 reaches a seat as a **discard**, even though the reaction machinery below it gets
 the button right: `reacter_button_pressed`
 (`src/conventions/reactor0/interpret_reaction.cpp:530-540`) already knows that a
@@ -1174,7 +1174,7 @@ the wire button, not the resolved action type, is what a reaction is about.
 The alternative worth weighing first is moving the hook into
 `reactor0::resolve_reaction`, which already has the button in hand — one site that
 cannot drift, at the cost of shared code depending on tiiah for the buckets, which
-the comment at the seam (`decide.cpp:636-640`) deliberately avoided.
+the comment at the seam (`decide.cpp:650-654`) deliberately avoided.
 
 ---
 
@@ -1317,7 +1317,7 @@ card that strikes in *every* world, which a 20-candidate set cannot do.
 
 ## 52. `[engine]` A shared call is judged dead on a PRIVATE view
 
-`reactor0/call_invariants.cpp:149-206`. Rule 3, `drop_dead_play_calls`, erases a
+`reactor0/call_invariants.cpp:152-209`. Rule 3, `drop_dead_play_calls`, erases a
 standing CALLED_TO_PLAY when common knowledge can see the card is dead. Its own comment
 states the contract: *"Common knowledge only. The holder's own view may be narrower,
 but a call is a shared commitment and has to die for every seat at the same moment, or
@@ -1346,7 +1346,7 @@ Two consequences worth stating together:
 
 **Narrowed in v16.29.0, not closed.** Rule 3 now also keeps a call whose reading is a
 valid pitch in some strike-free world of the SHARED view
-(`pitch_candidates_in_shared_worlds`, `reactor0/call_invariants.cpp:128-147`). That half is the same at every seat, so a
+(`pitch_candidates_in_shared_worlds`, `reactor0/call_invariants.cpp:131-150`). That half is the same at every seat, so a
 call that is live on the team's worlds lives everywhere (replay 2012424). What remains
 is the other direction: a call dead on the shared worlds that one seat's private belief
 still keeps, as in 2010512.

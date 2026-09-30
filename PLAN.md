@@ -32,7 +32,7 @@ get_result            reactor0/state_eval.cpp:249-382   16 tuned literals
 clue_branch_value     reactor0/state_eval.cpp:384-389   damping + flat tempo tax
 eval_action           reactor0/state_eval.cpp:449-510   gate + advance() lookahead
         ↓
-Game::take_action argmax          src/basics/decide.cpp:1160-1165
+Game::take_action argmax          src/basics/decide.cpp:1185-1190
 ```
 
 The numbers are not reasonable-about. Replay 1961419 T11 is the worked example
@@ -102,7 +102,7 @@ plus the §2c rationale block `:216-235`.
 
 `receiver_is_safe` `:514-531`, `is_pointless_double_discard` `:533-559`,
 `is_stable_play_clue_for_bob` `:561-576`, `drop_pointless_double_discards`
-`:578-613`, and its engine seam `src/basics/decide.cpp:914-916`.
+`:578-613`, and its engine seam `src/basics/decide.cpp:939-941`.
 
 Deleted rather than ported: the new priority 2 **already** requires the discarded
 card be trash, a same-hand-dupe or visibly duped, so a pointless double discard is
@@ -141,7 +141,7 @@ std::optional<PerformAction> choose_clue(const Game& game,
 ```
 
 spliced into `Game::take_action` **after** the candidate clue build
-(`decide.cpp:873-887`) and **before** the force-play override (`:1057`). When it
+(`decide.cpp:898-912`) and **before** the force-play override (`:1057`). When it
 returns a value, `take_action` returns it directly, short-circuiting both
 `eval_for` argmaxes (`:1086`, `:1135`). When it returns `nullopt`, the existing
 play/discard path runs with `all_clues` **emptied**, so reactor0 clues never
@@ -187,8 +187,8 @@ The implementation should invent none of these:
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `reactor0/interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
-| chop | `Game::chop` | `src/basics/decide.cpp:446-475` |
-| safe discard button (inverted suits) | `discard_button_is_safe` | `src/basics/decide.cpp:966-986` |
+| chop | `Game::chop` | `src/basics/decide.cpp:460-489` |
+| safe discard button (inverted suits) | `discard_button_is_safe` | `src/basics/decide.cpp:991-1011` |
 
 ---
 
@@ -237,7 +237,7 @@ receiver-CTD) have **no analogue** in the tree:
   is simply orphaned. "The reaction is over" is expressed three different ways
   today, none of them a data structure: the card left the hand; `check_missed`
   wipes a stale `urgent` sibling (`game.cpp:96-118`); `update_turn` clears
-  `waiting` (`decide.cpp:378-381`).
+  `waiting` (`decide.cpp:392-395`).
 - **Dependence does not exist.** Nothing computes whether two queued CTP cards
   could share a suit under their non-global inferences.
 - **Ordering is inconsistent.** `signal_turn` is the only timestamp, it is
@@ -250,7 +250,7 @@ The hooks the new structures must attach to are `react_play` /
 `react_discard` (reactor0: `interpret_reaction.cpp:65-97` and `:99-146`, where the
 reaction is confirmed at `:71` and `:105`), the stamp sites, and every clear site
 (`check_missed`, `erase_call`, `clear_contradicted_call`, the three `Game::elim`
-sweeps, the bomb reset at `decide.cpp:246-271`).
+sweeps, the bomb reset at `decide.cpp:260-285`).
 
 **One piece of good news:** `apply_snapshot` reads only `record["replay"]` and
 replays the action list (`src/logging/state_snapshot.cpp:409-412`) — it never

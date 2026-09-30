@@ -212,7 +212,7 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   if (!move || !std::holds_alternative<ClueInterp>(*move)) return r;
   const ClueInterp interp = std::get<ClueInterp>(*move);
   // A MISTAKE has no shape. Drop it before anything reads a stamp: the post-elim
-  // demotion (decide.cpp:228-230) leaves real-looking CTP stamps on a hypo whose
+  // demotion (decide.cpp:242-244) leaves real-looking CTP stamps on a hypo whose
   // interp is MISTAKE, so classifying stamps first would call it a play clue.
   if (interp == ClueInterp::MISTAKE) return r;
 
