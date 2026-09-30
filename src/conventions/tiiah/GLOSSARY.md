@@ -432,7 +432,9 @@ what the key above it left:
 The default tiebreak comes last. **Unknown trash** is a trash card the receiver
 cannot identify as trash, judged on the stacks the called play leaves.
 `settle_stable_play` in `reactor0/decision.cpp`. CONVENTION.md §2a, human
-diagnostic 2014561 T50.
+diagnostic 2014561 T50. It ranks only the clues that survive
+`mistakes_a_touched_card`: a colour clue touching a useful rainbow card is
+dropped before the hierarchy sees it (CONVENTION.md §1f, v18.19.0).
 
 ### named call / watched dupe
 A **named call** is a stable play call whose holder can read it back to exactly one

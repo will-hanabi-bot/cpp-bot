@@ -804,6 +804,60 @@ bool calls_a_critical_card_to_discard(const Game& game, const Game& hypo) {
   return false;
 }
 
+// THROW IT IN A HOLE: would this stable play clue have its receiver MISTAKE a card
+// it touches for something it is not (v18.19.0)?
+//
+// A rainbowy variant pins a colour clue's call to the next playable card of that
+// colour's own suit (tiiah/CONVENTION.md §1f), so a colour clue on a RAINBOW card
+// is read as that colour. Replay 2014884 T4: Bob held an unclued ra1, and Yellow
+// was given. Bob writes y1, the card lands as the ra1, and every seat's yellow
+// bookkeeping is wrong from then on. The pin also made Yellow look like the clue
+// that NAMES its card, so the stable play hierarchy's first key preferred it to
+// the 1, which was right. With Yellow gone, Purple took its place, calling the
+// same ra1 as `{p2,ra1}`. Hence three arms:
+//
+//   1. the CALLED card's reading, once the clue has landed, must still admit the
+//      card we can see;
+//   2. a colour clue may call a rainbowy card only as §1f's re-pin, naming it;
+//   3. a colour clue may not newly touch a useful rainbowy card it does not
+//      call: the receiver takes it for the clue's own colour.
+//
+// A candidate FILTER like the three above: it reads our sight of the touched
+// cards, so it changes which clues are given and never what one means.
+bool mistakes_a_touched_card(const Game& game, const Game& hypo,
+                             const ClueAction& action,
+                             const ClueReading& reading) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  if (reading.shape != ClueShape::STABLE_PLAY) return false;
+  const int subject = reading.stable_subject;
+  if (subject < 0 || subject >= static_cast<int>(hypo.common.thoughts.size())) {
+    return false;
+  }
+  auto rainbowy = [&s](Identity id) {
+    const SuitType& t = s.variant->suits[id.suit_index].suit_type;
+    return t.rainbowish || t.muddy || t.prism;
+  };
+  const bool colour = action.clue.kind == ClueKind::COLOUR;
+  if (const auto id = s.deck[subject].id()) {
+    const IdentitySet read = hypo.common.thoughts[subject].possibilities();
+    if (!read.contains(*id)) return true;
+    // A colour call on a rainbowy card is fair only as §1f's re-pin, which names
+    // it outright. Otherwise the pin may simply have found nothing to narrow: at
+    // 2014884 T4 Purple called the ra1 as `{p2,ra1}`, because the pin reads the
+    // shared stacks (purple 0, so p1) while the call was read on the pair's
+    // (purple 1).
+    if (colour && rainbowy(*id) && read.length() != 1) return true;
+  }
+  if (!colour) return false;
+  for (int o : action.list_) {
+    if (o == subject || s.deck[o].clued) continue;  // not a NEW, ancillary touch
+    const auto id = s.deck[o].id();
+    if (id && !s.is_basic_trash(*id) && rainbowy(*id)) return true;
+  }
+  return false;
+}
+
 // THROW IT IN A HOLE: would this clue be a REFUSAL (tiiah/CONVENTION.md §1c)?
 //
 // We are the reacter of a standing ordinary reactive, and we can see that the
@@ -939,6 +993,7 @@ std::vector<ClueCandidate> analyse_clues(
     if (calls_a_critical_card_to_discard(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), 0.0};
+    if (mistakes_a_touched_card(game, hypo, ca, c.reading)) continue;
     // An undecodable REACTIVE is not a stall -- drop it, as a MISTAKE is dropped,
     // and for the same reason: no rung can reason about it.
     //

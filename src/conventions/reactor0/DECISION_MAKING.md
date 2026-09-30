@@ -685,7 +685,7 @@ is judged from Alice's own inference, not common knowledge.
    [tiiah/CONVENTION.md §2b](../tiiah/CONVENTION.md)): the clue that leaves the
    receiver the fewest identities for its called card
    (`ClueCandidate::receiver_reading_size`, first in `rung_1`,
-   `reactor0/decision.cpp:1317-1339`). That reading is the tiiah convention's, so it
+   `reactor0/decision.cpp:1372-1394`). That reading is the tiiah convention's, so it
    reaches this list through the optional `CandidateAnnotator` that `analyse_clues`
    calls with each candidate's hypo — the engine passes one under TIIAH and nothing
    otherwise, the field stays 0, and the term separates nothing.
@@ -807,6 +807,12 @@ is judged from Alice's own inference, not common knowledge.
        [2014561](../../../v18_human_vs_bot_diagnostics/2014561.md) T50) are in
        tiiah/CONVENTION.md §2a. Under every other variant it is the default
        tiebreak alone, as it always has been.
+
+       Before any ranking, Throw It in a Hole drops a colour stable play clue
+       that would have its receiver mistake a touched card: a useful rainbow card,
+       called or not, is clued by rank (`mistakes_a_touched_card`,
+       `reactor0/decision.cpp:827-859`, v18.19.0; replay 2014884 T4, where Yellow
+       would have been read as the y1 on Bob's ra1). tiiah/CONVENTION.md §1f.
     2. If pace is >= 3 and Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.

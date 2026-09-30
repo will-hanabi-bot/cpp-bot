@@ -398,6 +398,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp
   tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014561_named_stable_play_past_own_dupe_veto.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2014884_rainbow_one_clued_by_rank.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
