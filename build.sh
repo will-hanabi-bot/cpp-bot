@@ -1,5 +1,12 @@
 #!/bin/bash
-# Rebuild just the hanabi_bot target. Two failure modes get special handling:
+# Rebuild just the hanabi_bot target.
+#
+#   ./build.sh          build/hanabi_bot.exe
+#   ./build.sh --test   build/hanabi_bot_test.exe -- the same bot from the same
+#                       source under another name, so it can be built while a
+#                       running hanabi_bot.exe holds its own image locked.
+#
+# Two failure modes get special handling:
 #
 #  1. An interrupted build can leave build/.ninja_deps truncated; ninja then
 #     aborts with "premature end of file". Clearing the metadata is cheap
@@ -15,6 +22,19 @@
 set -euo pipefail
 
 TARGET=hanabi_bot
+case "${1:-}" in
+  "") ;;
+  --test) TARGET=hanabi_bot_test ;;
+  *)
+    echo "usage: $0 [--test]" >&2
+    exit 2
+    ;;
+esac
+if [ "$#" -gt 1 ]; then
+  echo "usage: $0 [--test]" >&2
+  exit 2
+fi
+
 LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
 

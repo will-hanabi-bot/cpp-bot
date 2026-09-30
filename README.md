@@ -319,7 +319,7 @@ Windows.
 | `scripts/find_game.sh` reports "no per-game log found" even though the log exists | Was calling BSD `stat -f "%m %N"`; MSYS2 ships GNU coreutils, which needs `-c "%Y %n"`. The script now probes for the right flavour at runtime. |
 | `pacman -Syuu` appears to hang or kills your terminal | Expected on the first pass — see §5.2. Reopen the shell and repeat. |
 | `collect2.exe: error: ld returned 1 exit status` when linking a test binary, with no preceding compile error | Windows locks a running executable, so a rebuild cannot relink `hanabi_tests.exe` while a `ctest` run is in progress. Wait for the test run to finish, then rebuild. |
-| `ld.exe: cannot open output file hanabi_bot.exe: Permission denied` from `build.sh` | Same lock, but held by a **running bot** — it owns its own image file. Stop the bot processes and re-run (deploying a new build needs a restart anyway). `build.sh` detects this and prints the holding PIDs. Note it only bites once a relink is actually required: while the binary is up to date the build is a no-op, so this can appear to start failing "for no reason" after a source change. |
+| `ld.exe: cannot open output file hanabi_bot.exe: Permission denied` from `build.sh` | Same lock, but held by a **running bot** — it owns its own image file. Stop the bot processes and re-run (deploying a new build needs a restart anyway), or build a second copy alongside with `./build.sh --test` (`build/hanabi_bot_test.exe`). `build.sh` detects this and prints the holding PIDs. Note it only bites once a relink is actually required: while the binary is up to date the build is a no-op, so this can appear to start failing "for no reason" after a source change. |
 
 | MSYS or Git Bash processes crash with a DLL-version error after a `PATH` change | `C:\msys64\usr\bin` was added to `PATH` alongside Git Bash, giving two rival `msys-2.0.dll`s. Remove it — see §5.6, you only need `ucrt64\bin`. |
 
@@ -343,6 +343,12 @@ ctest --test-dir build --output-on-failure -LE decision_making
 target. It recovers automatically from a truncated `.ninja_deps` left by an
 interrupted build, fails loudly on any other build error (it propagates
 cmake's exit status), and diagnoses the locked-binary case below by name.
+
+`./build.sh --test` builds `build/hanabi_bot_test.exe` instead: the same bot, from
+the same source, under another name. A running `hanabi_bot.exe` locks only its own
+image (`hanabi_core` is a static library), so this builds the current source while
+the live bot keeps running. A running `hanabi_bot_test.exe` locks itself the same
+way.
 
 If CMake cannot find OpenSSL — Homebrew keeps it keg-only — point it at the
 right prefix:

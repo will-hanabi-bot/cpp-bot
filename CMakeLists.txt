@@ -504,6 +504,13 @@ add_executable(hanabi_bot apps/hanabi_bot.cpp)
 target_link_libraries(hanabi_bot PRIVATE hanabi_core)
 hanabi_set_warnings(hanabi_bot)
 
+# The same bot under another name, so the current source can be built and run
+# while build/hanabi_bot.exe is running (and therefore locked on Windows).
+# `./build.sh --test` builds it.
+add_executable(hanabi_bot_test apps/hanabi_bot.cpp)
+target_link_libraries(hanabi_bot_test PRIVATE hanabi_core)
+hanabi_set_warnings(hanabi_bot_test)
+
 add_executable(bench_endgame apps/bench_endgame.cpp)
 target_link_libraries(bench_endgame PRIVATE hanabi_core)
 hanabi_set_warnings(bench_endgame)
