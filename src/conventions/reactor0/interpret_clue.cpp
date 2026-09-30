@@ -626,7 +626,7 @@ namespace {
 // readings, which is a stronger claim than a stable referential discard makes.
 // TODO.md entry 28 is the open question of whether it should.
 //
-// Deliberately NOT `Game::narrow_thought`: its escalation (`basics/game.cpp:119-138`)
+// Deliberately NOT `Game::narrow_thought`: its escalation (`basics/game.cpp:120-139`)
 // clears the meta when nothing survives, which would erase the very call
 // `ref_discard` just stamped. An empty result is left alone instead -- the CTD
 // is positional and does not depend on the inference, the same reasoning as the

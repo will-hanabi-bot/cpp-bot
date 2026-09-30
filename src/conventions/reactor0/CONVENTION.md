@@ -749,7 +749,7 @@ stable play clue Bob's chop was owed — costing a playable g3 and a playable y1
 This is a reactor0-only rule (`basics/decide.cpp`, the `convention !=
 REACTOR0` guard on the giver-side `check_missed`). Reactor cancels: there a clue
 instead of a reaction means the chain broke, and `check_missed`
-(`basics/game.cpp:95-118`) clears the stamp and reverts `inferred` to
+(`basics/game.cpp:96-119`) clears the stamp and reverts `inferred` to
 `old_inferred`. Reactor0 cannot do that, because its Precedence puts a **VERY HIGH
 clue above the urgent return** — a clue is exactly what a legitimate deferral
 looks like, so cancelling on one punishes the convention's own rule.
@@ -906,7 +906,7 @@ three ways, each deliberate:
   Discard stacks the card, so a critical reading there is what the call wants.
   `target_discard`'s bare filter would empty the set outright in Dark Orange.
 - **It never refuses and never erases.** No `narrow_thought`, so its escalation
-  (`basics/game.cpp:119-138`) — which clears the meta when nothing survives, and
+  (`basics/game.cpp:120-139`) — which clears the meta when nothing survives, and
   would delete the call just stamped — is out of reach; an empty result is left
   alone instead. The CTD is positional and does not depend on the inference,
   which is the same reasoning as the v0.30 reset at

@@ -233,10 +233,10 @@ receiver-CTD) have **no analogue** in the tree:
   reacter-CTD into one flag with no way to tell them apart.
 - **Nothing pops a reacter stamp when the reaction happens.** The reacted card has
   already left `state.hands` by the time resolution runs
-  (`game.cpp:453-493` runs `on_play` before `interpret_play`), so its `meta` entry
+  (`game.cpp:454-494` runs `on_play` before `interpret_play`), so its `meta` entry
   is simply orphaned. "The reaction is over" is expressed three different ways
   today, none of them a data structure: the card left the hand; `check_missed`
-  wipes a stale `urgent` sibling (`game.cpp:95-117`); `update_turn` clears
+  wipes a stale `urgent` sibling (`game.cpp:96-118`); `update_turn` clears
   `waiting` (`decide.cpp:378-381`).
 - **Dependence does not exist.** Nothing computes whether two queued CTP cards
   could share a suit under their non-global inferences.

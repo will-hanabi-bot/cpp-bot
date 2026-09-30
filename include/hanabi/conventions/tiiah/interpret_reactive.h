@@ -109,6 +109,18 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
 void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
                      int react_order);
 
+// REVERSE-REACTIVE CONFIRMATION (v18.11.0, the reviewer's rule). A reverse
+// reactive stands only if its RECEIVER's next non-clue action plays one of the
+// receiver's standing called cards (called before this action, in `prev`). A play
+// of an uncalled card or a discard means the clue was something else -- a fix, when
+// only the giver and the receiver could tell (2013726 T5 with green's o7 a b2) --
+// and the reverse reactive is withdrawn: the waiting connection cleared, its
+// pending copy retired, and the reacter's call on its reaction card dropped.
+// Called from `Game::handle_action` BEFORE anything books the action, since the
+// standing test reads the game as it stood. Returns whether it withdrew. A no-op
+// outside Throw It in a Hole.
+bool confirm_reverse_reactive(Game& game, int actor, int order, bool was_play);
+
 // THE TEAM's reading of a reacter's blind play, predicted at the GIVER's and the
 // REACTER's seats (v17.2.0): what the receiver will be able to name at reaction
 // time -- a proven finesse's connector, else the reacter's bucket on the shared

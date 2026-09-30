@@ -1,5 +1,5 @@
 // A fix takes precedence over a reverse reactive (tiiah/CONVENTION.md §1c, §1h;
-// v18.10.0).
+// v18.10.0; v18.11.0).
 //
 // The reviewer's rule: Cathy played a card matching one of the candidates of Bob's
 // called card, so from her view Bob's call is still in superposition with a dead
@@ -88,9 +88,13 @@ TEST(TiiahFixBeforeReverseReactive, TheGiverReadsItsRedAsAFix) {
   EXPECT_TRUE(g.waiting.empty()) << "no reverse reactive is installed";
 }
 
-// From CATHY's seat -- we are the giver's Cathy, and it was OUR blind play. We
-// cannot name it, but the Red naming Bob's card as the r1 tells us: a fix.
-TEST(TiiahFixBeforeReverseReactive, CathyReadsItFromHerOwnBlindPlay) {
+// From CATHY's seat -- we are the giver's Cathy, and it was OUR blind play, a
+// `{r1,g1}` we cannot name (v18.11.0). The Red naming Bob's card as the r1 is a fix
+// if our card was the r1 and a reverse reactive if it was the g1, and we cannot
+// tell -- the reviewer's case of green's o7 being a b2 in 2013726 T5. So we read the
+// reverse reactive, and Bob's next action settles it: he plays some other card, and
+// the reverse reactive is off.
+Game cathy_cannot_tell() {
   Game g = setup(opts({"y4", "g4", "b4", "p4", "r4"}, {"r1", "y3", "g3", "b3", "p3"}));
   const int ours = order_at(g, TestPlayer::ALICE, 1);
   const int cathys = order_at(g, TestPlayer::CATHY, 1);
@@ -99,7 +103,42 @@ TEST(TiiahFixBeforeReverseReactive, CathyReadsItFromHerOwnBlindPlay) {
   // Bob gives next: his Bob is Cathy, who holds the settled `{r1,b2}` call, and
   // his Cathy is us.
   settled_call(g, cathys, ids({kR1, kB2}));
+  return g;
+}
+
+TEST(TiiahFixBeforeReverseReactive, CathyWhoCannotTellWaitsForBobsAction) {
+  Game g = cathy_cannot_tell();
   ASSERT_TRUE(reactor::variants::reverse_reactive_position(g, 1));
+
+  g = take_turn(std::move(g), "Bob clues red to Cathy");
+
+  EXPECT_NE(interp_of(g), ClueInterp::FIX) << "we cannot tell it is one";
+  ASSERT_FALSE(g.waiting.empty()) << "read as the reverse reactive, for now";
+  EXPECT_EQ(g.waiting.front().reacter, 0) << "we would react";
+
+  // The receiver plays an uncalled card (her slot 2) rather than her standing call.
+  g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/2, /*reached_the_hole=*/true);
+
+  EXPECT_TRUE(g.waiting.empty()) << "so it was not a reverse reactive after all";
+}
+
+// ...or she discards the dead card her call was on: off too.
+TEST(TiiahFixBeforeReverseReactive, ADiscardOfTheDeadCardAlsoWithdrawsIt) {
+  Game g = cathy_cannot_tell();
+  g = take_turn(std::move(g), "Bob clues red to Cathy");
+  ASSERT_FALSE(g.waiting.empty());
+
+  g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/1, /*reached_the_hole=*/false);
+
+  EXPECT_TRUE(g.waiting.empty());
+}
+
+// A Cathy who CAN name her blind play -- her own stacks count the r1, as black's
+// did in 2013726 T5 from blue's call for a finesse into red 2 -- reads the fix at once.
+TEST(TiiahFixBeforeReverseReactive, CathyWhoKnowsHerBlindPlayReadsTheFix) {
+  Game g = cathy_cannot_tell();
+  g.with_state([](State& st) { st = st.with_stacks({1, 0, 0, 0, 0}); });
+  ASSERT_TRUE(g.state.is_basic_trash(kR1)) << "guard: our own stacks count the r1";
 
   g = take_turn(std::move(g), "Bob clues red to Cathy");
 

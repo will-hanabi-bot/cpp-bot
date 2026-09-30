@@ -9,6 +9,7 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/player_elim.h"
 #include "hanabi/conventions/tiiah/dupes.h"
+#include "hanabi/conventions/tiiah/interpret_reactive.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/instrumentation/timer.h"
 
@@ -601,6 +602,17 @@ void Game::handle_action(const Action& action) {
   // worlds our own hole cards leave open, and it settles them when one of them is
   // the only world in which the play lands (§1e rule 6). Ahead of the resolution
   // because it is what the resolution's "dead" test then reads.
+  //
+  // First of all, though, a REVERSE reactive's receiver has acted (v18.11.0): it
+  // stands only if what he played was a standing play of his, judged on the game
+  // before any of the hole bookkeeping below books that very play. A failed
+  // discard is a misplay, which pressed Play.
+  if (const auto* p = std::get_if<PlayAction>(&action)) {
+    hanabi::tiiah::confirm_reverse_reactive(*this, p->player_index_v, p->order, true);
+  } else if (const auto* d = std::get_if<DiscardAction>(&action)) {
+    hanabi::tiiah::confirm_reverse_reactive(*this, d->player_index_v, d->order,
+                                            d->failed);
+  }
   hanabi::tiiah::presume_play_lands(*this, action);
   // ...and its discard twin: a partner who throws a card the team had named, and
   // that looks playable to us, can see it has already been played — by us, into

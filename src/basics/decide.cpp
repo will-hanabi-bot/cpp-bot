@@ -210,7 +210,7 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   using namespace hanabi::reactor;
   // Giving a clue counts as MISSING your own pending reaction -- under reactor.
   // `check_missed` scans the giver's own hand for an urgent card and clears the
-  // stamp, reverting `inferred` to `old_inferred` (basics/game.cpp:95).
+  // stamp, reverting `inferred` to `old_inferred` (basics/game.cpp:96).
   //
   // Reactor0 is exempt. There a reacter is ALLOWED to defer: its Precedence puts
   // a VERY HIGH clue above the urgent return, so a clue is exactly what a

@@ -116,13 +116,12 @@ std::optional<int> clue_would_fix_dead_call(const Game& before,
   if (!s.variant->throw_it_in_a_hole) return std::nullopt;
   const int clued = action.target;
   if (clued < 0 || clued >= static_cast<int>(s.hands.size())) return std::nullopt;
-  // DEAD TO THE TEAM, from what every seat holds alike (the reviewer's rule): trash
-  // on the shared view, or a candidate of a hole card someone other than the giver
-  // played -- the giver saw that card, so the clue can be telling us it was this.
-  // Not the giver-and-holder stacks: the third seat cannot compute those when the
-  // evidence is its own blind play (2013726 T5, black's `{r1,g1}`).
-  const State shared = s.shared_view();
-  const IdentitySet in_the_hole = hole_candidates_not_by(before, action.giver);
+  // DEAD TO US (v18.11.0, the reviewer's rule): trash on OUR OWN stacks. The giver
+  // and Bob watched Cathy's blind play, so they know; Cathy knows only when she can
+  // name it privately -- in 2013726 T5 black could, from blue's call for a finesse
+  // into red 2. A Cathy who cannot tell reads the clue as the reverse reactive, and
+  // Bob's next action settles it: a reverse reactive stands only if he plays a
+  // standing called card (`tiiah::confirm_reverse_reactive`).
   for (int order : s.hands[clued]) {
     if (before.meta[order].status != CardStatus::CALLED_TO_PLAY) continue;
     const IdentitySet live = before.common.thoughts[order].possibilities();
@@ -135,7 +134,7 @@ std::optional<int> clue_would_fix_dead_call(const Game& before,
       return s.variant->id_touched(i, action.clue.kind, action.clue.value) == touched;
     });
     if (now.length() != 1) continue;
-    if (!shared.is_basic_trash(now.head()) && !in_the_hole.contains(now.head())) continue;
+    if (!s.is_basic_trash(now.head())) continue;
     return order;
   }
   return std::nullopt;

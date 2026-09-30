@@ -12,6 +12,7 @@
 #include "hanabi/conventions/tiiah/dupes.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/variants/predicates.h"
@@ -201,6 +202,41 @@ void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
   r.frame = wc.receiver_frame;
   r.target_order = wc.receiver_hand[slots->second - 1];
   game.reaction_records.push_back(std::move(r));
+}
+
+bool confirm_reverse_reactive(Game& game, int actor, int order, bool was_play) {
+  if (!game.state.variant->throw_it_in_a_hole) return false;
+  if (game.waiting.empty()) return false;
+  const ReactorWC wc = game.waiting.front();
+  if (wc.inverted || wc.receiver != actor) return false;
+  // The REVERSE arm only: its receiver is the giver's Bob, and moves first.
+  if (wc.receiver != game.state.next_player_index(wc.giver)) return false;
+  // A standing play as the position counted it, before this action: a known play,
+  // or a clued or settled call.
+  const bool plays_a_standing_call =
+      was_play && hanabi::reactor::variants::is_standing_play(game, order);
+  if (plays_a_standing_call) return false;  // confirmed
+  game.waiting.clear();
+  hanabi::reactor0::retire_pending_reaction(game, wc.reacter);
+  if (wc.react_order >= 0 && wc.react_order < static_cast<int>(game.meta.size())) {
+    const int turn = game.state.turn_count;
+    game.with_meta(wc.react_order, [turn](ConvData& m) {
+      if (m.status != CardStatus::CALLED_TO_PLAY &&
+          m.status != CardStatus::CALLED_TO_DISCARD) {
+        return;
+      }
+      m.status = CardStatus::NONE;
+      m.urgent = false;
+      m.by = std::nullopt;
+      m.react_target_order = -1;
+      m.note_mark = NoteMark::RESET;
+      m.note_mark_turn = turn;
+    });
+  }
+  hanabi::logging::log_branch("tiiah.reverse_reactive_withdrawn",
+                              {{"receiver", actor}, {"order", order},
+                               {"was_play", was_play}, {"reacter", wc.reacter}});
+  return true;
 }
 
 std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,

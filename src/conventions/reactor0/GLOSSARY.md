@@ -388,7 +388,7 @@ An inference chain proven false, detected as a card's `inferred` becoming
 empty. The card is reset to its global empathy immediately — before any
 convention interprets the action — and the call resting on the chain is
 voided with it. Engine-wide, not reactor0-specific. See CONVENTION.md §1i;
-`src/basics/game.cpp:163-168`, `:196-215`, `:236-244`.
+`src/basics/game.cpp:164-169`, `:196-215`, `:236-244`.
 
 ### finesse
 As in reactor — the reacter plays a card that connects with a

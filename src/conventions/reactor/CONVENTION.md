@@ -18,7 +18,7 @@ describes only what the code does.
 Two conventions of the document itself:
 
 - **Slot 1 is the leftmost, newest card.** Draws prepend to the hand
-  (`src/basics/game.cpp:378`), so slot 1 is the most recently drawn and the
+  (`src/basics/game.cpp:379`), so slot 1 is the most recently drawn and the
   highest `order`. "Left" means newer; "right" means older.
 - **Alice / Bob / Cathy** are positional: Alice is the player to move (the
   clue giver in most of this document), Bob the next player, Cathy the one
@@ -507,7 +507,7 @@ resulting card is still in the receiver's hand.
   CHUCK, a play call; asking "which of these can you afford to lose?" is
   backwards for it, and in Dark Orange — every rank `oneOfEach`, so every card
   critical — it empties the set outright. The card was then branded trash and
-  `Game::elim`'s step-1 sweep (`src/basics/game.cpp:498-509`) reset it to
+  `Game::elim`'s step-1 sweep (`src/basics/game.cpp:499-510`) reset it to
   global empathy and cleared the status, destroying the chuck signal one turn
   after it was given (bug_report_6_2_0.txt, replay 1959065 T5-T6). In that case
   the narrowing is to the inverted identities a chuck would actually **stack**,
@@ -558,7 +558,7 @@ rewinds.
 The response is `game.rewind(wc.turn, InterpAction{ClueInterp::REACTIVE})`
 (`:283-284`, `:344-345`), which replays the game from `base` with the earlier
 clue forced into the reactive reading. Rewind depth is capped at 4
-(`src/basics/game.cpp:595`). When a rewind succeeds the replay has already
+(`src/basics/game.cpp:596`). When a rewind succeeds the replay has already
 processed the current action end-to-end, so the caller must not touch it again
 — that is what `react_play` / `react_discard` returning `true` signals
 (`include/hanabi/conventions/reactor/interpret_reaction.h:44-49`).
@@ -613,7 +613,7 @@ reaction triggers the response-inversion rewind.
     only as the clue-scoring term of §2.4 and via `bad_touch_result`.
 
   The contrast matters: `CardStatus::SARCASTIC` and `GENTLEMANS_DISCARD` **are**
-  live (`decide.cpp:307-316`, `game.cpp:522-523`). They are not port leftovers.
+  live (`decide.cpp:307-316`, `game.cpp:523-524`). They are not port leftovers.
   Both are gated on the discarded card's identity having been **known** before
   the throw (`useful_dc`, `decide.cpp`) — see GLOSSARY, *sarcastic discard*.
 - **Some conventional rules live outside the `interpret_*` files** — notably
@@ -730,7 +730,7 @@ This is the most invasive variant in the codebase. For an inverted suit the
 *game rule* swaps what the two buttons do: a **pitch** (press Play,
 `PerformPlay`) sends the card to the discard pile and regains a clue, and a
 **chuck** (press Discard, `PerformDiscard`) is a play attempt onto the stack
-(`src/basics/game.cpp:228-247`, `:312-326`).
+(`src/basics/game.cpp:229-248`, `:312-326`).
 
 Critically: **`CALLED_TO_PLAY` and `CALLED_TO_DISCARD` name buttons, not
 outcomes** (`decide.cpp:706-722`). CTP means *pitch*, CTD means *chuck*, and the
@@ -1367,7 +1367,7 @@ The rest fire only when `cards_left == 1`.
 
   **CP has two opportunities, and which one counts depends on the card**
   (`:106-110`). Drawing the last card sets `endgame_turns = num_players`
-  (`src/basics/game.cpp:328`), so the final round runs offsets `1..n-1` and
+  (`src/basics/game.cpp:329`), so the final round runs offsets `1..n-1` and
   then **CP again** — CP acts last. A **4** in CP's hand can be played right
   now, offset 0, which is the long-standing CP-holds-the-4 exemption. A **5**
   cannot: the rule's own precondition is `play_stacks[suit] < 4`. Its offset is
@@ -1412,7 +1412,7 @@ ever sees, a known-trash orange had a guaranteed misplay as its sole option —
 bug_report_5_0_0.txt, replay 1957953 T30, which struck.
 
 The same routing now applies to forced Rules 2 and 3
-(`forced_endgame.cpp:209-218`, `:423-427`):
+(`forced_endgame.cpp:210-219`, `:423-427`):
 its candidates are filtered by `is_playable`, which on an inverted suit means
 *the chuck advances the stack*, so returning `PerformPlay` pitched a
 singleton-critical card into the discard pile.

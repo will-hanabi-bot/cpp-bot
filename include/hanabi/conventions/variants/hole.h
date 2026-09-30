@@ -57,6 +57,12 @@ bool has_known_play(const Game& game, int player);
 // decides the reverse-reactive position (v18.3.0), and with it role inversion.
 bool has_standing_play(const Game& game, int player);
 
+// Is this one card a standing play (v18.11.0)? A known play, or a clued or settled
+// call -- the per-card test `has_standing_play` asks of every card in a hand, and
+// what a reverse reactive's receiver must play for it to stand
+// (`tiiah::confirm_reverse_reactive`).
+bool is_standing_play(const Game& game, int order);
+
 // ROLE INVERSION (v18.2.0): this clue goes to the giver's Cathy and is STABLE,
 // because the table is in the reverse-reactive position. Without it a clue to
 // Cathy is reactor0's ordinary reactive. Since v18.3.0 it is exactly the

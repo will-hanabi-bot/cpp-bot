@@ -13,7 +13,7 @@ yet implemented see [TODO.md](../../../TODO.md).
 Two orientation facts that most entries depend on:
 
 - **Slot 1 is the leftmost, newest card.** Draws prepend
-  (`src/basics/game.cpp:378`), so slot 1 has the highest `order`. "Left" =
+  (`src/basics/game.cpp:379`), so slot 1 has the highest `order`. "Left" =
   newer, "right" = older.
 - **Alice / Bob / Cathy / Zelda** are positional, not identities: Alice is the
   player to move, Bob the next player, Cathy the one after, Zelda the previous
@@ -147,7 +147,7 @@ same reading. `include/hanabi/basics/game.h:73`; `player.h:1-8`.
 
 ### connectable
 Recursive check that a chain of plays can reach a target card before the
-receiver has to act. `src/basics/fix.cpp:242-268`.
+receiver has to act. `src/basics/fix.cpp:241-267`.
 
 ### Connection
 **⚠ Mostly unused.** The variant type `KnownConn | PlayableConn | PromptConn |
@@ -212,7 +212,7 @@ reading. Costs `−10` each in clue scoring (v1.7.0).
 
 ### distribution clue
 **⚠ Implemented but never invoked.** A clue whose only value is spreading
-duplicated criticals. `src/basics/fix.cpp:144-194`.
+duplicated criticals. `src/basics/fix.cpp:143-193`.
 
 ### effective_possible_for
 Narrows a card's `possible` set by visibility **from the holder's point of
@@ -224,7 +224,7 @@ for the giver and the reacter. See *POV invariance*.
 ### elim
 Umbrella for the post-action inference pass: `card_elim`, optional
 `good_touch_elim`, link refresh, and hypo-stack recomputation.
-`src/basics/game.cpp:463-573`.
+`src/basics/game.cpp:464-574`.
 
 ### elim_* matrices
 The four functions that eliminate identities from the receiver's slots *left
@@ -335,7 +335,7 @@ Suits where the game rule **swaps what the two buttons do**: a *chuck* is the
 play attempt and a *pitch* sends the card to the discard pile (with a clue
 regain). Because CTP/CTD name buttons rather than outcomes, the convention must
 stamp CTD to get an orange card onto its stack. See *pitch / chuck*.
-`src/conventions/variants/inverted.cpp`; `src/basics/game.cpp:228-247`, `:312-326`.
+`src/conventions/variants/inverted.cpp`; `src/basics/game.cpp:229-248`, `:312-326`.
 
 ### known trash (kt)
 A card whose every possibility is basic trash, or which is duplicated by an
@@ -586,7 +586,7 @@ Suits that play 5→4→3→2→1. Copy counts flip to `{1,2,2,2,3}`. Orthogonal
 ### rewind
 Replay the game from `base` with an `InterpAction` injected at a given turn,
 used to re-interpret an earlier clue. Depth-capped at 4.
-`src/basics/game.cpp:577-655`.
+`src/basics/game.cpp:578-667`.
 
 ### sacrifice
 A non-critical card discarded when nothing is trash — the last-resort
@@ -666,7 +666,7 @@ Per-observer belief about one card: `possible`, `inferred`, `info_lock`,
 
 ### touched
 A card that is clued, CTP'd, gentleman's-discarded, or finessed.
-`Game::is_touched`, `src/basics/game.cpp:121-125`. The `FINESSED` clause is
+`Game::is_touched`, `src/basics/game.cpp:122-126`. The `FINESSED` clause is
 unreachable in practice — nothing stamps that status.
 
 ### trash push

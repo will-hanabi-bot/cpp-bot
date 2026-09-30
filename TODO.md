@@ -393,7 +393,7 @@ inverted-variant line that reaches a discard.
 top-of-tree action the error runs the other way. `make_discard_for_simulation`
 keys on `state.deck[order].id()`, which is null for our own cards, so a candidate
 `DiscardAction{us, o, -1, -1, false}` is handed to `Game::on_discard`
-(`src/basics/game.cpp:263-305`) with `suit_index == -1`; `inverted_id` is then
+(`src/basics/game.cpp:264-306`) with `suit_index == -1`; `inverted_id` is then
 false, `failed` is false, and the simulation scores a clean clue-regaining
 discard. No strike, no discard-pile entry, no `max_score` loss — the eval cannot
 price the chuck risk of its own possibly-orange discard at all. Candidate removal
@@ -701,7 +701,7 @@ if (infer || game.good_touch || state.endgame_turns) {
 ```
 
 At `cards_left == 1` **all three disjuncts are false** — `endgame_turns` is only
-set when a draw empties the deck (`src/basics/game.cpp:511`) — so the root uses
+set when a draw empties the deck (`src/basics/game.cpp:512`) — so the root uses
 `obvious_playables`, which does no trash subtraction at all
 (`src/basics/player_game.cpp:174-180`, `exclude_trash` defaults false). A card
 that is clued and whose non-trash readings collapse to a single playable is
@@ -1181,14 +1181,14 @@ the comment at the seam (`decide.cpp:636-640`) deliberately avoided.
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:221`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:257`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
 what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
 REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:702-716`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:273`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:309`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has

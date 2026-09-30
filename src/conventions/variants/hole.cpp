@@ -91,13 +91,26 @@ bool has_standing_play(const Game& game, int player) {
   // blind-played an r3. Replay 2013963 T10: will-bot67's o17 held a settled,
   // unclued receiver's call; read clued-only, yagami's reverse-reactive finesse
   // (will-bot69's b2 into will-bot67's b3) read as a MISTAKE.
-  if (has_known_play(game, player)) return true;
   for (int o : game.state.hands[player]) {
-    const ConvData& m = game.meta[o];
-    if (m.status != CardStatus::CALLED_TO_PLAY) continue;
-    if (game.state.deck[o].clued || !m.urgent) return true;
+    if (is_standing_play(game, o)) return true;
   }
   return false;
+}
+
+bool is_standing_play(const Game& game, int order) {
+  const State& s = game.state;
+  if (order < 0 || order >= static_cast<int>(game.meta.size())) return false;
+  // A known play: every identity its touches allow is playable on the shared view.
+  const IdentitySet& touched = game.common.thoughts[order].possible;
+  const State shared = s.shared_view();
+  if (touched.non_empty() &&
+      touched.forall([&shared](Identity i) { return shared.is_playable(i); })) {
+    return true;
+  }
+  // A call every seat stamps alike: clued, or settled (see `has_standing_play`).
+  const ConvData& m = game.meta[order];
+  if (m.status != CardStatus::CALLED_TO_PLAY) return false;
+  return s.deck[order].clued || !m.urgent;
 }
 
 bool inverted_stable(const Game& prev, int giver, int target) {

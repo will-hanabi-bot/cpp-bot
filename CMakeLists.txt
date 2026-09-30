@@ -440,6 +440,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_role_inversion.cpp
   tests/test_tiiah/test_all_targets_gotten.cpp
   tests/test_tiiah/test_fix_before_reverse_reactive.cpp
+  tests/test_tiiah/test_reverse_reactive_confirmation.cpp
   tests/test_tiiah/test_replay_2013726_reacter_rules_out_the_n3.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
   tests/test_tiiah/test_receiver_bucket.cpp

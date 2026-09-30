@@ -94,7 +94,7 @@ the double discard), colour clues exactly one.
 Two orientation facts first:
 
 - **Slot 1 is the leftmost, newest card** — draws prepend to the hand
-  (`src/basics/game.cpp:378`).
+  (`src/basics/game.cpp:379`).
 - **Alice / Bob / Cathy** are positional: Alice is the player to move, Bob is
   next, Cathy after that.
 

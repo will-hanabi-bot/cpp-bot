@@ -65,7 +65,7 @@ void target_i_discard(const Game& prev, Game& game, const ReactorWC& wc,
   // narrowing to the NON-CRITICAL ids asks "which of these can you afford to
   // throw away?", and in Dark Orange — every rank `oneOfEach`, so every card
   // critical — that empties the set outright. The card is then marked trash,
-  // and `Game::elim`'s step-1 sweep (src/basics/game.cpp:498-509) sees the
+  // and `Game::elim`'s step-1 sweep (src/basics/game.cpp:499-510) sees the
   // empty `inferred`, resets the card to its global empathy and clears the
   // status, so the chuck signal is destroyed the moment it is given.
   // bug_report_6_2_0.txt, replay 1959065 T5-T6.
