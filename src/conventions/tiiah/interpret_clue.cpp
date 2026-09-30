@@ -110,9 +110,13 @@ void repin_own_call(const Game& prev, Game& game, int giver) {
   // Playable in some strike-free world of the giver's hole cards, on the frame the
   // giver and we share.
   IdentitySet giver_live = IdentitySet::empty();
+  // What the giver MEANT: playable on the frame itself, which is the giver's own
+  // belief -- it cannot know which world of its hole cards it is in.
+  IdentitySet giver_meant = IdentitySet::empty();
   if (giver >= 0 && giver < s.num_players && giver != me) {
     const State base = s.with_stacks(s.stacks_known_to_both(giver, me))
                            .with_band(s.evidence_known_to_both(giver, me));
+    giver_meant = base.playable_set;
     const auto worlds = open_worlds(game, base, giver);
     for (const OpenWorld* w : strike_free(worlds)) {
       giver_live = giver_live.union_with(w->state.playable_set);
@@ -123,6 +127,40 @@ void repin_own_call(const Game& prev, Game& game, int giver) {
     if (o < static_cast<int>(prev.meta.size()) &&
         prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
       continue;  // a standing call, already settled by the clue that made it
+    }
+    // A NAMED DUPE (v18.18.0). When the giver's frame leaves our call exactly one
+    // identity, and we WATCHED the giver throw that very identity into the hole
+    // without naming it, the call can only be the dupe: the giver meant the card
+    // its own frame allows, and cannot know its hole card already played it. So
+    // the card is that identity, known trash to us, and the call is withdrawn --
+    // we throw it rather than hold it. A card the giver did not call so exactly
+    // keeps both readings, as below. Human diagnostic 2014561 T56: "yagami_black
+    // will toss it if yagami_blue already played the other copy" -- which is what
+    // lets the giver call a card it may have played, when the call is named
+    // (reactor0 `calls_a_card_we_may_have_played`).
+    if (giver >= 0 && giver != me) {
+      const IdentitySet meant = game.common.thoughts[o].inferred.intersect(giver_meant);
+      if (meant.length() == 1) {
+        const Identity x = *meant.begin();
+        bool watched = false;
+        for (int h = 0; h < static_cast<int>(game.meta.size()) && !watched; ++h) {
+          if (!game.meta[h].superposed() && game.meta[h].shared_left.is_empty()) continue;
+          if (s.holder_of(h) != giver) continue;
+          const auto id = s.deck[h].id();
+          watched = id && *id == x;
+        }
+        if (watched && s.is_basic_trash(x)) {
+          const int turn = s.turn_count;
+          game.with_thought(o, [x](const Thought& t) {
+            Thought out = t;
+            out.old_inferred = t.inferred;
+            out.inferred = IdentitySet::single(x);
+            return out;
+          });
+          game.with_meta(o, [turn](ConvData& m) { m = m.cleared().reason(turn); });
+          continue;
+        }
+      }
     }
     // Playable in SOME world of our own hole cards (§1e, v16.24.0): our belief is
     // their minimum, and a call on a card that is only live in one of them -- the

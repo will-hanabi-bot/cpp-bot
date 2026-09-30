@@ -433,3 +433,13 @@ The default tiebreak comes last. **Unknown trash** is a trash card the receiver
 cannot identify as trash, judged on the stacks the called play leaves.
 `settle_stable_play` in `reactor0/decision.cpp`. CONVENTION.md §2a, human
 diagnostic 2014561 T50.
+
+### named call / watched dupe
+A **named call** is a stable play call whose holder can read it back to exactly one
+identity once the clue has landed. The giver's own-dupe veto (CONVENTION.md §2c)
+spares a named call (v18.18.0). The holder watched the giver's hole cards go in, so
+it can check the call against them. When the giver's frame leaves the call one
+identity X, and the holder watched the giver throw an X into the hole unnamed, the
+call is a **watched dupe**. The holder reads the card as X (trash), withdraws the
+call and throws it (`repin_own_call`, CONVENTION.md §1.3). Human diagnostic 2014561
+T56.

@@ -13,7 +13,7 @@ yet implemented see [TODO.md](../../../TODO.md).
 Two orientation facts that most entries depend on:
 
 - **Slot 1 is the leftmost, newest card.** Draws prepend
-  (`src/basics/game.cpp:379`), so slot 1 has the highest `order`. "Left" =
+  (`src/basics/game.cpp:385`), so slot 1 has the highest `order`. "Left" =
   newer, "right" = older.
 - **Alice / Bob / Cathy / Zelda** are positional, not identities: Alice is the
   player to move, Bob the next player, Cathy the one after, Zelda the previous
@@ -224,7 +224,7 @@ for the giver and the reacter. See *POV invariance*.
 ### elim
 Umbrella for the post-action inference pass: `card_elim`, optional
 `good_touch_elim`, link refresh, and hypo-stack recomputation.
-`src/basics/game.cpp:464-574`.
+`src/basics/game.cpp:470-580`.
 
 ### elim_* matrices
 The four functions that eliminate identities from the receiver's slots *left
@@ -586,7 +586,7 @@ Suits that play 5→4→3→2→1. Copy counts flip to `{1,2,2,2,3}`. Orthogonal
 ### rewind
 Replay the game from `base` with an `InterpAction` injected at a given turn,
 used to re-interpret an earlier clue. Depth-capped at 4.
-`src/basics/game.cpp:578-667`.
+`src/basics/game.cpp:584-673`.
 
 ### sacrifice
 A non-critical card discarded when nothing is trash — the last-resort

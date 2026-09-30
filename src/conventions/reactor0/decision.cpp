@@ -724,8 +724,19 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
 // (v18_human_vs_bot_diagnostics/2013726.md): green's own `{r3,g1}` hole card
 // vetoed every clue calling blue's playable g1 on chop, and blue threw it; v16.29.0,
 // before this filter, gave the 1.
+//
+// Nor a STABLE play clue's called card that its holder can NAME exactly once the
+// clue has landed (v18.18.0). The holder watched our card go into the hole, so a
+// call on a card they can name is one they can check against it: if our card was
+// that identity, they see the dupe and throw it. A call left with several
+// identities keeps the veto -- the holder cannot tell which of them we meant, nor
+// that one of them is dead. Human diagnostic 2014561 T56
+// (v18_human_vs_bot_diagnostics/2014561.md): blue's unknown 4 had just gone into
+// the hole, so Yellow (black's y4) and Purple (the clued p4) were both vetoed, and
+// blue revealed a trash p1 instead. "yagami_black will toss it if yagami_blue
+// already played the other copy."
 bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo,
-                                     int spared) {
+                                     const ClueAction& action, int spared) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return false;
   const auto worlds = hanabi::tiiah::open_worlds(game, s.private_base(),
@@ -752,8 +763,13 @@ bool calls_a_card_we_may_have_played(const Game& game, const Game& hypo,
   if (!hypo.waiting.empty() && hypo.waiting.front().receiver_target_order >= 0) {
     called.push_back(hypo.waiting.front().receiver_target_order);
   }
+  const bool stable = !dispatch_is_reactive(game, action);
   for (int o : called) {
     if (o == spared) continue;
+    if (stable && s.holder_of(o) == action.target &&
+        hypo.players[action.target].thoughts[o].possibilities().length() == 1) {
+      continue;  // a named stable call: its holder can see a dupe for itself
+    }
     auto id = s.deck[o].id();
     if (id && dead_somewhere(*id)) return true;
   }
@@ -919,7 +935,7 @@ std::vector<ClueCandidate> analyse_clues(
       continue;  // undecodable: no rung may propose it
     }
     if (calls_two_copies_to_play(game, hypo)) continue;
-    if (calls_a_card_we_may_have_played(game, hypo, spared)) continue;
+    if (calls_a_card_we_may_have_played(game, hypo, ca, spared)) continue;
     if (calls_a_critical_card_to_discard(game, hypo)) continue;
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), 0.0};

@@ -701,7 +701,7 @@ if (infer || game.good_touch || state.endgame_turns) {
 ```
 
 At `cards_left == 1` **all three disjuncts are false** — `endgame_turns` is only
-set when a draw empties the deck (`src/basics/game.cpp:512`) — so the root uses
+set when a draw empties the deck (`src/basics/game.cpp:518`) — so the root uses
 `obvious_playables`, which does no trash subtraction at all
 (`src/basics/player_game.cpp:174-180`, `exclude_trash` defaults false). A card
 that is clued and whose non-trash readings collapse to a single playable is

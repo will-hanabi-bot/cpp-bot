@@ -310,7 +310,13 @@ void Game::on_clue(const ClueAction& action) {
       if (did_reset) clear_contradicted_call(order);
 
       const Thought& after = common.thoughts[order];
-      if (after.possible.length() == 1) {
+      // Only a card we cannot see (v18.18.0). Our sight is the ground truth: the
+      // shared empathy can be wrong -- a copy counted as accounted for that is not
+      // -- and writing its answer over a card we can see rewrites the deck itself.
+      // Self-play seed 100 (v18.18.0) T55: the shared empathy of Cathy's b2 was
+      // left `{b1}`, the deck was rewritten to a b1, and at T56 a rank 1 aimed at
+      // that "b1" touched nothing.
+      if (after.possible.length() == 1 && !state.deck[order].id()) {
         with_id(order, after.possible.head());
       }
       if (after.inferred.length() < before.inferred.length()) {
