@@ -413,7 +413,8 @@ std::optional<int> rightmost_could_be_playable(
 // --- stable colour --------------------------------------------------------
 
 std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
-                                        const ClueAction& action, bool stall) {
+                                        const ClueAction& action, bool stall,
+                                        const std::vector<int>* reveal_frame) {
   hanabi::instr::ScopedTimer st("reactor0.stable_colour");
   hanabi::logging::LogScope ls(
       "reactor0.stable_colour",
@@ -453,7 +454,24 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
   //    is a known playable ORANGE the receiver must CHUCK it (press Discard),
   //    so the reveal is stamped CTD — a bare REVEAL stamps nothing and would
   //    leave the physical action to empathy alone.
-  if (auto revealed = find_play_reveal(prev, game, action)) {
+  //
+  //    With a `reveal_frame` (Throw It in a Hole, v18.20.0) the reveal outranks
+  //    the leftmost newly touched card only when it is a reveal on THAT frame
+  //    too: the stacks every seat knows. Replay 2015013 T35: Blue to will-bot69
+  //    touched its clued o14, the b2, while the b1 was still superposed, so the
+  //    receiver could not know the giver knew blue was on 1; the clue named the
+  //    leftmost newly touched card instead. At T37, the b2 having gone in in full
+  //    view, Blue on yagami's clued b3 was a reveal on every seat's stacks.
+  std::optional<int> revealed = find_play_reveal(prev, game, action);
+  if (revealed && reveal_frame && !reveal_frame->empty() &&
+      *reveal_frame != game.state.play_stacks) {
+    Game p = prev;
+    p.state = prev.state.with_stacks(*reveal_frame);
+    Game g = game;
+    g.state = game.state.with_stacks(*reveal_frame);
+    if (find_play_reveal(p, g, action) != revealed) revealed.reset();
+  }
+  if (revealed) {
     if (known_playable_inverted(game, *revealed)) {
       stamp_orange_chuck(game, action, *revealed);
     } else {

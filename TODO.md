@@ -677,7 +677,7 @@ would desync the signal.
 **Partly addressed in v16.11.0, and deliberately not closed.** The STABLE
 referential discard — the one arm that narrowed nothing at all, so its note
 listed the criticals outright (replay 2008422 T1) — now drops them, via
-`narrow_stable_chuck` (`src/conventions/reactor0/interpret_clue.cpp:609-659`).
+`narrow_stable_chuck` (`src/conventions/reactor0/interpret_clue.cpp:627-677`).
 That is `target_discard`'s weaker filter, *not* `chuck_candidates`: the ruling
 was that a stable "this slot is safe to throw" does not also claim the card is
 unplayable, so the playable readings stay. So what this entry asks for is still

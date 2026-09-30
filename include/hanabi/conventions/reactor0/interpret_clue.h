@@ -113,8 +113,11 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
 //   2. else the LEFTMOST card touched by this clue that could be playable
 //      is called to play;
 //   3. else STALL.
-std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
-                                        const ClueAction& action, bool stall);
+// `reveal_frame`, when given, is a stack vector the play reveal must ALSO hold
+// on to outrank step 2 -- Throw It in a Hole passes the stacks every seat knows.
+std::optional<ClueInterp> stable_colour(
+    const Game& prev, Game& game, const ClueAction& action, bool stall,
+    const std::vector<int>* reveal_frame = nullptr);
 
 // Stable rank clue, in priority order:
 //   1. all remaining useful identities of the rank playable → direct play

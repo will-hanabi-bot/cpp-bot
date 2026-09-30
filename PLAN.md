@@ -176,7 +176,7 @@ The implementation should invent none of these:
 
 | Need | Existing | Where |
 |---|---|---|
-| reactive vs stable | positional compare `action.target != bob` | `reactor0/interpret_clue.cpp:620-631` |
+| reactive vs stable | positional compare `action.target != bob` | `reactor0/interpret_clue.cpp:638-649` |
 | two new plays | `new_play_facts(...).count >= 2` | `reactor0/state_eval.cpp:170-187` |
 | finesse (H4) | rank Phase B | `reactor0/interpret_reactive.cpp:384-448` |
 | double discard | rank Phase C | `reactor0/interpret_reactive.cpp:449-483` |
@@ -242,7 +242,7 @@ receiver-CTD) have **no analogue** in the tree:
   could share a suit under their non-global inferences.
 - **Ordering is inconsistent.** `signal_turn` is the only timestamp, it is
   *set-once* (`card.cpp:112-117`), it is **absent** on three stamping paths
-  (`reactor0/interpret_clue.cpp:530-533`, `reactor0/interpret_reaction.cpp:57-61`,
+  (`reactor0/interpret_clue.cpp:548-551`, `reactor0/interpret_reaction.cpp:57-61`,
   `reactor/interpret_clue.cpp:352-356`), and its missing-value convention differs
   across call sites (`99` / `99` / `0` / `-1` / `-1`).
 

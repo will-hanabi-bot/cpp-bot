@@ -435,7 +435,11 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     if (action.clue.kind != ClueKind::COLOUR) {
       out = reactor0::stable_rank(p, g, action, stall_ctx);
     } else {
-      out = reactor0::stable_colour(p, g, action, stall_ctx);
+      // A colour play reveal outranks the leftmost newly touched card only when
+      // it is one on the stacks EVERY seat knows (v18.20.0) -- the same frame in
+      // every world below, since the rule is about global knowledge.
+      out = reactor0::stable_colour(p, g, action, stall_ctx,
+                                    &state.common_play_stacks);
       // §1f, applied to whatever the ladder called.
       pin_rainbowy_colour(p, g, action);
     }

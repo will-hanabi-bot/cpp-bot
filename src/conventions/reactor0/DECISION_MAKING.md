@@ -145,7 +145,7 @@ NOT-LOW iff any of VH1, H2, H3, H4, or:
 6. **N3** — the clue gets two new plays. `:628`.
 7. **N2** — the clue is **reactive** and Bob has no stable color play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
-   since dispatch is positional (§1a, `interpret_clue.cpp:935-938`). `:634-637`.
+   since dispatch is positional (§1a, `interpret_clue.cpp:953-956`). `:634-637`.
    In a **target-parity** variant the second arm is vacuously true (no stable
    clues exist) while the first still asks who was clued, so only a clue to
    Cathy reaches N2 there.
@@ -685,7 +685,7 @@ is judged from Alice's own inference, not common knowledge.
    [tiiah/CONVENTION.md §2b](../tiiah/CONVENTION.md)): the clue that leaves the
    receiver the fewest identities for its called card
    (`ClueCandidate::receiver_reading_size`, first in `rung_1`,
-   `reactor0/decision.cpp:1372-1394`). That reading is the tiiah convention's, so it
+   `reactor0/decision.cpp:1365-1387`). That reading is the tiiah convention's, so it
    reaches this list through the optional `CandidateAnnotator` that `analyse_clues`
    calls with each candidate's hypo — the engine passes one under TIIAH and nothing
    otherwise, the field stays 0, and the term separates nothing.
@@ -809,10 +809,12 @@ is judged from Alice's own inference, not common knowledge.
        tiebreak alone, as it always has been.
 
        Before any ranking, Throw It in a Hole drops a colour stable play clue
-       that would have its receiver mistake a touched card: a useful rainbow card,
-       called or not, is clued by rank (`mistakes_a_touched_card`,
-       `reactor0/decision.cpp:827-859`, v18.19.0; replay 2014884 T4, where Yellow
-       would have been read as the y1 on Bob's ra1). tiiah/CONVENTION.md §1f.
+       that would have its receiver misread the card it calls. A colour clue
+       does not call a rainbow card (`misreads_its_called_card`,
+       `reactor0/decision.cpp:830-852`, v18.19.0; replay 2014884 T4, where Yellow
+       would have been read as the y1 on Bob's ra1). A rainbow card it merely
+       touches is allowed (v18.20.0; replay 2015013 T37, a Blue play reveal of a
+       b3 beside an ra3). tiiah/CONVENTION.md §1f.
     2. If pace is >= 3 and Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.
@@ -1497,7 +1499,7 @@ button the receiver was promised.
 
 | Rule | Existing machinery | Where |
 |---|---|---|
-| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1028`, dispatched at `interpret_clue.cpp:935-938` |
+| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1028`, dispatched at `interpret_clue.cpp:953-956` |
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:215-267` |
 | finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:486-576` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:578-648` |

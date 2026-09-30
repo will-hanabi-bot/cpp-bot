@@ -417,7 +417,7 @@ clue). This reading takes priority over the orange ladder.
 ### positional dispatch
 Reactor0's whole dispatcher: clue to Bob ⇒ stable, clue to anyone else ⇒
 reactive with Bob as reacter — regardless of loadedness, stall context, or
-pending reactives. `interpret_clue.cpp:583-619`.
+pending reactives. `interpret_clue.cpp:601-637`.
 
 ### reactive clue
 As in reactor, a clue decoded jointly with the reacter's next action — but
@@ -619,7 +619,7 @@ card is marked known trash and nothing else happens — it is **terminal**,
 never a referential discard, and (unlike the aspirational reactor
 trash-push entry in TODO.md) never a play. Priority 2 of the stable rank
 ladder; priority 3 extends it to previously-clued cards revealed as trash.
-`interpret_clue.cpp:898-911`.
+`interpret_clue.cpp:916-929`.
 
 As a clue SHAPE (`ClueShape::TRASH_REVEAL`, what DECISION_MAKING.md 3.3 / 4.2
 select), it is wider: any stable clue after which a card in Bob's hand is known
@@ -660,7 +660,7 @@ name-based `includes_pinkish` — and, as of v5.0.0, "a **mixed** useful set is
 not playable by this clue". A set holding both orange and non-orange useful
 identities leaves the receiver unable to tell which button to press, so the
 reading declines; an all-orange one does not, and becomes a *chuck*.
-`src/conventions/reactor0/interpret_clue.cpp:364-450`.
+`src/conventions/reactor0/interpret_clue.cpp:364-451`.
 
 ### dc-target walk
 **Both** buckets try each trash/dupe dc-candidate in turn instead of committing

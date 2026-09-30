@@ -42,7 +42,16 @@ outside TIIAH. CONVENTION.md §1.3.
 
 Since v16.12.0 it is the FLOOR rather than the reading: what a clue means is read
 against the *pairwise view* below, and the common stacks are what is left when we
-are not one of the two seats a clue is between.
+are not one of the two seats a clue is between. The one exception is the
+*global play reveal* below (v18.20.0).
+
+### global play reveal
+A colour play reveal whose card is also revealed as playable on the *common
+stacks*, not just the *pairwise view* the clue is read on. Only a global one
+outranks the leftmost newly touched card; otherwise the colour clue is read as a
+direct play of that card. The receiver cannot know the giver knows the stack is
+high enough. `reveal_frame` in `reactor0::stable_colour`, which TIIAH passes
+`common_play_stacks`. CONVENTION.md §1b, replay 2015013 T35 and T37.
 
 ### pairwise view
 `State::pairwise_play_stacks[p]`: what we know seat `p` knows — the *common
@@ -433,8 +442,9 @@ The default tiebreak comes last. **Unknown trash** is a trash card the receiver
 cannot identify as trash, judged on the stacks the called play leaves.
 `settle_stable_play` in `reactor0/decision.cpp`. CONVENTION.md §2a, human
 diagnostic 2014561 T50. It ranks only the clues that survive
-`mistakes_a_touched_card`: a colour clue touching a useful rainbow card is
-dropped before the hierarchy sees it (CONVENTION.md §1f, v18.19.0).
+`misreads_its_called_card`: a colour clue that calls a rainbow card is dropped
+before the hierarchy sees it (CONVENTION.md §1f, v18.19.0). A rainbow card it
+merely touches is allowed (v18.20.0).
 
 ### named call / watched dupe
 A **named call** is a stable play call whose holder can read it back to exactly one

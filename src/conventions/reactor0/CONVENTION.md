@@ -118,7 +118,7 @@ giver, Bob the next player, Cathy the one after.
 
 ## §1a Dispatch — purely positional
 
-`reactor0::interpret_clue` (`src/conventions/reactor0/interpret_clue.cpp:588-624`):
+`reactor0::interpret_clue` (`src/conventions/reactor0/interpret_clue.cpp:606-642`):
 
 - empty clue in an empty-clues variant → `USELESS`;
 - **clue to Bob → always stable**, even when Bob is loaded (`:616-621`);
@@ -169,6 +169,12 @@ play in reactor0.** Priority:
    **Exception:** a revealed known playable *orange* is stamped
    `CALLED_TO_DISCARD` instead, because that is the button which advances an
    inverted stack — see the orange ladder below.
+
+   `stable_colour` takes an optional `reveal_frame`: a stack vector on which the
+   reveal must also hold, or the ladder moves on to the direct play
+   (`interpret_clue.cpp:465-474`, v18.20.0). reactor0 never passes one, so this
+   convention is unchanged. Throw It in a Hole passes its common stacks
+   (tiiah/CONVENTION.md §1b, the *global play reveal*).
 
    **Actionable, not merely playable.** `obvious_playables` answers "could this
    card play", which in an inverted variant is a different question from "can
@@ -260,7 +266,7 @@ contradicted card to its global empathy the moment the contradiction happens
 
 ## §1c Stable rank — seven priorities
 
-`stable_rank` (`interpret_clue.cpp:348-584`). The pink-promise gate runs
+`stable_rank` (`interpret_clue.cpp:348-602`). The pink-promise gate runs
 first (`:360-362`), then the rank is classified (`:364-450`).
 
 **The classification is over what the touched cards can actually be — this is
@@ -894,7 +900,7 @@ one stamping path that used to narrow nothing: `reactor::ref_discard`
 (`reactor/interpret_clue.cpp:325-428`) stamps the slot and returns, so a note
 reading "throw this away" still listed every critical the card could be — replay
 2008422 T1 called a card to discard holding all five 5s. reactor0 now filters at
-its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:609-659`, called
+its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:627-677`, called
 from `stable_rank` at `:938-946`), and it differs from the reacter stamps in
 three ways, each deliberate:
 

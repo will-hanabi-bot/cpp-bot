@@ -399,6 +399,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014561_named_stable_play_past_own_dupe_veto.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014884_rainbow_one_clued_by_rank.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2015013_colour_play_reveal_touching_rainbow.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
@@ -503,6 +504,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp
+  tests/test_tiiah/test_colour_reveal_frame.cpp
 )
 target_include_directories(hanabi_tiiah_tests PRIVATE tests)
 target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)
