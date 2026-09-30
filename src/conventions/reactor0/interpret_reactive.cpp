@@ -7,6 +7,7 @@
 
 #include "hanabi/basics/card.h"
 #include "hanabi/basics/clue.h"
+#include "hanabi/basics/fix.h"
 #include "hanabi/basics/identity.h"
 #include "hanabi/basics/interp.h"
 #include "hanabi/basics/player.h"
@@ -1053,7 +1054,9 @@ bool dispatch_is_reactive(const Game& game, const ClueAction& action) {
   // otherwise reactor0's positional rule stands unchanged.
   if (s.variant->throw_it_in_a_hole &&
       variants::reverse_reactive_position(game, action.giver)) {
-    return action.target == bob;
+    // ...except a clue to Bob that fixes his dead standing call (v18.10.0), which
+    // the reading side takes as the fix.
+    return action.target == bob && !hanabi::clue_would_fix_dead_call(game, action);
   }
   // Role inversion (v18.2.0): Bob holds a standing call and Cathy does not, so a
   // clue to Cathy is stable too. The reading side makes the same test.

@@ -402,7 +402,7 @@ bool chop_is_expendable(const Game& game, int player) {
 }
 
 // VH1's "the clue gets a finesse": the interpretation is reactive rank Phase B
-// (`interpret_reactive.cpp:485-575`), the blind-play phase that calls the
+// (`interpret_reactive.cpp:486-576`), the blind-play phase that calls the
 // reacter onto a prerequisite for a one-away card in the receiver's hand.
 //
 // Phase B is invisible to a walk over `hypo.meta`, because it stamps ONLY the
@@ -463,7 +463,7 @@ bool clue_gets_finesse(const Game& game, const Game& hypo,
   auto receive_order = predicted_receiver_order(hypo);
   if (!receive_order) return false;
   // Phase B's own two gates, from the phase that produces it
-  // (interpret_reactive.cpp:492, :519-520), rather than "is the receiver
+  // (interpret_reactive.cpp:493, :519-520), rather than "is the receiver
   // unstamped".
   //
   // Not quite verbatim any more: since v10.10.0 Phase B asks the connector of

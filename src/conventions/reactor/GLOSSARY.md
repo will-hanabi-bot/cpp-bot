@@ -147,7 +147,7 @@ same reading. `include/hanabi/basics/game.h:73`; `player.h:1-8`.
 
 ### connectable
 Recursive check that a chain of plays can reach a target card before the
-receiver has to act. `src/basics/fix.cpp:158-184`.
+receiver has to act. `src/basics/fix.cpp:242-268`.
 
 ### Connection
 **⚠ Mostly unused.** The variant type `KnownConn | PlayableConn | PromptConn |
@@ -189,7 +189,7 @@ Black, Dark, Gray, Cocoa — one copy each, so always critical.
 ### dc-target
 The receiver slot a reactive clue designates for discard. Chosen from a
 five-tier cascade: `pre_clued_trash` → `unknown_trash` → `known_trash` →
-`unknown_dupes` → `sacrifices`. `interpret_reactive.cpp:373-512`.
+`unknown_dupes` → `sacrifices`. `interpret_reactive.cpp:374-513`.
 
 ### deceptive (special rank)
 Variant flag where the special rank's touch rule is
@@ -212,7 +212,7 @@ reading. Costs `−10` each in clue scoring (v1.7.0).
 
 ### distribution clue
 **⚠ Implemented but never invoked.** A clue whose only value is spreading
-duplicated criticals. `src/basics/fix.cpp:59-110`.
+duplicated criticals. `src/basics/fix.cpp:144-194`.
 
 ### effective_possible_for
 Narrows a card's `possible` set by visibility **from the holder's point of
@@ -246,7 +246,7 @@ A reactive move in which the reacter must play a card that **connects with** a
 one-away-from-playable card in the receiver's hand. Phase B of the rank-reactive
 path, reached when no direct play target resolves: react slots are tried in the
 fixed order `{1, 5, 4, 3, 2}`, and the candidate must hold `prev_id`, the
-predecessor of the receiver's one-away target. `interpret_reactive.cpp:781-867`.
+predecessor of the receiver's one-away target. `interpret_reactive.cpp:782-868`.
 The `FINESSED` card status and `FinesseConn` type are inherited leftovers and are
 never set — see CONVENTION.md §1a.8.
 
@@ -498,7 +498,7 @@ see the comment at `src/net/commands.cpp:549-553`. Note
 ### play-target
 The receiver slot a reactive clue designates for play. Rightmost copy of each
 identity is primary; never stacks on an already-CTP'd card.
-`interpret_reactive.cpp:229-270`.
+`interpret_reactive.cpp:230-271`.
 
 ### playable_away
 How many ranks short of playable a card is. 0 = playable, 1 = one away (the
@@ -512,12 +512,12 @@ visible information. `card.h:79`.
 The design constraint that every observer must decode a clue identically.
 Enforced by making convention decisions from `common` knowledge and by
 `effective_possible_for`, which narrows from the *holder's* point of view
-rather than the computing bot's. `interpret_reactive.cpp:27-69`.
+rather than the computing bot's. `interpret_reactive.cpp:28-70`.
 
 ### pre_clued_trash
 Top-priority dc-target pool: slots clued before this turn that this clue's
 narrowing disambiguates into common-knowledge trash.
-`interpret_reactive.cpp:454-472`.
+`interpret_reactive.cpp:455-473`.
 
 ### prism
 Suits where colour touch is `(rank − 1) % num_colours == clue.value`.
@@ -547,7 +547,7 @@ Vanilla order Red=1, Yellow=2, Green=3, Blue=4, Purple=5, Teal=6, each
 
 ### react_slot / react_order
 The reacter's slot (and the card in it) that the convention calls them to act
-on. `interpret_reactive.cpp:275-280`; `game.h:62`.
+on. `interpret_reactive.cpp:276-281`; `game.h:62`.
 
 ### receiver
 The player the reactive clue was physically given to (`action.target`).
@@ -590,7 +590,7 @@ used to re-interpret an earlier clue. Depth-capped at 4.
 
 ### sacrifice
 A non-critical card discarded when nothing is trash — the last-resort
-dc-target pool. `interpret_reactive.cpp:438-452`.
+dc-target pool. `interpret_reactive.cpp:439-453`.
 
 ### sarcastic discard
 Discarding a card to tell a teammate they hold its duplicate.

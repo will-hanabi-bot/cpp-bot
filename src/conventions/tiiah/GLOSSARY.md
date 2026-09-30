@@ -286,17 +286,26 @@ play*, which is what the dispatch asks.
 `has_known_play`, `src/conventions/variants/hole.cpp:61-80`. CONVENTION.md §1c.
 
 ### standing play
-A *known play*, or a **clued** card called to play, whatever its inference and
-touches (v18.2.0; clued only since v18.3.0, since an unclued card called by a
-reaction is stamped at some seats and not others). A stable colour clue stamps its call by the nature of the clue, and
-every seat stamps it alike. It decides the *reverse-reactive position* (v18.3.0).
-`has_standing_play`, `src/conventions/variants/hole.cpp:82-97`. CONVENTION.md §1c.
+A *known play*, or a card called to play, whatever its inference and touches, whose
+call every seat stamps alike: a **clued** call (v18.3.0), which a stable colour clue
+stamps by its nature, or a **settled** one, which is no longer urgent (v18.10.0; a
+receiver's call once its reaction is played). A pending reaction call is left out.
+It decides the *reverse-reactive position* (v18.3.0).
+`has_standing_play`, `src/conventions/variants/hole.cpp:82-101`. CONVENTION.md §1c.
+
+### fix precedence
+A clue to Bob that names his called card as an identity dead to the team is a
+*fix*, even when that call is what puts the table in the *reverse-reactive
+position*. Dead to the team means trash on the shared view, or a candidate of a
+hole card someone other than the giver played. So Cathy can read the fix off her
+own blind play (v18.10.0; the reviewer's rule). `clue_would_fix_dead_call` and
+`dead_call_fix`, `src/basics/fix.cpp`. CONVENTION.md §1c. Replay 2013726 T5.
 
 ### role inversion
 The clue-to-Cathy half of the *reverse-reactive position*: Bob holds a *standing
 play* and Cathy does not, so a clue to Cathy is STABLE rather than reactor0's
 ordinary reactive (v18.2.0). `inverted_stable`,
-`src/conventions/variants/hole.cpp:99-107`; replay 2013645 T11. CONVENTION.md §1c.
+`src/conventions/variants/hole.cpp:103-111`; replay 2013645 T11. CONVENTION.md §1c.
 
 ### gotten
 A card already called to play: a reactive's target walk passes over it, since a
@@ -314,7 +323,7 @@ that position reactor0's positional rule stands: a clue to Cathy is the reactive
 one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:109-132`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:113-136`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch

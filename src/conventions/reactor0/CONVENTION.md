@@ -114,7 +114,7 @@ giver, Bob the next player, Cathy the one after.
   meaning here. It is never set on a reactor0 game
   (`src/net/commands.cpp:386-392`), `chat_allplays` skips reactor0 games when
   retro-applying (`:1085-1098`), and a reactor0 waiting connection always stores
-  `all_plays = false` (`interpret_reactive.cpp:1126`).
+  `all_plays = false` (`interpret_reactive.cpp:1129`).
 
 ## §1a Dispatch — purely positional
 
@@ -403,7 +403,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
 
 ## §1d Reactive — the clue value is the anchor
 
-`reactor0::interpret_reactive` (`interpret_reactive.cpp:1087-1170`). There is
+`reactor0::interpret_reactive` (`interpret_reactive.cpp:1090-1173`). There is
 no reactive focus. The anchor is:
 
 > **react_slot + target_slot ≡ anchor (mod hand size)** where
@@ -510,7 +510,7 @@ Red=1, Blue=4, Orange=2, Brown=3. Pinned by
 
 ### Rank reactive — an even number of plays (2 or 0)
 
-`reactive_rank` (`interpret_reactive.cpp:380-650`):
+`reactive_rank` (`interpret_reactive.cpp:381-651`):
 
 - **Phase A — double play** (`:397-483`). The target pool is the receiver's
   playable cards, slots ascending — **including already-CTP'd cards**
@@ -604,7 +604,7 @@ which is why only this vet was wrong.
 
 **"Safe to throw away" excepts a playable inverted reading.** The discard vet
 asks whether every reading of the react slot is critical, and retargets when
-one is (`every_reading_loses` `interpret_reactive.cpp:274-281`). That is the
+one is (`every_reading_loses` `interpret_reactive.cpp:275-282`). That is the
 PLAIN-suit reading of the Discard button: on an inverted suit Discard is a
 CHUCK, which puts the card on its stack, so a reading that is inverted *and*
 playable is not a loss at all — it is the play the call is asking for. Without
@@ -669,7 +669,7 @@ Orange 3 at a stack of 0 — useful, so pitching it still loses a copy.
 
 ### Colour reactive — one play
 
-`reactive_colour` (`interpret_reactive.cpp:654-856`):
+`reactive_colour` (`interpret_reactive.cpp:655-857`):
 
 - **Mode 1 — receiver has a playable** (`:741-825`): the reacter **discards**
   the react slot and the receiver plays the target (leftmost playable;
@@ -705,7 +705,7 @@ lock).
 
 ### The dc-target
 
-`dc_candidates` (`interpret_reactive.cpp:142-203`):
+`dc_candidates` (`interpret_reactive.cpp:143-204`):
 
 1. cards whose actual identity is **basic trash** or a **same-hand dupe**,
    slot-ascending — regardless of cluedness or of any status already stamped
@@ -884,7 +884,7 @@ Narrowing after the fact is not enough on its own, because `target_discard`
 Orange is always — and the whole clue then reads as a `MISTAKE`. So the chuck is
 reached by the stamp rather than by the narrowing: as of v10.9.0 every
 Discard-button site goes through `stamp_react_discard_button`
-(`interpret_reactive.cpp:974-982`), which tries `stamp_orange_chuck` — the same
+(`interpret_reactive.cpp:975-983`), which tries `stamp_orange_chuck` — the same
 stamp the stable orange ladder uses (`interpret_clue.cpp:286-311`) — and falls
 back to `target_discard`. See §1f for why the ladder replaced the v7.30.0
 either/or gate.
@@ -1275,7 +1275,7 @@ throw, and `reactor::target_discard` — which narrows `inferred` to the
 NON-critical ids, the plain-suit reading — cannot describe one.
 
 **The stamp asks two questions in order** (`stamp_react_discard_button`,
-`interpret_reactive.cpp:974-982`), shared by **all five** sites that issue a
+`interpret_reactive.cpp:975-983`), shared by **all five** sites that issue a
 Discard-button call — rank Phase A's and Phase B's inverted-target arms, Phase
 C's plain arm, and both colour modes — so they cannot drift:
 

@@ -79,6 +79,16 @@ inline std::optional<int> dead_call_fix(const Game& before, const Game& after,
   return dead_call_fix(before, after, /*giver=*/-1, clued);
 }
 
+// The same question asked BEFORE the clue, from its touches alone (v18.10.0):
+// would this clue narrow one of its target's called cards to a single identity
+// that is trash on the stacks the giver and the holder share? The dispatch asks
+// it, because a clue to Bob that fixes his dead standing call is a FIX even when
+// that call puts the table in the reverse-reactive position (tiiah §1c, §1h):
+// replay 2013726 T5, where green's 2 fixes blue's dead `{r1,b2}`. Nullopt outside
+// Throw It in a Hole.
+std::optional<int> clue_would_fix_dead_call(const Game& before,
+                                            const ClueAction& action);
+
 std::optional<IdentitySet> distribution_clue(const Game& prev, const Game& game,
                                                 const ClueAction& action, int focus);
 

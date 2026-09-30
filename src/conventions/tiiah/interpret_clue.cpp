@@ -311,7 +311,10 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     const bool reversed =
         hanabi::reactor::variants::reverse_reactive_position(prev, action.giver);
     if (reversed) {
-      if (action.target == bob) {
+      // A clue to Bob that FIXES his dead standing call is the fix below, not a
+      // reverse reactive (v18.10.0): the call that puts the table in the reverse
+      // position is the very one the fix is for. Replay 2013726 T5.
+      if (action.target == bob && !hanabi::clue_would_fix_dead_call(prev, action)) {
         return interpret_reactive(prev, game, action, /*reacter=*/cathy,
                                   /*receiver=*/bob);
       }

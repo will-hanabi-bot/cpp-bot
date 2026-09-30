@@ -205,7 +205,7 @@ and the clue's target isn't the giver's Bob, a `ReactorWC` with
 `inverted = true` is installed. This does not change the current reading; it
 arms the rewind described in §1a.6.
 
-**5. FIX** (`:521-525`). `check_fix` (`src/basics/fix.cpp:12-57`) reports a
+**5. FIX** (`:521-525`). `check_fix` (`src/basics/fix.cpp:12-65`) reports a
 `FixResultNormal` when a previously-clued card either was blind-playing/CTP'd
 but its `info_lock` is now entirely basic trash, or is now known trash after
 having been clued and never reset, or when the clue reveals a duplicate.
@@ -289,7 +289,7 @@ Equivalently, and this is the rule worth memorising:
 
 `calc_slot` is an involution in its second argument, which is why the same
 function serves both directions: the giver computes `react_slot` from a
-candidate `target_slot` (`interpret_reactive.cpp:275`, `:522`, `:664`), and
+candidate `target_slot` (`interpret_reactive.cpp:276`, `:522`, `:664`), and
 the reacter's actual action is decoded back to `target_slot` from the
 `react_slot` they chose (`interpret_reaction.cpp:32`). `hand_size` comes from
 `kHandSize[num_players]` (`include/hanabi/basics/state.h:29`), not from the
@@ -301,10 +301,10 @@ Dispatch is at `interpret_clue.cpp:811-815`.
 
 | Clue kind | Reacter's physical action | Receiver's action | Encoded at | Decoded at |
 |---|---|---|---|---|
-| **RANK** | play | **play** | `interpret_reactive.cpp:686-689` | `interpret_reaction.cpp:361-363` |
+| **RANK** | play | **play** | `interpret_reactive.cpp:687-690` | `interpret_reaction.cpp:361-363` |
 | **RANK** | discard | discard | — | `interpret_reaction.cpp:314-315` |
-| **COLOUR** | discard | **play** | `interpret_reactive.cpp:308-311` | `interpret_reaction.cpp:311-312` |
-| **COLOUR** | play | discard | `interpret_reactive.cpp:553-556` | `interpret_reaction.cpp:365-366` |
+| **COLOUR** | discard | **play** | `interpret_reactive.cpp:309-312` | `interpret_reaction.cpp:311-312` |
+| **COLOUR** | play | discard | `interpret_reactive.cpp:554-557` | `interpret_reaction.cpp:365-366` |
 
 The mnemonic the bot publishes over `/settings`
 (`src/conventions/variants/reactive_table.cpp:167-173`):
@@ -317,7 +317,7 @@ With `/allplays` on, colour clues are promoted to play+play as well
 
 #### Shared setup: `reactive_context`
 
-`interpret_reactive.cpp:81-203` computes three things before either path runs:
+`interpret_reactive.cpp:82-204` computes three things before either path runs:
 
 - `possible_conns` — delayed-play connectors from `delayed_plays`.
 - `known_plays` — receiver cards whose **strict** common-knowledge identity
@@ -331,7 +331,7 @@ With `/allplays` on, colour clues are promoted to play+play as well
   already-queued play" work: the queued card stops being hypo-playable and its
   successor becomes the eligible target (v1.5, replay 1916815).
 
-#### Colour reactive — `interpret_reactive_colour` (`interpret_reactive.cpp:209-567`)
+#### Colour reactive — `interpret_reactive_colour` (`interpret_reactive.cpp:210-568`)
 
 **Phase A — play targets** (receiver plays, reacter discards), `:229-370`.
 
@@ -393,7 +393,7 @@ obvious playable, which would carry no information (`:528-529`); the reacter's
 the inverted-suit veto applies (`:540-544`). Commit is
 `target_play(react_order, urgent=true)` (`:553-556`).
 
-#### Rank reactive — `interpret_reactive_rank` (`interpret_reactive.cpp:571-872`)
+#### Rank reactive — `interpret_reactive_rank` (`interpret_reactive.cpp:572-873`)
 
 **Phase A — play targets** (both play), `:582-779`. Same pool construction as
 the colour path (`:591-624`), plus two extra rules:
@@ -445,7 +445,7 @@ because `:824-838` is exactly the bluff case and returns `nullopt`. Tracked in
 
 #### POV invariance
 
-`effective_possible_for` (`interpret_reactive.cpp:54-69`) narrows a card's
+`effective_possible_for` (`interpret_reactive.cpp:55-70`) narrows a card's
 `possible` by visibility **from the holder's point of view**: it counts copies
 visible in every hand *except the holder's own*. The long comment at `:27-53`
 records why — using the computing bot's own POV made the giver and the reacter
@@ -761,7 +761,7 @@ Every place the convention compensates, all in
 In both reactive paths, `target_is_inverted(target)` **swaps the reacter's
 intended action** so that the receiver's standard reading of
 (clue kind + reacter action) still lands on the physically correct move
-(`interpret_reactive.cpp:308-311`, `:553-556`, `:686-689`, `:854-857`).
+(`interpret_reactive.cpp:309-312`, `:553-556`, `:686-689`, `:854-857`).
 Stable `ref_play` simply refuses orange targets (`interpret_clue.cpp:309-311`),
 so that the giver's eval scores the clue as a `MISTAKE` and prefers the rank
 clue that reaches the same card through `ref_discard`.
@@ -1161,7 +1161,7 @@ Conditions (2) and (3) both walk the plays a clue causes, via the shared
 every order that went from non-CTP to CTP in `hypo` (`:144-149`).
 
 That walk alone systematically under-counted **reactive finesses**. The finesse
-fallback in `interpret_reactive_rank` (`interpret_reactive.cpp:789-875`) stamps
+fallback in `interpret_reactive_rank` (`interpret_reactive.cpp:790-876`) stamps
 only the *reacter's* blind play at clue time (`:854-874`); the *receiver's*
 target is stamped a full turn later, when the reaction actually resolves
 (`react_play` → `target_i_play`, `interpret_reaction.cpp:383-427`). So a finesse

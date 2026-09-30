@@ -178,8 +178,8 @@ The implementation should invent none of these:
 |---|---|---|
 | reactive vs stable | positional compare `action.target != bob` | `reactor0/interpret_clue.cpp:620-631` |
 | two new plays | `new_play_facts(...).count >= 2` | `reactor0/state_eval.cpp:170-187` |
-| finesse (H4) | rank Phase B | `reactor0/interpret_reactive.cpp:383-447` |
-| double discard | rank Phase C | `reactor0/interpret_reactive.cpp:448-482` |
+| finesse (H4) | rank Phase B | `reactor0/interpret_reactive.cpp:384-448` |
+| double discard | rank Phase C | `reactor0/interpret_reactive.cpp:449-483` |
 | reactive lock | `predicts_reactive_lock` | `reactor0/interpret_reaction.cpp:31-47` |
 | "does this clue create a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |
 | new touches / fill-ins / elims | `elim_result` | `src/basics/clue_result.cpp` |

@@ -80,18 +80,22 @@ bool has_known_play(const Game& game, int player) {
 }
 
 bool has_standing_play(const Game& game, int player) {
-  // A CLUED card called to play counts, not just one whose touches name it
-  // playable (v18.2.0 role inversion, v18.3.0 the reverse reactive). A stable
-  // clue stamps its call by the nature of the clue, and every seat stamps it
-  // alike; an unclued card called by a reaction is stamped at some seats and not
-  // others, so it is left out. Replay 2013645 T11: yagami's T8 Blue called
-  // will-bot69's o12 as the b3, touched b1-b5; read touch-only, yagami's 4 to
-  // will-bot67 was an ordinary reactive and will-bot69 blind-played an r3.
+  // A card called to play counts, not just one whose touches name it playable
+  // (v18.2.0 role inversion, v18.3.0 the reverse reactive), when its call is one
+  // every seat stamps alike: a CLUED call, which a stable clue stamps by its
+  // nature, or a SETTLED one (v18.10.0) -- no longer urgent, like a receiver's
+  // call once its reaction has been played. A PENDING reaction call (`urgent`) is
+  // left out, being the kind a seat can stamp differently. Replay 2013645 T11:
+  // yagami's T8 Blue called will-bot69's o12 as the b3, touched b1-b5; read
+  // touch-only, yagami's 4 to will-bot67 was an ordinary reactive and will-bot69
+  // blind-played an r3. Replay 2013963 T10: will-bot67's o17 held a settled,
+  // unclued receiver's call; read clued-only, yagami's reverse-reactive finesse
+  // (will-bot69's b2 into will-bot67's b3) read as a MISTAKE.
   if (has_known_play(game, player)) return true;
   for (int o : game.state.hands[player]) {
-    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY && game.state.deck[o].clued) {
-      return true;
-    }
+    const ConvData& m = game.meta[o];
+    if (m.status != CardStatus::CALLED_TO_PLAY) continue;
+    if (game.state.deck[o].clued || !m.urgent) return true;
   }
   return false;
 }

@@ -439,6 +439,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_reverse_reactive.cpp
   tests/test_tiiah/test_role_inversion.cpp
   tests/test_tiiah/test_all_targets_gotten.cpp
+  tests/test_tiiah/test_fix_before_reverse_reactive.cpp
   tests/test_tiiah/test_replay_2013726_reacter_rules_out_the_n3.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
   tests/test_tiiah/test_receiver_bucket.cpp
@@ -478,6 +479,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2013645_stable_four_under_role_inversion.cpp
   tests/test_tiiah/test_replay_2013726_endgame_pairing_may_break_the_bucket.cpp
   tests/test_tiiah/test_replay_2013726_reverse_reactive_finesse_on_a_called_play.cpp
+  tests/test_tiiah/test_replay_2013963_reverse_reactive_finesse_on_a_settled_call.cpp
   tests/test_tiiah/test_known_play_standing_call.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp

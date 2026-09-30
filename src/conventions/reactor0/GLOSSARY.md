@@ -14,7 +14,7 @@ The right-hand side of the reactive slot arithmetic
 is the **clue value** — the rank for rank clues, the *colour value* for
 colour clues. Stored in `ReactorWC::focus_slot` (the field name is
 reactor's; reactor0 never computes a focus).
-`src/conventions/reactor0/interpret_reactive.cpp:1107-1119`.
+`src/conventions/reactor0/interpret_reactive.cpp:1110-1122`.
 Not to be confused with *clue tier*, which is how worthwhile **giving** a clue
 is. "Value" in reactor0 always means this anchor.
 
@@ -123,7 +123,7 @@ the family has one definition. Rank clues keep both arms, which is what leaves
 the six Alternating Clues variants a stable channel; the three **Synesthesia**
 ones carry `clueRanks: []` and so have **no stable clue of any kind**, making
 the *synesthesia table* below unreachable there. `bob_clue_is_reactive`
-(`reactor0/interpret_reactive.cpp:967-976`). In **Synesthesia**, which can never
+(`reactor0/interpret_reactive.cpp:968-977`). In **Synesthesia**, which can never
 give a rank clue, those stable clues read off a fixed colour table naming a
 button and a slot — see *synesthesia table*. CONVENTION.md §1f.
 
@@ -263,7 +263,7 @@ DECISION_MAKING.md, *Decision phase 1*.
 The reacter playing the computed react slot without knowing its identity.
 Reactor0 uses it in the rank double play, the finesse, and colour mode 2;
 the giver guarantees playability from their own view and observers who can
-see the card reject the clue otherwise. `interpret_reactive.cpp:289-292`.
+see the card reject the clue otherwise. `interpret_reactive.cpp:290-293`.
 
 ### colour value
 The fixed value a colour name contributes as the reactive anchor: Red=1,
@@ -294,7 +294,7 @@ and *touched-card rank classification*.
 ### double discard (clue)
 The rank-reactive fallback when no play or finesse target exists: zero
 plays — the reacter discards the react slot and the receiver discards the
-dc-target (or locks). `interpret_reactive.cpp:276-308`. The giver will not
+dc-target (or locks). `interpret_reactive.cpp:277-309`. The giver will not
 *offer* one that buys nothing — see *pointless double discard*.
 
 ### pointless double discard
@@ -394,7 +394,7 @@ voided with it. Engine-wide, not reactor0-specific. See CONVENTION.md §1i;
 As in reactor — the reacter plays a card that connects with a
 one-away-from-playable card in the receiver's hand — but reactor0 walks
 **targets** leftmost-first (reactor walks react slots in the fixed order
-{1,5,4,3,2}). `interpret_reactive.cpp:211-274`.
+{1,5,4,3,2}). `interpret_reactive.cpp:212-275`.
 
 ### play reveal
 A stable clue that fills in a previously-clued card as a new obvious
@@ -450,7 +450,7 @@ reactives keep their clue-time snapshot). `Game::allow_reactive_locks`;
 With rlocks off and a receiver hand of all good/unique/unplayable cards,
 the dc-target falls back to reactor's sacrifice ordering
 (`reactor::sacrifice_targets`: non-critical, deepest-away and highest rank
-first). `interpret_reactive.cpp:111-122`.
+first). `interpret_reactive.cpp:112-123`.
 
 ### sarcastic discard / gentleman's discard
 Inherited from the shared engine, not from anything reactor0 defines: a player
@@ -494,7 +494,7 @@ press Discard on this slot at all? *Some* reading is a playable inverted card,
 or *some* reading is a non-critical plain one. Existential, not universal, and
 it is the union of the two arms of `stamp_react_discard_button`.
 
-**`stamp_react_discard_button`** (`interpret_reactive.cpp:955-964`) is the
+**`stamp_react_discard_button`** (`interpret_reactive.cpp:956-965`) is the
 shared ladder every Discard-button reacter call goes through — rank Phase A's
 and Phase B's inverted-target arms, Phase C's plain arm, and both colour modes.
 It tries `stamp_orange_chuck` first (narrowing `inferred` to the identities the
@@ -752,7 +752,7 @@ at no cost, so the vet short-circuits to `OK`. The playability question can
 never be answered yes by a trash identity, which is how a free pitch came to be
 skipped — bug_report_4_1_0.txt 4.1.0b. The scope is *trash*, not *orange*:
 pitching a useful orange still loses a copy and is still rejected.
-`src/conventions/reactor0/interpret_reactive.cpp:187-203`.
+`src/conventions/reactor0/interpret_reactive.cpp:188-204`.
 
 ### bluff
 A reaction in which the reacter plays a card the pairing did not predict, so the

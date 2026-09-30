@@ -842,6 +842,9 @@ bool clue_fixes_dead_call(const Game& game, const Game& hypo,
   if (!order) return false;
   const auto seen = game.state.deck[*order].id();
   if (!seen) return false;  // our own hand: we cannot see it, so we cannot fix it
+  // And it really is dead to us (v18.10.0): readers may take a fix from a hole
+  // card's candidates alone, so we give one only for a card we know is down.
+  if (!game.state.is_basic_trash(*seen)) return false;
   return hypo.common.thoughts[*order].possibilities().contains(*seen);
 }
 

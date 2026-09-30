@@ -64,14 +64,37 @@ FixResult check_fix(const Game& prev, const Game& game, const ClueAction& action
   return FixResultNone{};
 }
 
+namespace {
+
+// What a hole card played by someone OTHER than `giver` may have been: the team's
+// set for it (`shared_left` for a card settled privately, else `superposition`).
+// The giver watched those cards go in, so a clue from it can be saying one of them
+// was this -- the half of a fix a third seat reads off its own blind play (the
+// reviewer's rule for fix precedence; 2013726 T5, black's `{r1,g1}`).
+IdentitySet hole_candidates_not_by(const Game& game, int giver) {
+  IdentitySet out = IdentitySet::empty();
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    const ConvData& m = game.meta[o];
+    const IdentitySet& team = m.shared_left.non_empty() ? m.shared_left : m.superposition;
+    if (team.is_empty() || game.state.holder_of(o) == giver) continue;
+    out = out.union_with(team);
+  }
+  return out;
+}
+
+}  // namespace
+
 std::optional<int> dead_call_fix(const Game& before, const Game& after, int giver,
                                  int clued) {
   const State& s = after.state;
   if (!s.variant->throw_it_in_a_hole) return std::nullopt;
   if (clued < 0 || clued >= static_cast<int>(s.hands.size())) return std::nullopt;
   // The deadness is asked of the view the giver and the holder share -- the shared
-  // view, for a third seat, which cannot compute theirs.
+  // view, for a third seat, which cannot compute theirs -- or of a hole card someone
+  // other than the giver played, which the third seat CAN read off its own blind
+  // play (v18.10.0): the clue then says that card was this identity.
   const State shared = s.with_stacks(s.stacks_known_to_both(giver, clued));
+  const IdentitySet in_the_hole = hole_candidates_not_by(before, giver);
   for (int order : s.hands[clued]) {
     if (order >= static_cast<int>(before.meta.size())) continue;
     if (order >= static_cast<int>(before.common.thoughts.size())) continue;
@@ -81,7 +104,38 @@ std::optional<int> dead_call_fix(const Game& before, const Game& after, int give
     if (before.common.thoughts[order].possibilities().length() < 2) continue;
     const IdentitySet now = after.common.thoughts[order].possibilities();
     if (now.length() != 1) continue;
-    if (!shared.is_basic_trash(now.head())) continue;
+    if (!shared.is_basic_trash(now.head()) && !in_the_hole.contains(now.head())) continue;
+    return order;
+  }
+  return std::nullopt;
+}
+
+std::optional<int> clue_would_fix_dead_call(const Game& before,
+                                            const ClueAction& action) {
+  const State& s = before.state;
+  if (!s.variant->throw_it_in_a_hole) return std::nullopt;
+  const int clued = action.target;
+  if (clued < 0 || clued >= static_cast<int>(s.hands.size())) return std::nullopt;
+  // DEAD TO THE TEAM, from what every seat holds alike (the reviewer's rule): trash
+  // on the shared view, or a candidate of a hole card someone other than the giver
+  // played -- the giver saw that card, so the clue can be telling us it was this.
+  // Not the giver-and-holder stacks: the third seat cannot compute those when the
+  // evidence is its own blind play (2013726 T5, black's `{r1,g1}`).
+  const State shared = s.shared_view();
+  const IdentitySet in_the_hole = hole_candidates_not_by(before, action.giver);
+  for (int order : s.hands[clued]) {
+    if (before.meta[order].status != CardStatus::CALLED_TO_PLAY) continue;
+    const IdentitySet live = before.common.thoughts[order].possibilities();
+    if (live.length() < 2) continue;
+    // What the touches leave: the identities the clue touches if it touched the
+    // card, the ones it misses if it did not.
+    const bool touched = std::find(action.list_.begin(), action.list_.end(), order) !=
+                         action.list_.end();
+    const IdentitySet now = live.filter([&](Identity i) {
+      return s.variant->id_touched(i, action.clue.kind, action.clue.value) == touched;
+    });
+    if (now.length() != 1) continue;
+    if (!shared.is_basic_trash(now.head()) && !in_the_hole.contains(now.head())) continue;
     return order;
   }
   return std::nullopt;

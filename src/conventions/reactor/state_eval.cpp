@@ -152,7 +152,7 @@ bool is_high_value_clue(const Game& game, const Game& hypo,
   // target is stamped a turn later, when the reaction resolves
   // (`react_play` → `target_i_play`, `interpret_reaction.cpp:383-427`; the
   // finesse block itself touches only `react_order`,
-  // `interpret_reactive.cpp:854-874`). Counting clue-time stamps alone
+  // `interpret_reactive.cpp:855-875`). Counting clue-time stamps alone
   // therefore scored every finesse as a single play and put condition (3)
   // permanently out of its reach.
   //

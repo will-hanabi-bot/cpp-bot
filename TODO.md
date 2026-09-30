@@ -85,7 +85,7 @@ half, in both conventions, and reading under reactor.
 POV-invariant
 abort in reactor's finesse phase
 (`src/conventions/reactor/interpret_reactive.cpp:742-756`) — mirrored by
-reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:524-529`) —
+reactor0 (`src/conventions/reactor0/interpret_reactive.cpp:525-530`) —
 returns `nullopt` whenever the observer can see that the reacter's card is
 *not* the required `prev_id`, which is exactly the bluff case; there is
 deliberately no "try the next slot" retry.
@@ -137,7 +137,7 @@ live-game evidence first.
 
 `new_play_facts` (`src/conventions/reactor0/state_eval.cpp:170-187`) counts
 `CALLED_TO_PLAY` transitions only. On an inverted suit a *play* call is stamped
-`CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:458-461`), so a genuine
+`CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:459-462`), so a genuine
 two-play reactive reads as zero plays there.
 
 This matters more, not less, after the v7.0.0 overhaul: `new_play_facts` is
@@ -160,7 +160,7 @@ deletes `get_result` outright in favour of the ordered priority list in
 The spec gates the colour play+dc mode's target walk on one condition only:
 "if the target would make Bob discard a known **critical** card, target the
 next leftmost playable". Implemented literally
-(`src/conventions/reactor0/interpret_reactive.cpp:273-283`) — so a react slot
+(`src/conventions/reactor0/interpret_reactive.cpp:274-284`) — so a react slot
 the reacter *knows* is playable is still eligible to be discarded, losing a
 play. Reactor's equivalent loop additionally skips react slots in the
 reacter's `obvious_playables`
@@ -183,7 +183,7 @@ writes `CALLED_TO_DISCARD` + `urgent` + `signal_turn` and only *then* tests
 whether the narrowing emptied, returning `std::nullopt` with the stamp left
 behind. `target_play` has the same shape. Reactor0 works around this by
 snapshotting and rolling back its candidate walks (`Rollback`,
-`src/conventions/reactor0/interpret_reactive.cpp:59-77`); reactor itself does
+`src/conventions/reactor0/interpret_reactive.cpp:60-78`); reactor itself does
 not, so an abandoned candidate can keep a call no clue ever made.
 
 Fixing it in the shared primitives would touch every reactor path at once, so
@@ -327,7 +327,7 @@ as reactor0 used to. Two consequences, one per direction:
 
 Left alone deliberately: fixing it is a second cross-version behaviour change
 and puts reactor's 120-test corpus at risk. reactor0's `vet_react_slot`
-(`reactor0/interpret_reactive.cpp:186-244`) is the shape to copy.
+(`reactor0/interpret_reactive.cpp:187-245`) is the shape to copy.
 
 ## 14. `[engine]` Nothing vetoes a clue whose reading predicts a strike — CLOSED for reactor0
 

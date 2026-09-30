@@ -129,3 +129,34 @@ TEST(TiiahRoleInversion, ACallOnCathyTooLeavesTheOrdinaryReactive) {
   EXPECT_TRUE(reactor0::dispatch_is_reactive(
       g, rank_clue(TestPlayer::ALICE, TestPlayer::CATHY, 3)));
 }
+
+// An UNCLUED call counts once it is settled (v18.10.0) -- a receiver's call whose
+// reaction has been played, say -- because every seat stamps it alike. Replay
+// 2013963 T10: will-bot67's o17 held such a call, and yagami's reverse-reactive
+// finesse to will-bot67 read as a MISTAKE while only clued calls counted.
+TEST(TiiahRoleInversion, ASettledUncluedCallPutsTheTableInTheReversePosition) {
+  Game g = setup(inversion_opts());
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  g.with_meta(o, [](ConvData& m) {
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.urgent = false;
+  });
+  ASSERT_FALSE(g.state.deck[o].clued) << "guard: nothing touched it";
+
+  EXPECT_TRUE(reactor::variants::has_standing_play(g, 1));
+  EXPECT_TRUE(reactor::variants::reverse_reactive_position(g, 0));
+}
+
+// A PENDING reaction call (urgent) does not: it is the kind a seat can stamp
+// differently from the others.
+TEST(TiiahRoleInversion, APendingUncluedCallDoesNot) {
+  Game g = setup(inversion_opts());
+  const int o = order_at(g, TestPlayer::BOB, 1);
+  g.with_meta(o, [](ConvData& m) {
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.urgent = true;
+  });
+
+  EXPECT_FALSE(reactor::variants::has_standing_play(g, 1));
+  EXPECT_FALSE(reactor::variants::reverse_reactive_position(g, 0));
+}

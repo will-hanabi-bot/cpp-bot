@@ -51,10 +51,10 @@ State stacks_after_queued_plays(const Game& game,
 // tiiah/CONVENTION.md §1c.
 bool has_known_play(const Game& game, int player);
 
-// Does this seat hold a STANDING PLAY (v18.2.0)? A known play, or a CLUED card
-// stamped CALLED_TO_PLAY, whatever its inference: a stable play clue stamps the
-// call, and every seat stamps it alike (v18.3.0: clued only). It decides the reverse-reactive position
-// (v18.3.0), and with it role inversion.
+// Does this seat hold a STANDING PLAY (v18.2.0)? A known play, or a card stamped
+// CALLED_TO_PLAY, whatever its inference, whose call every seat stamps alike: a
+// clued one (v18.3.0), or a settled one that is no longer urgent (v18.10.0). It
+// decides the reverse-reactive position (v18.3.0), and with it role inversion.
 bool has_standing_play(const Game& game, int player);
 
 // ROLE INVERSION (v18.2.0): this clue goes to the giver's Cathy and is STABLE,

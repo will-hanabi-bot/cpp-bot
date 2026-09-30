@@ -35,7 +35,7 @@ bool target_is_inverted(const State& state, int target_order);
 //     helper assumes. It does NOT hold for an orange the holder knows is
 //     basic trash: that is a free PITCH, and reactor0's rank Phase A skips
 //     this guard entirely for one (`can_pitch_for_free` below,
-//     reactor0/interpret_reactive.cpp:342-350). Kept blanket here because the
+//     reactor0/interpret_reactive.cpp:343-351). Kept blanket here because the
 //     helper reads `state.deck` and so is POV-asymmetric — it may only ever
 //     reject, and the exemption has to be decided on common knowledge.
 //   * target_discard(orange) ⇒ PerformDiscard, which the inversion turns
