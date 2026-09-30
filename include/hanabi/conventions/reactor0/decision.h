@@ -209,12 +209,28 @@ struct ClueCandidate {
   // reading is a stable play and the card it names is narrowed to exactly one
   // identity in the shared view once the clue has landed.
   //
-  // Only Throw It in a Hole reads it (`stable_play_chain`), and there it is the
+  // Only Throw It in a Hole reads it (`settle_stable_play`), and there it is the
   // whole question: a play whose identity its own player cannot name goes into
   // the hole unnamed, so it superposes instead of advancing the common stacks
   // (tiiah/CONVENTION.md §2, §1e). Recorded here because the test needs the
   // hypo, and `analyse_clues` is where the hypo lives.
   bool names_its_card = false;
+  // Throw It in a Hole only: the STABLE PLAY HIERARCHY's four keys
+  // (tiiah/CONVENTION.md §2a, v18.17.0), read off the hypo's model of the
+  // RECEIVER -- the giver's private prediction of what they will know once the
+  // clue has landed. Filled for a STABLE_PLAY; `settle_stable_play` reads them.
+  //  1. `target_inferences`: identities the receiver keeps for the called card.
+  //  2. `ancillary_score`: 1.99 per newly touched good card other than the called
+  //     one, minus 1 per newly touched trash card the receiver cannot tell is
+  //     trash.
+  //  3. `others_product`: the product of the receiver's candidate counts over
+  //     their other good cards.
+  //  4. `colour_ok`: a colour clue that cannot mistake a rainbow card for this
+  //     suit.
+  int target_inferences = 0;
+  double ancillary_score = 0.0;
+  double others_product = 0.0;
+  bool colour_ok = false;
   // Throw It in a Hole only: is this clue a REFUSAL — us, as the reacter of a
   // standing reactive, telling its giver that the card they named is already
   // played (tiiah/CONVENTION.md §1c, v16.14.0)?
@@ -344,5 +360,12 @@ std::optional<PerformAction> choose_endgame_clue(
 
 std::optional<PerformAction> choose_clue(const Game& game,
                                          const std::vector<ClueCandidate>& cands);
+
+// The tiebreak every stable-play rung uses (3.1, 3.6b, 4.1, the refusal's stable
+// play, the endgame stall list's rung 2): under Throw It in a Hole the STABLE PLAY
+// HIERARCHY (tiiah/CONVENTION.md §2a), then the default tiebreak; elsewhere the
+// default tiebreak alone. Exposed for the tests; nullptr on an empty pool.
+const ClueCandidate* best_stable_play(const Game& g,
+                                      const std::vector<const ClueCandidate*>& pool);
 
 }  // namespace hanabi::reactor0

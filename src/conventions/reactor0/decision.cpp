@@ -990,7 +990,7 @@ std::vector<ClueCandidate> analyse_clues(
     }
 
     // Can the receiver read this call back to ONE identity? Only Throw It in a
-    // Hole asks (`stable_play_chain`), but the answer costs nothing to record
+    // Hole asks (`settle_stable_play`), but the answer costs nothing to record
     // here, where the hypo is already built.
     //
     // Read from `common`: the receiver cannot see their own card, so what they
@@ -1005,6 +1005,58 @@ std::vector<ClueCandidate> analyse_clues(
       c.names_its_card =
           hypo.common.thoughts[c.reading.stable_subject].possibilities().length() ==
           1;
+    }
+
+    // The STABLE PLAY HIERARCHY's keys (tiiah/CONVENTION.md §2a, v18.17.0), all
+    // read off the hypo's model of the receiver: what the giver predicts they
+    // will know about their own cards once this clue has landed.
+    if (s.variant->throw_it_in_a_hole && c.reading.shape == ClueShape::STABLE_PLAY &&
+        c.reading.stable_subject >= 0 &&
+        c.reading.stable_subject < static_cast<int>(hypo.common.thoughts.size())) {
+      const int recv = ca.target;
+      const int subject = c.reading.stable_subject;
+      const auto& seen = hypo.players[recv].thoughts;
+      auto cands = [&](int o) { return seen[o].possibilities(); };
+      // "Known trash" is judged on the stacks the called play LEAVES: a touched
+      // card that can only be the called identity's own dupe is trash the
+      // receiver can see as well as any other. 2014561 T50: Purple left black's
+      // o10 as `{p1,p3}` with the p3 the very card it called.
+      const auto called = s.deck[subject].id();
+      const State after = called && s.is_playable(*called) ? s.with_play(*called) : s;
+      auto all_trash = [&](const IdentitySet& set) {
+        for (Identity i : set) {
+          if (!after.is_basic_trash(i)) return false;
+        }
+        return set.non_empty();
+      };
+      c.target_inferences = cands(subject).length();
+      for (int o : ca.list_) {
+        if (o == subject || s.deck[o].clued) continue;  // ancillary, newly touched
+        auto id = s.deck[o].id();
+        if (!id) continue;
+        if (!s.is_basic_trash(*id)) {
+          c.ancillary_score += 1.99;
+        } else if (!all_trash(cands(o))) {
+          c.ancillary_score -= 1.0;  // trash the receiver cannot tell is trash
+        }
+      }
+      c.others_product = 1.0;
+      for (int o : hypo.state.hands[recv]) {
+        if (o == subject) continue;
+        auto id = s.deck[o].id();
+        if (!id || s.is_basic_trash(*id)) continue;
+        c.others_product *= static_cast<double>(std::max(1, cands(o).length()));
+      }
+      c.colour_ok = ca.clue.kind == ClueKind::COLOUR;
+      for (int o : ca.list_) {
+        if (!c.colour_ok) break;
+        for (Identity i : cands(o)) {
+          if (s.variant->suits[i.suit_index].suit_type.rainbowish) {
+            c.colour_ok = false;
+            break;
+          }
+        }
+      }
     }
 
     c.refuses_dead_target = clue_refuses_dead_target(game, c.action);
@@ -1346,28 +1398,56 @@ Pool pool_stable_play_any_partner(const Game& g, const std::vector<ClueCandidate
   });
 }
 
-// 3.1 / 4.1's tiebreaks, shared with the endgame stall list's rung 2. Empty
-// under reactor0, where the rung has never had one and the default tiebreak
-// settles it.
+// 3.1 / 3.6b / 4.1's tiebreak, shared with the refusal's stable play and the
+// endgame stall list's rung 2. Under reactor0 it is the default tiebreak alone,
+// as the rung has always had.
 //
-// Throw It in a Hole adds one term, and it is the only thing above the default
-// tiebreak there: PREFER A CALL THE RECEIVER CAN READ BACK to one identity
-// (tiiah/CONVENTION.md §2). A play whose own player cannot name it goes into the
-// hole unnamed, so it superposes instead of advancing the common stacks, and
-// every later clue is read against a staler shared view. Replay 2008145 T1 is
-// what this is for: Bob held `g1 r1 y1`, and rank 1 -- which touches all three
-// and so wins the default tiebreak 5.97 to 1.99 -- left him choosing between
-// five identities, while green named the g1 outright.
+// Throw It in a Hole ranks stable play clues by the STABLE PLAY HIERARCHY
+// (tiiah/CONVENTION.md §2a, v18.17.0), each key read off the giver's model of the
+// receiver once the clue has landed, and each judged over what the key above it
+// left -- so it filters lexicographically rather than through `settle`'s terms,
+// which judge every term against the whole pool:
 //
-// `settle` keeps a term's survivors only when they are a proper non-empty
-// subset, so returning false everywhere is how a term says "no preference".
-// That is what makes the variant guard a plain early return: outside TIIAH this
-// chain cannot move anything.
-std::vector<Term> stable_play_chain(const Game& g) {
-  return {[&g](const ClueCandidate& c) {
-    if (!g.state.variant->throw_it_in_a_hole) return false;
-    return c.names_its_card;
-  }};
+//   1. the FEWEST identities left on the called card. A play its own player
+//      cannot name goes into the hole unnamed and superposes instead of advancing
+//      the shared view (replay 2008145 T1: rank 1 on `g1 r1 y1` left five, Green
+//      named the g1). It generalises v16.7.0's "the receiver can name it";
+//   2. the MOST ancillary value: 1.99 per newly touched good card besides the
+//      called one, less 1 per newly touched trash card the receiver cannot tell
+//      is trash -- a trash card it can is no cost;
+//   3. the SMALLEST product of candidate counts over the receiver's other good
+//      cards: the clue that leaves the rest of their hand best known;
+//   4. COLOUR over rank, unless the colour could mistake a rainbow card for its
+//      suit.
+//
+// Then the default tiebreak. Human diagnostic 2014561 (T50): three stable plays
+// all named their card and touched nothing else of use; Purple also pinned the
+// clued o13 as the p4, which Yellow and 3 left as three and four identities, and
+// the default tiebreak had taken 3 -- it counted Purple's p1 against it, though
+// the receiver could see it was trash.
+const ClueCandidate* settle_stable_play(const Game& g, Pool pool) {
+  if (pool.empty()) return nullptr;
+  if (g.state.variant->throw_it_in_a_hole) {
+    auto keep_best = [&pool](auto key) {
+      double best = 0.0;
+      bool first = true;
+      for (const ClueCandidate* c : pool) {
+        const double k = key(*c);
+        if (first || k < best) best = k;
+        first = false;
+      }
+      Pool kept;
+      for (const ClueCandidate* c : pool) {
+        if (key(*c) == best) kept.push_back(c);
+      }
+      pool = std::move(kept);
+    };
+    keep_best([](const ClueCandidate& c) { return double(c.target_inferences); });
+    keep_best([](const ClueCandidate& c) { return -c.ancillary_score; });
+    keep_best([](const ClueCandidate& c) { return c.others_product; });
+    keep_best([](const ClueCandidate& c) { return c.colour_ok ? 0.0 : 1.0; });
+  }
+  return settle(g, std::move(pool), {});
 }
 
 // 3.2 / 4.2 -- a stable discard or trash reveal to Bob aimed at a card the team
@@ -1518,6 +1598,11 @@ const ClueCandidate* first_of(const Game& g, Pool p) {
 
 }  // namespace
 
+const ClueCandidate* best_stable_play(const Game& g,
+                                      const std::vector<const ClueCandidate*>& pool) {
+  return settle_stable_play(g, pool);
+}
+
 // --- priority 3 ----------------------------------------------------------
 // Precondition: Bob is not locked, he has no safe play or discard, and his
 // chop is worth a clue -- endangered or playable. See the body; this used to
@@ -1580,7 +1665,7 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   if (!priority_3_applies(g)) return nullptr;
   // 3.1 -- a stable play clue to Bob.
   if (clues_at_least(g, 2)) {
-    if (auto* c = settle(g, pool_stable_play(g, cs), stable_play_chain(g))) {
+    if (auto* c = settle_stable_play(g, pool_stable_play(g, cs))) {
       return c;
     }
   }
@@ -1666,7 +1751,7 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
         // the g3. "does not provide yagami_black a safe action at all with the
         // rank 4 clue."
         if (!clues_at_least(g, 2) && !chop_is_critical(g, bob_of(g))) {
-          if (auto* c = settle(g, pool_stable_play(g, cs), stable_play_chain(g))) {
+          if (auto* c = settle_stable_play(g, pool_stable_play(g, cs))) {
             return c;
           }
         }
@@ -1897,7 +1982,7 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // also takes Throw It in a Hole's stable play clue to Cathy (v18.15.0).
   if (clues_at_least(g, 2)) {
     // 4.1
-    if (auto* c = settle(g, pool_stable_play_any_partner(g, cs), stable_play_chain(g))) {
+    if (auto* c = settle_stable_play(g, pool_stable_play_any_partner(g, cs))) {
       return c;
     }
   }
@@ -2031,13 +2116,11 @@ std::optional<PerformAction> choose_very_high_clue(
     rung = "2b.fix";
   } else if ((pick = rung_3(game, vh))) {
     rung = "3.bob_chop";
-  } else if ((pick = settle(game,
-                            select(vh,
-                                   [](const ClueCandidate& c) {
-                                     return c.refuses_dead_target &&
-                                            c.reading.shape == ClueShape::STABLE_PLAY;
-                                   }),
-                            stable_play_chain(game)))) {
+  } else if ((pick = settle_stable_play(
+                    game, select(vh, [](const ClueCandidate& c) {
+                      return c.refuses_dead_target &&
+                             c.reading.shape == ClueShape::STABLE_PLAY;
+                    })))) {
     // A REFUSAL is any stable clue to the receiver (tiiah/CONVENTION.md §1c, an
     // envelope), so which one is ours to choose: one that also gets a card
     // played, and among those the one that names it (v16.27.0). Replay 2011854
@@ -2098,7 +2181,7 @@ namespace {
 // simulation of what Bob will know after the clue.
 const ClueCandidate* e_rung_stable_play(const Game& g,
                                         const std::vector<ClueCandidate>& cs) {
-  return settle(g, pool_stable_play(g, cs), stable_play_chain(g));
+  return settle_stable_play(g, pool_stable_play(g, cs));
 }
 
 // 3. Any clue to Bob that singles out a useful card in his hand by empathy.

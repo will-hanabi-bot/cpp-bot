@@ -45,7 +45,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
 | Decision making (§2) | implemented (v16.6.0), by delegation to reactor0; among reactive plays, the fewest receiver candidates (§2b, v16.28.0); never call a card we may already have played (§2c, v17.2.0); never call a critical card to discard (§2d, v17.4.0); a critical chop nothing can ditch around is locked (reactor0 rung 3.10, v17.5.0); a locked hand below 8 tokens throws its least-critical card rather than pitch blind (reactor0 rung 12, v17.6.0); an occupied Alice saves a stuck Bob's chop when Cathy's is safe to lose (§2e, v18.13.0); a locked Alice's stable play may go to a role-inverted Cathy (§2f, v18.15.0); a stuck Bob gets a play before a lock of a non-critical chop (§2g, reactor0 rung 3.6b, v18.16.0) |
 | The fix clue (§1h) | implemented (v16.20.0); deadness on the giver-and-holder view, and the call withdrawn by the fix (v17.2.0) |
-| Naming the called card (§2a) | implemented (v16.7.0) |
+| Naming the called card (§2a) | implemented (v16.7.0); the stable play hierarchy — fewest inferences, ancillary value, the rest of the hand, colour (v18.17.0) |
 
 What has **not** been decided is the endgame: the solver declines to solve a
 TIIAH position rather than solving it wrongly, because our own hidden plays make
@@ -522,18 +522,19 @@ urgent return, which is the very thing being declined. The tier itself
 Two more things make it actually get given (v16.27.0):
 
 - **The tier gate does not apply to it** (`clue_is_admissible`,
-  `reactor0/decision.cpp:1098`), as it does not to the fix (§1h). A refusal stamps
+  `reactor0/decision.cpp:1150`), as it does not to the fix (§1h). A refusal stamps
   nothing, so it is always LOW, and an OCCUPIED reacter — which a reacter holding
   the urgent call always is — had every refusal rejected before its priority was
   consulted. Replay [2011854](https://hanab.live/shared-replay/2011854#27) T27:
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2034-2046`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2119-2129`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
-  a stable PLAY clue, and among those the one that names its card
-  (`stable_play_chain`, the same term §2 uses). Only then the default tiebreak, which
-  at T27 took a Rank 5 lock over the Purple that names will-bot69's p2.
+  a stable PLAY clue, ranked by §2a's stable play hierarchy (`settle_stable_play`, the
+  same tiebreak every stable-play rung uses; before v18.17.0 its single term, "names
+  its card"). Before v16.27.0 the default tiebreak alone decided, and at T27 it took
+  a Rank 5 lock over the Purple that names will-bot69's p2.
 
 **Reading it with several candidates** (v16.27.0). The refused card is down, and one
 of the giver's hole cards put it there — but when more than one of them admits it,
@@ -1757,7 +1758,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 3 — `rung_2b` (`reactor0/decision.cpp:1573-1577`), logged as `2b.fix`. Step 1
+and rung 3 — `rung_2b` (`reactor0/decision.cpp:1658-1662`), logged as `2b.fix`. Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
 (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm of `clue_tier`,
@@ -1863,7 +1864,7 @@ Both log a DECIDE branch (`tiiah.dupe_passback`, `tiiah.discharge`).
 its card accounting inconsistent and it declines rather than solving wrongly, so
 those turns are decided by the stall list and the ordinary rungs.
 
-### §2a Prefer a play clue the receiver can NAME (v16.7.0)
+### §2a Prefer a play clue the receiver can NAME (v16.7.0), and the stable play hierarchy (v18.17.0)
 
 **Among stable play clues, take one whose called card the receiver can read back
 to a single identity.** In practice that is a colour clue: a rank clue names a
@@ -1888,13 +1889,46 @@ rule then separates nothing and the default tiebreak decides, as it does under
 reactor0. A play reveal names its card by construction and is likewise never the
 thing this demotes.
 
-Implemented as `ClueCandidate::names_its_card`, computed in `analyse_clues`
-(`src/conventions/reactor0/decision.cpp`) as "the called card's shared
-`possibilities()` hold exactly one identity" — the very set `note_hidden_action`
-stamps a superposition from — and read by `stable_play_chain`, the only tiebreak
-rungs 3.1 / 4.1 and the endgame stall list's rung 2 have. Outside this variant
-the term is false of every candidate and `settle` skips it, so no other
-convention moves.
+**The stable play hierarchy (v18.17.0) is the general form.** When several
+stable play clues exist, they are tiebroken in this order. Each key is judged over
+what the key above it left. All are read from the giver's private model of the
+receiver once the clue has landed (`hypo.players[receiver]`):
+
+1. **The fewest identities left on the called card** — the rule above, as a
+   count.
+2. **The most ancillary value.** It is 1.99 per newly touched good card besides
+   the called one, less 1 per newly touched trash card the receiver cannot tell
+   is trash. Known trash is judged on the stacks the called play leaves, so a card
+   that can only be the called identity's dupe costs nothing.
+3. **The smallest product of candidate counts over the receiver's other good
+   cards**: the clue that leaves the rest of their hand best known.
+4. **Colour over rank**, unless the colour could mistake a rainbow card for its
+   suit.
+
+The default tiebreak comes last.
+
+The keys are `ClueCandidate::target_inferences`, `ancillary_score`,
+`others_product` and `colour_ok`, filled in `analyse_clues`. `settle_stable_play`
+applies them (`src/conventions/reactor0/decision.cpp`). It is the tiebreak of
+every stable-play rung: 3.1, 3.6b, 4.1, the refusal's stable play, and the endgame
+stall list's rung 2. Outside this variant it is the default tiebreak alone, so no
+other convention moves. `names_its_card` stays on the candidate as a record and is
+no longer ranked; criterion 1 subsumes it.
+
+Human diagnostic 2014561 (`v18_human_vs_bot_diagnostics/2014561.md`):
+- **T50:** blue had three stable plays to black: Yellow (the y4), 3 and Purple
+  (both the p3).
+  - All three name their card, and none touches anything else of use. Purple's p1
+    can only be the p1 or the p3 being called.
+  - Purple also pins the clued o13 as the p4. Yellow and 3 leave it with three
+    and four identities. The product (criterion 3) comes to 176 for Purple against
+    540 and 680.
+  - The default tiebreak had given the 3. It now gives Purple.
+  - `tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp`,
+    and one case per criterion in
+    `tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp`.
+- **T49:** stated criterion 1 (Green's `{g4}` over rank 4's `{r4,y4,g4}`). There,
+  by ruling, the 4 stands: green could not know its own hole card had been the g3.
 
 It is a TIEBREAK, not a veto: it orders the stable-play pool and never changes
 which rung fires, so a clue that names its card cannot displace a better rung.
@@ -1919,7 +1953,7 @@ card by sight, the frame the giver shares with the receiver advanced by that car
 the pair's worlds, through the same `receiver_reading` helper (`:588-634`) that
 `narrow_receiver_call` uses — so the giver and the reader cannot disagree about what a
 call says. It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
-(`src/conventions/reactor0/decision.cpp:1249-1271`) reads first. reactor0 cannot call
+(`src/conventions/reactor0/decision.cpp:1301-1323`) reads first. reactor0 cannot call
 into this convention, so `reactor0::analyse_clues` takes an optional
 `CandidateAnnotator` and the engine passes this one under TIIAH
 (`candidate_annotator`, `src/basics/decide.cpp:49-52`); outside TIIAH the field stays
@@ -1976,8 +2010,8 @@ played her call and Bob threw his chop. The reviewer: "Bob almost never stops to
 or save a playable card at risk on Cathy's chop."
 
 So a clue to Bob that touches his chop, without calling it to discard, is flagged
-`saves_stuck_bob_chop` (`reactor0/decision.cpp:1013-1016`) and exempt from the gate
-(`:1105`) when all of the following hold:
+`saves_stuck_bob_chop` (`reactor0/decision.cpp:1065-1068`) and exempt from the gate
+(`:1157`) when all of the following hold:
 
 - §3's precondition holds (`priority_3_applies`): Bob has no safe action.
 - Bob's chop is a **playable card at risk** (`:894-911`):
@@ -2061,6 +2095,8 @@ It now gives the Green.
 | `tests/test_tiiah/test_gate_and_clues.cpp` | §0 — `take_action` answers, and with a legal move; §1b read identically to reactor0 (a differential test); §1c refusing rather than guessing |
 | `tests/test_net/test_tiiah_commands.cpp` | §0 — `/setall tiiah` refused, the variant selecting the convention, and the `/settings` line carrying the buckets and the dispatch |
 | `tests/test_tiiah/test_decision_making/test_colour_preference.cpp` | §2a — replay 2008145 T1 giving a clue that names its card, the rank candidate naming none while all three colours do, the exception separating nothing, and reactor0 unmoved |
+| `tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp` | §2a — the stable play hierarchy, one tie per criterion: fewest inferences, ancillary value (unknown trash costs), the product over the other good cards, colour, then the default tiebreak (v18.17.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp` | §2a — human diagnostic 2014561 T50: blue gives Purple to black (criterion 3), not the 3 (v18.17.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp` | §2f — human diagnostic 2014538 T23: locked blue gives Green to black for the playable g3 (a role-inverted stable play in 4.1), not a stalling 3 (v18.15.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp` | §2g — human diagnostic 2014538 T24: green on one token gives black Green for the g3 (reactor0 rung 3.6b), not a 4 locking a non-critical chop (v18.16.0) |
 | `tests/test_tiiah/test_decision_making/test_occupied_save_of_bobs_chop.cpp` | §2e — an occupied Alice saves a stuck Bob's playable g1 when Cathy's chop is a safe r3 or a playable b1 her own known call duplicates, and plays her call when it is a critical y5 or an unduplicated y1, when her own known call duplicates Bob's g1, or when Cathy holds the other g1 in plain view (v18.13.0) |

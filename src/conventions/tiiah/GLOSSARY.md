@@ -418,3 +418,18 @@ Bob's chop without calling it to discard is an **occupied save**
 Alice holding a call of her own still gives it (v18.13.0,
 `cathy_chop_is_safe_to_lose` in `reactor0/decision.cpp`). CONVENTION.md §2e, human
 diagnostic 2014076 T18.
+
+### stable play hierarchy
+How competing stable play clues are ranked (v18.17.0). All four keys come from the
+giver's model of the receiver once the clue has landed, and each is judged over
+what the key above it left:
+1. the fewest identities left on the called card;
+2. the most ancillary value: 1.99 per newly touched good card besides the called
+   one, less 1 per newly touched trash card the receiver cannot tell is trash;
+3. the smallest product of candidate counts over the receiver's other good cards;
+4. colour over rank, unless the colour could mistake a rainbow card.
+
+The default tiebreak comes last. **Unknown trash** is a trash card the receiver
+cannot identify as trash, judged on the stacks the called play leaves.
+`settle_stable_play` in `reactor0/decision.cpp`. CONVENTION.md §2a, human
+diagnostic 2014561 T50.

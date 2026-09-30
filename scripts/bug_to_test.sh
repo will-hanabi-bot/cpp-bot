@@ -34,9 +34,9 @@ fi
 # live table id), and replay_log names the emitted TEST after the database
 # id when present. Deriving it from the filename instead would break the
 # ctest -R match below the moment a log is finalized under its replay id.
-GAME_ID=$(grep -o '"database_id":[0-9]*' "$LOG" | head -1 | cut -d: -f2)
+GAME_ID=$(grep -m1 -o '"database_id":[0-9]*' "$LOG" | head -1 | cut -d: -f2)
 if [[ -z "$GAME_ID" ]]; then
-  GAME_ID=$(grep -o '"game_id":[0-9]*' "$LOG" | head -1 | cut -d: -f2)
+  GAME_ID=$(grep -m1 -o '"game_id":[0-9]*' "$LOG" | head -1 | cut -d: -f2)
 fi
 if [[ -z "$GAME_ID" ]]; then
   echo "no database_id or game_id record found in $LOG" >&2
@@ -47,7 +47,7 @@ fi
 # overrode it. Missing key means a log written before conventions were
 # recorded, which was always reactor.
 if [[ -z "$CONVENTION" ]]; then
-  CONVENTION=$(grep -o '"convention":"[a-z0-9]*"' "$LOG" | head -1 | cut -d'"' -f4)
+  CONVENTION=$(grep -m1 -o '"convention":"[a-z0-9]*"' "$LOG" | head -1 | cut -d'"' -f4)
 fi
 CONVENTION=${CONVENTION:-reactor}
 case "$CONVENTION" in

@@ -538,8 +538,9 @@ left alone, so no reactor0 game can reach any of it.
 
 Since v16.27.0 a refusal also skips the tier gate (`clue_is_admissible`, as the
 fix does — see priority 2b), and when no rung of the step ranks the admitted
-clues, the refusals that are **stable play** clues are preferred, settled by
-`stable_play_chain` (a call the receiver can name), before the default tiebreak —
+clues, the refusals that are **stable play** clues are preferred, ranked by the
+stable play hierarchy (`settle_stable_play`, tiiah/CONVENTION.md §2a), before the
+default tiebreak —
 logged as `refusal.stable_play`. Any stable clue to the receiver is a refusal, so
 the one chosen should also be worth giving; at replay 2011854 T27 the default
 tiebreak had taken a Rank 5 lock over the Purple that named the receiver's p2.
@@ -684,7 +685,7 @@ is judged from Alice's own inference, not common knowledge.
    [tiiah/CONVENTION.md §2b](../tiiah/CONVENTION.md)): the clue that leaves the
    receiver the fewest identities for its called card
    (`ClueCandidate::receiver_reading_size`, first in `rung_1`,
-   `reactor0/decision.cpp:1249-1271`). That reading is the tiiah convention's, so it
+   `reactor0/decision.cpp:1301-1323`). That reading is the tiiah convention's, so it
    reaches this list through the optional `CandidateAnnotator` that `analyse_clues`
    calls with each candidate's hypo — the engine passes one under TIIAH and nothing
    otherwise, the field stays 0, and the term separates nothing.
@@ -790,13 +791,22 @@ is judged from Alice's own inference, not common knowledge.
     1. Give a stable play clue to Bob if there are `>= 2 clues**`. This includes
        direct rank or color play clues and play reveals given with either rank or color. 
 
-       **Throw It in a Hole adds the one tiebreak this rung has**
-       (`stable_play_chain`, v16.7.0): prefer a call the receiver can read back
-       to a single identity. There a play whose own player cannot name it goes
-       into the hole unnamed, so it superposes instead of advancing the common
-       stacks — tiiah/CONVENTION.md §2 has the rule and the replay. Under every
-       other variant the term is false of every candidate, so `settle` skips it
-       and the default tiebreak decides as it always has.
+       **Throw It in a Hole ranks this rung's candidates by the stable play
+       hierarchy** (`settle_stable_play`, v18.17.0; before it, v16.7.0's single
+       term "the receiver can name the card"). Each key is judged over what the
+       one above it left, from the giver's model of the receiver:
+       1. fewest identities left on the called card;
+       2. most 1.99 × (ancillary good cards newly touched) − (unknown trash
+          newly touched);
+       3. smallest product of candidate counts over the receiver's other good
+          cards;
+       4. colour over rank, unless the colour could mistake a rainbow card.
+
+       A play whose own player cannot name it goes into the hole unnamed. The
+       rule and the replays (2008145 T1; human diagnostic
+       [2014561](../../../v18_human_vs_bot_diagnostics/2014561.md) T50) are in
+       tiiah/CONVENTION.md §2a. Under every other variant it is the default
+       tiebreak alone, as it always has been.
     2. If pace is >= 3 and Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.
@@ -1418,7 +1428,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | rung 1 (action a pending reaction) | `take_action`'s urgent return, above the clue phase |
 | §3.7's "close to playing" count, and §4.4's fill-in ranking | `missing_connectors` |
 | the ditch-target rule (§3.8 / §3.9 / §4.8 / §4's floor) | `better_ditch_target` / `ditch_connectors` |
-| §3.1 / §3.6b / §4.1's tiebreak, and the endgame stall list's rung 2 | `stable_play_chain` — empty except under Throw It in a Hole |
+| §3.1 / §3.6b / §4.1's tiebreak, the refusal's stable play, and the endgame stall list's rung 2 | `settle_stable_play` — the default tiebreak, preceded under Throw It in a Hole by the stable play hierarchy |
 | §4.1's pool (Bob, and under Throw It in a Hole a role-inverted Cathy) | `pool_stable_play_any_partner` |
 | "can the receiver name the card this clue calls?" | `ClueCandidate::names_its_card`, filled in `analyse_clues` |
 | "is this a STABLE clue to Bob?" (§3.1/3.3/3.5/3.9, §4.1-4.4, §4.7) | `is_stable_to_bob`, which asks `clue_is_reactive` |
