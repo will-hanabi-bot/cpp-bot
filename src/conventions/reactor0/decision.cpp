@@ -1651,7 +1651,27 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
         has_cathy(g) && has_colour_play_clue_for(g, bob_of(g), cathy_of(g));
     if (close >= 3 && !bob_can_handle_cathy &&
         !(has_cathy(g) && chop_is_critical(g, cathy_of(g)))) {
-      if (auto* c = first_of(g, pool_lock(g, cs))) return c;
+      if (const ClueCandidate* lock = first_of(g, pool_lock(g, cs))) {
+        // 3.6b -- ...unless, below 3.1's clue count, a stable play clue to Bob
+        // exists and his chop is not critical (v18.16.0). The play takes the
+        // lock's place: the two cost the same one clue, but a lock commits Bob's
+        // whole hand and leaves him nothing to do, while a play gives him his
+        // turn. Only in place of a lock this rung would give -- where the ladder
+        // gives no clue at all, a low clue count is a reason to keep it -- and
+        // only while the chop is not critical, since a critical chop keeps
+        // 3.8-3.10, which save it for good.
+        //
+        // Human diagnostic 2014538 T24: green (1 token, occupied) locked black
+        // with a 4 on a non-critical y4 here, when Green would have had him play
+        // the g3. "does not provide yagami_black a safe action at all with the
+        // rank 4 clue."
+        if (!clues_at_least(g, 2) && !chop_is_critical(g, bob_of(g))) {
+          if (auto* c = settle(g, pool_stable_play(g, cs), stable_play_chain(g))) {
+            return c;
+          }
+        }
+        return lock;
+      }
     }
   }
   // 3.8 -- only when BOB'S CHOP IS CRITICAL. Still unconditional on the clue

@@ -823,6 +823,22 @@ is judged from Alice's own inference, not common knowledge.
        to a card in an inverted suit whose dupe is seen by Alice.
     6. Give a lock clue to Bob if all of Bob's cards are critical and there are
        `>= 2 clues**`
+    6b. **In place of 3.7's lock** (v18.16.0): when 3.7 would lock, and there are
+       fewer clues than 3.1 needs, and Bob's chop is not critical, give a stable
+       play clue to Bob instead if one exists, with 3.1's tiebreak. The two cost
+       the same one clue: a lock commits Bob's whole hand and leaves him nothing
+       to do, while a play gives him his turn. It only ever replaces a lock. Where
+       the ladder would give no clue at all, a low clue count is a reason to keep
+       it.
+
+       Implemented inside 3.7's block. A first version that stood on its own,
+       ahead of 3.7, also clued where no lock was coming, and cost self-play 7
+       points net.
+
+       Human diagnostic [2014538](../../../v18_human_vs_bot_diagnostics/2014538.md)
+       T24: green, on one token, locked black with a 4 on a non-critical y4 at 3.7,
+       when Green would have had him play the g3.
+       `tests/test_reactor0/test_decision_making/test_stable_play_before_lock.cpp`.
     7. If there are >= 3 cards in Bob's hand with at most one **missing connector**
        Alice can see in Bob's own hand, **and** Bob cannot give a stable
        **colour** play clue to Cathy, **and** Cathy's chop is not critical, then
@@ -968,7 +984,8 @@ is judged from Alice's own inference, not common knowledge.
 
    That is no longer true, and the difference is worth being precise about.
    Every rung that can end §3 now carries a condition of its own: 3.6 needs
-   Bob's whole hand critical, 3.7 needs three cards close to playing *and* two
+   Bob's whole hand critical, 3.6b only replaces 3.7's lock with a play (below 3.1's
+   clue count, on a chop that is not critical), 3.7 needs three cards close to playing *and* two
    vetoes, and **3.8, 3.9 and 3.10 all need Bob's chop to be critical**. Critical is
    strictly narrower than the test that got us into §3 — that one is
    `at_risk_chop`, which also fires for a card whose only other copy is still
@@ -1401,7 +1418,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | rung 1 (action a pending reaction) | `take_action`'s urgent return, above the clue phase |
 | §3.7's "close to playing" count, and §4.4's fill-in ranking | `missing_connectors` |
 | the ditch-target rule (§3.8 / §3.9 / §4.8 / §4's floor) | `better_ditch_target` / `ditch_connectors` |
-| §3.1 / §4.1's tiebreak, and the endgame stall list's rung 2 | `stable_play_chain` — empty except under Throw It in a Hole |
+| §3.1 / §3.6b / §4.1's tiebreak, and the endgame stall list's rung 2 | `stable_play_chain` — empty except under Throw It in a Hole |
 | §4.1's pool (Bob, and under Throw It in a Hole a role-inverted Cathy) | `pool_stable_play_any_partner` |
 | "can the receiver name the card this clue calls?" | `ClueCandidate::names_its_card`, filled in `analyse_clues` |
 | "is this a STABLE clue to Bob?" (§3.1/3.3/3.5/3.9, §4.1-4.4, §4.7) | `is_stable_to_bob`, which asks `clue_is_reactive` |

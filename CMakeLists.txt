@@ -394,11 +394,13 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2014076_save_bobs_playable_chop_while_occupied.cpp
   tests/test_tiiah/test_decision_making/test_occupied_save_of_bobs_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
   tests/test_reactor0/test_decision_making/test_locked_hand_throw.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
+  tests/test_reactor0/test_decision_making/test_stable_play_before_lock.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966091_lock_must_not_outrank_reaction.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966119_occupied_low_pace_actions_its_call.cpp
