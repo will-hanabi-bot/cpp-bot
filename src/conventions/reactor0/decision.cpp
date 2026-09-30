@@ -1327,6 +1327,25 @@ Pool pool_stable_play(const Game& g, const std::vector<ClueCandidate>& cs) {
   });
 }
 
+// 4.1's pool. Throw It in a Hole also has a stable play clue to CATHY: under role
+// inversion -- Bob holds a standing play and Cathy does not -- a clue to Cathy is
+// stable (tiiah/CONVENTION.md §1c), and it gets a card played exactly as one to Bob
+// does (v18.15.0). Rung 3.1 keeps the Bob-only pool, since it is about Bob's chop.
+//
+// Human diagnostic 2014538 T23: locked blue held Green for black's playable g3,
+// stable because green held a called n2, and gave a stalling 3 instead.
+// Outside TIIAH `dispatch_is_reactive` makes every clue to Cathy reactive, so this
+// is `pool_stable_play` there.
+Pool pool_stable_play_any_partner(const Game& g, const std::vector<ClueCandidate>& cs) {
+  if (!g.state.variant->throw_it_in_a_hole) return pool_stable_play(g, cs);
+  return select(cs, [&g](const ClueCandidate& c) {
+    const bool partner = c.action.target == bob_of(g) ||
+                         (has_cathy(g) && c.action.target == cathy_of(g));
+    return partner && !dispatch_is_reactive(g, c.action) &&
+           c.reading.shape == ClueShape::STABLE_PLAY;
+  });
+}
+
 // 3.1 / 4.1's tiebreaks, shared with the endgame stall list's rung 2. Empty
 // under reactor0, where the rung has never had one and the default tiebreak
 // settles it.
@@ -1854,10 +1873,11 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // read.
   if (!priority_4_applies(g, cs)) return nullptr;
 
-  // 4.1 is "same as 3.1", which carries 3.1's own clue-count condition.
+  // 4.1 is "same as 3.1", which carries 3.1's own clue-count condition. Its pool
+  // also takes Throw It in a Hole's stable play clue to Cathy (v18.15.0).
   if (clues_at_least(g, 2)) {
     // 4.1
-    if (auto* c = settle(g, pool_stable_play(g, cs), stable_play_chain(g))) {
+    if (auto* c = settle(g, pool_stable_play_any_partner(g, cs), stable_play_chain(g))) {
       return c;
     }
   }

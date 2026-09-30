@@ -43,7 +43,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0); the receiver's reading no longer dropped for missing the stamp (v16.26.0); an undeferred call no longer dropped as stale (v16.28.0); a finesse the receiver can prove, and the reacter's frame without its own card (v17.1.0); the reacter's card named for the team only as far as the receiver can (v17.2.0); a deferred reaction read the same way (v17.4.0); the receiver read before the call invariants, and a withdrawn target disarms the held negative (v18.14.0) |
 | Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0); rule 6 against the shared view, and rows as floors (v16.23.0); the frame is the minimum across worlds, stable calls read in every world, world feasibility from reactions, play-order replay, evidence bands and a floored shared view (v16.24.0); the shared view settles on what every world agrees, the receiver's promise read on its own frame, rule 8 (a strike was already down) and hole requirements, notes in the team's reading (v16.25.0); a refusal with several candidates, and a watched dupe strike, floor the shared view (v16.27.0); the band never absorbs a named card (v16.28.0); a call live in some shared world is not dead (v16.29.0); an outside seat tries its own hole cards for a stable call (v17.1.0); a private deduction about our own hole cards stays out of the rows (v17.3.0); the target of a call on a card it can name settles its own hole cards (v17.5.0); a row replays our private settles with the set both seats of the pair hold (v18.1.0); a colour re-touch of a clued card defers the collapse to its holder, and rule 7 has a shared form (v18.12.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0) |
-| Decision making (§2) | implemented (v16.6.0), by delegation to reactor0; among reactive plays, the fewest receiver candidates (§2b, v16.28.0); never call a card we may already have played (§2c, v17.2.0); never call a critical card to discard (§2d, v17.4.0); a critical chop nothing can ditch around is locked (reactor0 rung 3.10, v17.5.0); a locked hand below 8 tokens throws its least-critical card rather than pitch blind (reactor0 rung 12, v17.6.0); an occupied Alice saves a stuck Bob's chop when Cathy's is safe to lose (§2e, v18.13.0) |
+| Decision making (§2) | implemented (v16.6.0), by delegation to reactor0; among reactive plays, the fewest receiver candidates (§2b, v16.28.0); never call a card we may already have played (§2c, v17.2.0); never call a critical card to discard (§2d, v17.4.0); a critical chop nothing can ditch around is locked (reactor0 rung 3.10, v17.5.0); a locked hand below 8 tokens throws its least-critical card rather than pitch blind (reactor0 rung 12, v17.6.0); an occupied Alice saves a stuck Bob's chop when Cathy's is safe to lose (§2e, v18.13.0); a locked Alice's stable play may go to a role-inverted Cathy (§2f, v18.15.0) |
 | The fix clue (§1h) | implemented (v16.20.0); deadness on the giver-and-holder view, and the call withdrawn by the fix (v17.2.0) |
 | Naming the called card (§2a) | implemented (v16.7.0) |
 
@@ -529,7 +529,7 @@ Two more things make it actually get given (v16.27.0):
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:1994-2006`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2014-2026`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, and among those the one that names its card
   (`stable_play_chain`, the same term §2 uses). Only then the default tiebreak, which
@@ -1757,7 +1757,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 3 — `rung_2b` (`reactor0/decision.cpp:1554-1558`), logged as `2b.fix`. Step 1
+and rung 3 — `rung_2b` (`reactor0/decision.cpp:1573-1577`), logged as `2b.fix`. Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
 (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm of `clue_tier`,
@@ -2016,6 +2016,24 @@ at risk. At seed 105 T2, the other copy was in plain view in Cathy's hand. At se
 v18.12.0 that version lost 4 perfect games and gained 8 strikeouts. With both
 conditions the difference is noise: 29 of 300 seeds move, 16 up and 13 down.
 
+### §2f A locked Alice's stable play may go to Cathy (v18.15.0)
+
+Section 4.1 of reactor0's list, a locked Alice's first choice, is "same as 3.1": a
+stable play clue to Bob. Here role inversion (§1c) makes a clue to **Cathy** stable
+too, whenever Bob holds a standing play and Cathy does not. That clue gets a card
+played exactly as one to Bob does. So 4.1's pool takes a stable play clue to either
+partner (`pool_stable_play_any_partner`, `reactor0/decision.cpp`). Rung 3.1 keeps
+the Bob-only pool, since it exists for Bob's chop.
+
+Human diagnostic 2014538 T23 (`v18_human_vs_bot_diagnostics/2014538.md`):
+- blue was locked with 2 tokens, and green, blue's Bob, held a called n2;
+- Green to black was a stable play on black's g3, which blue could see was playable;
+- 4.1 never saw it, and 4.5 gave a stalling 3.
+
+"A color stable clue ... should definitely outrank a rank 3 lock clue." It now
+gives the Green.
+`tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp`.
+
 ## Test coverage
 
 | File | What it pins |
@@ -2027,6 +2045,7 @@ conditions the difference is noise: 29 of 300 seeds move, 16 up and 13 down.
 | `tests/test_tiiah/test_gate_and_clues.cpp` | §0 — `take_action` answers, and with a legal move; §1b read identically to reactor0 (a differential test); §1c refusing rather than guessing |
 | `tests/test_net/test_tiiah_commands.cpp` | §0 — `/setall tiiah` refused, the variant selecting the convention, and the `/settings` line carrying the buckets and the dispatch |
 | `tests/test_tiiah/test_decision_making/test_colour_preference.cpp` | §2a — replay 2008145 T1 giving a clue that names its card, the rank candidate naming none while all three colours do, the exception separating nothing, and reactor0 unmoved |
+| `tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp` | §2f — human diagnostic 2014538 T23: locked blue gives Green to black for the playable g3 (a role-inverted stable play in 4.1), not a stalling 3 (v18.15.0) |
 | `tests/test_tiiah/test_decision_making/test_occupied_save_of_bobs_chop.cpp` | §2e — an occupied Alice saves a stuck Bob's playable g1 when Cathy's chop is a safe r3 or a playable b1 her own known call duplicates, and plays her call when it is a critical y5 or an unduplicated y1, when her own known call duplicates Bob's g1, or when Cathy holds the other g1 in plain view (v18.13.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2014076_save_bobs_playable_chop_while_occupied.cpp` | §2e — human diagnostic 2014076 T18: occupied green gives blue Green (or 1) for the playable g1 on chop, not its own b2 play (v18.13.0) |
 | `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |

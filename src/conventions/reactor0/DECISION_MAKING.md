@@ -902,7 +902,13 @@ is judged from Alice's own inference, not common knowledge.
        so it moves him too.
    4c. Alice can give a clue that gets two cards to play (stamps two cards which would advance both stacks).
    Tiebreak by the following:
-    1. Same as 3.1, tiebreak included
+    1. Same as 3.1, tiebreak included. **Throw It in a Hole also admits a stable
+       play clue to CATHY** (v18.15.0, `pool_stable_play_any_partner`). Under role
+       inversion (Bob holds a standing play, Cathy does not) a clue to Cathy is
+       stable, and it gets a card played just as one to Bob does. Rung 3.1 stays
+       Bob-only, since it is about Bob's chop. Human diagnostic
+       [2014538](../../../v18_human_vs_bot_diagnostics/2014538.md) T23: locked blue
+       gave a stalling 3 to black over Green on black's playable g3.
     2. Same as 3.3
     3. Same as 3.5
     4. Give a fill-in clue (which is a **stable** clue that narrows down the
@@ -1396,6 +1402,7 @@ lives in `src/conventions/reactor0/decision.cpp`:
 | §3.7's "close to playing" count, and §4.4's fill-in ranking | `missing_connectors` |
 | the ditch-target rule (§3.8 / §3.9 / §4.8 / §4's floor) | `better_ditch_target` / `ditch_connectors` |
 | §3.1 / §4.1's tiebreak, and the endgame stall list's rung 2 | `stable_play_chain` — empty except under Throw It in a Hole |
+| §4.1's pool (Bob, and under Throw It in a Hole a role-inverted Cathy) | `pool_stable_play_any_partner` |
 | "can the receiver name the card this clue calls?" | `ClueCandidate::names_its_card`, filled in `analyse_clues` |
 | "is this a STABLE clue to Bob?" (§3.1/3.3/3.5/3.9, §4.1-4.4, §4.7) | `is_stable_to_bob`, which asks `clue_is_reactive` |
 | §3.7's veto on Bob cluing Cathy | `has_colour_play_clue_for` |
