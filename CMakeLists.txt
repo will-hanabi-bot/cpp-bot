@@ -390,6 +390,8 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2013726_fix_dead_call_with_two.cpp
   tests/test_tiiah/test_decision_making/test_own_dupe_filter.cpp
   tests/test_tiiah/test_decision_making/test_replay_2013726_save_playable_chop_despite_own_dupe.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2014076_save_bobs_playable_chop_while_occupied.cpp
+  tests/test_tiiah/test_decision_making/test_occupied_save_of_bobs_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp

@@ -848,6 +848,41 @@ bool clue_fixes_dead_call(const Game& game, const Game& hypo,
   return hypo.common.thoughts[*order].possibilities().contains(*seen);
 }
 
+// Is `player`'s chop `id` DUPLICATED: another copy in their own hand, or a called
+// card in anyone else's hand -- ours included -- whose common reading is `id`?
+bool chop_is_duplicated(const Game& game, int player, int chop, Identity id) {
+  const State& s = game.state;
+  if (has_same_hand_dupe(s, player, chop, id)) return true;
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == player) continue;
+    for (int o : s.hands[p]) {
+      if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      const IdentitySet reading = game.common.thoughts[o].possibilities();
+      if (reading.length() == 1 && *reading.begin() == id) return true;
+    }
+  }
+  return false;
+}
+
+// THROW IT IN A HOLE: can Cathy afford to lose her chop while Alice spends her turn
+// on Bob's (tiiah/CONVENTION.md §2e, v18.13.0)? Her chop must be NOT CRITICAL, and
+// NOT A PLAYABLE card unless that card is duplicated: a second copy in her own hand,
+// or a called card in anyone else's hand whose common reading is that one
+// identity. A locked Cathy throws nothing. Judged from Alice's full visibility, so
+// a chop we cannot see is never safe.
+bool cathy_chop_is_safe_to_lose(const Game& game) {
+  const State& s = game.state;
+  const int cathy = cathy_of(game);
+  auto chop = game.chop(cathy);
+  if (!chop) return true;  // locked
+  auto id = s.deck[*chop].id();
+  if (!id) return false;
+  if (s.is_basic_trash(*id)) return true;
+  if (s.is_critical(*id)) return false;
+  if (!s.is_playable(*id)) return true;
+  return chop_is_duplicated(game, cathy, *chop, *id);
+}
+
 std::vector<ClueCandidate> analyse_clues(
     const Game& game,
     const std::vector<std::pair<PerformAction, Action>>& all_clues,
@@ -860,6 +895,19 @@ std::vector<ClueCandidate> analyse_clues(
   int spared = -1;
   if (s.variant->throw_it_in_a_hole && priority_3_applies(game)) {
     if (auto c = game.chop(bob_of(game))) spared = *c;
+  }
+  // ...and whether an OCCUPIED Alice may still save it (v18.13.0): a PLAYABLE
+  // chop that is AT RISK -- no copy in a hand we can see, and none a known call
+  // already names (a clue on a card we hold a call on calls a second copy to
+  // play, it saves nothing) -- and only while Cathy's chop is safe to lose, since
+  // Bob will not stop for Cathy's.
+  bool may_save_spared = spared >= 0 && has_cathy(game) &&
+                         at_risk_chop(game, alice_of(game), bob_of(game)) &&
+                         has_playable_chop(game, bob_of(game)) &&
+                         cathy_chop_is_safe_to_lose(game);
+  if (may_save_spared) {
+    auto id = s.deck[spared].id();
+    may_save_spared = id && !chop_is_duplicated(game, bob_of(game), spared, *id);
   }
   for (const auto& [perform, action] : all_clues) {
     if (!std::holds_alternative<ClueAction>(action)) continue;
@@ -961,6 +1009,11 @@ std::vector<ClueCandidate> analyse_clues(
 
     c.refuses_dead_target = clue_refuses_dead_target(game, c.action);
     c.fixes_dead_call = clue_fixes_dead_call(game, hypo, c.action);
+    // Touching the chop saves it -- unless the clue calls it to be thrown.
+    c.saves_stuck_bob_chop =
+        may_save_spared && ca.target == bob_of(game) &&
+        std::find(ca.list_.begin(), ca.list_.end(), spared) != ca.list_.end() &&
+        hypo.meta[spared].status != CardStatus::CALLED_TO_DISCARD;
 
     // Fill-ins, for rung 4.5. "Narrows" is judged from the TARGET's own view --
     // he is the one who learns something -- and counts both positive and
@@ -1043,6 +1096,13 @@ bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
   // refusals were gated out, and it reacted into yagami's call on a dead p1 --
   // which will-bot69 then played into a strike.
   if (c.fixes_dead_call || c.refuses_dead_target) return true;
+  // So is a save of a stuck Bob's chop when Cathy's chop is safe to lose
+  // (tiiah/CONVENTION.md §2e, v18.13.0). Bob, stuck, throws his chop next turn, and
+  // he almost never stops to save Cathy's in turn, so an occupied Alice is the
+  // last seat that can. Her own call waits a round; the chop does not. Human
+  // diagnostic 2014076 T18: green, occupied by light's Blue, played its b2, and
+  // blue threw a playable g1.
+  if (c.saves_stuck_bob_chop) return true;
   // The two rules take DIFFERENT pace thresholds, and the difference is the
   // whole point.
   //

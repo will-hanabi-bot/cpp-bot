@@ -242,6 +242,13 @@ struct ClueCandidate {
   // `clue_is_admissible`, which reads `tier` alone and would drop every fix an
   // OCCUPIED Alice could give.
   bool fixes_dead_call = false;
+  // Throw It in a Hole only: does this clue SAVE a stuck Bob's chop while
+  // Cathy's chop is safe to lose (tiiah/CONVENTION.md §2e, v18.13.0)? Bob is
+  // stuck (`priority_3_applies`), his chop is a playable card at risk that no
+  // known call duplicates, the clue touches it without calling it to discard,
+  // and Cathy's chop is not critical and is either not playable or duplicated. Exempts the candidate from the tier gate in `clue_is_admissible`,
+  // so an OCCUPIED Alice can still reach rung 3 with it.
+  bool saves_stuck_bob_chop = false;
   // Throw It in a Hole only: for a REACTIVE_PLAY, how many identities the
   // RECEIVER will read its called card as, as the giver predicts it (0 when not
   // computed). Priority 1's first tiebreak there: of two reactives calling the

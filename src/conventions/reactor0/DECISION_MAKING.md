@@ -684,7 +684,7 @@ is judged from Alice's own inference, not common knowledge.
    [tiiah/CONVENTION.md §2b](../tiiah/CONVENTION.md)): the clue that leaves the
    receiver the fewest identities for its called card
    (`ClueCandidate::receiver_reading_size`, first in `rung_1`,
-   `reactor0/decision.cpp:1189-1211`). That reading is the tiiah convention's, so it
+   `reactor0/decision.cpp:1249-1271`). That reading is the tiiah convention's, so it
    reaches this list through the optional `CandidateAnnotator` that `analyse_clues`
    calls with each candidate's hypo — the engine passes one under TIIAH and nothing
    otherwise, the field stays 0, and the term separates nothing.
@@ -760,7 +760,29 @@ is judged from Alice's own inference, not common knowledge.
    playable — yet §3 fired and spent a clue on it. The second arm is equally
    load-bearing: at replay 1942330 T33 Bob's chop was a **playable** Navy 2 also
    duplicated in Cathy's hand, so it was in no danger, and the Blue play clue
-   that collects it is still right (`priority_3_applies`, `decision.cpp`). Every condition marked `>= N clues**` below means the
+   that collects it is still right (`priority_3_applies`, `decision.cpp`).
+
+   **Throw It in a Hole: an OCCUPIED Alice may still save the chop (v18.13.0).**
+   A candidate that touches a stuck Bob's chop without calling it to discard is
+   flagged `ClueCandidate::saves_stuck_bob_chop` when Bob's chop is a **playable card
+   at risk** and Cathy's chop is **safe to lose**. Playable and at risk means
+   `has_playable_chop` and `at_risk_chop`, and no called card anywhere, ours
+   included, whose common reading is its identity (`chop_is_duplicated`). The flag
+   is set in `analyse_clues`, and the candidate is **exempt from the tier gate**
+   (`clue_is_admissible`), like the fix and the refusal. Safe to lose
+   (`cathy_chop_is_safe_to_lose`) means **not critical**, and **not playable unless
+   duplicated**: by another copy in Cathy's own hand, or by a called card in anyone
+   else's hand whose common reading is that one identity. A locked Cathy is safe.
+   Without the exemption such a save is usually LOW: H1 needs H1c, and H1c fails
+   whenever Bob could give Cathy a colour play clue himself. The reviewer's reason
+   is that Bob "almost never stops to get or save a playable card at risk on Cathy's
+   chop", so Alice's own call waits a round and the chop does not. Human diagnostic
+   [2014076](../../../v18_human_vs_bot_diagnostics/2014076.md) T18: green, occupied
+   by light's Blue, played its b2, and blue threw a playable g1. Rung 3.1 now gives
+   Green to blue. The flag is computed only in a hole variant, so no reactor0 game
+   reaches it.
+
+   Every condition marked `>= N clues**` below means the
    condition also applies at `>= N-1` clues if Cathy has a safe discard, or if
    Cathy has on chop a trash, a same-hand-dupe, or a good card that Alice sees at
    least one dupe of in any other player's hand (including her own). Tiebreak by

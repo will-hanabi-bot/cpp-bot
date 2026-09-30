@@ -406,3 +406,15 @@ The holder's play of the card is evidence in its own right. Its discard is §1e 
 7's shared form: only the worlds in which the card was trash survive, at every seat.
 A call on a card **not** clued before is not deferred. CONVENTION.md §1e, human
 diagnostic 2014076 T14.
+
+### safe-to-lose chop / occupied save
+Cathy's chop is **safe to lose** when it is not critical, and it is not playable
+unless it is duplicated. Duplicated means a second copy in Cathy's own hand, or a
+called card in anyone else's hand whose common reading is that one identity. A
+locked Cathy is safe. When it is safe, Bob has no safe action (`priority_3_applies`),
+and his chop is a playable card at risk that no known call duplicates, a clue touching
+Bob's chop without calling it to discard is an **occupied save**
+(`saves_stuck_bob_chop`). It is exempt from the tier gate, so an
+Alice holding a call of her own still gives it (v18.13.0,
+`cathy_chop_is_safe_to_lose` in `reactor0/decision.cpp`). CONVENTION.md §2e, human
+diagnostic 2014076 T18.
