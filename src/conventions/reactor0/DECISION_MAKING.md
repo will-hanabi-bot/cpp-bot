@@ -145,7 +145,7 @@ NOT-LOW iff any of VH1, H2, H3, H4, or:
 6. **N3** — the clue gets two new plays. `:628`.
 7. **N2** — the clue is **reactive** and Bob has no stable color play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
-   since dispatch is positional (§1a, `interpret_clue.cpp:953-956`). `:634-637`.
+   since dispatch is positional (§1a, `interpret_clue.cpp:1117-1120`). `:634-637`.
    In a **target-parity** variant the second arm is vacuously true (no stable
    clues exist) while the first still asks who was clued, so only a clue to
    Cathy reaches N2 there.
@@ -830,6 +830,15 @@ is judged from Alice's own inference, not common knowledge.
        revealing a clued card as trash came out shape `OTHER`, which no rung selects,
        and 3.7's lock won instead (replay 2011327 T22,
        `tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp`).
+
+       **The pinkish re-touch clues (v19.0.0) reach the rungs through the same
+       shapes, with no rung of their own** (CONVENTION.md §1c priority 0). A pink
+       tempo clue stamps `CALLED_TO_PLAY`, so it is a stable play (3.1 / 4.1). A
+       pink trash clue sets `meta.trash`, so it is a trash reveal (here and 4.2).
+       A pink identity clue returns `REVEAL`: it reads as a stable play when the
+       named card is playable to the giver, a trash reveal when it is trash, and
+       otherwise a fill-in (4.4) — never a harmless 4.5 stall. A reading the
+       giver can see is false is not given at all (`nullopt`, §1g).
     4. If pace is `>= 3`, give a double discard clue that stamps CTD on two trash
        cards or same-hand-dupes, or CTP to a trash or same-hand-dupe in an
        inverted suit. Same pace condition as 3.2, for the same reason: a double
@@ -1499,7 +1508,7 @@ button the receiver was promised.
 
 | Rule | Existing machinery | Where |
 |---|---|---|
-| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1028`, dispatched at `interpret_clue.cpp:953-956` |
+| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1028`, dispatched at `interpret_clue.cpp:1117-1120` |
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:215-267` |
 | finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:486-576` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:578-648` |

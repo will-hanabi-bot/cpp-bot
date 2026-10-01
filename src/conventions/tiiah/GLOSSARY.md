@@ -53,6 +53,13 @@ direct play of that card. The receiver cannot know the giver knows the stack is
 high enough. `reveal_frame` in `reactor0::stable_colour`, which TIIAH passes
 `common_play_stacks`. CONVENTION.md §1b, replay 2015013 T35 and T37.
 
+### pinkish re-touch (global frame)
+reactor0's pink tempo, pink trash and pink identity clues (reactor0 GLOSSARY),
+read here on the *common stacks*: the tempo clue's next playable pink and the
+trash clue's "rank down in every pinkish suit" are judged on what every seat
+knows. `pink_frame` in `reactor0::stable_rank`. CONVENTION.md §1b, replay
+2015070 T18–T19 (v19.0.0).
+
 ### pairwise view
 `State::pairwise_play_stacks[p]`: what we know seat `p` knows — the *common
 stacks* plus every hidden play we can name that `p` did not make. A play goes

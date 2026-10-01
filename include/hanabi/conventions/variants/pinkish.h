@@ -41,4 +41,14 @@ int playable_rank_focus(const Game& prev, const State& state,
                         const ClueAction& action,
                         const std::vector<int>& newly_touched);
 
+// Is rank `value` already played in `suit` on `state`'s stacks, judged in the
+// suit's CURRENT direction? The pink trash clue's condition (reactor0
+// CONVENTION.md §1c priority 0): an ascending suit has played `value` when
+// `value <= stack`; a descending one when `value >= stack` (a reversed suit's
+// stack starts at 6 and counts down). User ruling (v19.0.0): an Up or Down
+// pinkish suit that is going down -- a 5 played first, or START then a 4 --
+// is descending too. The engine does not model Up or Down yet; when it does,
+// its direction belongs here.
+bool rank_played_in(const State& state, int suit, int value);
+
 }  // namespace hanabi::reactor::variants

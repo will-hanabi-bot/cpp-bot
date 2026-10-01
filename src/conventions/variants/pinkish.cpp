@@ -48,6 +48,10 @@ bool violates_pink_promise(const Game& prev, const ClueAction& action) {
     if (s.suit_type.pinkish) { pinkish = true; break; }
   }
   if (!pinkish) return false;
+  // reactor0 and Throw It in a Hole make no pink promise at all in a
+  // pinkish-ones / pinkish-fives variant (user ruling, v19.0.0), so there is
+  // nothing to violate. `ref_discard` skips `apply_rank_promise` to match.
+  if (is_reactor0_family(prev.convention) && v.pink_s) return false;
 
   // Lock slot = rightmost (oldest, last vector index) unclued card before the
   // clue lands. Note this is NOT the chop, which is the *newest* unclued card.
@@ -121,6 +125,12 @@ int playable_rank_focus(const Game& prev, const State& state,
   return !touched_unclued.empty()
              ? *std::max_element(touched_unclued.begin(), touched_unclued.end())
              : *std::max_element(newly_touched.begin(), newly_touched.end());
+}
+
+bool rank_played_in(const State& state, int suit, int value) {
+  const int stack = state.play_stacks[suit];
+  if (state.variant->suits[suit].suit_type.reversed) return value >= stack;
+  return value <= stack;
 }
 
 }  // namespace hanabi::reactor::variants

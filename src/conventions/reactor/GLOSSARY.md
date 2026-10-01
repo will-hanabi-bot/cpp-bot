@@ -124,7 +124,7 @@ different position and is never a chop.
 ### CHOP_MOVED (status)
 `CardStatus::CHOP_MOVED`: the card is protected from discard. The only thing
 that stamps it is a `LOCK`, which stamps every card in the hand at once.
-`card.h:23`, `:124`; `interpret_clue.cpp:339-358`.
+`card.h:23`, `:124`; `interpret_clue.cpp:339-364`.
 
 ### clue starved
 Variant where playing a 5 returns only half a clue token.
@@ -359,7 +359,7 @@ do. `obvious_loaded`, `player_game.cpp:233-236`; the full-empathy variant is
 A player with no safe action and every unclued card stamped `CHOP_MOVED`.
 Produced by the LOCK clue interpretation, which is a rank clue touching the
 *lock slot*. A lock protects the whole hand: nothing in it is safe to discard.
-`interpret_clue.cpp:334-359`; `player_game.cpp:221-246`.
+`interpret_clue.cpp:334-365`; `player_game.cpp:221-246`.
 
 ### lock slot
 The **oldest** (lowest-`order`, rightmost) unclued card. A rank clue that
@@ -470,7 +470,7 @@ Chimneys. Rank clues touch every rank. `predicates.cpp:12-18`.
 ### pink promise
 In pinkish variants, a rank clue that newly touches the receiver's *lock slot*
 promises that card has that rank. Violating it kills the stable reading.
-`src/conventions/variants/pinkish.cpp:18-55`.
+`src/conventions/variants/pinkish.cpp:18-59`.
 
 ### pitch / chuck
 The two buttons, named so that prose never has to say "play" and mean "discard".
@@ -535,7 +535,7 @@ receiver. Normally Bob. `include/hanabi/basics/game.h:44`;
 
 ### reactive clue
 A clue whose meaning depends on another player's response, resolved by the
-slot arithmetic. `interpret_clue.cpp:790-816`.
+slot arithmetic. `interpret_clue.cpp:803-829`.
 
 ### reactive focus slot
 See *focus*. The anchor of the sum rule.
@@ -631,7 +631,7 @@ A rank with variant-specific clue-touch behaviour, combined with `rainbow_s` /
 
 ### stable clue
 A clue read from its own shape by referential rules, without needing another
-player's response. `interpret_clue.cpp:424-618`, `:757-786`.
+player's response. `interpret_clue.cpp:437-631`, `:770-799`.
 
 ### stall
 A clue conveying no new instruction, burning a token to pass the turn.
@@ -672,7 +672,7 @@ unreachable in practice — nothing stamps that status.
 ### trash push
 A rank clue where every touchable identity is basic trash. Today this only
 narrows the focus's `inferred` to the trash set and sets `meta.trash`: no status
-is stamped and no play is called (`interpret_clue.cpp:447-468`). The convention
+is stamped and no play is called (`interpret_clue.cpp:460-481`). The convention
 says it should be read as a referential play clue; see `TODO.md`.
 
 ### trash reveal (brownish)
@@ -683,7 +683,7 @@ newest slot reads as REVEAL. `brownish_trash_reveal`,
 ### unnecessary focus
 A playable-rank focus whose every possibility is either basic trash or already
 visible somewhere — the clue would teach nothing, so the branch is skipped.
-`interpret_clue.cpp:477-486`.
+`interpret_clue.cpp:490-499`.
 
 ### urgent
 `ConvData::urgent` — act on this card *this turn*. Set by reactive

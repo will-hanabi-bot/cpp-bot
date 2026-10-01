@@ -173,7 +173,7 @@ ClueReading read_stable(const Game& game, const Game& hypo,
   }
 
   // A trash reveal stamps no status at all. The rank branch that touches only
-  // trash sets meta.trash on the new cards (reactor0/interpret_clue.cpp:918-929),
+  // trash sets meta.trash on the new cards (reactor0/interpret_clue.cpp:1082-1093),
   // and that one-field diff isolates it from the other REVEAL branches, none of
   // which flag a newly touched card.
   for (int o : hypo.state.hands[target]) {

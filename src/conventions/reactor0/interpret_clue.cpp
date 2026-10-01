@@ -45,7 +45,7 @@ std::vector<int> newly_touched_of(const Game& prev, const ClueAction& action) {
 
 // prev/post obvious playables + giver-visible connectables for `target`,
 // mirroring reactor's try_stable fill-in machinery
-// (src/conventions/reactor/interpret_clue.cpp:527-560).
+// (src/conventions/reactor/interpret_clue.cpp:540-573).
 std::vector<int> unique_concat(std::vector<int> a, const std::vector<int>& b) {
   std::unordered_set<int> seen(a.begin(), a.end());
   for (int x : b) {
@@ -648,7 +648,7 @@ namespace {
 // clears the meta when nothing survives, which would erase the very call
 // `ref_discard` just stamped. An empty result is left alone instead -- the CTD
 // is positional and does not depend on the inference, the same reasoning as the
-// v0.30 reset at `reactor/interpret_clue.cpp:402-419`.
+// v0.30 reset at `reactor/interpret_clue.cpp:415-432`.
 void narrow_stable_chuck(const Game& prev, Game& game, int receiver) {
   const State& state = game.state;
   for (int o : state.hands[receiver]) {
@@ -675,12 +675,166 @@ void narrow_stable_chuck(const Game& prev, Game& game, int receiver) {
   }
 }
 
+// --- pinkish re-touch: pink tempo / pink trash / pink identity (v19.0.0) ---
+//
+// A stable RANK clue that touches NO new card and only cards known to be
+// pinkish once it lands (CONVENTION.md §1c, priority 0). A pink colour clue on
+// such cards keeps §1b's meaning; these are the rank clue's three readings, in
+// order:
+//
+//   1. PINK TEMPO: two or more touched cards, and the clue value is the SLOT of
+//      one of them. That card is called to play as the next playable pink.
+//   2. PINK TRASH: rank `value` is already played in every pinkish suit (`value
+//      <= N`, N the lowest pinkish stack, for ascending suits). The leftmost
+//      touched pink card whose rank identity is not known exactly is trash.
+//   3. PINK IDENTITY: otherwise, that same card has rank `value`.
+//
+// Replay 2015070 T18 (TIIAH & Pink): yagami's 1 re-touched barakeel's i1, which
+// a 4 had touched before. With pink on 0 globally it names the card as the i1;
+// read as a STALL, the card kept the 4's stale `{i4}` and barakeel's discard of
+// it proved nothing (tiiah/CONVENTION.md §1e rule 7).
+//
+// All three apply to the pinkish SUITS. Only the tempo reading also applies to a
+// special-rank variant's pinkish rank (`pink_s`: Pink-Ones, Light-Pink-Fives),
+// which has no pinkish stack for the trash rule to read. Odds and Evens is out:
+// its clue value is a parity, neither a rank nor a slot.
+
+// A suit touched by every rank clue.
+bool pinkish_suit_id(const Variant& v, Identity i) {
+  return v.suits[i.suit_index].suit_type.pinkish;
+}
+
+// ...or, for the tempo reading only, the special rank a `pink_s` variant
+// touches with every rank clue.
+bool tempo_pinkish_id(const Variant& v, Identity i) {
+  return pinkish_suit_id(v, i) ||
+         (v.pink_s && v.special_rank && i.rank == *v.special_rank);
+}
+
+// Every seat knows the card is pinkish: its common empathy has nothing else.
+template <typename Pred>
+bool known_pinkish(const Game& game, int order, Pred pred) {
+  const IdentitySet& possible = game.common.thoughts[order].possible;
+  return possible.non_empty() && possible.forall(pred);
+}
+
+// RANK IDENTITY KNOWN EXACTLY, on `frame`: it is common knowledge that the card
+// has only trash readings, or that every reading shares one rank.
+bool rank_identity_known(const Game& game, int order, const State& frame) {
+  const IdentitySet readings = game.common.thoughts[order].possibilities();
+  if (readings.forall([&](Identity i) { return frame.is_basic_trash(i); })) {
+    return true;
+  }
+  std::optional<int> rank;
+  return readings.forall([&](Identity i) {
+    if (!rank) rank = i.rank;
+    return i.rank == *rank;
+  });
+}
+
+struct PinkRetouch {
+  bool applies = false;             // false: fall through to the ladder
+  std::optional<ClueInterp> interp;  // nullopt with `applies`: MISTAKE
+};
+
+PinkRetouch pink_retouch(Game& game, const ClueAction& action,
+                         const std::vector<int>& newly_touched,
+                         const std::vector<int>* pink_frame) {
+  const State& state = game.state;
+  const Variant& v = *state.variant;
+  if (action.clue.kind != ClueKind::RANK || !newly_touched.empty() ||
+      action.list_.empty() || v.odds_and_evens) {
+    return {};
+  }
+  const auto tempo_pred = [&v](Identity i) { return tempo_pinkish_id(v, i); };
+  const auto suit_pred = [&v](Identity i) { return pinkish_suit_id(v, i); };
+  bool tempo_ok = true;
+  bool suit_ok = true;
+  for (int o : action.list_) {
+    if (!known_pinkish(game, o, tempo_pred)) tempo_ok = false;
+    if (!known_pinkish(game, o, suit_pred)) suit_ok = false;
+  }
+  if (!tempo_ok) return {};  // `suit_ok` implies `tempo_ok`
+
+  // The stacks these readings rest on. Throw It in a Hole passes the GLOBAL
+  // ones (tiiah/CONVENTION.md §1b): a seat cannot read a tempo or a trash clue
+  // off stacks its partner may not share.
+  const bool swap = pink_frame != nullptr && !pink_frame->empty() &&
+                    *pink_frame != state.play_stacks;
+  const State frame = swap ? state.with_stacks(*pink_frame) : state;
+  const int value = action.clue.value;
+  const bool we_give = action.giver == state.our_player_index;
+  const auto& hand = state.hands[action.target];
+
+  // 1. Pink tempo.
+  if (action.list_.size() >= 2 && value >= 1 &&
+      value <= static_cast<int>(hand.size()) &&
+      contains(action.list_, hand[value - 1])) {
+    const int o = hand[value - 1];
+    const IdentitySet keep = game.common.thoughts[o].possible.filter(
+        [&](Identity i) { return tempo_pred(i) && frame.is_playable(i); });
+    if (keep.is_empty()) return {true, std::nullopt};
+    // §1g: the giver does not call a card it can see the call misnames.
+    if (const auto id = state.deck[o].id(); we_give && id && !keep.contains(*id)) {
+      return {true, std::nullopt};
+    }
+    game.narrow_thought(o, keep);
+    const int turn = state.turn_count;
+    const int giver_i = action.giver;
+    game.with_meta(o, [turn, giver_i](ConvData& m) {
+      m.focused = true;
+      m.status = CardStatus::CALLED_TO_PLAY;
+      m.by = giver_i;
+      m = m.reason(turn).signal(turn);
+    });
+    narrow_to_stamped_button(game, o);
+    return {true, ClueInterp::PLAY};
+  }
+  if (!suit_ok) return {};
+
+  // The leftmost touched card whose rank identity is still open.
+  std::optional<int> target;
+  for (int o : hand) {
+    if (contains(action.list_, o) && !rank_identity_known(game, o, frame)) {
+      target = o;
+      break;
+    }
+  }
+  if (!target) return {};
+  const auto id = state.deck[*target].id();
+
+  // 2. Pink trash: `value` is down in every pinkish suit.
+  bool trash_rank = false;
+  for (int s = 0; s < static_cast<int>(v.suits.size()); ++s) {
+    if (!v.suits[s].suit_type.pinkish) continue;
+    trash_rank = variants::rank_played_in(frame, s, value);
+    if (!trash_rank) break;
+  }
+  if (trash_rank) {
+    if (we_give && id && !state.is_basic_trash(*id)) return {true, std::nullopt};
+    const IdentitySet keep = game.common.thoughts[*target].possible.filter(
+        [&](Identity i) { return frame.is_basic_trash(i); });
+    if (keep.non_empty()) game.narrow_thought(*target, keep);
+    game.with_meta(*target, [](ConvData& m) { m.trash = true; });
+    return {true, ClueInterp::REVEAL};
+  }
+
+  // 3. Pink identity.
+  if (we_give && id && id->rank != value) return {true, std::nullopt};
+  const IdentitySet keep = game.common.thoughts[*target].possible.filter(
+      [value](Identity i) { return i.rank == value; });
+  if (keep.is_empty()) return {true, std::nullopt};
+  game.narrow_thought(*target, keep);
+  return {true, ClueInterp::REVEAL};
+}
+
 }  // namespace
 
 // --- stable rank ----------------------------------------------------------
 
 std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
-                                      const ClueAction& action, bool stall) {
+                                      const ClueAction& action, bool stall,
+                                      const std::vector<int>* pink_frame) {
   hanabi::instr::ScopedTimer st("reactor0.stable_rank");
   hanabi::logging::LogScope ls(
       "reactor0.stable_rank",
@@ -698,7 +852,7 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   // Classify the rank over what the cards this clue ACTUALLY TOUCHED can be,
   // not over the whole variant's touch set. **This is where reactor0 diverges
   // from reactor** (which still scans `variant->touch_possibilities`, see
-  // reactor/interpret_clue.cpp:447-458 and its §1c).
+  // reactor/interpret_clue.cpp:460-471 and its §1c).
   //
   // Why: in an omni variant a rank clue touches the omni suit at EVERY rank
   // (`Variant::id_touched` returns true for any pinkish suit on any rank
@@ -812,6 +966,16 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   const bool defer_to_reveal = orange_only && playable_rank && !all_trash &&
                                find_play_reveal(prev, game, action).has_value();
 
+  // 0. A pinkish re-touch: pink tempo, pink trash or pink identity (v19.0.0).
+  //    Above the direct play, which would otherwise read a tempo clue as a call
+  //    on the leftmost touched card, and above the trash reveal, which would
+  //    read a pink trash clue as a STALL (no new card to mark).
+  if (const PinkRetouch pink =
+          pink_retouch(game, action, newly_touched, pink_frame);
+      pink.applies) {
+    return pink.interp;
+  }
+
   // 1. Direct play clue: all remaining useful identities of the rank are
   //    playable (assuming good touch).
   if (playable_rank && !all_trash && !defer_to_reveal) {
@@ -889,7 +1053,7 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
       // `variants::called_focus_status` is the shared helper for that
       // (it returns CTD for any inverted member of the set); reactor keeps it
       // at its own call site unconditionally
-      // (reactor/interpret_clue.cpp:504), reactor0 gates it on `orange_only`.
+      // (reactor/interpret_clue.cpp:517), reactor0 gates it on `orange_only`.
       // The gate is what makes a MIXED set safe here: `new_inferred` has
       // already dropped every inverted identity, so the helper would return
       // CTP anyway, but gating says so without depending on that.

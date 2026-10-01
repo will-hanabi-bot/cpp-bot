@@ -128,6 +128,7 @@ add_executable(hanabi_tests
   tests/test_basics/test_clue.cpp
   tests/test_basics/test_action.cpp
   tests/test_basics/test_odds_and_evens.cpp
+  tests/test_basics/test_rank_played_in.cpp
   tests/test_basics/test_blind.cpp
   tests/test_basics/test_synesthesia.cpp
   tests/test_basics/test_alternating_clues.cpp
@@ -350,6 +351,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_bad_reactive_target/test_replay_1973406_finesse_walks_past_a_dead_connector.cpp
   tests/test_reactor0/test_bad_reactive_target/test_replay_2005309_phase_c_rejects_on_giver_only_knowledge.cpp
   tests/test_reactor0/test_stable_rank_omni.cpp
+  tests/test_reactor0/test_pink_rank_clues.cpp
   tests/test_reactor0/test_strike_no_reset.cpp
   tests/test_reactor0/test_urgent_skips_known_trash.cpp
   tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp
@@ -475,6 +477,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_fix_clue.cpp
   tests/test_tiiah/test_replay_2011133_rule_six_is_shared.cpp
   tests/test_tiiah/test_replay_2011319_discarded_playable_was_already_played.cpp
+  tests/test_tiiah/test_replay_2015070_pink_identity_discard_collapses_superposition.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp
@@ -505,6 +508,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp
   tests/test_tiiah/test_colour_reveal_frame.cpp
+  tests/test_tiiah/test_pink_rank_clues.cpp
 )
 target_include_directories(hanabi_tiiah_tests PRIVATE tests)
 target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)

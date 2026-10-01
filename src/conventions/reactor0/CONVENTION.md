@@ -264,10 +264,12 @@ layer is ever handed a card with an empty `inferred`: the engine resets a
 contradicted card to its global empathy the moment the contradiction happens
 (§1i).
 
-## §1c Stable rank — seven priorities
+## §1c Stable rank — eight priorities
 
-`stable_rank` (`interpret_clue.cpp:348-602`). The pink-promise gate runs
-first (`:360-362`), then the rank is classified (`:364-450`).
+`stable_rank` (`interpret_clue.cpp:835-1131`). The pink-promise gate runs
+first, then the rank is classified, then priority 0 (v19.0.0) and the ladder
+below. The line citations inside the numbered priorities predate v19.0.0's
+insertion and have drifted; the priority-0 ones are current.
 
 **The classification is over what the touched cards can actually be — this is
 a deliberate divergence from reactor**, which still scans
@@ -325,6 +327,75 @@ degraded to the referential discard at the bottom of this ladder. Replays
 An empty narrowed set teaches nothing and is treated as neither
 all-trash nor playable-rank (`:446-450`), rather than vacuously true.
 
+0. **Pinkish re-touch: pink tempo, pink trash, pink identity** (v19.0.0;
+   `pink_retouch`, `interpret_clue.cpp:740-829`, called at `:969-976`). The
+   clue is a rank clue that touches **no new card**, and every card it touches
+   is **known pinkish** once it lands: every identity in its common `possible`
+   is on a pinkish suit (`SuitType::pinkish`: Pink, Light / Dark / Gray Pink,
+   Omni, Dark Omni). A pink *colour* clue on such cards keeps §1b's meaning,
+   play the leftmost touched pink card. The rank clue reads, in order:
+   1. **Pink tempo** (`:769-805`) — two or more cards touched, and the clue
+      value is the **slot** of one of them. That card is called to play
+      (`CALLED_TO_PLAY`, `by`, `reason`/`signal`) as the next playable pink: its
+      `possible` narrowed to the pinkish identities playable on the stacks.
+      E.g. pink on 3, Bob `g5 r1 i4 i5 b5` with slots 3-4 touched by a 2 before;
+      a 3 re-touches both, and slot 3 is the i4. `PLAY`.
+   2. **Pink trash** (`:806-821`) — not a tempo clue, and rank `value` is
+      already played in **every** pinkish suit (`variants::rank_played_in`,
+      `src/conventions/variants/pinkish.cpp:130-134`). For ascending suits that
+      is `value <= N`, N the lowest pinkish stack; for a descending suit it is
+      `value >= stack` (user ruling, for a reversed suit and, once the engine
+      models it, an Up or Down pinkish suit going down). The leftmost touched
+      card whose **rank identity is not known exactly** is marked trash
+      (`meta.trash`, `possible ∩ trash`). Rank 1 or 2 with pink on 2 and
+      `g5 g4 i1 i2 b3` marks the i1; the same clue again marks the i2, the i1
+      now being known trash. `REVEAL`.
+   3. **Pink identity** (`:822-828`) — otherwise, that same card has rank
+      `value`: `possible ∩ {rank == value}`. Pink on 2, `g5 g3 i4 b3 i5` with
+      slots 3 and 5 touched by a 2 before: a 4 names slot 3 the i4. `REVEAL`.
+
+   **Rank identity known exactly** (`rank_identity_known`, `:723-734`): the
+   card's common readings are all trash, or all of one rank. The narrowing goes
+   through `Game::narrow_thought`, so a stale inference that disagrees is
+   re-based on empathy rather than intersected to nothing.
+
+   **Scope.** All three readings apply to the pinkish suits. Only the **tempo**
+   reading also applies to a special-rank variant's pinkish rank (`pink_s`:
+   Pink-Ones, Pink-Fives, Light-Pink-Fives…), which has no pinkish stack for the
+   trash rule to read. Odds and Evens is excluded: its clue value is a parity,
+   neither a rank nor a slot. If no reading applies (no tempo slot and the cards
+   are not on a pinkish suit, or every touched card's rank is already known),
+   the ladder below runs as before. The `reactor` convention does not have these
+   readings.
+
+   **The giver (§1g).** A giver who can see a reading is false never gives the
+   clue: a tempo call whose card is not one of the readings, a trash clue on a
+   card it sees is not trash, an identity clue of the wrong rank. Each returns
+   `nullopt` for the giver.
+
+   **Throw It in a Hole** reads these on the stacks **every** seat knows, not
+   the pair's (`pink_frame`; tiiah/CONVENTION.md §1b).
+
+   Replay [2015070](https://hanab.live/replay/2015070) T18 (TIIAH & Pink):
+   yagami's 1 re-touched barakeel's i1, known pink, with pink on 0 globally — a
+   pink identity clue naming it the i1. Read as a `STALL` before, the card kept
+   a stale `{i4}` (see priorities 5/6), and barakeel's discard of it at T19
+   proved nothing; now it settles will-bot67's hole i1
+   (tiiah/CONVENTION.md §1e rule 7). Tests: `tests/test_reactor0/test_pink_rank_clues.cpp`,
+   `tests/test_tiiah/test_pink_rank_clues.cpp`,
+   `tests/test_tiiah/test_replay_2015070_pink_identity_discard_collapses_superposition.cpp`.
+
+   Self-play, v18.20.0 against v19.0.0 (this priority and priorities 5/6's
+   promise change together, seeds 1–300):
+   - **TIIAH & Pink:** mean 21.02 → 21.27, strikeouts 145 → 136, cards ever
+     read wrongly 1823 → 1794, 25/25s 16 → 15. All 163 moved seeds are rule
+     effects, about evenly up and down.
+   - **TIIAH 5 Suits:** identical, game for game.
+   - The worst loss read individually (seed 56, −17) is a pink identity clue
+     that named its card correctly. The receiver played it into a strike
+     because two hole cards had already been misnamed, a pre-existing
+     superposition error.
+
 1. **Direct play clue** (`:452-531`) — every remaining useful identity the
    touched cards can hold is playable (assuming good touch). Focus = leftmost
    **newly** touched card — highest order, since slot 1 is newest — in both
@@ -368,7 +439,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    (`RankDirectPlayPitchesAMixedUsefulSet` keeps that hazard concrete).
 
    **reactor calls `called_focus_status` unconditionally at its own
-   site** (`src/conventions/reactor/interpret_clue.cpp:504`).
+   site** (`src/conventions/reactor/interpret_clue.cpp:517`).
    Returns `PLAY`. An *unnecessary* focus (every possibility trash or
    visible elsewhere) makes the clue a `STALL` instead (`:482-494`).
 2. **Play reveal** (`:532-537`) — the clue fills a previously-clued card in
@@ -390,10 +461,29 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    trash reveal (`variants::brownish_trash_reveal`) → `REVEAL`.
 5. **Lock** and 6. **Referential discard** (`:530-532`) — a clue touching at
    least one new card falls into reactor's `ref_discard`
-   (`src/conventions/reactor/interpret_clue.cpp:317-420`): touching the lock
+   (`src/conventions/reactor/interpret_clue.cpp:317-433`): touching the lock
    slot (oldest unclued) stamps the whole hand `CHOP_MOVED` → `LOCK`;
    otherwise the first unclued slot right of the focus is stamped
-   `CALLED_TO_DISCARD` → `DISCARD`, pink promise included.
+   `CALLED_TO_DISCARD` → `DISCARD`.
+
+   **The pink promise is made on the lock slot only (v19.0.0, user ruling).**
+   In a pinkish variant a stable rank clue touching the receiver's lock slot
+   marks that card as the clued rank (`variants::apply_rank_promise`,
+   `src/conventions/reactor/interpret_clue.cpp:353-362`) — **unless** the
+   variant has pinkish ones or fives (`pink_s`), where it promises nothing; so
+   `variants::violates_pink_promise` has nothing to check there
+   (`src/conventions/variants/pinkish.cpp:54`). A **referential discard makes no
+   pink promise** (`reactor/interpret_clue.cpp:396-409`): it stamps its
+   discard and marks the focus `focused`, as in any other variant. Both are
+   gated on the reactor0 family; the `reactor` convention keeps the promise in
+   both places.
+
+   Replay 2015070 T6 is why: yagami's 4 touched barakeel's i1 as a referential
+   discard. The promise narrowed the card to `{i4}`, saw it was not a 4 and
+   declined the clue as a `MISTAKE` — but the `{i4}` stayed, and twelve turns
+   later it kept a pink identity clue (priority 0) from naming the card.
+   `AReferentialDiscardMakesNoPinkPromise` and
+   `APinkishOnesLockMakesNoPinkPromise` in `tests/test_reactor0/test_pink_rank_clues.cpp`.
 
    **Under Odds and Evens the rank promise is a PARITY promise**
    (`variants::rank_satisfies_promise`, `src/conventions/variants/pinkish.cpp`).
@@ -897,7 +987,7 @@ either/or gate.
 
 **The STABLE referential discard narrows too, but less (v16.11.0).** It is the
 one stamping path that used to narrow nothing: `reactor::ref_discard`
-(`reactor/interpret_clue.cpp:325-428`) stamps the slot and returns, so a note
+(`reactor/interpret_clue.cpp:325-441`) stamps the slot and returns, so a note
 reading "throw this away" still listed every critical the card could be — replay
 2008422 T1 called a card to discard holding all five 5s. reactor0 now filters at
 its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:627-677`, called
@@ -916,7 +1006,7 @@ three ways, each deliberate:
   would delete the call just stamped — is out of reach; an empty result is left
   alone instead. The CTD is positional and does not depend on the inference,
   which is the same reasoning as the v0.30 reset at
-  `reactor/interpret_clue.cpp:402-419`.
+  `reactor/interpret_clue.cpp:415-432`.
 
 Reactor is untouched by all of this: its corpus pins a stable CTD that lands on
 a critical dark null 5 (replay 1916791), which is why the filter sits at the
@@ -1163,11 +1253,18 @@ the reading binds at clue time via `ReactorWC::rlocks`.
 
 Inherited from reactor, by construction rather than reimplementation: the
 pink promise (via `violates_pink_promise` + `ref_discard` +
-`playable_rank_focus`), the brownish trash reveal, the inverted (orange)
+`playable_rank_focus`; since v19.0.0 made on the lock slot only and never in a
+pinkish-ones / fives variant — §1c priorities 5/6), the brownish trash reveal, the inverted (orange)
 compensation on the **reactive** side (`would_lose_inverted_reacter`,
 target-play/discard swaps at every reactive site), and reversed suits (free
 from `State`'s direction-aware helpers, plus `variants::connector_of` for the
 finesse prerequisite, which runs **up** the ranks on a reversed suit).
+
+### Pinkish — the re-touch readings (v19.0.0)
+
+A rank clue that touches no new card and only known-pinkish cards is a pink
+tempo, pink trash or pink identity clue — reactor0's own, not inherited from
+reactor. §1c priority 0 has the rules.
 
 ### Matryoshka — no rule change
 
@@ -2055,6 +2152,8 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_orange.cpp` | §1b/§1c in inverted variants — bug 3.1's rank-2 focus (now a pitch narrowed to the plain playables), a rank clue still revealing a playable orange, pitch at pace > 3, chuck at pace <= 3, chuck in Dark Orange, play reveal outranking the pitch, the stall when nothing can reach the stacks, the §1b giver-side reject of an unplayable chuck target, and the §1c orange-only rank chuck alongside the mixed-set pitch |
 | `tests/test_endgame/test_orange_chuck.cpp` | bug 3.2 — the solver offers a known playable orange as a chuck, and `perform_to_action` models a chuck of a non-playable orange as a misplay |
 | `tests/test_reactor0/test_stable_rank_omni.cpp` | §1c in an omni variant — rank 1 and rank 4 read as direct plays, an unplayable useful identity still blocks, and the pinkish focus is the leftmost |
+| `tests/test_reactor0/test_pink_rank_clues.cpp` | §1c priority 0 — the pink tempo clue (and one pink card never being one), the pink trash clue moving on to the next card, the pink identity clue, the giver never giving a misnaming tempo clue, a tempo clue on Pink-Ones; and priorities 5/6 — a referential discard and a Pink-Ones lock making no pink promise (v19.0.0) |
+| `tests/test_basics/test_rank_played_in.cpp` | §1c priority 0 — `variants::rank_played_in`: ascending `value <= stack`, descending `value >= stack` (v19.0.0) |
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |

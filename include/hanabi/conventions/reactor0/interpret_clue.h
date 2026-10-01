@@ -120,6 +120,10 @@ std::optional<ClueInterp> stable_colour(
     const std::vector<int>* reveal_frame = nullptr);
 
 // Stable rank clue, in priority order:
+//   0. touches no new card and only known-pinkish cards → pink tempo (the
+//      card in slot `value` called to play), pink trash or pink identity
+//      (v19.0.0). `pink_frame`, when given, is the stack vector those readings
+//      rest on -- Throw It in a Hole passes the stacks every seat knows;
 //   1. all remaining useful identities of the rank playable → direct play
 //      clue (leftmost newly touched; if none newly touched, the leftmost
 //      touched card that could be playable);
@@ -130,7 +134,8 @@ std::optional<ClueInterp> stable_colour(
 //   4./5. touches ≥ 1 new card → reactor's ref_discard (lock slot → LOCK,
 //      else referential discard, pink promise included);
 //   6. else STALL.
-std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
-                                      const ClueAction& action, bool stall);
+std::optional<ClueInterp> stable_rank(
+    const Game& prev, Game& game, const ClueAction& action, bool stall,
+    const std::vector<int>* pink_frame = nullptr);
 
 }  // namespace hanabi::reactor0

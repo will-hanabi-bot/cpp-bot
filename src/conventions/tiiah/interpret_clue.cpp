@@ -433,7 +433,10 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     if (swap) scope.emplace(g.state, frame);
     std::optional<ClueInterp> out;
     if (action.clue.kind != ClueKind::COLOUR) {
-      out = reactor0::stable_rank(p, g, action, stall_ctx);
+      // A pinkish re-touch (pink tempo / trash / identity) rests on the stacks
+      // EVERY seat knows (v19.0.0), for the same reason a colour reveal does.
+      out = reactor0::stable_rank(p, g, action, stall_ctx,
+                                  &state.common_play_stacks);
     } else {
       // A colour play reveal outranks the leftmost newly touched card only when
       // it is one on the stacks EVERY seat knows (v18.20.0) -- the same frame in

@@ -613,13 +613,47 @@ trash. Parity binds an Omni card like any other, because it is a property of the
 rank; `Variant::id_touched` is *not* the right question, being true for every
 rank of a pinkish suit.
 
+### pink promise (reactor0 family)
+A stable rank clue touching the receiver's **lock slot** in a pinkish variant
+marks that card as the clued rank. Since v19.0.0 reactor0 and Throw It in a Hole
+make it on the lock slot **only** — a referential discard makes none — and never
+in a pinkish-ones / pinkish-fives (`pink_s`) variant. The `reactor` convention
+keeps the older promise (reactor's GLOSSARY). CONVENTION.md §1c priorities 5/6.
+
+### pinkish re-touch
+A stable rank clue that touches no new card and only cards known to be pinkish
+once it lands (every identity in their common `possible` on a pinkish suit). It
+is one of the three clues below, tried in order. `pink_retouch`,
+`interpret_clue.cpp`; CONVENTION.md §1c priority 0 (v19.0.0).
+
+### pink tempo clue
+A pinkish re-touch of two or more cards whose clue value is the **slot** of one
+of them: that card is called to play as the next playable pink. The only one of
+the three that also applies to a `pink_s` variant's special rank.
+
+### pink trash clue
+A pinkish re-touch, not a tempo clue, whose rank is already played in every
+pinkish suit (`variants::rank_played_in`: `value <= stack` ascending,
+`value >= stack` descending). The leftmost touched card whose rank identity is
+not known exactly is marked trash.
+
+### pink identity clue
+A pinkish re-touch that is neither of the above: the leftmost touched card whose
+rank identity is not known exactly has the clued rank.
+
+### rank identity known exactly
+It is common knowledge that the card has only trash readings, or that all its
+readings share one rank (`rank_identity_known`). Weaker than knowing the
+identity: `{i4, o4}` knows the rank. The pink trash and identity clues skip such
+cards.
+
 ### trash reveal
 Reactor0's reading of an all-trash rank clue: the leftmost newly touched
 card is marked known trash and nothing else happens — it is **terminal**,
 never a referential discard, and (unlike the aspirational reactor
 trash-push entry in TODO.md) never a play. Priority 2 of the stable rank
 ladder; priority 3 extends it to previously-clued cards revealed as trash.
-`interpret_clue.cpp:916-929`.
+`interpret_clue.cpp:1080-1093`.
 
 As a clue SHAPE (`ClueShape::TRASH_REVEAL`, what DECISION_MAKING.md 3.3 / 4.2
 select), it is wider: any stable clue after which a card in Bob's hand is known

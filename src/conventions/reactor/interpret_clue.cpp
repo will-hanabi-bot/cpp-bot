@@ -351,7 +351,13 @@ std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
     if (prev.common.thinks_locked(prev, receiver)) return ClueInterp::MISTAKE;
     // Lock interpretation.
     int lo = *lock_order;
-    if (variants::includes_pinkish(state)) {
+    // The pink promise: the lock slot is marked as the clue's rank. reactor0
+    // and Throw It in a Hole make it only on a pinkish SUIT, never in a
+    // pinkish-ones / pinkish-fives variant (`pink_s`), where a rank clue on the
+    // special rank does not say which rank it is (user ruling, v19.0.0).
+    const bool reactor0_family = is_reactor0_family(game.convention);
+    if (variants::includes_pinkish(state) &&
+        !(reactor0_family && state.variant->pink_s)) {
       if (!variants::apply_rank_promise(game, lo, clue)) return std::nullopt;
     }
     int turn = state.turn_count;
@@ -387,7 +393,14 @@ std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
                             : *std::min_element(promised_orders.begin(),
                                                   promised_orders.end());
 
-  if (variants::includes_pinkish(state)) {
+  // A referential discard makes NO pink promise under reactor0 and Throw It in
+  // a Hole (user ruling, v19.0.0): only a lock does. Replay 2015070 T6: yagami's
+  // 4 touched barakeel's i1 as a referential discard. The promise narrowed it to
+  // `{i4}`, found the card was not a 4 and declined the clue -- but the `{i4}`
+  // stayed, and twelve turns later it kept a pink identity clue from naming the
+  // card as the i1 (reactor0 CONVENTION.md §1c priority 0).
+  if (variants::includes_pinkish(state) &&
+      !is_reactor0_family(game.convention)) {
     if (!variants::apply_rank_promise(game, promised_order, clue)) {
       return std::nullopt;
     }
