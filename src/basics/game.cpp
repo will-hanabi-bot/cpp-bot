@@ -641,6 +641,10 @@ void Game::handle_action(const Action& action) {
   // a partner's identity from what WE saw, and `on_play` is about to pin their
   // thought to it, but the seat that played it learned nothing.
   hanabi::tiiah::note_hidden_action(*this, action);
+  // ...and a stable call elsewhere that overlaps the called card just played builds
+  // on it (tiiah/CONVENTION.md §1c, v19.2.0) -- read before `on_play` pins the
+  // played card's thought, and before the call invariants could judge it dead.
+  hanabi::tiiah::rebase_calls_on_a_played_call(*this, action);
 
   // Snapshot prev for the convention hooks (which take the pre-handler state).
   Game prev = *this;

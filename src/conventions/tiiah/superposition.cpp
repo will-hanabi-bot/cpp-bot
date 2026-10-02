@@ -1427,6 +1427,68 @@ void note_hidden_action(Game& game, const Action& raw) {
   });
 }
 
+// §1c, the user's ruling (v19.2.0): a stable call that overlaps a call standing
+// in another hand BUILDS ON IT once that call is played. Under role inversion a
+// clue to Cathy is stable while Bob holds a call, and if both name the same card
+// the second clue means the next one up -- but only if Bob plays his. If he plays
+// something else or throws his copy, Cathy plays hers on the stacks as they were;
+// either way she is to play the card just clued. Bob acts before Cathy, so she
+// always knows which.
+//
+// Replay 2017459. T1 yagami's Purple called will-bot67's o9, the p1. T4 her Purple
+// to will-bot69 (stable by role inversion) called o13 on purple 0, so `{p1}`; it
+// was a p2. T5 will-bot67 played its p1, and rule 3 of the call invariants erased
+// o13's call as dead. It is the p2.
+//
+// Only a played call every seat can NAME is built on, and only one stamped by a
+// clue: Cathy cannot build on a card she cannot say. Self-play under the looser
+// "the readings overlap" read a played `{r1,y1,g1,b1}` (a rank 1, stamp-less) as
+// a reason to turn a `{y1}` call into `{y2}` -- it was the r1 -- and lost 0.25
+// points a game over 300 seeds.
+//
+// Read from `common` and the stamps only, so every seat rebases alike, and before
+// the play is dispatched: `on_play` is about to pin the played card's thought.
+void rebase_calls_on_a_played_call(Game& game, const Action& raw) {
+  if (!game.state.variant->throw_it_in_a_hole) return;
+  const auto* play = std::get_if<PlayAction>(&raw);
+  if (!play) return;
+  const int b = play->order;
+  if (b < 0 || b >= static_cast<int>(game.meta.size())) return;
+  if (game.meta[b].status != CardStatus::CALLED_TO_PLAY) return;
+  if (!game.meta[b].signal_turn) return;
+  const IdentitySet played = game.common.thoughts[b].possibilities();
+  if (played.length() != 1) return;
+  const int stamped_b = *game.meta[b].signal_turn;
+
+  const State& s = game.state;
+  auto next_up = [&s](Identity i) -> std::optional<Identity> {
+    const bool reversed = s.variant->suits[i.suit_index].suit_type.reversed;
+    const int rank = i.rank + (reversed ? -1 : 1);
+    if (rank < 1 || rank > 5) return std::nullopt;
+    return Identity(i.suit_index, rank);
+  };
+
+  for (int p = 0; p < s.num_players; ++p) {
+    if (p == play->player_index_v) continue;
+    for (int c : s.hands[p]) {
+      const ConvData& m = game.meta[c];
+      if (m.status != CardStatus::CALLED_TO_PLAY || m.urgent) continue;
+      if (m.signal_turn.value_or(-1) <= stamped_b) continue;  // given before Bob's
+      const IdentitySet reading = game.common.thoughts[c].possibilities();
+      const IdentitySet overlap = reading.intersect(played);
+      if (overlap.is_empty()) continue;
+      const IdentitySet& possible = game.common.thoughts[c].possible;
+      IdentitySet rebased = reading.filter([&](Identity i) { return !overlap.contains(i); });
+      for (Identity i : overlap) {
+        if (const auto up = next_up(i); up && possible.contains(*up)) {
+          rebased = rebased.add(*up);
+        }
+      }
+      if (rebased.non_empty() && rebased != reading) game.narrow_thought(c, rebased);
+    }
+  }
+}
+
 namespace {
 
 // §1e, the targeting rules as evidence (v16.24.0), SHARED. Every seat watched the

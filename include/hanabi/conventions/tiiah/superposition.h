@@ -255,6 +255,14 @@ bool all_copies_visible_to_pair(const Game& game, int order, Identity id, int p)
 // No-op outside TIIAH, and for every action that is not a hidden play.
 void note_hidden_action(Game& game, const Action& raw);
 
+// A stable call on another seat that overlaps the CALLED card just played is
+// REBASED onto it (CONVENTION.md §1c, v19.2.0): `{p1}` on Cathy, given while
+// Bob's own `{p1}` call stood, becomes `{p2}` once Bob plays his. Called from
+// `Game::handle_action` before the play is dispatched, while `common` still
+// holds the played card's reading and before the call invariants could judge
+// the overlapping call dead. No-op outside TIIAH and for a non-play.
+void rebase_calls_on_a_played_call(Game& game, const Action& raw);
+
 // Called after an action has been interpreted. Applies §1e's collapsing rules
 // to every outstanding superposition:
 //

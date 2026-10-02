@@ -2036,6 +2036,10 @@ enforcement from inside their `waiting` block.
    also keeps a call whose reading is a valid pitch in some strike-free world of
    the shared view (`:189-204`, helper `:128-147`; tiiah/CONVENTION.md §1c). Gated on
    `Variant::throw_it_in_a_hole`, so no other variant's calls change.
+   Since v19.2.0 a stable call there that overlaps a called card just played is
+   **rebased onto it before this rule sees it** — `{p1}` becomes `{p2}` — rather
+   than read dead (`tiiah::rebase_calls_on_a_played_call`; tiiah/CONVENTION.md
+   §1c, replay 2017459).
 2. **At most one discard call.** Unlike play calls, `CALLED_TO_DISCARD` does
    not stack: a new call replaces the standing one. Cards merely *revealed* to
    be basic trash (`meta.trash`) are not calls and are untouched — they

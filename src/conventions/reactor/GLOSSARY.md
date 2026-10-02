@@ -586,7 +586,7 @@ Suits that play 5→4→3→2→1. Copy counts flip to `{1,2,2,2,3}`. Orthogonal
 ### rewind
 Replay the game from `base` with an `InterpAction` injected at a given turn,
 used to re-interpret an earlier clue. Depth-capped at 4.
-`src/basics/game.cpp:584-673`.
+`src/basics/game.cpp:584-677`.
 
 ### sacrifice
 A non-critical card discarded when nothing is trash — the last-resort

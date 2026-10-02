@@ -309,6 +309,15 @@ receiver's call once its reaction is played). A pending reaction call is left ou
 It decides the *reverse-reactive position* (v18.3.0).
 `has_standing_play`, `src/conventions/variants/hole.cpp:82-98`. CONVENTION.md §1c.
 
+### rebased call
+A stable call that could be the card a call stamped earlier in another hand
+names, once that earlier call is played and every seat can name it: that identity
+is replaced by the next one up its suit, so a role-inverted `{p1}` on Cathy becomes
+`{p2}` after Bob plays his called p1. If Bob throws his copy, plays something else,
+or plays a call nobody can name, nothing is rebased.
+`rebase_calls_on_a_played_call`, `src/conventions/tiiah/superposition.cpp`.
+CONVENTION.md §1c (v19.2.0), replay 2017459.
+
 ### fix precedence
 A clue to Bob that names his called card as an identity a seat **knows** is dead
 (trash on that seat's own stacks) is a *fix* to that seat, even when the call is
