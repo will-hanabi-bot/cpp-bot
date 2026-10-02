@@ -1317,8 +1317,28 @@ void note_hidden_action(Game& game, const Action& raw) {
   // thought to the identity we could see and they could not.
   const IdentitySet candidates = game.common.thoughts[order].possibilities();
   const int player = play->player_index_v;
-  const auto known = only_one(candidates);
   const auto seen = game.state.deck[order].id();
+  std::optional<Identity> known = only_one(candidates);
+  // A STALE common naming (v19.1.0). Our common copy of a partner's call can be
+  // read on a frame we could not compute: an outside seat reads a call between two
+  // partners on the shared floor (§1.3), and the plays that floor lacks may be our
+  // own. When we can SEE the card, it landed, and the copy names something else,
+  // the copy is what is wrong -- both seats of the pair read the call on their
+  // frame, and the third seat watches the card -- so it is named by sight.
+  //
+  // Replay 2015109. At T28 yagami's Yellow called barakeel's o31; the two of them
+  // had watched our y1 and y2 go in, so it was the y3. Our copy read the call on
+  // yellow 0: the ladder narrowed o31 to {y1}, our own sight then refused the
+  // call as a MISTAKE, and the narrowing stayed -- our y1 and y2 were privately
+  // settled, so no world of them could re-read it. At T29 barakeel played it, and
+  // the shared view booked a y1:
+  // the y3 vanished from every shared world. At T43 no world could reach yellow 3,
+  // so yagami's y4 (o41) settled as the w4, white went to 4 in common, and at T47 a
+  // reactive clue targeting her real w4 read as a MISTAKE at our seat.
+  if (known && seen && *seen != *known &&
+      player != game.state.our_player_index && game.state.is_playable(*seen)) {
+    known = seen;
+  }
 
   // The ROWS (§1.3, v16.23.0). A row takes a play when both seats of the pair can
   // name it, and it takes it as a floor: the pair watched the card land (never
