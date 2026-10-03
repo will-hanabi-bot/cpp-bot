@@ -81,6 +81,13 @@ std::vector<OpenWorld> open_worlds(const Game& game, const State& base,
 // is real and there is nothing to refute.
 std::vector<const OpenWorld*> strike_free(const std::vector<OpenWorld>& worlds);
 
+// Narrow every hole card to what `surviving` (a subset of `worlds`) still
+// allows, settling the ones left with a single identity -- which moves the shared
+// view and the rows when `shared` (§1e). The second half of rule 6, for a caller
+// outside this file: the reactive world fallback (CONVENTION.md §1d, v19.3.0).
+bool collapse_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
+                        const std::vector<const OpenWorld*>& surviving, bool shared);
+
 // Keep the conditional half of a reading, so a later fact can withdraw it: each
 // candidate of `support` carries a bitmask over `worlds`, and one every world
 // agrees on is unconditional and left out (`ConvData::ConditionalReading`).

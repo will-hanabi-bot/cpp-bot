@@ -482,6 +482,11 @@ bool back_solve_own_plays(Game& game, const Game& prev, const Action& action) {
 
 }  // namespace
 
+bool collapse_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
+                        const std::vector<const OpenWorld*>& surviving, bool shared) {
+  return prune_to_worlds(game, worlds, surviving, shared);
+}
+
 bool all_copies_visible_to_pair(const Game& game, int order, Identity id, int p) {
   if (p == game.state.our_player_index) return false;
   // Both of our hands are out: a copy in either is one the OTHER of us cannot

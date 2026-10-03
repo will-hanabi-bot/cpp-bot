@@ -581,6 +581,114 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     }
     return ClueInterp::REACTIVE;
   }
+
+  // THE WORLD FALLBACK (v19.3.0, the user's ruling). No pairing reads on the frame,
+  // but the frame is a MINIMUM over worlds (§1e): a card one away from playable on
+  // it may be playable outright in a world some hole card leaves open. So, left to
+  // right over the receiver's one-away cards: take the first that is directly
+  // playable in some world, pair it by the sum rule, and if the reaction is valid
+  // in those worlds, read it there -- and collapse the worlds to them, since the
+  // clue is evidence of which world we are in.
+  //
+  // Replay 2017491 T13. will-bot67 had reacted with its b1 at T12, named only
+  // privately, so the frame had blue 0. will-bot69's 2 to yagami was a reverse
+  // reactive for will-bot67's r3 (slot 4) into her b2 (slot 3): one away on the
+  // frame, a finesse whose connector o12 could not be, so the clue read as
+  // unreadable and will-bot67 discarded. In the world where its hole card was the
+  // b1, the b2 plays: o12 is the r3, and every view takes the b1.
+  {
+    std::vector<int> everyone;
+    for (int p = 0; p < state.num_players; ++p) everyone.push_back(p);
+    const State world_base = state.with_stacks(pair_view).with_band(
+        state.evidence_known_to_both(action.giver, reacter));
+    const auto all_worlds =
+        open_worlds(game, world_base, everyone, 64, -1, /*shared=*/true);
+    const auto worlds = strike_free(all_worlds);
+    for (const ReceiverTarget& target :
+         receiver_targets(game, receiver, receiver_acts_first, &pair_view)) {
+      if (worlds.size() < 2) break;  // one world is the frame itself
+      if (target.away != 1) continue;
+      if (state.variant->suits[target.id.suit_index].suit_type.inverted) continue;
+      // The worlds in which it plays outright, after the receiver's queued plays.
+      std::vector<std::pair<const OpenWorld*, State>> playable_in;
+      for (const OpenWorld* w : worlds) {
+        State faced = reacter_faces(game, receiver, receiver_acts_first,
+                                    &w->state.play_stacks);
+        if (faced.playable_away(target.id) == 0) playable_in.emplace_back(w, std::move(faced));
+      }
+      if (playable_in.empty()) continue;
+
+      int target_slot = 0;
+      for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
+        if (state.hands[receiver][i] == target.order) target_slot = static_cast<int>(i) + 1;
+      }
+      const int react_slot = hanabi::reactor::calc_slot(anchor, target_slot, hand_size);
+      if (react_slot < 1 || react_slot > static_cast<int>(state.hands[reacter].size())) {
+        continue;
+      }
+      const int react_order = state.hands[reacter][react_slot - 1];
+      const IdentitySet react_live =
+          hanabi::reactor::effective_possible_for(game, react_order);
+      // The bucket the relation names for the reacter's card (§1d).
+      const auto want = bucket_of(*state.variant, target.id.suit_index);
+      const std::optional<int> from =
+          want ? std::optional<int>(action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
+                                                                       : (*want + 1) % 3)
+               : std::nullopt;
+      // Valid in a world when the reacter's card can play there; read as the
+      // playables of the named bucket across the worlds where it is valid.
+      std::vector<const OpenWorld*> kept;
+      IdentitySet reading = IdentitySet::empty();
+      IdentitySet any_playable = IdentitySet::empty();
+      for (const auto& [w, faced] : playable_in) {
+        const IdentitySet live_here =
+            react_live.filter([&faced](Identity i) { return faced.is_playable(i); });
+        if (live_here.is_empty()) continue;
+        kept.push_back(w);
+        any_playable = any_playable.union_with(live_here);
+        if (from) {
+          reading = reading.union_with(live_here.filter([&](Identity i) {
+            auto b = bucket_of(*state.variant, i.suit_index);
+            return b && *b == *from;
+          }));
+        }
+      }
+      if (kept.empty()) continue;  // shared: walk on, and so does the reacter
+      if (reading.is_empty()) reading = any_playable;
+      if (auto actual = state.deck[react_order].id()) {
+        // giver-only: §1g, as in the walk.
+        if (!any_playable.contains(*actual)) return std::nullopt;
+        if (action.giver == state.our_player_index && state.pace() > 1 &&
+            !bucket_relation_holds(*state.variant, action.clue.kind, *actual, target.id) &&
+            !both_know_their_own(game, react_order, target.order)) {
+          return std::nullopt;
+        }
+      }
+      if (!reactor0::stamp_react_play_button(game, action, react_order)) continue;
+      const Thought& t0 = game.common.thoughts[react_order];
+      if (t0.old_inferred) game.reset_thought_to(react_order, *t0.old_inferred);
+      game.narrow_thought(react_order, reading);
+      // Every hole card, by the user's ruling: the clue is evidence of which world
+      // we are in, and the worlds it leaves are the ones we keep.
+      collapse_to_worlds(game, all_worlds, kept, /*shared=*/true);
+
+      const IdentitySet react_before = prev.common.thoughts[react_order].possibilities();
+      if (!game.waiting.empty()) {
+        game.waiting.front().react_order = react_order;
+        game.waiting.front().receiver_target_order = target.order;
+        game.waiting.front().react_before = react_before;
+      }
+      if (game.pending_reactions[receiver]) {
+        game.pending_reactions[receiver]->react_order = react_order;
+        game.pending_reactions[receiver]->receiver_target_order = target.order;
+        game.pending_reactions[receiver]->react_before = react_before;
+      }
+      hanabi::logging::log_branch("tiiah.reactive_world_fallback",
+                                  {{"target", target.order}, {"react_order", react_order},
+                                   {"worlds", static_cast<int>(kept.size())}});
+      return ClueInterp::REACTIVE;
+    }
+  }
   return std::nullopt;
 }
 

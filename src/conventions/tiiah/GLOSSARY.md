@@ -153,7 +153,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:672-682`), read by
+(`src/conventions/tiiah/superposition.cpp:677-687`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -176,7 +176,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:720-782`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:725-787`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 
 ### evidence / band
@@ -259,7 +259,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:996-1042`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1102-1148`.
 CONVENTION.md §1d.
 
 ### proven finesse
@@ -267,7 +267,7 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:788-823`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:894-929`. CONVENTION.md §1d.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -308,6 +308,13 @@ stamps by its nature, or a **settled** one, which is no longer urgent (v18.10.0;
 receiver's call once its reaction is played). A pending reaction call is left out.
 It decides the *reverse-reactive position* (v18.3.0).
 `has_standing_play`, `src/conventions/variants/hole.cpp:82-98`. CONVENTION.md §1c.
+
+### world fallback
+How a reactive clue is read when no pairing reads on the walk's frame: the
+receiver's one-away cards, leftmost first, are tried in the worlds of the hole
+cards. The first that plays outright in some world, with a reaction valid there,
+is the pairing, and the worlds collapse to those (CONVENTION.md §1d, v19.3.0;
+replay 2017491). `interpret_reactive`, `src/conventions/tiiah/interpret_reactive.cpp`.
 
 ### rebased call
 A stable call that could be the card a call stamped earlier in another hand

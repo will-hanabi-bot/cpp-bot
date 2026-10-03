@@ -480,6 +480,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2015070_pink_identity_discard_collapses_superposition.cpp
   tests/test_tiiah/test_replay_2015109_reactive_after_stale_common_naming.cpp
   tests/test_tiiah/test_replay_2017459_stable_call_rebases_on_bobs_played_call.cpp
+  tests/test_tiiah/test_replay_2017491_reverse_reactive_world_fallback.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp
@@ -513,6 +514,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_pink_rank_clues.cpp
   tests/test_tiiah/test_hole_play_named_by_sight.cpp
   tests/test_tiiah/test_rebase_on_played_call.cpp
+  tests/test_tiiah/test_reactive_world_fallback.cpp
 )
 target_include_directories(hanabi_tiiah_tests PRIVATE tests)
 target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)
