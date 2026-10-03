@@ -188,3 +188,64 @@ TEST(TiiahDischarge, TheReacterThrowsACardTheGiverAlreadyPlayed) {
 
   EXPECT_EQ(discarded(g.take_action()), ours) << "the r1 is already down: discharge it";
 }
+
+// --- the discharge read from its rule (v20.1.0) -------------------------------
+//
+// The two cases above pin our card to `{r1, r3}`, so the play stamp FAILS and the
+// discharge is reached that way. With our card's empathy left WIDE the stamp would
+// succeed; the discharge must still be read, from the rule itself: the pairing is
+// a finesse naming our card exactly, that card is already down on our stacks, and
+// the giver played it and is superposed for it. Replay 2018316 T8 was the reverse
+// reactive of this.
+
+TEST(TiiahDischarge, AForwardFinesseOnTheGiversOwnCardDischargesWithWideEmpathy) {
+  Game g = setup(opts_for({{"xx", "xx", "xx", "xx", "xx"},
+                           {"r2", "y4", "g4", "b4", "p4"},
+                           {"r1", "y3", "g3", "b3", "p3"}},
+                          {0, 0, 0, 0, 0}, TestPlayer::CATHY));
+  read_as(g, order_at(g, TestPlayer::CATHY, 1), ids({kR1, kY1}));
+  g = hidden_action(std::move(g), TestPlayer::CATHY, 1, /*reached_the_hole=*/true, "y5");
+  g = hidden_action(std::move(g), TestPlayer::ALICE, 5, /*reached_the_hole=*/false);
+  g = hidden_action(std::move(g), TestPlayer::BOB, 5, /*reached_the_hole=*/false, "r5");
+  const int ours = order_at(g, TestPlayer::ALICE, 2);
+  g = take_turn(std::move(g), "Cathy clues 4 to Bob");
+
+  EXPECT_EQ(g.meta[ours].status, CardStatus::CALLED_TO_DISCARD);
+  EXPECT_EQ(g.common.thoughts[ours].inferred, IdentitySet::single(kR1));
+  EXPECT_EQ(discarded(g.take_action()), ours);
+}
+
+namespace {
+
+// The REVERSE reactive: Bob gives a 5 to Cathy, who holds a known g1 -- the position
+// -- so we react and she receives. Bob threw his `{r1,y1}` into the hole: the r1. On
+// the frame Bob and we share red is 0, so Cathy's r2 is a finesse through our slot 2.
+Game reverse_position(const IdentitySet& bobs_hole) {
+  Game g = setup(opts_for({{"xx", "xx", "xx", "xx", "xx"},
+                           {"r1", "y3", "g3", "b3", "p3"},
+                           {"g1", "r2", "y4", "b4", "p4"}},
+                          {0, 0, 0, 0, 0}, TestPlayer::BOB));
+  read_as(g, order_at(g, TestPlayer::BOB, 1), bobs_hole);
+  g = fully_known(std::move(g), TestPlayer::CATHY, 1, "g1");
+  g = hidden_action(std::move(g), TestPlayer::BOB, 1, /*reached_the_hole=*/true, "y5");
+  g = hidden_action(std::move(g), TestPlayer::CATHY, 5, /*reached_the_hole=*/false, "r5");
+  g = hidden_action(std::move(g), TestPlayer::ALICE, 5, /*reached_the_hole=*/false);
+  // Cathy: r5 g1 r2 y4 b4. A 5 anchors 5: her r2 on slot 3 pairs with our slot 2.
+  return take_turn(std::move(g), "Bob clues 5 to Cathy");
+}
+
+}  // namespace
+
+TEST(TiiahDischarge, AReverseFinesseOnTheGiversOwnCardDischarges) {
+  Game g = reverse_position(ids({kR1, kY1}));
+  const int ours = order_at(g, TestPlayer::ALICE, 2);
+  EXPECT_EQ(g.meta[ours].status, CardStatus::CALLED_TO_DISCARD);
+  EXPECT_EQ(g.common.thoughts[ours].inferred, IdentitySet::single(kR1));
+}
+
+TEST(TiiahDischarge, AReverseFinesseWithNoSuchHoleCardIsNoDischarge) {
+  Game g = reverse_position(ids({kY1, kG1}));
+  const int ours = order_at(g, TestPlayer::ALICE, 2);
+  EXPECT_NE(g.meta[ours].status, CardStatus::CALLED_TO_DISCARD)
+      << "Bob's hole card cannot be the r1, so nothing is discharged";
+}

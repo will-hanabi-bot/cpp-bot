@@ -483,6 +483,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2017459_stable_call_rebases_on_bobs_played_call.cpp
   tests/test_tiiah/test_replay_2017491_reverse_reactive_world_fallback.cpp
   tests/test_tiiah/test_replay_2017568_rank_four_on_lock_slot_is_a_ref_discard.cpp
+  tests/test_tiiah/test_replay_2018316_reverse_reactive_discharge.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp

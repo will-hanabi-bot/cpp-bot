@@ -473,15 +473,39 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       }
     }
 
+    // The DISCHARGE read from its rule (§1k, v20.1.0): the pairing is a finesse on
+    // the frame we share with the giver, so it names our card exactly -- the
+    // connector -- and that card is already down on our own stacks, played into the
+    // hole by the GIVER, who is still superposed for it. Then our card IS the
+    // connector, and we throw it. This used to be reached only when the play stamp
+    // FAILED, i.e. when our empathy happened to allow no other playable; with wide
+    // empathy the stamp succeeded and the reading below re-read the card on our own
+    // stacks, where the target plays outright and the bucket names something else.
+    // Replay 2018316 T8: yagami_black's 5 to blue was a reverse-reactive finesse on
+    // green's o2 through the i1 black itself had played unknowingly at T2 (pink 0
+    // on black's frame, 1 on green's). Green read the bucket's `{b3}` and played the
+    // i1 into a strike; it is the i1, and green throws it.
+    bool discharged = false;
+    if (connector && !double_chuck && reacter == state.our_player_index &&
+        state.is_basic_trash(*connector) &&
+        discharge_hole_card(game, wc, *connector)) {
+      game.narrow_thought(react_order, IdentitySet::single(*connector));
+      if (reactor0::stamp_react_discard_button(game, action, react_order)) {
+        discharged = true;
+        hanabi::logging::log_branch("tiiah.discharge_stamped", {{"order", react_order}});
+      }
+    }
     auto stamped =
-        double_chuck
+        discharged ? std::optional<ClueInterp>(ClueInterp::REACTIVE)
+        : double_chuck
             ? reactor0::stamp_react_discard_button(game, action, react_order)
             : reactor0::stamp_react_play_button(game, action, react_order);
-    // The playable-dupe DISCHARGE, at the reacter's own seat (§1k, v16.25.0). The
-    // pairing names our card as X on the frame we share with the giver, but X is
-    // already down on our own stacks -- the giver threw it into the hole without
-    // knowing -- so the play button cannot be stamped. We are called to throw it
-    // instead; the receiver still plays.
+    // The playable-dupe DISCHARGE when the pairing is not a finesse (§1k,
+    // v16.25.0): our empathy leaves a single playable X on the frame we share with
+    // the giver, but X is already down on our own stacks -- the giver threw it into
+    // the hole without knowing -- so the play button cannot be stamped. We are
+    // called to throw it instead; the receiver still plays. The finesse case is
+    // read from the rule above, before any stamp.
     if (!stamped && !double_chuck && reacter == state.our_player_index) {
       const IdentitySet on_frame =
           react_live.filter([&after](Identity i) { return after.is_playable(i); });
@@ -527,7 +551,10 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     if (own_away == 1) {
       own_connector = hanabi::reactor::variants::connector_of(state, target.id);
     }
-    if (own_connector) {
+    if (discharged) {
+      // Named above: the giver's own unnamed connector, and we throw it. This
+      // outranks the own-stacks reading below.
+    } else if (own_connector) {
       game.narrow_thought(react_order, IdentitySet::single(*own_connector));
     } else if (own_away == 0 && !double_chuck) {
       if (auto want = bucket_of(*state.variant, target.id.suit_index)) {
