@@ -7,6 +7,13 @@
 // locked. Rung 3.1's stable play needs two tokens, so 3.7 locked black with a 4 --
 // "does not provide yagami_black a safe action at all". Green names black's o26, the
 // g3 we can see is playable, and costs the same one clue.
+//
+// v20.0.0 (rank referential discards on the lock slot) removes the premise. Blue's
+// T23 3 to black touched black's lock slot but had a referential target, o25, so it
+// is no longer a lock: it calls o25 to discard, and black is not stuck. With black
+// holding a safe action, an occupied green at one token gives no clue (the tier gate
+// rejects every candidate) and plays its called n2, o10. The diagnostic was written
+// against the old reading of T23.
 
 #include <gtest/gtest.h>
 
@@ -1355,8 +1362,8 @@ TEST(TiiahReplay2014538, StablePlayOverLockAtOneClue) {
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   hanabi::PerformAction action = game.take_action();
-  const auto* colour = std::get_if<hanabi::PerformColour>(&action);
-  ASSERT_TRUE(colour) << "a stable play, not the rank 4 lock";
-  EXPECT_EQ(colour->target, 0) << "to black";
-  EXPECT_EQ(colour->value, 2) << "Green, for the g3";
+  // Not the rank 4 lock either way.
+  const auto* play = std::get_if<hanabi::PerformPlay>(&action);
+  ASSERT_TRUE(play) << "black has T23's discard to make; we play our called n2";
+  EXPECT_EQ(play->target, 10);
 }

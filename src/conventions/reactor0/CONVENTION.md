@@ -342,7 +342,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
       a 3 re-touches both, and slot 3 is the i4. `PLAY`.
    2. **Pink trash** (`:806-821`) — not a tempo clue, and rank `value` is
       already played in **every** pinkish suit (`variants::rank_played_in`,
-      `src/conventions/variants/pinkish.cpp:130-134`). For ascending suits that
+      `src/conventions/variants/pinkish.cpp:138-142`). For ascending suits that
       is `value <= N`, N the lowest pinkish stack; for a descending suit it is
       `value >= stack` (user ruling, for a reversed suit and, once the engine
       models it, an Up or Down pinkish suit going down). The leftmost touched
@@ -439,7 +439,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    (`RankDirectPlayPitchesAMixedUsefulSet` keeps that hazard concrete).
 
    **reactor calls `called_focus_status` unconditionally at its own
-   site** (`src/conventions/reactor/interpret_clue.cpp:517`).
+   site** (`src/conventions/reactor/interpret_clue.cpp:545`).
    Returns `PLAY`. An *unnecessary* focus (every possibility trash or
    visible elsewhere) makes the clue a `STALL` instead (`:482-494`).
 2. **Play reveal** (`:532-537`) — the clue fills a previously-clued card in
@@ -461,19 +461,48 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    trash reveal (`variants::brownish_trash_reveal`) → `REVEAL`.
 5. **Lock** and 6. **Referential discard** (`:530-532`) — a clue touching at
    least one new card falls into reactor's `ref_discard`
-   (`src/conventions/reactor/interpret_clue.cpp:317-433`): touching the lock
+   (`src/conventions/reactor/interpret_clue.cpp:317-461`): touching the lock
    slot (oldest unclued) stamps the whole hand `CHOP_MOVED` → `LOCK`;
    otherwise the first unclued slot right of the focus is stamped
    `CALLED_TO_DISCARD` → `DISCARD`.
 
+   **Rank referential discards on the lock slot (v20.0.0, the user's
+   convention).** In **Throw It in a Hole** and **Clue Starved**, a rank clue that
+   touches the lock slot is an ordinary referential discard whenever it has a
+   target: the first card right of the leftmost newly touched card that this clue
+   does not touch and that was not clued before. Only when it has **no** target is
+   it a lock.
+   - Code: `ref_discard_target` and `lock_slot_refers`
+     (`src/conventions/reactor/interpret_clue.cpp:325-344`), applied at `:368-375`.
+   - It is gated on the reactor0 family (TIIAH at any seat count, and 3-player Clue
+     Starved). The `reactor` convention keeps the lock.
+   - Such a clue is not a lock, so it makes no pink promise:
+     `violates_pink_promise` stands down when the rule applies
+     (`src/conventions/variants/pinkish.cpp:71-74`). Otherwise a 5 whose lock slot
+     is an i4 would be rejected for "breaking" a promise it never made.
+
+   Replay [2017568](https://hanab.live/shared-replay/2017568) (TIIAH & Pink):
+   - **T1:** will-bot67's 4 to will-bot69 touched slots 2, 4 and 5. It now calls
+     slot 3 to discard instead of locking.
+   - **The user's follow-ups**, on yagami's `g5 r5 g2 p1 i4`: a 4 touches only the
+     i4 on slot 5 and has no target, so it is a lock; a 5 touches slots 1, 2 and 5
+     and calls slot 3 to discard.
+
+   Tests:
+   - `tests/test_tiiah/test_replay_2017568_rank_four_on_lock_slot_is_a_ref_discard.cpp`;
+   - `tests/test_tiiah/test_rank_ref_discard_on_lock_slot.cpp`;
+   - `tests/test_reactor0/test_rank_ref_discard_on_lock_slot.cpp` (Clue Starved,
+     both cases), with `Reactor0StableRank.LockSlotTouchLocksTheHand` as the No
+     Variant control.
+
    **The pink promise is made on the lock slot only (v19.0.0, user ruling).**
    In a pinkish variant a stable rank clue touching the receiver's lock slot
    marks that card as the clued rank (`variants::apply_rank_promise`,
-   `src/conventions/reactor/interpret_clue.cpp:353-362`) — **unless** the
+   `src/conventions/reactor/interpret_clue.cpp:381-390`) — **unless** the
    variant has pinkish ones or fives (`pink_s`), where it promises nothing; so
    `variants::violates_pink_promise` has nothing to check there
-   (`src/conventions/variants/pinkish.cpp:54`). A **referential discard makes no
-   pink promise** (`reactor/interpret_clue.cpp:396-409`): it stamps its
+   (`src/conventions/variants/pinkish.cpp:55`). A **referential discard makes no
+   pink promise** (`reactor/interpret_clue.cpp:424-437`): it stamps its
    discard and marks the focus `focused`, as in any other variant. Both are
    gated on the reactor0 family; the `reactor` convention keeps the promise in
    both places.
@@ -987,7 +1016,7 @@ either/or gate.
 
 **The STABLE referential discard narrows too, but less (v16.11.0).** It is the
 one stamping path that used to narrow nothing: `reactor::ref_discard`
-(`reactor/interpret_clue.cpp:325-441`) stamps the slot and returns, so a note
+(`reactor/interpret_clue.cpp:346-469`) stamps the slot and returns, so a note
 reading "throw this away" still listed every critical the card could be — replay
 2008422 T1 called a card to discard holding all five 5s. reactor0 now filters at
 its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:627-677`, called
@@ -1006,7 +1035,7 @@ three ways, each deliberate:
   would delete the call just stamped — is out of reach; an empty result is left
   alone instead. The CTD is positional and does not depend on the inference,
   which is the same reasoning as the v0.30 reset at
-  `reactor/interpret_clue.cpp:415-432`.
+  `reactor/interpret_clue.cpp:443-460`.
 
 Reactor is untouched by all of this: its corpus pins a stable CTD that lands on
 a critical dark null 5 (replay 1916791), which is why the filter sits at the
@@ -1265,6 +1294,12 @@ finesse prerequisite, which runs **up** the ranks on a reversed suit).
 A rank clue that touches no new card and only known-pinkish cards is a pink
 tempo, pink trash or pink identity clue — reactor0's own, not inherited from
 reactor. §1c priority 0 has the rules.
+
+### Clue Starved — a rank clue on the lock slot refers first (v20.0.0)
+
+A stable rank clue touching the lock slot is a referential discard whenever it
+has a target, and a lock only when it has none, as in Throw It in a Hole. §1c
+priorities 5/6 have the rule.
 
 ### Matryoshka — no rule change
 
@@ -2158,6 +2193,7 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_stable_rank_omni.cpp` | §1c in an omni variant — rank 1 and rank 4 read as direct plays, an unplayable useful identity still blocks, and the pinkish focus is the leftmost |
 | `tests/test_reactor0/test_pink_rank_clues.cpp` | §1c priority 0 — the pink tempo clue (and one pink card never being one), the pink trash clue moving on to the next card, the pink identity clue, the giver never giving a misnaming tempo clue, a tempo clue on Pink-Ones; and priorities 5/6 — a referential discard and a Pink-Ones lock making no pink promise (v19.0.0) |
 | `tests/test_basics/test_rank_played_in.cpp` | §1c priority 0 — `variants::rank_played_in`: ascending `value <= stack`, descending `value >= stack` (v19.0.0) |
+| `tests/test_reactor0/test_rank_ref_discard_on_lock_slot.cpp` | §1c priorities 5/6 in Clue Starved — a lock-slot rank clue with a target is a referential discard; without one it is still a lock (v20.0.0) |
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |

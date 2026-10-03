@@ -352,6 +352,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_bad_reactive_target/test_replay_2005309_phase_c_rejects_on_giver_only_knowledge.cpp
   tests/test_reactor0/test_stable_rank_omni.cpp
   tests/test_reactor0/test_pink_rank_clues.cpp
+  tests/test_reactor0/test_rank_ref_discard_on_lock_slot.cpp
   tests/test_reactor0/test_strike_no_reset.cpp
   tests/test_reactor0/test_urgent_skips_known_trash.cpp
   tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp
@@ -481,6 +482,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2015109_reactive_after_stale_common_naming.cpp
   tests/test_tiiah/test_replay_2017459_stable_call_rebases_on_bobs_played_call.cpp
   tests/test_tiiah/test_replay_2017491_reverse_reactive_world_fallback.cpp
+  tests/test_tiiah/test_replay_2017568_rank_four_on_lock_slot_is_a_ref_discard.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp
@@ -515,6 +517,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_hole_play_named_by_sight.cpp
   tests/test_tiiah/test_rebase_on_played_call.cpp
   tests/test_tiiah/test_reactive_world_fallback.cpp
+  tests/test_tiiah/test_rank_ref_discard_on_lock_slot.cpp
 )
 target_include_directories(hanabi_tiiah_tests PRIVATE tests)
 target_link_libraries(hanabi_tiiah_tests PRIVATE hanabi_core GTest::gtest_main)

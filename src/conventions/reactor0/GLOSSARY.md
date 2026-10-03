@@ -613,6 +613,14 @@ trash. Parity binds an Omni card like any other, because it is a property of the
 rank; `Variant::id_touched` is *not* the right question, being true for every
 rank of a pinkish suit.
 
+### rank referential discard on the lock slot
+In Throw It in a Hole and Clue Starved (reactor0 family), a rank clue touching the
+lock slot is a referential discard whenever it has a target, the first card right
+of the leftmost newly touched card that this clue does not touch and that was not
+clued before. It is a lock only when there is none. `ref_discard_target`,
+`lock_slot_refers` (`reactor/interpret_clue.cpp`). CONVENTION.md §1c priorities 5/6
+(v20.0.0), replay 2017568.
+
 ### pink promise (reactor0 family)
 A stable rank clue touching the receiver's **lock slot** in a pinkish variant
 marks that card as the clued rank. Since v19.0.0 reactor0 and Throw It in a Hole

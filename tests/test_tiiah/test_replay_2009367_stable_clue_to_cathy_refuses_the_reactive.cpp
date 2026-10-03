@@ -831,12 +831,14 @@ TEST(TiiahReplay2009367Refusal, StableClueToCathyRefusesTheReactive) {
       << "and red is still on 1 -- will-bot69's r1, not a second red from us";
 
   // The refusal is an ENVELOPE: T7's clue is still read as the stable clue it
-  // is, which here is a lock over will-bot69's hand.
+  // is. That was a lock over will-bot69's hand until v20.0.0; it touches the lock
+  // slot but has a referential target, so it is now a referential discard
+  // (reactor0 CONVENTION.md §1c priorities 5/6).
   ASSERT_FALSE(game.move_history.empty());
   const auto* interp = std::get_if<hanabi::ClueInterp>(
       &game.move_history[game.move_history.size() - 2]);
   ASSERT_NE(interp, nullptr);
-  EXPECT_EQ(*interp, hanabi::ClueInterp::LOCK)
+  EXPECT_EQ(*interp, hanabi::ClueInterp::DISCARD)
       << "read as a refusal AND as the clue it is -- not swallowed by the signal";
 
   // And it changes the turn. Knowing purple is on 1 -- and so that the r2 is

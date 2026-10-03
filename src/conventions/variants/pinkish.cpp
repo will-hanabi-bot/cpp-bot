@@ -4,6 +4,7 @@
 
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/reactor/interpret_clue.h"
 
 namespace hanabi::reactor::variants {
 
@@ -64,6 +65,13 @@ bool violates_pink_promise(const Game& prev, const ClueAction& action) {
 
   // Promise only applies when the lock slot itself is touched.
   if (!contains(action.list_, *lock_slot)) return false;
+  // ...and only when the clue IS a lock. In Throw It in a Hole and Clue Starved a
+  // lock-slot rank clue with a referential target is a referential discard
+  // (v20.0.0), and a referential discard promises nothing (v19.0.0).
+  if (hanabi::reactor::lock_slot_refers(prev) &&
+      hanabi::reactor::ref_discard_target(state, action)) {
+    return false;
+  }
 
   auto lock_slot_id = state.deck[*lock_slot].id();
   if (!lock_slot_id) return false;  // observer's own hand — can't verify

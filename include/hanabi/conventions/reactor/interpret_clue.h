@@ -38,6 +38,17 @@ std::optional<ClueInterp> target_discard(Game& game, const ClueAction& action,
 std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
                                          const ClueAction& action, bool stall);
 
+// The referential discard target of a clue, read on the hand BEFORE it: the first
+// card right of the leftmost newly touched one that this clue does not touch and
+// that was not clued already. Nullopt when there is none (or nothing is new).
+std::optional<int> ref_discard_target(const State& prev, const ClueAction& action);
+
+// Rank referential discards on the lock slot (reactor0 CONVENTION.md §1c, v20.0.0):
+// in Throw It in a Hole and Clue Starved, under the reactor0 family, a rank clue
+// touching the lock slot is a referential discard whenever it has a target, and a
+// lock only when it has none.
+bool lock_slot_refers(const Game& game);
+
 // Try interpreting as a stable clue (returns null if the stable interp fails).
 std::optional<ClueInterp> try_stable(const Game& prev, Game& game,
                                         const ClueAction& action, bool stall);

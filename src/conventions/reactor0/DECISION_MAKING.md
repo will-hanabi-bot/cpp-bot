@@ -871,6 +871,12 @@ is judged from Alice's own inference, not common knowledge.
        **colour** play clue to Cathy, **and** Cathy's chop is not critical, then
        give a lock clue to Bob. Both Cathy clauses are **vacuous at two seats**,
        as H1b/H1c's are.
+
+       In **Throw It in a Hole and Clue Starved** a rank clue on the lock slot locks
+       only when it has no referential discard target (CONVENTION.md §1c priorities
+       5/6, v20.0.0). With a target it is read, and so offered, as a stable discard
+       instead. The pool reads the simulated clue's shape, so this rung sees only
+       the clues that really lock.
     8. If Bob's chop is critical, give a reactive discard that stamps CTD on a non-critical card in Bob's
        hand, or a reactive play that stamps CTP on a non-critical inverted card
        in Bob's hand. WHICH card is the **ditch-target rule** below.

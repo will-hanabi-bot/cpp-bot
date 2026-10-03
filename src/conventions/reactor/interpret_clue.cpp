@@ -322,6 +322,27 @@ std::optional<ClueInterp> ref_play(const Game& prev, Game& game,
 
 // --- ref_discard --------------------------------------------------------
 
+std::optional<int> ref_discard_target(const State& prev, const ClueAction& action) {
+  const auto& hand = prev.hands[action.target];
+  std::optional<int> focus;
+  for (int o : action.list_) {
+    if (prev.deck[o].clued) continue;
+    if (!focus || o > *focus) focus = o;  // leftmost newly touched = highest order
+  }
+  if (!focus) return std::nullopt;
+  const auto pos = std::find(hand.begin(), hand.end(), *focus);
+  if (pos == hand.end()) return std::nullopt;
+  for (auto it = pos + 1; it != hand.end(); ++it) {
+    if (!prev.deck[*it].clued && !contains(action.list_, *it)) return *it;
+  }
+  return std::nullopt;
+}
+
+bool lock_slot_refers(const Game& game) {
+  const Variant& v = *game.state.variant;
+  return is_reactor0_family(game.convention) && (v.throw_it_in_a_hole || v.clue_starved);
+}
+
 std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
                                          const ClueAction& action, bool stall) {
   const State& state = game.state;
@@ -344,7 +365,14 @@ std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
     lock_order = *std::min_element(unclued_orders.begin(), unclued_orders.end());
   }
 
-  if (lock_order && contains(list_, *lock_order)) {
+  // RANK REFERENTIAL DISCARDS ON THE LOCK SLOT (v20.0.0, the user's convention):
+  // in Throw It in a Hole and Clue Starved a rank clue touching the lock slot is an
+  // ordinary referential discard whenever it has a target, and a lock only when it
+  // has none. Replay 2017568 T1: will-bot67's 4 to will-bot69 touched slots 2, 4
+  // and 5 -- a lock, until this; now it calls slot 3 to discard.
+  const bool refers = clue.kind == ClueKind::RANK && lock_slot_refers(game) &&
+                      ref_discard_target(prev.state, action).has_value();
+  if (lock_order && contains(list_, *lock_order) && !refers) {
     if (stall && state.next_player_index(receiver) == giver) {
       return ClueInterp::STALL;
     }
