@@ -491,6 +491,9 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2018316_reverse_reactive_discharge.cpp
   tests/test_tiiah/test_replay_2018428_reverse_reactive_needs_a_called_play.cpp
   tests/test_tiiah/test_reverse_reactive_standing_play.cpp
+  tests/test_tiiah/test_replay_2018517_receiver_world_fallback_collapses_hole.cpp
+  tests/test_tiiah/test_receiver_world_fallback.cpp
+  tests/test_tiiah/test_replay_2018535_receiver_finesse_through_a_hole_card.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp

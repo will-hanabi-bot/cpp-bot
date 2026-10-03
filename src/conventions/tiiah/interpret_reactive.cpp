@@ -970,6 +970,125 @@ bool finesse_from_the_card(const Game& game, const ReactorWC& wc,
          could.intersect(rr.bucket).is_empty();
 }
 
+// THE RECEIVER WORLD FALLBACK (v20.5.0, the user's ruling). The reaction is in,
+// but the shared stamp found nothing the receiver's target could play on the frame
+// the giver and the receiver share -- a MINIMUM over the hole's worlds -- and fell
+// to its bluff or mistake reading. Before that stands, the receiver's slot is read
+// in the worlds, at every seat alike:
+//
+//   1. The bucket rule (the bucket half and the finesse half of §1d): if some world
+//      lets a card of that reading play, the target is it.
+//   2. Otherwise any identity of the target that is ONE AWAY on the frame, bucket
+//      or not, and plays in some world.
+//
+// Either way the worlds that make the reading are the ones kept, and the hole cards
+// collapse to them: the clue is evidence of which world we are in. Only when both
+// fail is the clue the bluff or mistake the stamp read.
+//
+// Replay 2018517 T19-T21. will-bot67 had thrown o21 `{r2,y1}` into the hole
+// unnamed. yagami's 3 was a reactive: will-bot69's m3 into will-bot67's slot 1,
+// the r3 (m plays into m4 or the red/yellow bucket). On the frame red was 1, so no
+// 3 played, the stamp read a bluff, and will-bot67 discarded. In the world where
+// o21 was the r2, the r3 plays: o21 collapses to `{r2}` and the r3 is called.
+void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
+                             int react_order) {
+  const State& s = game.state;
+  const auto slots = hanabi::reactor::calc_target_slot(prev, game, react_order, wc);
+  if (!slots) return;
+  const int slot = slots->second;
+  if (slot < 1 || slot > static_cast<int>(wc.receiver_hand.size())) return;
+  const int target = wc.receiver_hand[slot - 1];
+  const auto& hand = s.hands[wc.receiver];
+  if (std::find(hand.begin(), hand.end(), target) == hand.end()) return;
+  if (target >= static_cast<int>(prev.common.thoughts.size())) return;
+
+  // Only a seat that WATCHED the reacter's card reads the fallback: the reading is
+  // the bucket and the finesse of that one card. The reacter itself cannot name what
+  // it played, and a fallback read off its inference would collapse the worlds on a
+  // guess (replay 2015109 T9: will-bot67's own `{r1,r2,y1,y2}` reaction kept half
+  // the worlds). It keeps the stamp's reading.
+  const auto played = prev.state.deck[react_order].id();
+  if (!played) return;
+  const IdentitySet react_live = IdentitySet::single(*played);
+
+  // The worlds the receiver's reading ranges over, exactly as `narrow_receiver_call`
+  // reads them.
+  const bool at_receiver = wc.receiver == s.our_player_index;
+  const State base =
+      at_receiver ? s.private_base()
+                  : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
+                        .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
+  const std::vector<int> holders =
+      at_receiver ? std::vector<int>{wc.receiver}
+                  : std::vector<int>{wc.receiver, wc.giver};
+  const auto all = open_worlds(game, base, holders);
+  std::vector<OpenWorld> worlds;
+  for (const OpenWorld* w : strike_free(all)) worlds.push_back(*w);
+  if (worlds.size() < 2) return;  // one world is the frame itself
+
+  const IdentitySet& before = prev.common.thoughts[target].inferred;
+  const IdentitySet& possible = game.common.thoughts[target].possible;
+  const IdentitySet could = before.non_empty() ? before.intersect(possible) : possible;
+  if (could.is_empty()) return;
+
+  // 1. The bucket rule, per world.
+  IdentitySet reading = IdentitySet::empty();
+  std::uint64_t mask = 0;
+  int step = 1;
+  const ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
+  for (const auto& [i, m] : rr.support) {
+    if (!could.contains(i)) continue;
+    // The finesse half is offered in every world; keep only where it plays.
+    std::uint64_t playable = 0;
+    for (std::size_t w = 0; w < worlds.size(); ++w) {
+      if ((m >> w & 1ULL) && worlds[w].state.is_playable(i)) playable |= 1ULL << w;
+    }
+    if (playable == 0) continue;
+    reading = reading.add(i);
+    mask |= playable;
+  }
+  // 2. Any one-away reading that plays in some world.
+  if (reading.is_empty()) {
+    step = 2;
+    for (Identity i : could) {
+      if (base.playable_away(i) != 1) continue;
+      std::uint64_t playable = 0;
+      for (std::size_t w = 0; w < worlds.size(); ++w) {
+        if (worlds[w].state.is_playable(i)) playable |= 1ULL << w;
+      }
+      if (playable == 0) continue;
+      reading = reading.add(i);
+      mask |= playable;
+    }
+  }
+  if (reading.is_empty() || mask == 0) return;  // the bluff or mistake stands
+  // A reading every world allows is no evidence about the hole, and the stamp failed
+  // for some other reason -- its clue-time frame, say -- which this is not here to
+  // second-guess (replay 2011885 T10).
+  const std::uint64_t every = worlds.size() >= 64 ? ~0ULL : (1ULL << worlds.size()) - 1;
+  if (mask == every) return;
+
+  std::vector<const OpenWorld*> kept;
+  for (std::size_t w = 0; w < worlds.size(); ++w) {
+    if (mask >> w & 1ULL) kept.push_back(&worlds[w]);
+  }
+  if (before.non_empty()) game.reset_thought_to(target, before);
+  game.narrow_thought(target, reading);
+  const int turn = s.turn_count;
+  const int giver = wc.giver;
+  game.with_meta(target, [turn, giver](ConvData& m) {
+    m.status = CardStatus::CALLED_TO_PLAY;
+    m.by = giver;
+    m.focused = true;
+    m = m.reason(turn).signal(turn);
+  });
+  // Every hole card, as in the clue-time world fallback (§1d, v19.3.0).
+  collapse_to_worlds(game, worlds, kept, /*shared=*/true);
+  hanabi::logging::log_branch("tiiah.receiver_world_fallback",
+                              {{"step", step}, {"target", target},
+                               {"worlds", static_cast<int>(kept.size())}});
+}
+
 }  // namespace
 
 // The RECEIVER's half of 1d's relation, applied when their call is made.
@@ -1020,7 +1139,13 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
     target = o;
     break;
   }
-  if (target < 0) return;
+  if (target < 0) {
+    // No call was stamped: the shared stamp read the target on the frame the giver
+    // and the receiver share, found nothing playable there, and fell to its bluff
+    // or mistake reading. Before that stands, the reading is tried in the worlds.
+    receiver_world_fallback(prev, game, wc, react_order);
+    return;
+  }
 
   // WHAT THE REACTER'S CARD COULD BE, from this seat. Its identity when this
   // seat watched it, and the inference the clue left on it when this seat is

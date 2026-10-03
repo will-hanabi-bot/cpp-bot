@@ -259,7 +259,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1142-1188`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1267-1313`.
 CONVENTION.md §1d.
 
 ### proven finesse
@@ -324,6 +324,16 @@ receiver's one-away cards, leftmost first, are tried in the worlds of the hole
 cards. The first that plays outright in some world, with a reaction valid there,
 is the pairing, and the worlds collapse to those (CONVENTION.md §1d, v19.3.0;
 replay 2017491). `interpret_reactive`, `src/conventions/tiiah/interpret_reactive.cpp`.
+
+### receiver world fallback
+How a reaction is read when the shared stamp finds nothing the receiver's target can
+play on the frame it reads (v20.5.0, the user's ruling; replays 2018517, 2018535).
+Every seat that watched the reacter's card reads the target in the worlds of the
+hole cards: first the bucket rule (bucket and finesse halves), then any one-away
+identity. The first reading that plays in some, but not every, world is called, and
+the worlds collapse to those that make it. Otherwise the stamp's bluff or mistake
+reading stands. `receiver_world_fallback`, `src/conventions/tiiah/interpret_reactive.cpp`.
+CONVENTION.md §1d.
 
 ### rebased call
 A stable call that could be the card a call stamped earlier in another hand
