@@ -118,7 +118,7 @@ giver, Bob the next player, Cathy the one after.
 
 ## §1a Dispatch — purely positional
 
-`reactor0::interpret_clue` (`src/conventions/reactor0/interpret_clue.cpp:606-642`):
+`reactor0::interpret_clue` (`src/conventions/reactor0/interpret_clue.cpp:623-659`):
 
 - empty clue in an empty-clues variant → `USELESS`;
 - **clue to Bob → always stable**, even when Bob is loaded (`:616-621`);
@@ -172,7 +172,7 @@ play in reactor0.** Priority:
 
    `stable_colour` takes an optional `reveal_frame`: a stack vector on which the
    reveal must also hold, or the ladder moves on to the direct play
-   (`interpret_clue.cpp:465-474`, v18.20.0). reactor0 never passes one, so this
+   (`interpret_clue.cpp:473-482`, v18.20.0). reactor0 never passes one, so this
    convention is unchanged. Throw It in a Hole passes its common stacks
    (tiiah/CONVENTION.md §1b, the *global play reveal*).
 
@@ -242,10 +242,18 @@ play in reactor0.** Priority:
      branch found, so if every touched orange is known critical the leftmost
      one that could still reach the stacks is chucked. If none could →
      `STALL` (`:315`).
-5. **Direct play** — the **leftmost card touched by this clue** whose common
+5. **Direct play** — the **leftmost card NEWLY touched by this clue** whose common
    empathy could be playable (playable set ∪ delayed-play successors) is
-   called to play via `target_play` (`leftmost_could_be_playable` `:203-223`,
-   guards + call `:318-339`). The guards are reactor's `ref_play` rejections:
+   called to play via `target_play` (`leftmost_could_be_playable`, over
+   `colour_focus_pool`). Only a clue that touches **no** new card looks at the
+   cards it re-touches; with new cards touched and none of them able to play, the
+   clue calls nothing and ends in priority 6's `STALL` (v20.4.0, the user's ruling;
+   `src/conventions/reactor0/interpret_clue.cpp:403-409`, read at `:576-586`). The
+   giver-side model `has_colour_play_clue_for` takes the same pool. Replay
+   [2018435](https://hanab.live/shared-replay/2018435) T11: Yellow to yagami_black
+   re-touched o14, a clued ra1, and newly touched o13, the y1. Read from every
+   touched card it named the rainbow o14, which a colour clue may not call, so it
+   was dropped. `tests/test_reactor0/test_stable_colour_new_touch_focus.cpp`. The guards are reactor's `ref_play` rejections:
    blind-playing target, CTD'd-and-not-visibly-playable target. There is **no
    longer an inverted-target reject** — it read `state.deck[*target].id()`,
    which is POV-asymmetric (nullopt for the receiver's own card), and the
@@ -266,7 +274,7 @@ contradicted card to its global empathy the moment the contradiction happens
 
 ## §1c Stable rank — eight priorities
 
-`stable_rank` (`interpret_clue.cpp:835-1131`). The pink-promise gate runs
+`stable_rank` (`interpret_clue.cpp:852-1148`). The pink-promise gate runs
 first, then the rank is classified, then priority 0 (v19.0.0) and the ladder
 below. The line citations inside the numbered priorities predate v19.0.0's
 insertion and have drifted; the priority-0 ones are current.
@@ -328,7 +336,7 @@ An empty narrowed set teaches nothing and is treated as neither
 all-trash nor playable-rank (`:446-450`), rather than vacuously true.
 
 0. **Pinkish re-touch: pink tempo, pink trash, pink identity** (v19.0.0;
-   `pink_retouch`, `interpret_clue.cpp:740-829`, called at `:969-976`). The
+   `pink_retouch`, `interpret_clue.cpp:757-846`, called at `:969-976`). The
    clue is a rank clue that touches **no new card**, and every card it touches
    is **known pinkish** once it lands: every identity in its common `possible`
    is on a pinkish suit (`SuitType::pinkish`: Pink, Light / Dark / Gray Pink,
@@ -1019,7 +1027,7 @@ one stamping path that used to narrow nothing: `reactor::ref_discard`
 (`reactor/interpret_clue.cpp:346-469`) stamps the slot and returns, so a note
 reading "throw this away" still listed every critical the card could be — replay
 2008422 T1 called a card to discard holding all five 5s. reactor0 now filters at
-its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:627-677`, called
+its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:644-694`, called
 from `stable_rank` at `:938-946`), and it differs from the reacter stamps in
 three ways, each deliberate:
 
@@ -2169,6 +2177,7 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_stable_colour.cpp` | play reveal, direct play, no-ref-play, stall |
 | `tests/test_reactor0/test_stable_rank.cpp` | the rank priority ladder |
 | `tests/test_reactor0/test_stable_colour_baseline.cpp` | §1i — a contradicted inference resets and the clue reads afresh, touched and untouched |
+| `tests/test_reactor0/test_stable_colour_new_touch_focus.cpp` | §1b priority 5 — a newly touched card outranks a re-touched one to its left, the re-touched card called when nothing new is touched, a stall when the new cards cannot play, and the play reveal still first (v20.4.0) |
 | `tests/test_reactor0/test_call_invariants.cpp` | §1h — CTP play order **per kind** (a reacter stamp never erases an older receiver stamp; the reverse still does), single CTD, revealed trash left alone |
 | `tests/test_reactor0/test_candidate_rollback.cpp` | a clue stamps exactly the card it names; abandoned candidates roll back |
 | `tests/test_reactor0/test_react_discard_button.cpp` | §1d/§1f — the Discard button tries the chuck arm *then* the discard arm at every site, so a dead chuck no longer swallows the reactive |

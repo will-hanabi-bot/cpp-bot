@@ -30,7 +30,7 @@ We will mostly borrow the existing implementations of high/medium/low tier clues
 Note the change to H1 to also require that Cathy's chop be either playable or
 critical.
 
-A clue tier (`clue_tier`, `state_eval.cpp:551-654`) is VERY HIGH iff:
+A clue tier (`clue_tier`, `state_eval.cpp:552-655`) is VERY HIGH iff:
 
 1. **VH1** — Cathy's chop is not trash or a same-hand-dupe, and the clue **gets a
    finesse**. A finesse is reactive Phase B, which belongs to the **even-parity
@@ -145,7 +145,7 @@ NOT-LOW iff any of VH1, H2, H3, H4, or:
 6. **N3** — the clue gets two new plays. `:642`.
 7. **N2** — the clue is **reactive** and Bob has no stable color play clue he
    could give Cathy. Reactive is a single integer compare, `action.target != bob`,
-   since dispatch is positional (§1a, `interpret_clue.cpp:1117-1120`). `:648-651`.
+   since dispatch is positional (§1a, `interpret_clue.cpp:1134-1137`). `:648-651`.
    In a **target-parity** variant the second arm is vacuously true (no stable
    clues exist) while the first still asks who was clued, so only a clue to
    Cathy reaches N2 there.
@@ -206,9 +206,9 @@ strips locked ids from cards *outside* the group) and cannot answer this.
 
 **Bob's colour play clue for Cathy** (`has_colour_play_clue_for`, `:288-320`) is a
 structural check, not a simulation: for each colour clue Bob could give Cathy it
-replays `stable_colour`'s target choice (§1b step 5,
-`interpret_clue.cpp:327`) plus its three guards (`:340-345`), then asks whether
-the named card actually plays. Two known approximations, both deliberate: it skips
+replays `stable_colour`'s target choice (§1b step 5, including its newly-touched
+focus via `colour_focus_pool` since v20.4.0, `interpret_clue.cpp:576-586`) plus its
+three guards (`:340-345`), then asks whether the named card actually plays. Two known approximations, both deliberate: it skips
 the FIX branch above the direct-play read (`interpret_clue.cpp:245-248`), and it
 does not model a play reveal (`:256-261`). It is evaluated **last** in `clue_tier`,
 behind the O(1) reactive test, because it is the only costly term.
@@ -574,7 +574,7 @@ card. Replay 1981703 T19: a dupe killed yagami_green's called card, its own
 sight dropped the call, the stamp survived, and the gate flattened every
 candidate at pace 1 — leaving phase 2 to blind-pitch into a game-ending strike.
 
-Concretely, `requires_high_tier` (`state_eval.cpp:324-357`) reads the stamp
+Concretely, `requires_high_tier` (`state_eval.cpp:325-358`) reads the stamp
 literally and counts a `CALLED_TO_DISCARD` **only in a variant that contains an
 inverted suit** — there, pressing Discard is how an inverted card is played, so
 the call is a deferred play. In a plain variant a reacter-CTD does not occupy
@@ -1534,7 +1534,7 @@ button the receiver was promised.
 
 | Rule | Existing machinery | Where |
 |---|---|---|
-| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1028`, dispatched at `interpret_clue.cpp:1117-1120` |
+| reactive vs stable | `clue_is_reactive` — positional (`action.target != bob`) plus the target-parity overrides | `interpret_reactive.cpp:1028`, dispatched at `interpret_clue.cpp:1134-1137` |
 | two new plays (H3, N3) | `new_play_facts(...).count >= 2` | `state_eval.cpp:229-281` |
 | finesse (VH1) | reactive rank Phase B | `interpret_reactive.cpp:486-576` |
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:578-648` |

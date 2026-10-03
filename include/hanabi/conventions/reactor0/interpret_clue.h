@@ -25,6 +25,13 @@ std::optional<int> leftmost_could_be_playable(
     const Game& game, const ClueAction& action,
     const std::vector<int>& candidates);
 
+// The cards a stable colour clue's direct play may focus (v20.4.0): the ones it
+// touches NEWLY -- not clued in `before`, the position the clue was given in --
+// or, when it touches no new card, every card it touches. Shared by the reading
+// (`stable_colour`) and the giver-side model (`has_colour_play_clue_for`), so the
+// two cannot disagree about the focus. Replay 2018435 T11.
+std::vector<int> colour_focus_pool(const Game& before, const ClueAction& action);
+
 // The same question asked from the other end: the RIGHTMOST (oldest) candidate
 // whose common empathy could still be playable. Odds and Evens focuses a direct
 // rank play clue this way -- one rank clue there names a whole parity class, so

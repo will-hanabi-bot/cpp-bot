@@ -282,6 +282,9 @@ A stable clue whose meaning is "play this touched card" — reactor0's
 stable colour reading and rank priority 1. Contrast reactor, where a stable
 colour clue is *referential* (points one slot left of a touched card).
 There is **no referential play in reactor0**.
+A stable colour clue's direct play focuses its **newly touched** cards first; only
+a clue that touches no new card looks at the ones it re-touches (v20.4.0,
+`colour_focus_pool`; CONVENTION.md §1b priority 5).
 A rank direct play clue means **pitch** (press Play) by default, which is why
 it cannot put an orange card onto its stack while the rank's useful
 identities are mixed. When **every** useful identity of the rank is orange —
@@ -417,7 +420,7 @@ clue). This reading takes priority over the orange ladder.
 ### positional dispatch
 Reactor0's whole dispatcher: clue to Bob ⇒ stable, clue to anyone else ⇒
 reactive with Bob as reacter — regardless of loadedness, stall context, or
-pending reactives. `interpret_clue.cpp:601-637`.
+pending reactives. `interpret_clue.cpp:618-654`.
 
 ### reactive clue
 As in reactor, a clue decoded jointly with the reacter's next action — but
@@ -661,7 +664,7 @@ card is marked known trash and nothing else happens — it is **terminal**,
 never a referential discard, and (unlike the aspirational reactor
 trash-push entry in TODO.md) never a play. Priority 2 of the stable rank
 ladder; priority 3 extends it to previously-clued cards revealed as trash.
-`interpret_clue.cpp:1080-1093`.
+`interpret_clue.cpp:1097-1110`.
 
 As a clue SHAPE (`ClueShape::TRASH_REVEAL`, what DECISION_MAKING.md 3.3 / 4.2
 select), it is wider: any stable clue after which a card in Bob's hand is known
@@ -702,7 +705,7 @@ name-based `includes_pinkish` — and, as of v5.0.0, "a **mixed** useful set is
 not playable by this clue". A set holding both orange and non-orange useful
 identities leaves the receiver unable to tell which button to press, so the
 reading declines; an all-orange one does not, and becomes a *chuck*.
-`src/conventions/reactor0/interpret_clue.cpp:364-451`.
+`src/conventions/reactor0/interpret_clue.cpp:364-459`.
 
 ### dc-target walk
 **Both** buckets try each trash/dupe dc-candidate in turn instead of committing

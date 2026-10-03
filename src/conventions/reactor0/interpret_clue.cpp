@@ -400,6 +400,14 @@ std::optional<int> leftmost_could_be_playable(
   return could_be_playable_end(game, action, candidates, /*from_right=*/false);
 }
 
+std::vector<int> colour_focus_pool(const Game& before, const ClueAction& action) {
+  std::vector<int> fresh;
+  for (int o : action.list_) {
+    if (!before.state.deck[o].clued) fresh.push_back(o);
+  }
+  return fresh.empty() ? action.list_ : fresh;
+}
+
 // Odds and Evens focuses a direct rank play clue from the RIGHT. A rank clue
 // there names a parity class, so it sweeps up 1s, 3s and 5s at once; the
 // convention promises the rightmost of the newly touched cards that could
@@ -565,8 +573,17 @@ std::optional<ClueInterp> stable_colour(const Game& prev, Game& game,
     return stall_or_fix();
   }
 
-  // 3. The leftmost touched card that could be playable is called to play.
-  auto target = leftmost_could_be_playable(game, action, action.list_);
+  // 3. The leftmost NEWLY touched card that could be playable is called to play;
+  // only a clue that touches no new card falls back to the cards it re-touches
+  // (v20.4.0, the user's ruling). With new cards touched and none of them able to
+  // play, the clue calls nothing and the ladder ends in its stall below.
+  //
+  // Replay 2018435 T11: Yellow to yagami_black would re-touch o14, a clued ra1
+  // already played, and newly touch o13, the y1. Read from every touched card the
+  // focus was o14 -- a rainbow card a colour clue may not call (§1f), so the clue
+  // was dropped and will-bot69 locked black with a 3 instead.
+  const std::vector<int> focus_pool = colour_focus_pool(prev, action);
+  auto target = leftmost_could_be_playable(game, action, focus_pool);
   if (target) {
     // Guards shared with reactor's ref_play
     // (src/conventions/reactor/interpret_clue.cpp:291-311): don't stack a

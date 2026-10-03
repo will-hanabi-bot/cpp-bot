@@ -79,7 +79,7 @@ the convention names a Bob and a Cathy and nobody else. See
 [reactor0/CONVENTION.md](src/conventions/reactor0/CONVENTION.md) is
 authoritative. Dispatch is purely positional — a clue to Bob is stable, a
 clue to anyone else is reactive. Stable colour clues are *direct* play
-clues (play the leftmost touched card that could be playable); stable rank
+clues (play the leftmost newly touched card that could be playable, v20.4.0); stable rank
 clues run a six-priority ladder ending in reactor's referential discard.
 Reactive clues drop the focus concept: the anchor of
 `react_slot + target_slot ≡ anchor (mod hand size)` is the **clue value**

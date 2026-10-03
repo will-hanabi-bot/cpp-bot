@@ -1114,14 +1114,22 @@ bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& act
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return false;
   if (view.size() != s.play_stacks.size()) return false;
-  // The worlds of the PAIR's own hole cards, and nobody else's: those are what the
-  // giver and the receiver cannot name, so they are where the clue is ambiguous TO
-  // THEM. A third seat's hole cards are not -- both of them watched those go in.
+  // The worlds of the RECEIVER's own hole cards, and nobody else's: those are what
+  // the receiver cannot name, so they are where the clue is ambiguous to it. A third
+  // seat's hole cards are not -- both of the pair watched those go in.
   // Our own, when we are that third seat, are our private uncertainty, and
   // widening the shared reading with them would write one seat's doubt into
   // `common` (replay 2011397 T3: will-bot69's {g1,b1} turned yagami's clued b1 into
   // {b1,b2} at will-bot69's seat alone, and rule 1 never fired on it).
-  const std::vector<int> holders{action.giver, action.target};
+  //
+  // The RECEIVER's hole cards only, not the giver's (v20.4.0, the user's ruling).
+  // A stable clue is read on the giver's own stacks: the giver cannot know which
+  // world of its own hole cards it is in, so it meant the card its frame names. If
+  // its hole card was in fact that card, the receiver -- who watched it go in --
+  // throws the call as the dupe (`repin_own_call`'s named dupe, v18.18.0). Replay
+  // 2018435 T11: will-bot69's Yellow named black's y1, but widened by will-bot69's
+  // own `{y1,g1,b1,ra1}` it read `{y1,y2}`, and §2c dropped it as unnamed.
+  const std::vector<int> holders{action.target};
   const State frame = s.with_stacks(view);
   // Worlds are replayed on the frame with its BAND: `view` may already carry the
   // floor these same worlds produced (v16.24.0).

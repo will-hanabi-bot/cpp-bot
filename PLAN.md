@@ -28,9 +28,9 @@ Reactor0's decision layer is a fork of reactor's scorer. Every clue is collapsed
 into a `double` and compared by a global argmax:
 
 ```
-get_result            reactor0/state_eval.cpp:263-396   16 tuned literals
-clue_branch_value     reactor0/state_eval.cpp:398-403   damping + flat tempo tax
-eval_action           reactor0/state_eval.cpp:463-524   gate + advance() lookahead
+get_result            reactor0/state_eval.cpp:263-397   16 tuned literals
+clue_branch_value     reactor0/state_eval.cpp:399-404   damping + flat tempo tax
+eval_action           reactor0/state_eval.cpp:464-525   gate + advance() lookahead
         ↓
 Game::take_action argmax          src/basics/decide.cpp:1185-1190
 ```
@@ -176,7 +176,7 @@ The implementation should invent none of these:
 
 | Need | Existing | Where |
 |---|---|---|
-| reactive vs stable | positional compare `action.target != bob` | `reactor0/interpret_clue.cpp:638-649` |
+| reactive vs stable | positional compare `action.target != bob` | `reactor0/interpret_clue.cpp:655-666` |
 | two new plays | `new_play_facts(...).count >= 2` | `reactor0/state_eval.cpp:184-201` |
 | finesse (H4) | rank Phase B | `reactor0/interpret_reactive.cpp:384-448` |
 | double discard | rank Phase C | `reactor0/interpret_reactive.cpp:449-483` |
@@ -242,7 +242,7 @@ receiver-CTD) have **no analogue** in the tree:
   could share a suit under their non-global inferences.
 - **Ordering is inconsistent.** `signal_turn` is the only timestamp, it is
   *set-once* (`card.cpp:112-117`), it is **absent** on three stamping paths
-  (`reactor0/interpret_clue.cpp:548-551`, `reactor0/interpret_reaction.cpp:57-61`,
+  (`reactor0/interpret_clue.cpp:556-559`, `reactor0/interpret_reaction.cpp:57-61`,
   `reactor/interpret_clue.cpp:380-390`), and its missing-value convention differs
   across call sites (`99` / `99` / `0` / `-1` / `-1`).
 

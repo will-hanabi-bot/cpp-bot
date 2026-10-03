@@ -320,7 +320,8 @@ bool has_colour_play_clue_for(const Game& game, int giver, int receiver) {
     auto touched = s.clue_touched(s.hands[receiver], c.kind, c.value);
     if (touched.empty()) continue;
     ClueAction probe{giver, receiver, touched, c.base()};
-    auto target = leftmost_could_be_playable(game, probe, probe.list_);
+    // The same focus the reading takes: newly touched cards first (v20.4.0).
+    auto target = leftmost_could_be_playable(game, probe, colour_focus_pool(game, probe));
     if (!target) continue;
     if (game.is_blind_playing(*target)) continue;
     auto tid = s.deck[*target].id();

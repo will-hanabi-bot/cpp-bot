@@ -173,7 +173,7 @@ ClueReading read_stable(const Game& game, const Game& hypo,
   }
 
   // A trash reveal stamps no status at all. The rank branch that touches only
-  // trash sets meta.trash on the new cards (reactor0/interpret_clue.cpp:1082-1093),
+  // trash sets meta.trash on the new cards (reactor0/interpret_clue.cpp:1099-1110),
   // and that one-field diff isolates it from the other REVEAL branches, none of
   // which flag a newly touched card.
   for (int o : hypo.state.hands[target]) {
@@ -1795,7 +1795,7 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
     // unguarded call asks whether Bob could colour-clue *Alice*, which is a
     // real but entirely different question and would veto the lock on the
     // strength of it. This is H1c's `!has_cathy ||` idiom
-    // (`state_eval.cpp:551-552`).
+    // (`state_eval.cpp:552-553`).
     const bool bob_can_handle_cathy =
         has_cathy(g) && has_colour_play_clue_for(g, bob_of(g), cathy_of(g));
     // Throw It in a Hole: no lock over a chop worse than one away (v20.2.0, the

@@ -339,6 +339,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_reversed_finesse.cpp
   tests/test_reactor0/test_stable_colour.cpp
   tests/test_reactor0/test_stable_colour_baseline.cpp
+  tests/test_reactor0/test_stable_colour_new_touch_focus.cpp
   tests/test_reactor0/test_stable_rank.cpp
   tests/test_reactor0/test_stable_chuck_drops_criticals.cpp
   tests/test_reactor0/test_odds_and_evens.cpp
@@ -406,6 +407,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2018365_no_lock_over_far_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2018365_play_over_forced_clue_at_eight.cpp
   tests/test_tiiah/test_decision_making/test_no_lock_over_far_chop.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2018435_yellow_focuses_newly_touched_card.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
