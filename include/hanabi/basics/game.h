@@ -118,6 +118,12 @@ struct ReactorWC {
   // giver and the reacter need it to predict what the receiver will be able to
   // name (`tiiah::reaction_team_reading`). Empty where the walk did not run.
   IdentitySet react_before = IdentitySet::empty();
+  // THROW IT IN A HOLE, the REVERSE arm only: the receiver's standing plays in the
+  // position BEFORE this clue -- what put the table in the reverse position
+  // (v20.3.0). The reverse reactive stands only if the receiver's next action
+  // plays one of these; a card this clue newly made playable does not confirm it
+  // (`tiiah::confirm_reverse_reactive`, replay 2018428).
+  std::vector<int> receiver_standing;
 
   bool operator==(const ReactorWC&) const = default;
 };

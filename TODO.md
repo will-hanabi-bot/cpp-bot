@@ -1181,14 +1181,14 @@ the comment at the seam (`decide.cpp:650-654`) deliberately avoided.
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:257`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:262`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
 what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
 REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:702-716`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:309`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:314`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has

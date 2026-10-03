@@ -167,7 +167,7 @@ unbooked, since which card was which is exactly what is unknown.
 The stacks a reactive's target is walked in: the **minimum**, suit by suit, across
 every world the reacter can live in, from the giver's perspective (v16.24.0). For the
 pair it is their row; for an outside seat, the shared view floored over every seat's
-worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:175-189`.
+worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:176-190`.
 CONVENTION.md §1e. It replaced "assume none of the superposed cards were played".
 
 ### feasible world
@@ -259,7 +259,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1129-1175`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1142-1188`.
 CONVENTION.md §1d.
 
 ### proven finesse
@@ -267,7 +267,7 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:921-956`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:934-969`. CONVENTION.md §1d.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -297,17 +297,26 @@ name different slots (replay 2010246 T2). For readers it is purely the
 ### known play
 A card whose clue-touch empathy (`possible` in `common`) allows only identities
 playable on the **shared view** (v18.0.0). Inferences and a seat's own stacks do
-not count, because every seat must reach the same answer. One half of a *standing
-play*, which is what the dispatch asks.
-`has_known_play`, `src/conventions/variants/hole.cpp:61-80`. CONVENTION.md §1c.
+not count, because every seat must reach the same answer. Not enough for a
+*standing play* since v20.3.0: that needs a *sure play*.
+`has_known_play`, `src/conventions/variants/hole.cpp:61-81`. CONVENTION.md §1c.
+
+### sure play
+A known play none of whose identities could already be in the hole: no unsettled
+hole card's team set holds an identity of that suit at or beyond it (v20.3.0, the
+user's ruling). There is no good touch on an ancillary touched card, and the shared
+view is the minimum across the hole's worlds, so a touched-but-uncalled card may
+be a dupe. It need not be called, nor a singleton: a yellow card filled in as a 1
+is one. `possibly_in_the_hole` / `is_standing_play`,
+`src/conventions/variants/hole.cpp:101-146`. CONVENTION.md §1c, replay 2018428.
 
 ### standing play
-A *known play*, or a card called to play, whatever its inference and touches, whose
+A *sure play*, or a card called to play, whatever its inference and touches, whose
 call every seat stamps alike: a **clued** call (v18.3.0), which a stable colour clue
 stamps by its nature, or a **settled** one, which is no longer urgent (v18.10.0; a
 receiver's call once its reaction is played). A pending reaction call is left out.
 It decides the *reverse-reactive position* (v18.3.0).
-`has_standing_play`, `src/conventions/variants/hole.cpp:82-98`. CONVENTION.md §1c.
+`has_standing_play`, `src/conventions/variants/hole.cpp:83-99`. CONVENTION.md §1c.
 
 ### world fallback
 How a reactive clue is read when no pairing reads on the walk's frame: the
@@ -335,23 +344,25 @@ reviewer's rule). A seat that cannot tell reads the reverse reactive, and the
 
 ### reverse-reactive confirmation
 A reverse reactive stands only if its receiver's next non-clue action plays one of
-his *standing plays*. A play of an uncalled card, or a discard, withdraws it
-(v18.11.0; the reviewer's rule). This is how a Cathy who cannot tell a fix from a
+his *standing plays* -- one of those that made the position, recorded before the
+clue (`ReactorWC::receiver_standing`, v20.3.0). A play of any other card, including
+one the reverse clue itself newly made playable, or a discard, withdraws it
+(v18.11.0; the reviewer's rule; replay 2018428 T17). This is how a Cathy who cannot tell a fix from a
 reverse reactive learns which it was. `tiiah::confirm_reverse_reactive`,
-`src/conventions/tiiah/interpret_reactive.cpp:207-240`. CONVENTION.md §1c.
+`src/conventions/tiiah/interpret_reactive.cpp:208-245`. CONVENTION.md §1c.
 
 ### role inversion
 The clue-to-Cathy half of the *reverse-reactive position*: Bob holds a *standing
 play* and Cathy does not, so a clue to Cathy is STABLE rather than reactor0's
 ordinary reactive (v18.2.0). `inverted_stable`,
-`src/conventions/variants/hole.cpp:116-124`; replay 2013645 T11. CONVENTION.md §1c.
+`src/conventions/variants/hole.cpp:148-156`; replay 2013645 T11. CONVENTION.md §1c.
 
 ### gotten
 A card already called to play: a reactive's target walk passes over it, since a
 new reactive has to get something new. When every playable and finesse target in
 the receiver's hand is gotten, the walk takes the leftmost gotten one instead
 (v18.5.0; human diagnostic 2013726 T38). `receiver_targets`,
-`src/conventions/tiiah/interpret_reactive.cpp:242-296`. CONVENTION.md §1c.
+`src/conventions/tiiah/interpret_reactive.cpp:247-301`. CONVENTION.md §1c.
 
 ### reverse reactive
 The second of TIIAH's two dispatches. When Bob holds a *standing play* and Cathy
@@ -362,7 +373,7 @@ that position reactor0's positional rule stands: a clue to Cathy is the reactive
 one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:126-149`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:158-183`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch
@@ -381,7 +392,7 @@ inverted card. Inverted playables and inverted finesses are otherwise skipped as
 reactive targets. The reacter's own card has to be **affordable to chuck** —
 inverted and playable, so the button plays it, or simply not critical — and a
 pairing that fails that is refused outright, since the reacter cannot see their
-own hand. `safe_to_chuck`, `src/conventions/tiiah/interpret_reactive.cpp:97-103`.
+own hand. `safe_to_chuck`, `src/conventions/tiiah/interpret_reactive.cpp:98-104`.
 CONVENTION.md §1d.
 
 ### delayed call

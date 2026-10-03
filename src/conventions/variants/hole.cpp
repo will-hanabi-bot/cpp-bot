@@ -66,8 +66,9 @@ bool has_known_play(const Game& game, int player) {
   // allow is playable there.
   //
   // Inferences and a seat's own stacks are left out, because each of them can
-  // differ between seats. A standing call is added on top by `has_standing_play`,
-  // which is what the dispatch asks (v18.3.0).
+  // differ between seats. The dispatch asks `has_standing_play` instead (v18.3.0),
+  // whose touch arm is stricter since v20.3.0: none of the identities may be one
+  // the hole could already hold (`is_standing_play`).
   const State shared = s.shared_view();
   for (int o : s.hands[player]) {
     const IdentitySet& touched = game.common.thoughts[o].possible;
@@ -97,14 +98,45 @@ bool has_standing_play(const Game& game, int player) {
   return false;
 }
 
+bool possibly_in_the_hole(const Game& game, Identity id) {
+  const State shared = game.state.shared_view();
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    const ConvData& m = game.meta[o];
+    const IdentitySet& team = m.shared_left.non_empty() ? m.shared_left : m.superposition;
+    // A settled hole card (one identity) is already on the shared view.
+    if (team.length() <= 1) continue;
+    const bool reaches = team.exists([&](Identity j) {
+      return j.suit_index == id.suit_index &&
+             shared.playable_away(j) >= shared.playable_away(id);
+    });
+    if (reaches) return true;
+  }
+  return false;
+}
+
 bool is_standing_play(const Game& game, int order) {
   const State& s = game.state;
   if (order < 0 || order >= static_cast<int>(game.meta.size())) return false;
-  // A known play: every identity its touches allow is playable on the shared view.
+  // A SURE play (v20.3.0): every identity its touches allow is playable on the
+  // shared view, and none of them could already be in the hole. The shared view
+  // is the MINIMUM across the hole's worlds, so "playable there" alone is not
+  // enough -- and there is no good touch on an ancillary touched card, so a card
+  // that was touched but not called may be exactly such a dupe.
+  //
+  // Replay 2018428 T16: black's T7 1 had called will-bot69's o15 and only touched
+  // o5, `{r1,y1,g1,b1,p1,ra1}`. Every 1 was playable on the shared view, so o5 put
+  // the table in the reverse position, and black's next 1 to will-bot69 read as a
+  // reverse reactive: will-bot67 blind-played its o11 as a g2 into a strike. But
+  // o8 `{g1,b1}`, o13 `{r1,y1}` and o15 (any 1) could each hold one of those 1s.
+  //
+  // A card need not be called, and its identity need not be a singleton: a yellow
+  // card filled in as a 1 is a sure play (the user's ruling), and so is a `{y1,g1}`
+  // when nothing in the hole could be either.
   const IdentitySet& touched = game.common.thoughts[order].possible;
   const State shared = s.shared_view();
-  if (touched.non_empty() &&
-      touched.forall([&shared](Identity i) { return shared.is_playable(i); })) {
+  if (touched.non_empty() && touched.forall([&](Identity i) {
+        return shared.is_playable(i) && !possibly_in_the_hole(game, i);
+      })) {
     return true;
   }
   // A call every seat stamps alike: clued, or settled (see `has_standing_play`).
@@ -135,7 +167,9 @@ bool reverse_reactive_position(const Game& prev, int giver) {
   // unplayable identities. Human diagnostic 2013726 T30
   // (v18_human_vs_bot_diagnostics/2013726.md): black held a called r4 touched as
   // r1-r5, so blue's Brown to black -- a reverse-reactive finesse of green's n3
-  // into black's n4, which v16.29.0 gave -- was not available.
+  // into black's n4, which v16.29.0 gave -- was not available. An uncalled card
+  // counts only as a SURE play, one nothing in the hole could have made trash
+  // (v20.3.0, replay 2018428; `is_standing_play`).
   return has_standing_play(prev, bob) && !has_standing_play(prev, cathy);
 }
 

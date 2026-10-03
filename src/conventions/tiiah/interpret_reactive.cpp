@@ -1,5 +1,6 @@
 #include "hanabi/conventions/tiiah/interpret_reactive.h"
 
+#include <algorithm>
 #include <optional>
 #include <vector>
 
@@ -211,10 +212,14 @@ bool confirm_reverse_reactive(Game& game, int actor, int order, bool was_play) {
   if (wc.inverted || wc.receiver != actor) return false;
   // The REVERSE arm only: its receiver is the giver's Bob, and moves first.
   if (wc.receiver != game.state.next_player_index(wc.giver)) return false;
-  // A standing play as the position counted it, before this action: a known play,
-  // or a clued or settled call.
+  // One of the standing plays that MADE the position, recorded before the clue
+  // (v20.3.0). Asking `is_standing_play` now, after the clue, also accepted the
+  // card the clue itself made playable. Replay 2018428 T17: will-bot69 played the
+  // ra1 black's 1 had just touched, an unrelated card that should have withdrawn
+  // the reverse reactive, and at T18 will-bot67 blind-played its o11 into a strike.
   const bool plays_a_standing_call =
-      was_play && hanabi::reactor::variants::is_standing_play(game, order);
+      was_play && std::find(wc.receiver_standing.begin(), wc.receiver_standing.end(),
+                            order) != wc.receiver_standing.end();
   if (plays_a_standing_call) return false;  // confirmed
   game.waiting.clear();
   hanabi::reactor0::retire_pending_reaction(game, wc.reacter);
@@ -360,6 +365,14 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     wc.receiver_frame = state.common_play_stacks;
     for (int o : state.hands[receiver]) {
       if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) wc.receiver_called.push_back(o);
+    }
+  } else {
+    // The reverse arm: the standing plays that made the position, read BEFORE this
+    // clue, which is what its confirmation asks the receiver to play (v20.3.0).
+    for (int o : prev.state.hands[receiver]) {
+      if (hanabi::reactor::variants::is_standing_play(prev, o)) {
+        wc.receiver_standing.push_back(o);
+      }
     }
   }
   game.waiting.clear();

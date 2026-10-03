@@ -47,18 +47,24 @@ State stacks_after_queued_plays(const Game& game,
 
 // Does this seat hold a KNOWN PLAY? A card whose clue-touch empathy (`possible`
 // in `common`) allows only identities playable on the shared view (v18.0.0).
-// Read from what every seat computes alike. Part of a STANDING play, below.
-// tiiah/CONVENTION.md §1c.
+// Read from what every seat computes alike. No longer what a STANDING play asks
+// (v20.3.0): see `is_standing_play`. tiiah/CONVENTION.md §1c.
 bool has_known_play(const Game& game, int player);
 
-// Does this seat hold a STANDING PLAY (v18.2.0)? A known play, or a card stamped
+// Could `id` already be down in some world of the hole (v20.3.0)? Some unsettled
+// hole card's team set (`shared_left`, else `superposition`) holds an identity of
+// `id`'s suit at or beyond it on the shared view. Every seat reads the same sets.
+bool possibly_in_the_hole(const Game& game, Identity id);
+
+// Does this seat hold a STANDING PLAY (v18.2.0)? A sure play, or a card stamped
 // CALLED_TO_PLAY, whatever its inference, whose call every seat stamps alike: a
 // clued one (v18.3.0), or a settled one that is no longer urgent (v18.10.0). It
 // decides the reverse-reactive position (v18.3.0), and with it role inversion.
 bool has_standing_play(const Game& game, int player);
 
-// Is this one card a standing play (v18.11.0)? A known play, or a clued or settled
-// call -- the per-card test `has_standing_play` asks of every card in a hand, and
+// Is this one card a standing play (v18.11.0)? A SURE play -- every identity its
+// touches allow is playable on the shared view, and none could already be in the
+// hole (v20.3.0) -- or a clued or settled call: the per-card test `has_standing_play` asks of every card in a hand, and
 // what a reverse reactive's receiver must play for it to stand
 // (`tiiah::confirm_reverse_reactive`).
 bool is_standing_play(const Game& game, int order);
