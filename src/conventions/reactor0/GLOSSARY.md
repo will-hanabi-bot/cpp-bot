@@ -24,7 +24,7 @@ visibility. All four must hold: Alice knows the identity and it is not basic
 trash; there is **no second copy in the holder's own hand**; no copy is
 visible in the third player's hand; and Alice cannot prove she is holding a
 copy (see *group elim*). Input to H1 and N2/N3 (DECISION_MAKING.md).
-`src/conventions/reactor0/state_eval.cpp:166-190`. Stricter than reactor's
+`src/conventions/reactor0/state_eval.cpp:180-204`. Stricter than reactor's
 `chop_is_nontrash` (`src/conventions/reactor/state_eval.cpp:44-49`), which
 tests basic trash only.
 
@@ -682,7 +682,7 @@ hand. A NOT-LOW condition of the *pace-clue tier gate*: it lifts every clue
 that turn to at least MEDIUM, because the team is expecting that card to be
 saved or played. Weaker than *at-risk chop* — it ignores copies in Cathy's
 hand and in Alice's — which is the point: the card need not be in danger to be
-worth a clue. `src/conventions/reactor0/state_eval.cpp:197-213`;
+worth a clue. `src/conventions/reactor0/state_eval.cpp:211-227`;
 DECISION_MAKING.md, *Clue Tier Definitions*. Added after replay 1942330 T33.
 
 ### touched-card rank classification

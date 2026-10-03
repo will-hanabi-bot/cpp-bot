@@ -1795,10 +1795,23 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
     // unguarded call asks whether Bob could colour-clue *Alice*, which is a
     // real but entirely different question and would veto the lock on the
     // strength of it. This is H1c's `!has_cathy ||` idiom
-    // (`state_eval.cpp:537-538`).
+    // (`state_eval.cpp:551-552`).
     const bool bob_can_handle_cathy =
         has_cathy(g) && has_colour_play_clue_for(g, bob_of(g), cathy_of(g));
-    if (close >= 3 && !bob_can_handle_cathy &&
+    // Throw It in a Hole: no lock over a chop worse than one away (v20.2.0, the
+    // user's ruling). The variant is hard enough that committing Bob's whole hand
+    // is only worth it for a chop that is critical, playable or one away; anything
+    // further and Alice does something else -- most often her own standing play.
+    // Human diagnostic 2018365 T7 (v18_human_vs_bot_diagnostics/2018365.md): green,
+    // holding a called y1, locked black with a 2 over a y4 chop on empty yellow.
+    // 3.6b goes with it, since it only ever replaces this lock.
+    const bool far_chop = g.state.variant->throw_it_in_a_hole &&
+                          !chop_worth_a_lock(g, bob_of(g));
+    if (far_chop && close >= 3) {
+      hanabi::logging::log_branch("reactor0.rung_3_7_far_chop_no_lock",
+                                  {{"bob", bob_of(g)}});
+    }
+    if (!far_chop && close >= 3 && !bob_can_handle_cathy &&
         !(has_cathy(g) && chop_is_critical(g, cathy_of(g)))) {
       if (const ClueCandidate* lock = first_of(g, pool_lock(g, cs))) {
         // 3.6b -- ...unless, below 3.1's clue count, a stable play clue to Bob
@@ -1939,9 +1952,10 @@ const ClueCandidate* rung_safe_stall(const Game& g,
 }  // namespace
 
 bool priority_4_applies(const Game& g, const std::vector<ClueCandidate>& cs) {
-  // THREE SEPARATE TRIGGERS (v13.2.0). Locked and 8-clues are unqualified, as
-  // they always were: in both, cluing is the only thing Alice can do that is not
-  // burning a card. The PACE arm is the one that carries a qualifier, and it
+  // THREE SEPARATE TRIGGERS (v13.2.0). Locked is unqualified, as it always
+  // was: cluing is the only thing a locked Alice can do that is not burning a
+  // card. 8 tokens was unqualified too, until v20.2.0 gave it the pace arm's
+  // qualifiers (below). The PACE arm carries a qualifier, and it
   // widened from `pace() == 0` to `pace() <= 1` -- with 4a-4c naming the three
   // positions where opening section 4 that early is worth it.
   const bool locked = g.common.thinks_locked(g, alice_of(g));
@@ -2001,8 +2015,18 @@ bool priority_4_applies(const Game& g, const std::vector<ClueCandidate>& cs) {
     return c.new_plays >= 2;
   });
 
-  const bool low_pace_opens = g.state.pace() <= 1 && (a4 || a4b || a4c);
-  return g.state.clue_tokens == 8 || locked || low_pace_opens;
+  // 8 TOKENS carries the same qualifiers as the pace arm (v20.2.0). A discard is
+  // illegal there, but a PLAY is not: an Alice holding a known play is not
+  // forced to clue, and §4's floor would otherwise hand her a clue that does
+  // nothing in place of it. Human diagnostic 2018365 T10
+  // (v18_human_vs_bot_diagnostics/2018365.md): green, holding a called y1 at 8
+  // tokens, gave Blue on black's already-clued b3 -- a clue that saved nothing,
+  // with black's chop a same-hand dupe. §1-§3 are untouched: a clue they find
+  // (a save, a reactive play) is still given at 8 tokens.
+  const bool forced_opens = a4 || a4b || a4c;
+  const bool low_pace_opens = g.state.pace() <= 1 && forced_opens;
+  const bool eight_opens = g.state.clue_tokens == 8 && forced_opens;
+  return eight_opens || locked || low_pace_opens;
 }
 
 namespace {
@@ -2011,7 +2035,8 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // "Alice is LOCKED or at 8 clues and is forced to clue or pitch." Both are
   // positions where the ordinary list has run out and she still has to do
   // something: at 8 tokens a discard is illegal, and locked she has no chop to
-  // discard, so her only alternative to cluing is burning a card.
+  // discard, so her only alternative to cluing is burning a card. At 8 tokens
+  // that holds only while she has no known play (v20.2.0, `priority_4_applies`).
   //
   // Replay 1966633 T5 is the locked half. Bob held a standing CTD, so the whole
   // of priority 3 declined on "no safe play or discard", section 4 needed 8

@@ -26,6 +26,7 @@ elsewhere.
 | [2014076](2014076.md) | Throw It in a Hole & Brown (6 Suits), tiiah | yagami_light | T14 (deferred collapse on a re-touched clued card), T18 (occupied Alice saves Bob's playable chop) | T14 fixed (v18.12.0), T18 (v18.13.0) |
 | [2014538](2014538.md) | Throw It in a Hole & Brown (6 Suits), tiiah | yagami_black | T21 (clue economy at 2 clues with a player locked), T23 (a colour stable play over a rank stall, role inversion), T24 (a stable play before locking a stuck Bob) | T21 recorded only (ruling); T23 fixed (v18.15.0), T24 (v18.16.0) |
 | [2014561](2014561.md) | Throw It in a Hole & Brown (6 Suits), tiiah | yagami_black | T49 (tiebreak stable plays by the receiver's inferences), T50 (a four-step stable play hierarchy), T56 (a named call past the own-dupe veto), T66 (endgame: single out Bob's, then Cathy's, good card) | T49 no change (ruling); T66 verified; T50 fixed (v18.17.0), T56 (v18.18.0) |
+| [2018365](2018365.md) | Throw It in a Hole & Null (6 Suits), tiiah | yagami_black | T7 (no lock over a chop worse than one away), T10 (no forced clue at 8 tokens while Alice can play) | T7 fixed (v20.2.0), T10 (v20.2.0) |
 
 ## Template
 

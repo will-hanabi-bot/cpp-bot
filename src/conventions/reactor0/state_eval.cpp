@@ -164,6 +164,20 @@ bool chop_is_critical(const Game& game, int player) {
   return !chop_is_free_chuck(s, chop);
 }
 
+// Rung 3.7's Throw It in a Hole gate. `playable_away` is 0 for a playable card
+// and 1 for one a single card short; trash reads negative and is not worth a lock.
+bool chop_worth_a_lock(const Game& game, int player) {
+  const State& s = game.state;
+  auto chop = game.chop(player);
+  if (!chop) return false;  // locked hand — no chop
+  auto id = s.deck[*chop].id();
+  if (!id) return false;  // unknown from our POV — cannot verify
+  if (s.is_basic_trash(*id)) return false;
+  if (s.is_critical(*id)) return true;
+  const int away = s.playable_away(*id);
+  return away >= 0 && away <= 1;
+}
+
 bool at_risk_chop(const Game& game, int alice, int player) {
   const State& s = game.state;
   auto chop = game.chop(player);

@@ -28,9 +28,9 @@ Reactor0's decision layer is a fork of reactor's scorer. Every clue is collapsed
 into a `double` and compared by a global argmax:
 
 ```
-get_result            reactor0/state_eval.cpp:249-382   16 tuned literals
-clue_branch_value     reactor0/state_eval.cpp:384-389   damping + flat tempo tax
-eval_action           reactor0/state_eval.cpp:449-510   gate + advance() lookahead
+get_result            reactor0/state_eval.cpp:263-396   16 tuned literals
+clue_branch_value     reactor0/state_eval.cpp:398-403   damping + flat tempo tax
+eval_action           reactor0/state_eval.cpp:463-524   gate + advance() lookahead
         ↓
 Game::take_action argmax          src/basics/decide.cpp:1185-1190
 ```
@@ -177,7 +177,7 @@ The implementation should invent none of these:
 | Need | Existing | Where |
 |---|---|---|
 | reactive vs stable | positional compare `action.target != bob` | `reactor0/interpret_clue.cpp:638-649` |
-| two new plays | `new_play_facts(...).count >= 2` | `reactor0/state_eval.cpp:170-187` |
+| two new plays | `new_play_facts(...).count >= 2` | `reactor0/state_eval.cpp:184-201` |
 | finesse (H4) | rank Phase B | `reactor0/interpret_reactive.cpp:384-448` |
 | double discard | rank Phase C | `reactor0/interpret_reactive.cpp:449-483` |
 | reactive lock | `predicts_reactive_lock` | `reactor0/interpret_reaction.cpp:31-47` |

@@ -1647,7 +1647,7 @@ an illegal one. `Reactor0TargetParity.EightCluesNoLongerMakesAClueToBobStable`
 records the rule change and points here.
 
 Only TWO sites take the gate. `clue_is_reactive` is one. The other is
-`has_colour_play_clue_for` (`state_eval.cpp:273-302`), which models a *stable*
+`has_colour_play_clue_for` (`state_eval.cpp:287-316`), which models a *stable*
 colour clue and used to return false outright here — the question it answers is
 "could Bob have handled Cathy himself?", and Cathy is Bob's own "Bob", so past
 the threshold that clue is stable and the question has a real answer again.

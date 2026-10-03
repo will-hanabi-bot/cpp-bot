@@ -451,6 +451,12 @@ Alice holding a call of her own still gives it (v18.13.0,
 `cathy_chop_is_safe_to_lose` in `reactor0/decision.cpp`). CONVENTION.md §2e, human
 diagnostic 2014076 T18.
 
+### lockable chop / far chop
+A chop is **lockable** when it is critical, playable or one away from playable on
+Alice's own stacks. Anything further away is a **far chop**. Rung 3.7 does not lock
+Bob over a far chop in this variant (v20.2.0, `chop_worth_a_lock` in
+`reactor0/state_eval.cpp`). CONVENTION.md §2h, human diagnostic 2018365 T7.
+
 ### stable play hierarchy
 How competing stable play clues are ranked (v18.17.0). All four keys come from the
 giver's model of the receiver once the clue has landed, and each is judged over

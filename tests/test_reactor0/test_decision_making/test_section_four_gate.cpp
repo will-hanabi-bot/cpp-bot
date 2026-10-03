@@ -7,8 +7,10 @@
 //        4b  Bob holds a playable he does not know about, and Cathy has none
 //        4c  some candidate gets TWO cards playing
 //
-// The first two are UNQUALIFIED -- in both, every alternative to cluing burns a
-// card -- and 4a-4c hang off the pace arm alone. Through v13.1.0 that arm read
+// Locked is UNQUALIFIED -- every alternative to cluing burns a card. 8 clues
+// carries 4a-4c too since v20.2.0, because a play is legal at 8 tokens (human
+// diagnostic 2018365 T10); until then 4a-4c hung off the pace arm alone, and
+// through v13.1.0 that arm read
 // `pace() == 0 && Alice has no known playable`; v13.2.0 widened the pace and
 // added 4b and 4c as further ways in.
 //
@@ -231,18 +233,17 @@ TEST(Reactor0SectionFourGate, PaceTwoIsClosedEvenWhenFourAHolds) {
   EXPECT_FALSE(hanabi::reactor0::priority_4_applies(g, kNoCandidates));
 }
 
-// --- the two unqualified arms ---------------------------------------------
+// --- the 8-token and locked arms -------------------------------------------
 
-TEST(Reactor0SectionFourGate, EightCluesOpensWithoutFourAToFourC) {
+TEST(Reactor0SectionFourGate, EightCluesIsClosedWhileAliceHasAKnownPlay) {
   Game g = alice_sees_a_play(5);  // pace 5, and 4a false
   ASSERT_FALSE(hanabi::reactor0::priority_4_applies(g, kNoCandidates))
       << "guard: closed on its own terms before the tokens are raised";
 
   Game h = g;
   h.state.clue_tokens = 8;
-  EXPECT_TRUE(hanabi::reactor0::priority_4_applies(h, kNoCandidates))
-      << "at 8 tokens a discard is illegal, so cluing is forced whatever Alice "
-         "can see -- 4a-4c gate the PACE arm only";
+  EXPECT_FALSE(hanabi::reactor0::priority_4_applies(h, kNoCandidates))
+      << "a play is legal at 8 tokens, so Alice holding one is not forced to clue";
 }
 
 TEST(Reactor0SectionFourGate, LockedOpensWithoutFourAToFourC) {
@@ -262,4 +263,26 @@ TEST(Reactor0SectionFourGate, LockedOpensWithoutFourAToFourC) {
   EXPECT_TRUE(hanabi::reactor0::priority_4_applies(g, kNoCandidates))
       << "locked is its own trigger: with no chop, every alternative to cluing "
          "burns a card";
+}
+
+// v20.2.0: the 8-token arm takes the pace arm's qualifiers. With nothing Alice
+// knows she can play (4a), 8 tokens still opens section 4: a discard is illegal,
+// so cluing is all that is left. Human diagnostic 2018365 T10
+// (v18_human_vs_bot_diagnostics/2018365.md).
+TEST(Reactor0SectionFourGate, EightCluesOpensWhenFourAHolds) {
+  Game g = alice_blind(5);
+  ASSERT_TRUE(g.me().thinks_playables(g, (int)TestPlayer::ALICE).empty())
+      << "guard: 4a holds";
+  g.state.clue_tokens = 8;
+  EXPECT_TRUE(hanabi::reactor0::priority_4_applies(g, kNoCandidates))
+      << "at 8 tokens with no known play, cluing is forced";
+}
+
+// ...and a candidate that gets two plays (4c) opens it even beside Alice's play.
+TEST(Reactor0SectionFourGate, EightCluesOpensBesideAKnownPlayForTwoPlays) {
+  Game g = alice_sees_a_play(5);
+  g.state.clue_tokens = 8;
+  auto cands = candidate_with_two_plays(g);
+  ASSERT_FALSE(cands.empty()) << "guard: the position offers a legal clue";
+  EXPECT_TRUE(hanabi::reactor0::priority_4_applies(g, cands));
 }

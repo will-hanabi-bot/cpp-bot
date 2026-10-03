@@ -57,6 +57,13 @@ bool has_playable_chop(const Game& game, int player);
 // cannot see, as with its siblings above.
 bool chop_is_critical(const Game& game, int player);
 
+// "`player`'s chop is worth locking over" — Throw It in a Hole's gate on rung
+// 3.7: the chop is critical, playable, or ONE AWAY from playable on our own
+// stacks. Anything further away is not worth committing a whole hand for in a
+// variant this hard (human diagnostic 2018365 T7). False for a locked hand and for
+// a chop whose identity the caller cannot see.
+bool chop_worth_a_lock(const Game& game, int player);
+
 // What a clue's interpretation does to the play count, walked as CTP-status
 // transitions between the real game and the clue's hypo.
 //

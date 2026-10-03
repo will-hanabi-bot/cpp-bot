@@ -135,7 +135,7 @@ live-game evidence first.
 
 ## 4. `[reactor0]` `new_play_facts` undercounts plays on an inverted suit
 
-`new_play_facts` (`src/conventions/reactor0/state_eval.cpp:170-187`) counts
+`new_play_facts` (`src/conventions/reactor0/state_eval.cpp:184-201`) counts
 `CALLED_TO_PLAY` transitions only. On an inverted suit a *play* call is stamped
 `CALLED_TO_DISCARD` (`reactor0/interpret_reactive.cpp:459-462`), so a genuine
 two-play reactive reads as zero plays there.
@@ -360,7 +360,7 @@ candidate pipeline:
 - Neither `get_result` reads `hypo.state.strikes` — reactor's
   (`reactor/state_eval.cpp:152-292`) or reactor0's (§2c) — and reactor0's §2b
   filter returns early in any inverted variant
-  (`reactor0/state_eval.cpp:532`), which is exactly where a chuck can strike.
+  (`reactor0/state_eval.cpp:546`), which is exactly where a chuck can strike.
 - `find_all_clues`'s `reacter_critical_discard` guard
   (`src/basics/decide.cpp:593-607`) tests `is_critical`, not "would strike",
   and is unreachable from `take_action`, which builds its own pool at
@@ -444,7 +444,7 @@ hardest in Dark Orange, where every card is `oneOfEach` and therefore critical.
   gating out the orange tiering that would otherwise give a stack-advancing
   discard `1.0`. This binds reactor0 too, but only until v7.1.0: reactor0
   reaches it solely by delegating non-clue actions at
-  `reactor0/state_eval.cpp:451-452`, and phase 2 of the decision overhaul
+  `reactor0/state_eval.cpp:465-466`, and phase 2 of the decision overhaul
   replaces that delegation. Re-label this bullet **reactor-only** when v7.1.0
   ships.
 - **`Player::order_trash`** folds CTD into "trash" outright. Today that is
@@ -726,7 +726,7 @@ test_replay_1885467.cpp:129` already pins a `winrate == 0` that has this shape.
 `DECISION_MAKING.md`'s *Clue Tier Definitions* lists **H1a** among the NOT-LOW
 conditions: Bob is unlocked, has no safe action, and his chop is *endangered*,
 and that alone should be worth MEDIUM even when the Cathy conditions H1b/H1c
-fail. `clue_tier` (`src/conventions/reactor0/state_eval.cpp:537-640`) has never
+fail. `clue_tier` (`src/conventions/reactor0/state_eval.cpp:551-654`) has never
 implemented it. `h1a` is computed at `:588` and read once, inside the H1
 conjunction at `:592`; the NOT-LOW block below starts at N5 (`:624`) and never
 consults it.

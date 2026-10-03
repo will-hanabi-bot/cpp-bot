@@ -43,7 +43,7 @@ what v16.0.0 was for, and finishing it is what v16.6.0 is.
 | The bucket-encoded reactive (§1d) | implemented (v16.3.0); the receiver's half (v16.9.0); its held negative (v16.11.0); the relation as a giver-side legality test (v16.15.0); read in the giver-and-receiver frame (v16.18.0); the receiver reads the reacter's card too (v16.19.0); the receiver's reading no longer dropped for missing the stamp (v16.26.0); an undeferred call no longer dropped as stale (v16.28.0); a finesse the receiver can prove, and the reacter's frame without its own card (v17.1.0); the reacter's card named for the team only as far as the receiver can (v17.2.0); a deferred reaction read the same way (v17.4.0); the receiver read before the call invariants, and a withdrawn target disarms the held negative (v18.14.0); an unreadable reactive falls back to the worlds (v19.3.0); a reacter whose finesse runs through the giver's own unknown hole play throws it (§1k), forward or reverse, rather than re-reading it on its own stacks (v20.1.0) |
 | Superposition (§1e) | implemented (v16.1.0); the back-solve (v16.12.0); conditional readings (v16.13.0); never presume a strike (v16.16.0); the receiver reads the worlds too (v16.17.0); rule 3's pair form and rule 6 on one's own plays (v16.18.0); rule 6 raising our own stacks (v16.19.0); rule 6 SHARED (v16.21.0); rule 7, a named playable discarded was already played, and no gentleman's discard (v16.22.0); rule 6 against the shared view, and rows as floors (v16.23.0); the frame is the minimum across worlds, stable calls read in every world, world feasibility from reactions, play-order replay, evidence bands and a floored shared view (v16.24.0); the shared view settles on what every world agrees, the receiver's promise read on its own frame, rule 8 (a strike was already down) and hole requirements, notes in the team's reading (v16.25.0); a refusal with several candidates, and a watched dupe strike, floor the shared view (v16.27.0); the band never absorbs a named card (v16.28.0); a call live in some shared world is not dead (v16.29.0); an outside seat tries its own hole cards for a stable call (v17.1.0); a private deduction about our own hole cards stays out of the rows (v17.3.0); the target of a call on a card it can name settles its own hole cards (v17.5.0); a row replays our private settles with the set both seats of the pair hold (v18.1.0); a colour re-touch of a clued card defers the collapse to its holder, and rule 7 has a shared form (v18.12.0); a pink identity clue names a card for rule 7 (v19.0.0); a watched hole play is named by sight, not by a stale common copy (v19.1.0) |
 | Rainbowy colour pinning (§1f) | implemented (v16.4.0); the giver's half, a colour clue never calls a rainbow card (v18.19.0), and may touch one it does not call (v18.20.0) |
-| Decision making (§2) | implemented (v16.6.0), by delegation to reactor0; among reactive plays, the fewest receiver candidates (§2b, v16.28.0); never call a card we may already have played (§2c, v17.2.0), unless the call is named, whose holder reads a watched dupe (v18.18.0); never call a critical card to discard (§2d, v17.4.0); a critical chop nothing can ditch around is locked (reactor0 rung 3.10, v17.5.0); a locked hand below 8 tokens throws its least-critical card rather than pitch blind (reactor0 rung 12, v17.6.0); an occupied Alice saves a stuck Bob's chop when Cathy's is safe to lose (§2e, v18.13.0); a locked Alice's stable play may go to a role-inverted Cathy (§2f, v18.15.0); a stuck Bob gets a play before a lock of a non-critical chop (§2g, reactor0 rung 3.6b, v18.16.0) |
+| Decision making (§2) | implemented (v16.6.0), by delegation to reactor0; among reactive plays, the fewest receiver candidates (§2b, v16.28.0); never call a card we may already have played (§2c, v17.2.0), unless the call is named, whose holder reads a watched dupe (v18.18.0); never call a critical card to discard (§2d, v17.4.0); a critical chop nothing can ditch around is locked (reactor0 rung 3.10, v17.5.0); a locked hand below 8 tokens throws its least-critical card rather than pitch blind (reactor0 rung 12, v17.6.0); an occupied Alice saves a stuck Bob's chop when Cathy's is safe to lose (§2e, v18.13.0); a locked Alice's stable play may go to a role-inverted Cathy (§2f, v18.15.0); a stuck Bob gets a play before a lock of a non-critical chop (§2g, reactor0 rung 3.6b, v18.16.0); no lock over a chop worse than one away (§2h, reactor0 rung 3.7, v20.2.0); no forced clue at 8 tokens while Alice can play (§2i, reactor0 §4, v20.2.0) |
 | The fix clue (§1h) | implemented (v16.20.0); deadness on the giver-and-holder view, and the call withdrawn by the fix (v17.2.0) |
 | Naming the called card (§2a) | implemented (v16.7.0); the stable play hierarchy — fewest inferences, ancillary value, the rest of the hand, colour (v18.17.0) |
 
@@ -653,7 +653,7 @@ Two more things make it actually get given (v16.27.0):
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2183-2193`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2208-2218`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, ranked by §2a's stable play hierarchy (`settle_stable_play`, the
   same tiebreak every stable-play rung uses; before v18.17.0 its single term, "names
@@ -2363,6 +2363,40 @@ Human diagnostic 2014538 T24:
 It now gives the Green.
 `tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp`.
 
+### §2h No lock over a chop worse than one away (reactor0 rung 3.7, v20.2.0)
+
+The user's ruling: the variant is hard, so rung 3.7 locks a stuck Bob only when his
+chop is **critical, playable or one away from playable**, judged on Alice's own
+stacks (`chop_worth_a_lock`, `src/conventions/reactor0/state_eval.cpp:167-179`, read
+at `src/conventions/reactor0/decision.cpp:1801-1814`). Anything further away is not
+worth committing his whole hand for, and Alice does something else instead, most
+often her own standing play. 3.6b (§2g) goes with the lock it replaces. 3.6 and 3.10
+already need a critical chop, and §4's lock, the forced branch, is unchanged. This
+holds only under this variant; reactor0 keeps the lock.
+
+Human diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T7:
+- green, holding a called y1 at 7 tokens, gave black a 2 that touched the r2 on his
+  lock slot, a lock;
+- black's chop, the newest unclued card, was a y4 on empty yellow, three away.
+
+Green now plays the y1.
+`tests/test_tiiah/test_decision_making/test_replay_2018365_no_lock_over_far_chop.cpp`,
+`tests/test_tiiah/test_decision_making/test_no_lock_over_far_chop.cpp`.
+
+### §2i No forced clue at 8 tokens while Alice can play (reactor0 §4, v20.2.0)
+
+A change to reactor0's shared ladder, for every convention that delegates to it. At 8
+tokens reactor0 §4, the forced-clue list whose floor always returns a clue, now opens
+only when Alice has no known play, or Bob is stuck on a hidden playable that a clue
+moves now, or a clue gets two plays (4a-4c, the pace arm's own qualifiers;
+`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2018-2029`). A discard
+is illegal at 8 tokens, but a play is not.
+
+Human diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T10: at 8
+tokens green, still holding the called y1, gave Blue on black's already-clued b3. The
+clue saved nothing, and black's chop was a same-hand dupe. Green now plays the y1.
+`tests/test_tiiah/test_decision_making/test_replay_2018365_play_over_forced_clue_at_eight.cpp`.
+
 ## Test coverage
 
 | File | What it pins |
@@ -2380,6 +2414,9 @@ It now gives the Green.
 | `tests/test_tiiah/test_named_call_on_a_watched_dupe.cpp` | §1.3 — a named stable call on an identity the holder watched the giver play into the hole reads as the dupe: known trash, call withdrawn; the control keeps a live call (v18.18.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp` | §2f — human diagnostic 2014538 T23: locked blue gives Green to black for the playable g3 (a role-inverted stable play in 4.1), not a stalling 3 (v18.15.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp` | §2g — human diagnostic 2014538 T24: green on one token gives black Green for the g3 (reactor0 rung 3.6b), not a 4 locking a non-critical chop (v18.16.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2018365_no_lock_over_far_chop.cpp` | §2h — human diagnostic 2018365 T7: green, holding a called y1, plays it rather than lock black over a y4 chop three away (v20.2.0) |
+| `tests/test_tiiah/test_decision_making/test_no_lock_over_far_chop.cpp` | §2h — `chop_worth_a_lock` reads critical, playable and one away as worth a lock, and two away or trash as not; a far chop gets neither the lock nor 3.6b's play, a one-away chop still reaches 3.7, and reactor0 keeps the rung (v20.2.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2018365_play_over_forced_clue_at_eight.cpp` | §2i — human diagnostic 2018365 T10: at 8 tokens green plays its called y1 rather than give a section-4 clue that saves nothing (v20.2.0) |
 | `tests/test_tiiah/test_decision_making/test_occupied_save_of_bobs_chop.cpp` | §2e — an occupied Alice saves a stuck Bob's playable g1 when Cathy's chop is a safe r3 or a playable b1 her own known call duplicates, and plays her call when it is a critical y5 or an unduplicated y1, when her own known call duplicates Bob's g1, or when Cathy holds the other g1 in plain view (v18.13.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2014076_save_bobs_playable_chop_while_occupied.cpp` | §2e — human diagnostic 2014076 T18: occupied green gives blue Green (or 1) for the playable g1 on chop, not its own b2 play (v18.13.0) |
 | `tests/test_tiiah/test_decision_making/test_clue_reading.cpp` | §2 — a clue to Bob read as reactive with Cathy reacting, the delayed connector read as a PLAY rather than a strike, a clue to Cathy read stable, and the double-play reactive chosen end to end |
