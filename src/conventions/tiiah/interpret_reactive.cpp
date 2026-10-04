@@ -399,6 +399,113 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   const std::vector<int> pair_view = reacter_frame(game, action.giver, reacter);
   const State after =
       reacter_faces(game, receiver, receiver_acts_first, &pair_view);
+  // ASCR IN THE WALK (§1e, v20.6.0, the user's ruling; it absorbs v19.3.0's world
+  // fallback). The frame is a MINIMUM over the hole's worlds, so a pairing that
+  // fails on it -- the reacter's card unplayable, or a one-away target with no
+  // connector the reacter can be -- may work in a world some hole card leaves open.
+  // Before walking on to the next target, every seat asks whether some strike-free
+  // world lets this target play AND the reacter's card play; if so this is the
+  // pairing, read in those worlds, and the worlds collapse to them. Only when no
+  // world works does the walk go on.
+  //
+  // Human diagnostic 2018541 T26 (v18_human_vs_bot_diagnostics/2018541.md): the
+  // first target was will-bot69's b4, paired with will-bot67's o6 `{r4,ra4}`. On the
+  // frame red was 2 -- will-bot67 could not name its own T23 r3 -- so the walk went
+  // on to the g2 and called o26 into a strike. In the world where o16 was the r3,
+  // the r4 plays. Replay 2017491 T13 (v19.3.0) is the one-away case: the b2 had no
+  // connector o12 could be, but played in the world where o18 was the b1.
+  enum class AscrOutcome { NONE, READ, REJECT };
+  std::optional<std::vector<OpenWorld>> ascr_all;
+  std::vector<const OpenWorld*> ascr_worlds;
+  auto ascr_pairing = [&](const ReceiverTarget& target, int react_order) -> AscrOutcome {
+    if (state.variant->suits[target.id.suit_index].suit_type.inverted) {
+      return AscrOutcome::NONE;  // a double chuck plays nothing
+    }
+    if (!ascr_all) {
+      std::vector<int> everyone;
+      for (int p = 0; p < state.num_players; ++p) everyone.push_back(p);
+      const State world_base = state.with_stacks(pair_view).with_band(
+          state.evidence_known_to_both(action.giver, reacter));
+      ascr_all = open_worlds(game, world_base, everyone, 64, -1, /*shared=*/true);
+      ascr_worlds = strike_free(*ascr_all);
+    }
+    if (ascr_worlds.size() < 2) return AscrOutcome::NONE;  // one world is the frame
+    // The stacks the reacter faces in each world, after the receiver's queued plays,
+    // where this target plays outright.
+    std::vector<std::optional<State>> faced(ascr_worlds.size());
+    for (std::size_t w = 0; w < ascr_worlds.size(); ++w) {
+      State f = reacter_faces(game, receiver, receiver_acts_first,
+                              &ascr_worlds[w]->state.play_stacks);
+      if (f.playable_away(target.id) == 0) faced[w] = std::move(f);
+    }
+    auto faced_in = [&](const OpenWorld& w) -> const State* {
+      for (std::size_t k = 0; k < ascr_worlds.size(); ++k) {
+        if (ascr_worlds[k] == &w) return faced[k] ? &*faced[k] : nullptr;
+      }
+      return nullptr;
+    };
+    const IdentitySet react_live =
+        hanabi::reactor::effective_possible_for(game, react_order);
+    // The bucket the relation names for the reacter's card (§1d) comes first.
+    const auto want = bucket_of(*state.variant, target.id.suit_index);
+    const std::optional<int> from =
+        want ? std::optional<int>(action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
+                                                                     : (*want + 1) % 3)
+             : std::nullopt;
+    const IdentitySet in_bucket = react_live.filter([&](Identity i) {
+      auto b = bucket_of(*state.variant, i.suit_index);
+      return from && b && *b == *from;
+    });
+    auto works = [&](const OpenWorld& w, Identity i) {
+      const State* f = faced_in(w);
+      return f && f->is_playable(i);
+    };
+    const auto found = ascr_find(ascr_worlds, {in_bucket, react_live}, works,
+                                 /*require_evidence=*/false);
+    if (!found) return AscrOutcome::NONE;
+    if (auto actual = state.deck[react_order].id()) {
+      // giver-only: §1g, as in the walk. The card we can see must work somewhere.
+      const bool sound = std::any_of(ascr_worlds.begin(), ascr_worlds.end(),
+                                     [&](const OpenWorld* w) { return works(*w, *actual); });
+      if (!sound) return AscrOutcome::REJECT;
+      if (action.giver == state.our_player_index && state.pace() > 1 &&
+          !bucket_relation_holds(*state.variant, action.clue.kind, *actual, target.id) &&
+          !both_know_their_own(game, react_order, target.order)) {
+        return AscrOutcome::REJECT;
+      }
+    }
+    // Collapse FIRST, as the rule says: the stamp narrows the reacter's card to what
+    // plays on our stacks, and until the worlds collapse the card may play in none
+    // of them (2018541: the r4 on red 2). Every hole card, by the user's ruling: the
+    // clue is evidence of which world we are in, and the worlds it leaves are the
+    // ones we keep. Undone if the stamp still cannot be made.
+    const Game before_collapse = game;
+    collapse_to_worlds(game, *ascr_all, found->kept, /*shared=*/true);
+    if (!reactor0::stamp_react_play_button(game, action, react_order)) {
+      game = before_collapse;
+      return AscrOutcome::NONE;
+    }
+    const Thought& t0 = game.common.thoughts[react_order];
+    if (t0.old_inferred) game.reset_thought_to(react_order, *t0.old_inferred);
+    game.narrow_thought(react_order, found->reading);
+
+    const IdentitySet react_before = prev.common.thoughts[react_order].possibilities();
+    if (!game.waiting.empty()) {
+      game.waiting.front().react_order = react_order;
+      game.waiting.front().receiver_target_order = target.order;
+      game.waiting.front().react_before = react_before;
+    }
+    if (game.pending_reactions[receiver]) {
+      game.pending_reactions[receiver]->react_order = react_order;
+      game.pending_reactions[receiver]->receiver_target_order = target.order;
+      game.pending_reactions[receiver]->react_before = react_before;
+    }
+    hanabi::logging::log_branch("tiiah.ascr",
+                                {{"site", "walk"}, {"tier", found->tier + 1},
+                                 {"target", target.order}, {"react_order", react_order},
+                                 {"worlds", static_cast<int>(found->kept.size())}});
+    return AscrOutcome::READ;
+  };
   for (const ReceiverTarget& target :
        receiver_targets(game, receiver, receiver_acts_first, &pair_view)) {
     int target_slot = 0;
@@ -428,7 +535,12 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     std::optional<Identity> connector;
     if (target.away == 1) {
       connector = hanabi::reactor::variants::connector_of(state, target.id);
-      if (!connector) continue;
+      if (!connector) {
+        const AscrOutcome r = ascr_pairing(target, react_order);
+        if (r == AscrOutcome::READ) return ClueInterp::REACTIVE;
+        if (r == AscrOutcome::REJECT) return std::nullopt;
+        continue;
+      }
     }
     const IdentitySet react_live =
         hanabi::reactor::effective_possible_for(game, react_order);
@@ -437,6 +549,10 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       return double_chuck ? safe_to_chuck(state, after, i) : after.is_playable(i);
     };
     if (!react_live.exists(reacter_side_ok)) {
+      // ASCR before walking on: does some world make this pairing work?
+      const AscrOutcome r = ascr_pairing(target, react_order);
+      if (r == AscrOutcome::READ) return ClueInterp::REACTIVE;
+      if (r == AscrOutcome::REJECT) return std::nullopt;
       continue;  // shared: walk on, and so does the reacter
     }
 
@@ -622,113 +738,6 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     return ClueInterp::REACTIVE;
   }
 
-  // THE WORLD FALLBACK (v19.3.0, the user's ruling). No pairing reads on the frame,
-  // but the frame is a MINIMUM over worlds (§1e): a card one away from playable on
-  // it may be playable outright in a world some hole card leaves open. So, left to
-  // right over the receiver's one-away cards: take the first that is directly
-  // playable in some world, pair it by the sum rule, and if the reaction is valid
-  // in those worlds, read it there -- and collapse the worlds to them, since the
-  // clue is evidence of which world we are in.
-  //
-  // Replay 2017491 T13. will-bot67 had reacted with its b1 at T12, named only
-  // privately, so the frame had blue 0. will-bot69's 2 to yagami was a reverse
-  // reactive for will-bot67's r3 (slot 4) into her b2 (slot 3): one away on the
-  // frame, a finesse whose connector o12 could not be, so the clue read as
-  // unreadable and will-bot67 discarded. In the world where its hole card was the
-  // b1, the b2 plays: o12 is the r3, and every view takes the b1.
-  {
-    std::vector<int> everyone;
-    for (int p = 0; p < state.num_players; ++p) everyone.push_back(p);
-    const State world_base = state.with_stacks(pair_view).with_band(
-        state.evidence_known_to_both(action.giver, reacter));
-    const auto all_worlds =
-        open_worlds(game, world_base, everyone, 64, -1, /*shared=*/true);
-    const auto worlds = strike_free(all_worlds);
-    for (const ReceiverTarget& target :
-         receiver_targets(game, receiver, receiver_acts_first, &pair_view)) {
-      if (worlds.size() < 2) break;  // one world is the frame itself
-      if (target.away != 1) continue;
-      if (state.variant->suits[target.id.suit_index].suit_type.inverted) continue;
-      // The worlds in which it plays outright, after the receiver's queued plays.
-      std::vector<std::pair<const OpenWorld*, State>> playable_in;
-      for (const OpenWorld* w : worlds) {
-        State faced = reacter_faces(game, receiver, receiver_acts_first,
-                                    &w->state.play_stacks);
-        if (faced.playable_away(target.id) == 0) playable_in.emplace_back(w, std::move(faced));
-      }
-      if (playable_in.empty()) continue;
-
-      int target_slot = 0;
-      for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
-        if (state.hands[receiver][i] == target.order) target_slot = static_cast<int>(i) + 1;
-      }
-      const int react_slot = hanabi::reactor::calc_slot(anchor, target_slot, hand_size);
-      if (react_slot < 1 || react_slot > static_cast<int>(state.hands[reacter].size())) {
-        continue;
-      }
-      const int react_order = state.hands[reacter][react_slot - 1];
-      const IdentitySet react_live =
-          hanabi::reactor::effective_possible_for(game, react_order);
-      // The bucket the relation names for the reacter's card (§1d).
-      const auto want = bucket_of(*state.variant, target.id.suit_index);
-      const std::optional<int> from =
-          want ? std::optional<int>(action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
-                                                                       : (*want + 1) % 3)
-               : std::nullopt;
-      // Valid in a world when the reacter's card can play there; read as the
-      // playables of the named bucket across the worlds where it is valid.
-      std::vector<const OpenWorld*> kept;
-      IdentitySet reading = IdentitySet::empty();
-      IdentitySet any_playable = IdentitySet::empty();
-      for (const auto& [w, faced] : playable_in) {
-        const IdentitySet live_here =
-            react_live.filter([&faced](Identity i) { return faced.is_playable(i); });
-        if (live_here.is_empty()) continue;
-        kept.push_back(w);
-        any_playable = any_playable.union_with(live_here);
-        if (from) {
-          reading = reading.union_with(live_here.filter([&](Identity i) {
-            auto b = bucket_of(*state.variant, i.suit_index);
-            return b && *b == *from;
-          }));
-        }
-      }
-      if (kept.empty()) continue;  // shared: walk on, and so does the reacter
-      if (reading.is_empty()) reading = any_playable;
-      if (auto actual = state.deck[react_order].id()) {
-        // giver-only: §1g, as in the walk.
-        if (!any_playable.contains(*actual)) return std::nullopt;
-        if (action.giver == state.our_player_index && state.pace() > 1 &&
-            !bucket_relation_holds(*state.variant, action.clue.kind, *actual, target.id) &&
-            !both_know_their_own(game, react_order, target.order)) {
-          return std::nullopt;
-        }
-      }
-      if (!reactor0::stamp_react_play_button(game, action, react_order)) continue;
-      const Thought& t0 = game.common.thoughts[react_order];
-      if (t0.old_inferred) game.reset_thought_to(react_order, *t0.old_inferred);
-      game.narrow_thought(react_order, reading);
-      // Every hole card, by the user's ruling: the clue is evidence of which world
-      // we are in, and the worlds it leaves are the ones we keep.
-      collapse_to_worlds(game, all_worlds, kept, /*shared=*/true);
-
-      const IdentitySet react_before = prev.common.thoughts[react_order].possibilities();
-      if (!game.waiting.empty()) {
-        game.waiting.front().react_order = react_order;
-        game.waiting.front().receiver_target_order = target.order;
-        game.waiting.front().react_before = react_before;
-      }
-      if (game.pending_reactions[receiver]) {
-        game.pending_reactions[receiver]->react_order = react_order;
-        game.pending_reactions[receiver]->receiver_target_order = target.order;
-        game.pending_reactions[receiver]->react_before = react_before;
-      }
-      hanabi::logging::log_branch("tiiah.reactive_world_fallback",
-                                  {{"target", target.order}, {"react_order", react_order},
-                                   {"worlds", static_cast<int>(kept.size())}});
-      return ClueInterp::REACTIVE;
-    }
-  }
   return std::nullopt;
 }
 
@@ -1031,49 +1040,25 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   const IdentitySet could = before.non_empty() ? before.intersect(possible) : possible;
   if (could.is_empty()) return;
 
-  // 1. The bucket rule, per world.
-  IdentitySet reading = IdentitySet::empty();
-  std::uint64_t mask = 0;
-  int step = 1;
-  const ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
-  for (const auto& [i, m] : rr.support) {
-    if (!could.contains(i)) continue;
-    // The finesse half is offered in every world; keep only where it plays.
-    std::uint64_t playable = 0;
-    for (std::size_t w = 0; w < worlds.size(); ++w) {
-      if ((m >> w & 1ULL) && worlds[w].state.is_playable(i)) playable |= 1ULL << w;
-    }
-    if (playable == 0) continue;
-    reading = reading.add(i);
-    mask |= playable;
-  }
-  // 2. Any one-away reading that plays in some world.
-  if (reading.is_empty()) {
-    step = 2;
-    for (Identity i : could) {
-      if (base.playable_away(i) != 1) continue;
-      std::uint64_t playable = 0;
-      for (std::size_t w = 0; w < worlds.size(); ++w) {
-        if (worlds[w].state.is_playable(i)) playable |= 1ULL << w;
-      }
-      if (playable == 0) continue;
-      reading = reading.add(i);
-      mask |= playable;
-    }
-  }
-  if (reading.is_empty() || mask == 0) return;  // the bluff or mistake stands
-  // A reading every world allows is no evidence about the hole, and the stamp failed
+  // ASCR (§1e): the bucket rule first -- the bucket and finesse halves of §1d --
+  // then any one-away reading, bucket or not; whichever plays in some world. A
+  // reading every world allows is no evidence about the hole, and the stamp failed
   // for some other reason -- its clue-time frame, say -- which this is not here to
   // second-guess (replay 2011885 T10).
-  const std::uint64_t every = worlds.size() >= 64 ? ~0ULL : (1ULL << worlds.size()) - 1;
-  if (mask == every) return;
+  const ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
+  const std::vector<IdentitySet> tiers{
+      could.intersect(rr.allowed),
+      could.filter([&base](Identity i) { return base.playable_away(i) == 1; })};
+  std::vector<const OpenWorld*> world_ptrs;
+  for (const OpenWorld& w : worlds) world_ptrs.push_back(&w);
+  const auto found = ascr_find(
+      world_ptrs, tiers,
+      [](const OpenWorld& w, Identity i) { return w.state.is_playable(i); },
+      /*require_evidence=*/true);
+  if (!found) return;  // the bluff or mistake stands
 
-  std::vector<const OpenWorld*> kept;
-  for (std::size_t w = 0; w < worlds.size(); ++w) {
-    if (mask >> w & 1ULL) kept.push_back(&worlds[w]);
-  }
   if (before.non_empty()) game.reset_thought_to(target, before);
-  game.narrow_thought(target, reading);
+  game.narrow_thought(target, found->reading);
   const int turn = s.turn_count;
   const int giver = wc.giver;
   game.with_meta(target, [turn, giver](ConvData& m) {
@@ -1082,11 +1067,11 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
     m.focused = true;
     m = m.reason(turn).signal(turn);
   });
-  // Every hole card, as in the clue-time world fallback (§1d, v19.3.0).
-  collapse_to_worlds(game, worlds, kept, /*shared=*/true);
-  hanabi::logging::log_branch("tiiah.receiver_world_fallback",
-                              {{"step", step}, {"target", target},
-                               {"worlds", static_cast<int>(kept.size())}});
+  collapse_to_worlds(game, worlds, found->kept, /*shared=*/true);
+  hanabi::logging::log_branch("tiiah.ascr",
+                              {{"site", "receiver"}, {"tier", found->tier + 1},
+                               {"target", target},
+                               {"worlds", static_cast<int>(found->kept.size())}});
 }
 
 }  // namespace

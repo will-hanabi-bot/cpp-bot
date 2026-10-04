@@ -12,6 +12,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -87,6 +89,24 @@ std::vector<const OpenWorld*> strike_free(const std::vector<OpenWorld>& worlds);
 // outside this file: the reactive world fallback (CONVENTION.md §1d, v19.3.0).
 bool collapse_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
                         const std::vector<const OpenWorld*>& surviving, bool shared);
+
+// THE ACTIONABLE SUPERPOSITION COLLAPSE RULE (ASCR; CONVENTION.md §1e, v20.6.0,
+// the user's ruling). A seat that seems to be called to play a card it cannot play
+// first asks whether some world of the hole cards makes it playable. `tiers` are the
+// card's candidate identities in priority order (a receiver's bucket + finesse suits
+// before the rest); the first tier with an identity that `works` in some world is
+// the reading, and `kept` the worlds in which any of its identities works. With
+// `require_evidence`, a reading every world allows is not one (it says nothing about
+// the hole). The caller then collapses with `collapse_to_worlds(..., kept, shared)`.
+// Every site that reads a play call in the worlds before writing it off shares this.
+struct AscrReading {
+  IdentitySet reading = IdentitySet::empty();
+  std::vector<const OpenWorld*> kept;
+  int tier = -1;
+};
+std::optional<AscrReading> ascr_find(
+    const std::vector<const OpenWorld*>& worlds, const std::vector<IdentitySet>& tiers,
+    const std::function<bool(const OpenWorld&, Identity)>& works, bool require_evidence);
 
 // Keep the conditional half of a reading, so a later fact can withdraw it: each
 // candidate of `support` carries a bitmask over `worlds`, and one every world

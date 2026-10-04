@@ -487,6 +487,33 @@ bool collapse_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
   return prune_to_worlds(game, worlds, surviving, shared);
 }
 
+std::optional<AscrReading> ascr_find(
+    const std::vector<const OpenWorld*>& worlds, const std::vector<IdentitySet>& tiers,
+    const std::function<bool(const OpenWorld&, Identity)>& works, bool require_evidence) {
+  if (worlds.size() < 2) return std::nullopt;  // one world is the frame itself
+  for (std::size_t t = 0; t < tiers.size(); ++t) {
+    AscrReading out;
+    std::vector<bool> keep(worlds.size(), false);
+    for (Identity i : tiers[t]) {
+      bool somewhere = false;
+      for (std::size_t w = 0; w < worlds.size(); ++w) {
+        if (!works(*worlds[w], i)) continue;
+        keep[w] = true;
+        somewhere = true;
+      }
+      if (somewhere) out.reading = out.reading.add(i);
+    }
+    if (out.reading.is_empty()) continue;  // the next interpretation
+    for (std::size_t w = 0; w < worlds.size(); ++w) {
+      if (keep[w]) out.kept.push_back(worlds[w]);
+    }
+    if (require_evidence && out.kept.size() == worlds.size()) return std::nullopt;
+    out.tier = static_cast<int>(t);
+    return out;
+  }
+  return std::nullopt;
+}
+
 bool all_copies_visible_to_pair(const Game& game, int order, Identity id, int p) {
   if (p == game.state.our_player_index) return false;
   // Both of our hands are out: a copy in either is one the OTHER of us cannot

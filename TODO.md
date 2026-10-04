@@ -1497,3 +1497,24 @@ rests on o9 is wider than it should be.
 The fix is to replay a hole card against the view as it stood at `hole_turn` and then
 add what landed after, in order. That needs a per-turn record of what each view knew,
 which nothing keeps today.
+
+## 60. `[tiiah]` Two world readings are not yet on the shared ASCR routine
+
+CONVENTION.md §1e, the Actionable Superposition Collapse Rule (v20.6.0, the user's
+ruling): a player who seems to be actioned to play an unplayable card first looks for a
+world that makes it playable, and collapses the worlds to those. `ascr_find`
+(`src/conventions/tiiah/superposition.cpp`) is the shared routine, and the reactive walk
+and the receiver's reaction read through it. Two older sites still read the worlds their
+own way:
+
+- **The stable-call world re-run** (`tiiah::interpret_clue`, v16.24.0 / v17.1.0 /
+  v17.5.0). A seat that can see the card re-runs the stable ladder in each world and
+  takes the FIRST world that makes the call; the outside seat and the target narrow
+  only their own hole cards, privately. Under ASCR it would keep every world that makes
+  the call and collapse for every seat.
+- **A call alive in a world** (`reactor0/call_invariants.cpp`, v16.29.0). A held play
+  call that plays only in some shared world is kept rather than erased, but nothing
+  collapses. Under ASCR the worlds would collapse to those in which it plays.
+
+Both change behaviour, so the user chose to leave them for a separate change
+(human diagnostic 2018541).
