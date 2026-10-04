@@ -1166,7 +1166,7 @@ held capture is dropped (`Game::disarm_reaction_elim`,
 `src/basics/decide.cpp:70-82`). Two withdrawals do this:
 - `erase_call` in the call invariants (rules 1–4, including rule 3's dead call),
   at `reactor0/call_invariants.cpp:53`;
-- Throw It in a Hole's fix, at `tiiah/interpret_clue.cpp:479`.
+- Throw It in a Hole's fix, at `tiiah/interpret_clue.cpp:507`.
 
 A bluff's `drop_call` does not. That is how the reaction itself reads the card, and
 the capture is armed after it.

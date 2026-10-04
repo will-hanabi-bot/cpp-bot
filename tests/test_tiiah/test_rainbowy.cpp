@@ -53,18 +53,47 @@ TEST(TiiahRainbowy, AColourClueNamesItsOwnSuitNotTheRainbow) {
   expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/1, {"r1"});
 }
 
-// ...and it is a COLOUR rule. A rank clue is read by reactor0's rank ladder
-// exactly as it always was, with no suit pinned.
-TEST(TiiahRainbowy, ARankClueIsNotPinned) {
+// ...and a RANK play clue on a new card in slot 1 makes it the rainbow playable,
+// unless that is directly impossible (v20.13.0, the user's ruling; replay 2019249
+// T14). Until v20.13.0 a rank clue was never pinned.
+TEST(TiiahRainbowy, ARankClueOnANewSlotOneCardIsTheRainbow) {
   Game g = setup(rainbow_opts());
+
+  g = take_turn(std::move(g), "Alice clues 1 to Bob");
+
+  ASSERT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
+  expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/1, {"m1"});
+}
+
+// ...and not when the rainbow playable is directly impossible: rainbow is already on
+// 1, so its next card is no 1 at all.
+TEST(TiiahRainbowy, ARankClueIsNotPinnedPastTheRainbow) {
+  SetupOptions opts = rainbow_opts();
+  opts.play_stacks = std::vector<int>{0, 0, 0, 0, 0, 1};
+  Game g = setup(std::move(opts));
 
   g = take_turn(std::move(g), "Alice clues 1 to Bob");
 
   ASSERT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
   const IdentitySet infs =
       g.common.thoughts[order_at(g, TestPlayer::BOB, 1)].inferred;
+  EXPECT_GT(infs.length(), 1);
+}
+
+// The control: the 1 calls Bob's slot 2, not his slot 1, so reactor0's rank ladder
+// reads it as it always did, a playable 1 of no particular suit.
+TEST(TiiahRainbowy, ARankClueOffSlotOneIsNotPinned) {
+  SetupOptions opts = rainbow_opts();
+  opts.hands[1] = {"y4", "r1", "g4", "b4", "p4"};
+  Game g = setup(std::move(opts));
+
+  g = take_turn(std::move(g), "Alice clues 1 to Bob");
+
+  ASSERT_EQ(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY);
+  const IdentitySet infs =
+      g.common.thoughts[order_at(g, TestPlayer::BOB, 2)].inferred;
   EXPECT_GT(infs.length(), 1)
-      << "a rank 1 clue says a playable 1, and does not say which suit";
+      << "a rank 1 clue off slot 1 says a playable 1, and does not say which suit";
 }
 
 // The exception: red is finished, so "the next playable red" does not exist and
