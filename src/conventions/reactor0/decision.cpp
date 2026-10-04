@@ -516,7 +516,7 @@ namespace {
 
 // Does `player` hold nothing they can safely act on? The three safe actions are
 // an obvious play, known trash and a standing CTD, and `thinks_trash` covers the
-// last two (player_game.cpp:115-132) — the same reading H1a uses.
+// last two (player_game.cpp:116-133) — the same reading H1a uses.
 bool has_no_safe_action(const Game& g, int player) {
   return g.common.obvious_playables(g, player).empty() &&
          g.common.thinks_trash(g, player).empty();

@@ -477,7 +477,7 @@ std::optional<PerformAction> any_legal_clue(const Game& game) {
 //
 // The search cannot reach this. It generated our play and then pruned it,
 // because `player_known_plays` -> `thinks_playables` subtracts known trash only
-// from TOUCHED cards (src/basics/player_game.cpp:186): our slot 4 is clued so
+// from TOUCHED cards (src/basics/player_game.cpp:196): our slot 4 is clued so
 // its reading collapsed to {r4} and was offered, while p1's r5 is UNCLUED so
 // {r1..r5} never collapsed and p1 read as having no play. The line therefore
 // looked unwinnable and the action was dropped (src/endgame/solver.cpp:168).

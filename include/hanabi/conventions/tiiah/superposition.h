@@ -146,6 +146,13 @@ std::vector<int> floor_over_worlds(const Game& game, const std::vector<int>& bas
 // belief -- what a call on our own card may be when we cannot name what we threw.
 IdentitySet playable_in_some_own_world(const Game& game);
 
+// Does `reading` hold a playable identity in EVERY strike-free world of our own hole
+// cards (v20.9.0, the user's ruling)? Then a call on one of our cards with that
+// reading is a known play, though no single identity of it plays on our belief:
+// whichever world we are in, the card plays (replay 2018766 T23: `{r2,y2}` over a
+// hole card that was the r1 or the y1). False with fewer than two worlds.
+bool plays_in_every_own_world(const Game& game, const IdentitySet& reading);
+
 // The other half of a conditional reading: an antecedent has narrowed to
 // `still`, so every world it contradicts is gone, and so is every candidate that
 // had no other world left to stand in (`ConvData::ConditionalReading`).

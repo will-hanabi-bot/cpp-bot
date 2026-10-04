@@ -1149,6 +1149,17 @@ IdentitySet playable_in_some_own_world(const Game& game) {
   return out;
 }
 
+bool plays_in_every_own_world(const Game& game, const IdentitySet& reading) {
+  const State& s = game.state;
+  if (reading.is_empty()) return false;
+  const auto worlds = open_worlds(game, s.private_base(), s.our_player_index);
+  const auto live = strike_free(worlds);
+  if (live.size() < 2) return false;  // one world is our belief itself
+  return std::all_of(live.begin(), live.end(), [&reading](const OpenWorld* w) {
+    return reading.intersect(w->state.playable_set).non_empty();
+  });
+}
+
 bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& action,
                              const std::vector<int>& view) {
   const State& s = game.state;

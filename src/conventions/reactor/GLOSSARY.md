@@ -39,7 +39,7 @@ colour name**, not the suit name, so partners and bot agree.
 ### anxiety play
 When locked but holding a card that *might* be playable, gamble on the slot
 with the highest playable probability.
-`src/basics/player_game.cpp:441-470`.
+`src/basics/player_game.cpp:451-480`.
 
 ### arrangement
 In the endgame solver, one concrete assignment of identities to our own
@@ -314,7 +314,7 @@ including a clue-regain rank. `state_eval.cpp:105-146`.
 ### hypo stacks
 The play stacks after simulating everyone's known plays to a fixpoint. Feeds
 `playable_away`, `hypo_score`, and the reactive play-target pool.
-`src/basics/player_game.cpp:474-601`.
+`src/basics/player_game.cpp:484-611`.
 
 ### IdentitySet
 Bitset over the ~30 card identities; the workhorse of empathy. Uses
@@ -339,11 +339,11 @@ stamp CTD to get an orange card onto its stack. See *pitch / chuck*.
 
 ### known trash (kt)
 A card whose every possibility is basic trash, or which is duplicated by an
-older card in the same hand. `order_kt`, `src/basics/player_game.cpp:96-113`.
+older card in the same hand. `order_kt`, `src/basics/player_game.cpp:97-114`.
 
 ### known playable (kp)
 A card whose every non-trash possibility is currently playable. `order_kp`,
-`player_game.cpp:134-159`.
+`player_game.cpp:135-160`.
 
 ### link
 A relation between several cards sharing one identity set — `PromisedLink`,
@@ -352,14 +352,14 @@ A relation between several cards sharing one identity set — `PromisedLink`,
 
 ### loaded / unloaded
 Loaded = has an obvious playable or known trash, i.e. has something safe to
-do. `obvious_loaded`, `player_game.cpp:233-236`; the full-empathy variant is
+do. `obvious_loaded`, `player_game.cpp:243-246`; the full-empathy variant is
 `thinks_loaded`, `:216-219`.
 
 ### lock / locked
 A player with no safe action and every unclued card stamped `CHOP_MOVED`.
 Produced by the LOCK clue interpretation, which is a rank clue touching the
 *lock slot*. A lock protects the whole hand: nothing in it is safe to discard.
-`interpret_clue.cpp:355-393`; `player_game.cpp:221-246`.
+`interpret_clue.cpp:355-393`; `player_game.cpp:231-256`.
 
 ### lock slot
 The **oldest** (lowest-`order`, rightmost) unclued card. A rank clue that
@@ -370,7 +370,7 @@ card.
 
 ### locked discard
 The sacrifice choice when locked: minimise critical probability, then maximise
-a rank/distance score. `player_game.cpp:401-439`.
+a rank/distance score. `player_game.cpp:411-449`.
 
 ### low-clue-count gate
 At `clue_tokens < 3` and `pace() >= 3`, with a real play in hand, a clue must
@@ -562,7 +562,7 @@ together with the *lock* is how this convention keeps cards alive.
 
 ### refer
 The slot-stepping primitive: move one slot in a direction, skipping touched
-cards, wrapping. `src/basics/player_game.cpp:23-34`.
+cards, wrapping. `src/basics/player_game.cpp:24-35`.
 
 ### RemainingMap
 Multiset of unseen identities used by the endgame solver.
@@ -617,7 +617,7 @@ Variant flag reducing the rank-1 count from 3 to 2.
 
 ### sieved
 An identity that is safe to lose because another copy is held somewhere it
-won't be discarded. `src/basics/player_game.cpp:248-276`.
+won't be discarded. `src/basics/player_game.cpp:258-286`.
 
 ### signal_turn
 The turn a CTP/CTD was first stamped. The queue-order tiebreaker throughout —

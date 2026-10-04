@@ -610,7 +610,7 @@ The reason is an asymmetry inside one predicate. `Player::thinks_playables`
 subtracts known trash only from cards that are **touched**:
 
 ```cpp
-bool et = exclude_trash && game.is_touched(o);   // src/basics/player_game.cpp:186
+bool et = exclude_trash && game.is_touched(o);   // src/basics/player_game.cpp:196
 ```
 
 * our order 12 is **clued**, so the subtraction applies and
@@ -703,7 +703,7 @@ if (infer || game.good_touch || state.endgame_turns) {
 At `cards_left == 1` **all three disjuncts are false** — `endgame_turns` is only
 set when a draw empties the deck (`src/basics/game.cpp:518`) — so the root uses
 `obvious_playables`, which does no trash subtraction at all
-(`src/basics/player_game.cpp:174-180`, `exclude_trash` defaults false). A card
+(`src/basics/player_game.cpp:184-190`, `exclude_trash` defaults false). A card
 that is clued and whose non-trash readings collapse to a single playable is
 therefore **invisible to the search's first pass**. It reappears only through
 the `infer=true` retry at `solver.cpp:879-882`, which runs *only when the first

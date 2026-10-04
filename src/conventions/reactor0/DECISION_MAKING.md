@@ -72,7 +72,7 @@ Otherwise, a clue tier is HIGH iff **any** of:
 1. **H1** — ALL of H1a, H1b, and H1c.
     - **H1a — Bob's chop is endangered.** Bob is not locked, and has no safe
       action (no obvious play, no known trash, no CTD — all three are covered by
-      `thinks_trash`, `player_game.cpp:115-132`), and his chop is *endangered*
+      `thinks_trash`, `player_game.cpp:116-133`), and his chop is *endangered*
       (below). `:602-612`. The "no safe action" half is shared with H4a
       verbatim (`bob_stuck`, `:568-570`); H1a and H4a differ only in how bad the
       chop is.
@@ -519,7 +519,7 @@ save Bob's chop. Two playables were lost.
 
 **A spent call is not a dropped one.** The stamp, the narrowed `inferred` and the
 status all stand, and a `CALLED_TO_PLAY` card is an *obvious playable* whatever
-its urgent flag (`player_game.cpp:147-153`), so phase 2 still actions it on a
+its urgent flag (`player_game.cpp:148-154`), so phase 2 still actions it on a
 turn with nothing better to do. What lapses is only its claim on steps 3 and 4.
 Measured against the build before the rule, over all 1885 corpus turns whose
 trace contains `precedence.urgent_reaction`, it moves **15** — 0.8%.
@@ -575,6 +575,14 @@ knows is **not** the next card on that inverted suit's stack, **and that she can
 still action** (`call_is_actionable`, v13.3.0). This knowledge need
 not be global: it is Alice's own inference that counts. Note *occupied* is not the
 same as *loaded*.
+
+**What counts as a known play in Throw It in a Hole (v20.9.0).** The per-card test
+behind *loaded*, *locked*, §4's 4a and the play phase is `Player::order_playable`
+(`src/basics/player_game.cpp:162-180`). In a hole variant it also counts a call on
+Alice's own card that plays in **every** world of her own hole cards (some identity
+of it playable in each), though no single identity plays on her belief. Replay
+2018766 T23: will-bot69's `{r2,y2}`, over its own hole card `{r1,y1}`, made it count
+itself locked, and §4 clued instead of playing it. See tiiah `CONVENTION.md` §2k.
 
 **The call has to be live.** *Occupied* means "she has something better to do
 than spend a token on a LOW clue", so a call whose button could now only strike
@@ -1561,7 +1569,7 @@ button the receiver was promised.
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
 | chop | `Game::chop` | `src/basics/decide.cpp:723-755` |
 | safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:991-1011` |
-| Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:115-132` |
+| Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:116-133` |
 
 ## Not yet implemented
 

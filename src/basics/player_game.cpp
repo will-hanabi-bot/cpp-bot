@@ -5,6 +5,7 @@
 #include "hanabi/basics/player.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
+#include "hanabi/conventions/tiiah/superposition.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -166,7 +167,16 @@ bool Player::order_playable(const Game& game, int order, bool exclude_trash) con
   const Thought& thought = thoughts[order];
   IdentitySet poss = infer ? thought.possibilities() : thought.possible;
   IdentitySet p = exclude_trash ? poss.difference(state.trash_set) : poss;
-  return p.non_empty() && p.intersect(state.playable_set) == p;
+  if (p.non_empty() && p.intersect(state.playable_set) == p) return true;
+  // Throw It in a Hole (v20.9.0, the user's ruling): a call on our OWN card that
+  // plays in every world of our own hole cards -- some identity of it playable in
+  // each -- is a known play, though no single identity plays on our belief. Replay
+  // 2018766 T23: will-bot69's o9 `{r2,y2}` over its own hole card `{r1,y1}`; read as
+  // no play, will-bot69 counted itself locked and clued instead of playing it.
+  return state.variant->throw_it_in_a_hole &&
+         game.meta[order].status == CardStatus::CALLED_TO_PLAY &&
+         state.holder_of(order) == state.our_player_index &&
+         hanabi::tiiah::plays_in_every_own_world(game, p);
 }
 
 // --- obvious_* / thinks_* / locked / loaded / sieved / discardable --------

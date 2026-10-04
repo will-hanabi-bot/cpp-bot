@@ -301,6 +301,14 @@ not count, because every seat must reach the same answer. Not enough for a
 *standing play* since v20.3.0: that needs a *sure play*.
 `has_known_play`, `src/conventions/variants/hole.cpp:61-81`. CONVENTION.md §1c.
 
+### known play in every world
+A call on our own card that plays whichever world of our own hole cards we are in:
+some identity of it is playable in each strike-free world, though no single one is
+playable on our belief (v20.9.0, the user's ruling). It counts as a known play for
+*loaded* / *locked*, §4's 4a and the play phase. `plays_in_every_own_world`, read by
+`Player::order_playable`. CONVENTION.md §2k, replay 2018766 T23. Not the same as
+*known play* (touches on the shared view) or *sure play* (a standing play).
+
 ### sure play
 A known play none of whose identities could already be in the hole: no unsettled
 hole card's team set holds an identity of that suit at or beyond it (v20.3.0, the

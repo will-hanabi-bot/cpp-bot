@@ -586,7 +586,7 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   const bool has_cathy = cathy_seat != alice;
 
   // Bob has nothing safe to do: no obvious play, and no known trash (which
-  // covers the CTD case -- see `thinks_trash`, player_game.cpp:115-132). Shared
+  // covers the CTD case -- see `thinks_trash`, player_game.cpp:116-133). Shared
   // by H1a and H4a, which differ only in how bad the chop they are protecting
   // is: H1a wants it ENDANGERED, H4a wants it outright CRITICAL.
   const bool bob_stuck = !game.common.thinks_locked(game, bob) &&
