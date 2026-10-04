@@ -94,3 +94,39 @@ TEST(TiiahReceiverWorldFallback, WithNoHoleTheReadingIsUnchanged) {
   EXPECT_NE(g.meta[target].status, CardStatus::CALLED_TO_PLAY);
   EXPECT_EQ(g.state.common_play_stacks[0], 0);
 }
+
+// A CONDITIONAL reading (v20.8.0; replay 2018766). Green, blue and purple are on 2.
+// Cathy throws a 1 she knows only as a 1, so the team reads it as the r1 or the y1:
+// two worlds. Alice's 2 then touches her r2, which plays as the r2 in the one world
+// and the y2 in the other (the g2, b2 and p2 are trash).
+// Together they cover every world, but neither identity holds in both, so the
+// reading rests on the hole: the call stands, and nothing collapses.
+TEST(TiiahReceiverWorldFallback, AReadingConditionalOnEveryWorldStillCalls) {
+  SetupOptions opts;
+  opts.variant_name = "Throw It in a Hole (5 Suits)";
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"y3", "g4", "b4", "y4", "p3"},
+      {"r2", "g3", "y4", "b4", "r1"},
+  };
+  opts.play_stacks = std::vector<int>{0, 0, 2, 2, 2};
+  opts.clue_tokens = 5;
+  opts.starting = TestPlayer::CATHY;
+  use_tiiah(opts);
+  Game g = setup(std::move(opts));
+  g = pre_clue(std::move(g), TestPlayer::CATHY, 5, {"1"});
+  const int target = order_at(g, TestPlayer::CATHY, 1);
+
+  g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/5,
+                    /*reached_the_hole=*/true, "g4");
+  g = take_turn(std::move(g), "Alice clues 2 to Cathy");
+  g = hidden_action(std::move(g), TestPlayer::BOB, /*slot=*/5,
+                    /*reached_the_hole=*/true, "r4");
+
+  EXPECT_EQ(g.meta[target].status, CardStatus::CALLED_TO_PLAY);
+  EXPECT_EQ(g.common.thoughts[target].inferred,
+            IdentitySet::single(g.state.expand_short("r2"))
+                .add(g.state.expand_short("y2")));
+  EXPECT_EQ(g.state.common_play_stacks[0], 0) << "nothing collapses";
+  EXPECT_EQ(g.state.common_play_stacks[1], 0);
+}

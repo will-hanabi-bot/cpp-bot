@@ -1085,6 +1085,23 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
     m = m.reason(turn).signal(turn);
   });
   collapse_to_worlds(game, worlds, found->kept, /*shared=*/true);
+  // The conditional half, over the worlds kept (v20.8.0), as `narrow_receiver_call`
+  // records it: each identity of the reading holds in its own worlds, so a later
+  // fact can settle which (replay 2018766: the r2 where the receiver's hole card was
+  // the r1, the y2 where it was the y1).
+  {
+    std::vector<OpenWorld> kept_worlds;
+    for (const OpenWorld* w : found->kept) kept_worlds.push_back(*w);
+    std::vector<std::pair<Identity, std::uint64_t>> support;
+    for (Identity i : found->reading) {
+      std::uint64_t mask = 0;
+      for (std::size_t w = 0; w < kept_worlds.size() && w < 64; ++w) {
+        if (kept_worlds[w].state.is_playable(i)) mask |= 1ULL << w;
+      }
+      if (mask != 0) support.emplace_back(i, mask);
+    }
+    record_conditional(game, target, kept_worlds, support);
+  }
   hanabi::logging::log_branch("tiiah.ascr",
                               {{"site", "receiver"}, {"tier", found->tier + 1},
                                {"target", target},

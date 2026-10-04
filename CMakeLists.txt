@@ -497,6 +497,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_ascr_walk.cpp
   tests/test_tiiah/test_replay_2018541_ascr_reacter_card_plays_in_a_world.cpp
   tests/test_tiiah/test_spent_reaction_relegated.cpp
+  tests/test_tiiah/test_replay_2018766_receiver_conditional_reading_keeps_the_call.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp

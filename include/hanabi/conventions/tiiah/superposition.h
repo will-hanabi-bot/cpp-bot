@@ -96,8 +96,10 @@ bool collapse_to_worlds(Game& game, const std::vector<OpenWorld>& worlds,
 // card's candidate identities in priority order (a receiver's bucket + finesse suits
 // before the rest); the first tier with an identity that `works` in some world is
 // the reading, and `kept` the worlds in which any of its identities works. With
-// `require_evidence`, a reading every world allows is not one (it says nothing about
-// the hole). The caller then collapses with `collapse_to_worlds(..., kept, shared)`.
+// `require_evidence`, a reading one of whose identities works in EVERY world is not
+// one: it does not rest on the hole (v20.8.0; a reading whose identities each need
+// some worlds is kept, even when together they cover them all). The caller then
+// collapses with `collapse_to_worlds(..., kept, shared)`.
 // Every site that reads a play call in the worlds before writing it off shares this.
 struct AscrReading {
   IdentitySet reading = IdentitySet::empty();

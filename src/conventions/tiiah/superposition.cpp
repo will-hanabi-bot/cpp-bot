@@ -507,7 +507,20 @@ std::optional<AscrReading> ascr_find(
     for (std::size_t w = 0; w < worlds.size(); ++w) {
       if (keep[w]) out.kept.push_back(worlds[w]);
     }
-    if (require_evidence && out.kept.size() == worlds.size()) return std::nullopt;
+    // No evidence when ONE identity of the reading works in every world: the
+    // reading then does not rest on the hole at all (replay 2011885 T10, a `{b3}`
+    // that played in both worlds). A reading whose identities each need some
+    // worlds is evidence even if together they cover them all -- each is
+    // conditional on its own world, and nothing collapses (replay 2018766 T22: the
+    // receiver's `{r2,y2}`, the r2 where its hole card was the r1, the y2 where it
+    // was the y1).
+    if (require_evidence) {
+      const bool unconditional = out.reading.exists([&](Identity i) {
+        return std::all_of(worlds.begin(), worlds.end(),
+                           [&](const OpenWorld* w) { return works(*w, i); });
+      });
+      if (unconditional) return std::nullopt;
+    }
     out.tier = static_cast<int>(t);
     return out;
   }

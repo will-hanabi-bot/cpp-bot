@@ -153,7 +153,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:704-714`), read by
+(`src/conventions/tiiah/superposition.cpp:717-727`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -176,7 +176,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:752-814`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:765-827`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 
 ### evidence / band
@@ -259,7 +259,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1269-1315`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1286-1332`.
 CONVENTION.md §1d.
 
 ### proven finesse
@@ -340,7 +340,8 @@ How a reaction is read when the shared stamp finds nothing the receiver's target
 play on the frame it reads (v20.5.0, the user's ruling; replays 2018517, 2018535).
 Every seat that watched the reacter's card reads the target in the worlds of the
 hole cards: first the bucket rule (bucket and finesse halves), then any one-away
-identity. The first reading that plays in some, but not every, world is called, and
+identity. The first reading that plays in some world is called (unless one identity
+of it plays in every world, v20.8.0), and
 the worlds collapse to those that make it. Otherwise the stamp's bluff or mistake
 reading stands. The receiver's half of *ASCR*, on `ascr_find` since v20.6.0.
 `receiver_world_fallback`, `src/conventions/tiiah/interpret_reactive.cpp`. CONVENTION.md §1d.
