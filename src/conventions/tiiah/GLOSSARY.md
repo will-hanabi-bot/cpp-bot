@@ -259,7 +259,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1286-1332`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1313-1359`.
 CONVENTION.md §1d.
 
 ### proven finesse
@@ -267,7 +267,7 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:960-995`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:987-1022`. CONVENTION.md §1d.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the

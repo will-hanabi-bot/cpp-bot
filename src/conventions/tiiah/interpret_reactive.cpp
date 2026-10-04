@@ -712,19 +712,44 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         const IdentitySet& allowed = br.allowed;
         const auto& worlds = br.worlds;
         const auto& support = br.support;
-        if (game.common.thoughts[react_order]
-                .possibilities()
-                .intersect(allowed)
-                .non_empty()) {
+        // Judged against what the card could be BEFORE the stamp (v20.10.0). The
+        // stamp has already narrowed it to the playables of one state -- often the
+        // OTHER buckets' playables -- so testing the stamped set dropped the bucket
+        // reading whenever it lay only in some world, and left the reacter reading
+        // a card from the wrong bucket. Replay 2018857 T17: will-bot67's o12 was
+        // stamped `{g2,b2}` (bucket 1, the target's own); its bucket-0 reading is the
+        // `{r2}` of the worlds where its own o11 or o20 was the r1.
+        const Thought& t_before = game.common.thoughts[react_order];
+        const IdentitySet before_stamp =
+            t_before.old_inferred ? t_before.old_inferred->intersect(t_before.possible)
+                                  : prev.common.thoughts[react_order].possibilities();
+        const IdentitySet reading = before_stamp.intersect(allowed);
+        if (reading.non_empty()) {
           // Undo the stamp helper's narrowing before applying ours, the same way
           // `reactor0::narrow_to_stamped_button` does: `stamp_react_play_button`
           // narrowed to the playables of ONE state, which is the single-world
           // reading this is here to widen, and `narrow_thought` alone could
           // never get past it. Rule 1 constrains the net effect of an
           // interpretation, not the writes inside it.
-          const Thought& t0 = game.common.thoughts[react_order];
-          if (t0.old_inferred) game.reset_thought_to(react_order, *t0.old_inferred);
+          if (t_before.old_inferred) game.reset_thought_to(react_order, *t_before.old_inferred);
           game.narrow_thought(react_order, allowed);
+          // ASCR (§1e): the reacter is called to play a card that plays only in
+          // some worlds of its own hole cards, so the worlds collapse to those.
+          // One tier, the bucket reading: the stamp's other-bucket playables are
+          // what stands when it is empty, so the tiers are never mixed.
+          std::vector<const OpenWorld*> world_ptrs;
+          for (const OpenWorld& w : worlds) world_ptrs.push_back(&w);
+          const auto found = ascr_find(
+              world_ptrs, {reading},
+              [](const OpenWorld& w, Identity i) { return w.state.is_playable(i); },
+              /*require_evidence=*/false);
+          if (found && found->kept.size() < worlds.size()) {
+            collapse_to_worlds(game, worlds, found->kept, /*shared=*/true);
+            hanabi::logging::log_branch(
+                "tiiah.ascr", {{"site", "reacter_bucket"}, {"tier", found->tier + 1},
+                               {"react_order", react_order},
+                               {"worlds", static_cast<int>(found->kept.size())}});
+          }
           record_conditional(game, react_order, worlds, support);
         }
       }

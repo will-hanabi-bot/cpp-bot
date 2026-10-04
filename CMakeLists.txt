@@ -500,6 +500,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_spent_reaction_relegated.cpp
   tests/test_tiiah/test_replay_2018766_receiver_conditional_reading_keeps_the_call.cpp
   tests/test_tiiah/test_call_in_every_world_is_a_play.cpp
+  tests/test_tiiah/test_replay_2018857_reacter_reads_bucket_in_the_worlds.cpp
+  tests/test_tiiah/test_reacter_bucket_in_the_worlds.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp
