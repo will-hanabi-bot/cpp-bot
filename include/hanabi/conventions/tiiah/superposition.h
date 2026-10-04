@@ -153,6 +153,15 @@ IdentitySet playable_in_some_own_world(const Game& game);
 // hole card that was the r1 or the y1). False with fewer than two worlds.
 bool plays_in_every_own_world(const Game& game, const IdentitySet& reading);
 
+// Does `reading` play on the SHARED view, with our own stacks behind it only for
+// want of our own unnamed hole cards (v20.11.0, the user's ruling)? Every identity
+// must be playable on the shared view and not trash on ours, and every card between
+// our stack and it must be a candidate of one of our own hole cards: the shared view
+// reads that card as down, and we cannot name it. Replay 2018874 T47: `{b5}` with
+// blue on 4 shared and on 3 for us, our hole card o29 `{g4,b4}`. When our view is
+// behind for any other reason, it knows better than the shared one.
+bool plays_on_shared_view_past_own_hole(const Game& game, const IdentitySet& reading);
+
 // The other half of a conditional reading: an antecedent has narrowed to
 // `still`, so every world it contradicts is gone, and so is every candidate that
 // had no other world left to stand in (`ConvData::ConditionalReading`).

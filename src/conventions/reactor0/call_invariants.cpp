@@ -55,6 +55,14 @@ void erase_call(Game& game, int order) {
 
 // Rule 1: CTP cards run newest slot -> oldest in play order.
 void enforce_play_order(Game& game, const std::vector<int>& hand) {
+  // Throw It in a Hole: a new call never erases a call already standing to its
+  // left (v20.11.0, the user's ruling; tiiah/CONVENTION.md §1c). The rule's premise
+  // -- a later clue would not have pointed past a card still playable -- is false
+  // there: the target walk passes over a standing call because that card is
+  // already gotten, not because it is dead. A dead call still dies by rule 3.
+  // Replay 2018874 T49: yagami's reaction called will-bot69's o23 (the r5, slot 5)
+  // and this erased its standing stable call on o44 (the b5, slot 1).
+  if (game.state.variant->throw_it_in_a_hole) return;
   // The most recently stamped call. On a tie (two stamps in the same turn)
   // keep the NEWEST slot, so simultaneous calls never erase each other.
   int newest_call = -1;

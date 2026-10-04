@@ -306,8 +306,11 @@ A call on our own card that plays whichever world of our own hole cards we are i
 some identity of it is playable in each strike-free world, though no single one is
 playable on our belief (v20.9.0, the user's ruling). It counts as a known play for
 *loaded* / *locked*, §4's 4a and the play phase. `plays_in_every_own_world`, read by
-`Player::order_playable`. CONVENTION.md §2k, replay 2018766 T23. Not the same as
-*known play* (touches on the shared view) or *sure play* (a standing play).
+`Player::order_playable`. CONVENTION.md §2k, replay 2018766 T23. Its sibling since
+v20.11.0: our own call whose reading plays on the shared view, though our private
+stacks lag it only for want of our own unnamed hole cards, counts the same way
+(`plays_on_shared_view_past_own_hole`, replay 2018874 T47). Not the same as *known
+play* (touches on the shared view) or *sure play* (a standing play).
 
 ### sure play
 A known play none of whose identities could already be in the hole: no unsettled
@@ -429,7 +432,7 @@ A `CALLED_TO_PLAY` card that is not playable yet and will be once the *receiver*
 has played what they already know — what a reverse-reactive finesse creates.
 Alive but not actionable: reactor0's dead-call invariant judges it against the
 stacks after those queued plays, and leaves the call itself out of that
-simulation (`src/conventions/reactor0/call_invariants.cpp:170-209`). A call
+simulation (`src/conventions/reactor0/call_invariants.cpp:178-217`). A call
 whose reading is a valid pitch in some strike-free world of the shared view is
 not dead either (v16.29.0). CONVENTION.md §1c.
 

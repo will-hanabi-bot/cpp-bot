@@ -62,7 +62,7 @@ Six terms are used throughout without further comment; the rest are in
   (`src/basics/state.cpp:77-108`).
 - **loaded / unloaded** — loaded means the player has an obvious playable or a
   known trash, i.e. something safe to do (`obvious_loaded`,
-  `player_game.cpp:243-246`).
+  `player_game.cpp:253-256`).
 - **CTP** — `CardStatus::CALLED_TO_PLAY`. **CTD** —
   `CardStatus::CALLED_TO_DISCARD` (`card.h:21-33`). Both name a *button*, not an
   outcome; see the next two terms.
@@ -604,7 +604,7 @@ reaction triggers the response-inversion rewind.
   - the entire `Connection` variant set, including `PromptConn`, `FinesseConn`
     and `PositionalConn` (`include/hanabi/basics/connection.h:20-117`);
   - `Player::valid_prompt` / `Player::find_prompt`
-    (`src/basics/player_game.cpp:312-391`) — dead code with **no callers**;
+    (`src/basics/player_game.cpp:322-401`) — dead code with **no callers**;
     `find_prompt` only calls `valid_prompt`, and nothing calls `find_prompt`;
   - `ClueInterp::SAVE` and `ClueInterp::DISTRIBUTION` (§1a.1);
   - `good_touch_elim` (`src/basics/player_elim.cpp:319-352`), unreachable because
@@ -1027,7 +1027,7 @@ filter call at `:996`). Until
 v6.6.0 the second application was gated on `order_trash`, i.e. it guarded only the
 empathy-trash entries — but `discardable` also admits cards whose every
 possibility is *sieved*, covered elsewhere and therefore expendable
-(`player_game.cpp:296-300`). That is a judgement about the discard *pile* and says
+(`player_game.cpp:306-310`). That is a judgement about the discard *pile* and says
 nothing about which button is safe. Replay 1961419 T11 walked straight through the
 gap: a clued rank 4 inferred `{Red 4, Orange 4}`, both copies sieved, went out as
 a raw `PerformDiscard` and chucked Orange 4 into an orange stack of 2 for a
@@ -1045,7 +1045,7 @@ filtering it would break chop discards outright.
 CTD'd cards, only the one with the largest `signal_turn` is discardable this
 turn. Older CTDs stay marked but are removed from the pool.
 
-**`locked_discard`** (`src/basics/player_game.cpp:411-449`) picks the sacrifice
+**`locked_discard`** (`src/basics/player_game.cpp:421-459`) picks the sacrifice
 when locked: minimise `|possible ∩ critical_set| / |possible|`, then maximise a
 score rewarding basic-trash possibilities and high rank / distance from the
 stack.
@@ -1459,7 +1459,7 @@ Concrete protections:
 **Where the bot accepts risk**: it will take an endgame line at a 1% win rate
 (`decide.cpp:747`); it scores playing an unknown-identity card at `+1.5`, the
 highest non-endgame play value (`state_eval.cpp:513`); `anxiety_play`
-(`player_game.cpp:451-480`) gambles on the highest playable-probability card
+(`player_game.cpp:461-490`) gambles on the highest playable-probability card
 when locked; and `advance()`'s `clue_prob` model is an explicit probabilistic
 bet on teammate behaviour rather than a worst-case assumption.
 

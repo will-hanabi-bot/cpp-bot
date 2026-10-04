@@ -173,10 +173,20 @@ bool Player::order_playable(const Game& game, int order, bool exclude_trash) con
   // each -- is a known play, though no single identity plays on our belief. Replay
   // 2018766 T23: will-bot69's o9 `{r2,y2}` over its own hole card `{r1,y1}`; read as
   // no play, will-bot69 counted itself locked and clued instead of playing it.
-  return state.variant->throw_it_in_a_hole &&
-         game.meta[order].status == CardStatus::CALLED_TO_PLAY &&
-         state.holder_of(order) == state.our_player_index &&
-         hanabi::tiiah::plays_in_every_own_world(game, p);
+  //
+  // ...and so is one whose reading plays on the SHARED view, when our own stacks
+  // are behind it only for want of our own unnamed hole cards (v20.11.0, the user's
+  // ruling): which world we are in does not matter to a standing play call, it
+  // plays now. Replay 2018874 T47: will-bot69's o44 was stable-called `{b5}` with
+  // blue on 4 in every shared view but on 3 privately, the b4 being its own hole
+  // card o29 `{g4,b4}`, so it gave a 3 stall instead of playing the b5.
+  if (!state.variant->throw_it_in_a_hole ||
+      game.meta[order].status != CardStatus::CALLED_TO_PLAY ||
+      state.holder_of(order) != state.our_player_index || p.is_empty()) {
+    return false;
+  }
+  if (hanabi::tiiah::plays_on_shared_view_past_own_hole(game, p)) return true;
+  return hanabi::tiiah::plays_in_every_own_world(game, p);
 }
 
 // --- obvious_* / thinks_* / locked / loaded / sieved / discardable --------

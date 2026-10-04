@@ -2068,6 +2068,11 @@ enforcement from inside their `waiting` block.
    oldest slot in exactly play
    order, which is what lets the shared urgent scan pick by slot without
    consulting signal turns.
+   **Throw It in a Hole turns rule 1 off** (v20.11.0,
+   `src/conventions/reactor0/call_invariants.cpp:58-65`). There the target walk
+   passes over a standing call because the card is already gotten, so a newer call
+   to its right says nothing about it being dead (tiiah/CONVENTION.md §1c, replay
+   2018874 T49).
    **Throw It in a Hole makes a call's death a later question** (v16.3.0). A
    reverse-reactive finesse there names the reacter a card that only becomes
    playable once the *receiver* has played what they already know, so
@@ -2075,7 +2080,7 @@ enforcement from inside their `waiting` block.
    plays as well as the live ones, and leaves the call under test out of that
    simulation — counting it would spend its own identity and make it read dead
    exactly when it is most alive
-   (`src/conventions/reactor0/call_invariants.cpp:170-209`). Since v16.29.0 it
+   (`src/conventions/reactor0/call_invariants.cpp:178-217`). Since v16.29.0 it
    also keeps a call whose reading is a valid pitch in some strike-free world of
    the shared view (`:189-204`, helper `:128-147`; tiiah/CONVENTION.md §1c). Gated on
    `Variant::throw_it_in_a_hole`, so no other variant's calls change.

@@ -610,7 +610,7 @@ The reason is an asymmetry inside one predicate. `Player::thinks_playables`
 subtracts known trash only from cards that are **touched**:
 
 ```cpp
-bool et = exclude_trash && game.is_touched(o);   // src/basics/player_game.cpp:196
+bool et = exclude_trash && game.is_touched(o);   // src/basics/player_game.cpp:206
 ```
 
 * our order 12 is **clued**, so the subtraction applies and
@@ -703,7 +703,7 @@ if (infer || game.good_touch || state.endgame_turns) {
 At `cards_left == 1` **all three disjuncts are false** — `endgame_turns` is only
 set when a draw empties the deck (`src/basics/game.cpp:518`) — so the root uses
 `obvious_playables`, which does no trash subtraction at all
-(`src/basics/player_game.cpp:184-190`, `exclude_trash` defaults false). A card
+(`src/basics/player_game.cpp:194-200`, `exclude_trash` defaults false). A card
 that is clued and whose non-trash readings collapse to a single playable is
 therefore **invisible to the search's first pass**. It reappears only through
 the `infer=true` retry at `solver.cpp:879-882`, which runs *only when the first
@@ -1317,7 +1317,7 @@ card that strikes in *every* world, which a 20-candidate set cannot do.
 
 ## 52. `[engine]` A shared call is judged dead on a PRIVATE view
 
-`reactor0/call_invariants.cpp:152-209`. Rule 3, `drop_dead_play_calls`, erases a
+`reactor0/call_invariants.cpp:160-217`. Rule 3, `drop_dead_play_calls`, erases a
 standing CALLED_TO_PLAY when common knowledge can see the card is dead. Its own comment
 states the contract: *"Common knowledge only. The holder's own view may be narrower,
 but a call is a shared commitment and has to die for every seat at the same moment, or
@@ -1346,7 +1346,7 @@ Two consequences worth stating together:
 
 **Narrowed in v16.29.0, not closed.** Rule 3 now also keeps a call whose reading is a
 valid pitch in some strike-free world of the SHARED view
-(`pitch_candidates_in_shared_worlds`, `reactor0/call_invariants.cpp:131-150`). That half is the same at every seat, so a
+(`pitch_candidates_in_shared_worlds`, `reactor0/call_invariants.cpp:139-158`). That half is the same at every seat, so a
 call that is live on the team's worlds lives everywhere (replay 2012424). What remains
 is the other direction: a call dead on the shared worlds that one seat's private belief
 still keeps, as in 2010512.

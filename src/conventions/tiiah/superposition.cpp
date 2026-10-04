@@ -1160,6 +1160,29 @@ bool plays_in_every_own_world(const Game& game, const IdentitySet& reading) {
   });
 }
 
+bool plays_on_shared_view_past_own_hole(const Game& game, const IdentitySet& reading) {
+  const State& s = game.state;
+  if (reading.is_empty() || s.common_play_stacks.empty()) return false;
+  const State shared = s.shared_view();
+  IdentitySet own_hole = IdentitySet::empty();
+  for (const OpenWorld& w : open_worlds(game, s.private_base(), s.our_player_index)) {
+    for (const auto& [o, id] : w.assignment) own_hole = own_hole.add(id);
+  }
+  // Self-play seed 21 T58 (the first cut, which asked only the shared view): red on
+  // 1 shared, on 0 for the seat and in truth, and no red among its own hole cards.
+  // Its `{r2}` call struck; the shared view was the wrong one.
+  return reading.forall([&](Identity i) {
+    if (!shared.is_playable(i) || s.trash_set.contains(i)) return false;
+    const int away = s.playable_away(i);
+    for (int r = 1; r <= 5; ++r) {
+      const Identity between{i.suit_index, r};
+      const int a = s.playable_away(between);
+      if (a >= 0 && a < away && !own_hole.contains(between)) return false;
+    }
+    return true;
+  });
+}
+
 bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& action,
                              const std::vector<int>& view) {
   const State& s = game.state;
