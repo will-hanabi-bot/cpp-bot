@@ -933,6 +933,37 @@ void presume_play_lands(Game& game, const Action& raw) {
   // read against still said 0, and its clued `b3` was never called for the rest of
   // the game.
   prune_to_worlds(game, worlds, surviving, /*shared=*/true);
+
+  // ...and what EVERY surviving world agrees on, though no single card is named by
+  // it (v20.15.0, the user's ruling): the cards below the play were down, by one
+  // of our hole cards or another. Pruning narrows each card to the identities some
+  // surviving world gives it, so with two candidates for the b1 neither narrows,
+  // and our stacks -- the minimum over every assignment of those sets -- still
+  // read the b2 as a strike. Recorded as the joint fact the worlds honour.
+  // Replay 2019249 T20: yagami's b2 went in, and will-bot69's o11 and o12, each
+  // `{y1,g1,b1}`, could each be the b1 (o11 was). Booked as a strike, then so was
+  // yagami's T23 b3 reaction, and the receiver's reading of it never ran.
+  const State& after = game.state;
+  const auto& own = after.play_stacks;
+  const int k = played->suit_index;
+  if (k < static_cast<int>(own.size()) && !after.variant->suits[k].suit_type.reversed) {
+    for (int rank = own[k] + 1; rank < played->rank; ++rank) {
+      const Identity need(k, rank);
+      std::vector<int> could;
+      for (const OpenWorld* w : surviving) {
+        for (const auto& [o, id] : w->assignment) {
+          if (id == need && std::find(could.begin(), could.end(), o) == could.end()) {
+            could.push_back(o);
+          }
+        }
+      }
+      if (could.size() > 1) team_learns_already_played(game, need, std::move(could));
+    }
+  }
+  // Our own stacks take the floor now, BEFORE the play is resolved
+  // (`resolve_hidden_action` reads them next): a play only a world of ours lets
+  // land must be booked as landing, not as a strike.
+  presume_own_plays_land(game);
 }
 
 namespace {

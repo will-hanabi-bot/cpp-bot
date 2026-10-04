@@ -512,6 +512,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_fixed_reaction_card.cpp
   tests/test_tiiah/test_replay_2019249_rank_one_on_new_slot_one_is_rainbow.cpp
   tests/test_tiiah/test_watched_one_floors_the_row.cpp
+  tests/test_tiiah/test_watched_play_lands_on_a_joint_fact.cpp
+  tests/test_tiiah/test_replay_2019249_watched_plays_land_reaction_reads_rainbow.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp
