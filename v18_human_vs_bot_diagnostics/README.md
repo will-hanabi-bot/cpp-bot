@@ -28,6 +28,7 @@ elsewhere.
 | [2014561](2014561.md) | Throw It in a Hole & Brown (6 Suits), tiiah | yagami_black | T49 (tiebreak stable plays by the receiver's inferences), T50 (a four-step stable play hierarchy), T56 (a named call past the own-dupe veto), T66 (endgame: single out Bob's, then Cathy's, good card) | T49 no change (ruling); T66 verified; T50 fixed (v18.17.0), T56 (v18.18.0) |
 | [2018365](2018365.md) | Throw It in a Hole & Null (6 Suits), tiiah | yagami_black | T7 (no lock over a chop worse than one away), T10 (no forced clue at 8 tokens while Alice can play) | T7 fixed (v20.2.0), T10 (v20.2.0) |
 | [2018541](2018541.md) | Throw It in a Hole & Rainbow (5 Suits), tiiah | yagami_black | T26 (a reacter card playable in a hole world: the Actionable Superposition Collapse Rule) | fixed (v20.6.0) |
+| [2018759](2018759.md) | Throw It in a Hole & Rainbow (5 Suits), tiiah | yagami_black | T34 (a spent reaction stays urgent and blocks a save of Bob's playable chop) | fixed (v20.7.0) |
 
 ## Template
 

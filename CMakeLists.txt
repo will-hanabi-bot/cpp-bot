@@ -407,6 +407,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2018365_no_lock_over_far_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2018365_play_over_forced_clue_at_eight.cpp
   tests/test_tiiah/test_decision_making/test_no_lock_over_far_chop.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2018759_spent_reaction_not_urgent_saves_bobs_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
@@ -495,6 +496,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2018535_receiver_finesse_through_a_hole_card.cpp
   tests/test_tiiah/test_ascr_walk.cpp
   tests/test_tiiah/test_replay_2018541_ascr_reacter_card_plays_in_a_world.cpp
+  tests/test_tiiah/test_spent_reaction_relegated.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp

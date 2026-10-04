@@ -366,6 +366,19 @@ Two things outrank the phases below, and one thing sits between them:
     hand** (`ConvData::react_target_order`) — there is nobody left decoding
     against it. The call and its inference stand.
 
+    **Throw It in a Hole records the pairing too (v20.7.0).** The field is written
+    by reactor0's walk (`record_react_target`). TIIAH's own walk
+    (`tiiah::interpret_reactive`, since v16) never wrote it, so the field stayed -1
+    and every TIIAH reaction stayed urgent for good. It now writes it wherever the
+    reacter's call is made (the walk, the §1k discharge, and the ASCR pairing).
+    Human diagnostic [2018759](../../../v18_human_vs_bot_diagnostics/2018759.md)
+    T34:
+    - will-bot67 had deferred its m3 reaction, and will-bot69 had played the paired
+      target.
+    - The m3 was still urgent, and played ahead of the §2e save of will-bot69's
+      playable b2 chop.
+    - Relegated, the clue phase runs and gives Blue.
+
     For a **CTP** that is a **relegation to a receiver-CTP**, performed by rule 0
     of `enforce_call_invariants`: clearing `urgent` is what moves the card out of
     `reacter_ctp` and into the `receiver_ctp` deque, so decision phase 2 reaches

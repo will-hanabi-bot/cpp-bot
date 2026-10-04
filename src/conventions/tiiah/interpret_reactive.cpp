@@ -489,6 +489,11 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     if (t0.old_inferred) game.reset_thought_to(react_order, *t0.old_inferred);
     game.narrow_thought(react_order, found->reading);
 
+    // The pairing, kept for call invariant rule 0 (see the walk below).
+    {
+      const int paired = target.order;
+      game.with_meta(react_order, [paired](ConvData& m) { m.react_target_order = paired; });
+    }
     const IdentitySet react_before = prev.common.thoughts[react_order].possibilities();
     if (!game.waiting.empty()) {
       game.waiting.front().react_order = react_order;
@@ -723,6 +728,18 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
           record_conditional(game, react_order, worlds, support);
         }
       }
+    }
+    // The pairing, kept on the reacter's card (v20.7.0): call invariant rule 0
+    // (`relegate_spent_reactions`) clears `urgent` once this target has left the
+    // receiver's hand, so a deferred reaction whose target was played stops
+    // outranking every clue (reactor0 DECISION_MAKING.md, Precedence step 2,
+    // v9.3.0). reactor0's walk records it in `record_react_target`; this walk never
+    // did, so every TIIAH reaction stayed urgent. Human diagnostic 2018759 T34
+    // (v18_human_vs_bot_diagnostics/2018759.md): will-bot67 played its spent m3
+    // reaction instead of saving will-bot69's playable b2 chop.
+    {
+      const int paired = target.order;
+      game.with_meta(react_order, [paired](ConvData& m) { m.react_target_order = paired; });
     }
     const IdentitySet react_before = prev.common.thoughts[react_order].possibilities();
     if (!game.waiting.empty()) {
