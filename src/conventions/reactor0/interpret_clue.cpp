@@ -661,7 +661,7 @@ namespace {
 // readings, which is a stronger claim than a stable referential discard makes.
 // TODO.md entry 28 is the open question of whether it should.
 //
-// Deliberately NOT `Game::narrow_thought`: its escalation (`basics/game.cpp:120-139`)
+// Deliberately NOT `Game::narrow_thought`: its escalation (`basics/game.cpp:121-140`)
 // clears the meta when nothing survives, which would erase the very call
 // `ref_discard` just stamped. An empty result is left alone instead -- the CTD
 // is positional and does not depend on the inference, the same reasoning as the
@@ -973,7 +973,7 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
 
   // The orange-only reading sits BELOW the play reveal of priority 2. When the
   // clue pins a previously-clued orange to a playable one, the reveal already
-  // says everything — empathy carries the chuck, since `decide.cpp:924-933`
+  // says everything — empathy carries the chuck, since `decide.cpp:950-959`
   // routes an empathy-pinned playable orange through PerformDiscard. Claiming
   // it at priority 1 would also trip the `unnecessary_focus` test below, which
   // counts the focus's OWN pinned identity as "visible elsewhere"

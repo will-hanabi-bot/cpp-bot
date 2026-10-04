@@ -224,7 +224,7 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
   using namespace hanabi::reactor;
   // Giving a clue counts as MISSING your own pending reaction -- under reactor.
   // `check_missed` scans the giver's own hand for an urgent card and clears the
-  // stamp, reverting `inferred` to `old_inferred` (basics/game.cpp:96).
+  // stamp, reverting `inferred` to `old_inferred` (basics/game.cpp:97).
   //
   // Reactor0 is exempt. There a reacter is ALLOWED to defer: its Precedence puts
   // a VERY HIGH clue above the urgent return, so a clue is exactly what a
@@ -253,6 +253,32 @@ void Game::interpret_clue(const Game& prev, const ClueAction& action) {
                        !waiting.front().inverted;
   if (!waiting.empty() && waiting.front().reacter == action.giver) {
     waiting.clear();
+  }
+
+  // Throw It in a Hole (v20.12.0, the user's ruling): a reacter whose reaction card
+  // was FIXED may clue instead of throwing it, and then the reaction is off for
+  // good. The seats that saw the fix drop its discard call; the receiver, who could
+  // not name the card and was waiting on a clue to the reacter, learns from the
+  // clue that it was no reverse reactive either -- its receiver would have had to
+  // play -- and stops waiting. Without this, the reacter's next unrelated play read
+  // as the reaction (self-play seed 259).
+  if (convention == Convention::TIIAH) {
+    bool off = false;
+    const int turn = state.turn_count;
+    for (int o : state.hands[action.giver]) {
+      if (!meta[o].fixed_reaction) continue;
+      with_meta(o, [turn](ConvData& m) { m = m.cleared().reason(turn); });
+      off = true;
+    }
+    for (DeferredRead& d : deferred_reads) {
+      if (d.standing != -2 || d.owed_by != action.giver) continue;
+      d.standing = -1;
+      off = true;
+    }
+    if (off) {
+      hanabi::reactor0::retire_pending_reaction(*this, action.giver);
+      hanabi::logging::log_branch("tiiah.fixed_reaction_off", {{"reacter", action.giver}});
+    }
   }
 
   std::optional<ClueInterp> interp;

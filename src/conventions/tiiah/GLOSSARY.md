@@ -19,7 +19,7 @@ The shared engine reads a named playable thrown away as "you hold the other copy
 the card **was already played** — by us, since our stacks can only be short by
 what we threw in the hole — and it collapses our superpositions instead
 (`presume_discard_was_played`, CONVENTION.md §1e rule 7). `useful_dc` excludes a
-playable card in a hole variant (`src/basics/decide.cpp:545-554`). Replay 2011319.
+playable card in a hole variant (`src/basics/decide.cpp:571-580`). Replay 2011319.
 
 ### believed stacks
 `State::play_stacks` under TIIAH. We resolve each hidden action against the card
@@ -435,6 +435,20 @@ stacks after those queued plays, and leaves the call itself out of that
 simulation (`src/conventions/reactor0/call_invariants.cpp:178-217`). A call
 whose reading is a valid pitch in some strike-free world of the shared view is
 not dead either (v16.29.0). CONVENTION.md §1c.
+
+### deferred read
+A clue this seat waits to read (v20.12.0). It goes to Bob, would be a reverse
+reactive with us reacting if Bob held a standing play, and Bob still owes us a
+reaction whose card we cannot name. Bob's next play or discard settles it:
+`Game::handle_action` rewinds to the clue with the card a play pressed counted as his
+standing call. `Game::DeferredRead`, `include/hanabi/basics/game.h:334-341`.
+CONVENTION.md §1c, replay 2019249 T4.
+
+### fixed reaction card
+A card whose REACTION call a fix clue withdrew (§1h, v20.12.0). It becomes an urgent
+`CALLED_TO_DISCARD` (`ConvData::fixed_reaction`), which the reacter throws at once,
+telling the waiting receiver the clue was the fix. If the reacter clues instead, the
+reaction is off for good. CONVENTION.md §1c, self-play seed 259.
 
 ### superposition
 The state of a player who has played a card without learning what it was: the

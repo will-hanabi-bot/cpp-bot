@@ -166,7 +166,7 @@ bool is_chuckable(const Game& game, int player, int order) {
 // "Leftmost" is the tiebreak, and it is load-bearing rather than cosmetic:
 // without it BOTH copies join the chuck list and the team can throw the
 // identity away entirely. `state.hands` runs newest slot first (see
-// `Game::chop`'s second pass, basics/decide.cpp:499), so the first copy this
+// `Game::chop`'s second pass, basics/decide.cpp:525), so the first copy this
 // walk meets IS the left one.
 std::vector<int> redundant_dupes(const Game& game, int player) {
   const State& s = game.state;

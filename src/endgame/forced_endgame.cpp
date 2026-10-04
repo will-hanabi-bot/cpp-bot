@@ -94,7 +94,7 @@ bool five_lockout_fires(const Game& game, int suit) {
 
   // CP gets TWO opportunities, not one: this turn (offset 0) and — because
   // drawing the last card sets `endgame_turns = num_players`
-  // (src/basics/game.cpp:335), decremented per action (`:250`, `:274`,
+  // (src/basics/game.cpp:336), decremented per action (`:250`, `:274`,
   // `:310`) until the game ends at 0 (src/basics/state.cpp:144) — one more
   // turn at the very END of the final round, offset `n`.
   //
@@ -520,7 +520,7 @@ std::optional<PerformAction> required_play_action(const Game& game, bool narrow)
   // whole question is what happens if we do NOT contribute.
   //
   // With ONE card left the round has not started: our play draws the last card,
-  // which sets `endgame_turns = num_players` (src/basics/game.cpp:423), so the
+  // which sets `endgame_turns = num_players` (src/basics/game.cpp:424), so the
   // window is the next `num_players` seats. Our own seat comes round again
   // inside it and is left in deliberately -- `best_reachable_plays` reads
   // `state.deck[o].id()` and our cards are hidden, so it contributes nothing.

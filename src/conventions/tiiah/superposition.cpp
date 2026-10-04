@@ -853,6 +853,24 @@ void team_learns_already_played(Game& game, Identity gone,
 
 }  // namespace
 
+bool team_learns_a_hole_card_was(Game& game, Identity gone) {
+  if (!game.state.variant->throw_it_in_a_hole) return false;
+  if (game.state.shared_view().is_basic_trash(gone)) return true;  // already known
+  std::vector<int> could;
+  for (int o = 0; o < static_cast<int>(game.meta.size()); ++o) {
+    const IdentitySet& c = game.meta[o].shared_left.non_empty() ? game.meta[o].shared_left
+                                                                : game.meta[o].superposition;
+    if (c.length() > 1 && c.contains(gone)) could.push_back(o);
+  }
+  if (could.empty()) return false;
+  if (could.size() == 1) {
+    settle(game, could.front(), gone, /*shared=*/true);
+  } else {
+    team_learns_already_played(game, gone, std::move(could));
+  }
+  return true;
+}
+
 bool collapse_refused_target(Game& game, int giver, Identity gone) {
   if (!game.state.variant->throw_it_in_a_hole) return false;
   std::vector<int> could;

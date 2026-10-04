@@ -324,6 +324,22 @@ class Game {
   // the same giver simply replaces its own entry.
   std::vector<std::optional<ReactorWC>> pending_reactions;
 
+  // THROW IT IN A HOLE: a clue this seat could not read yet (v20.12.0, the user's
+  // ruling; tiiah/CONVENTION.md §1c). The clue would be a reverse reactive with us
+  // reacting if its receiver held a standing play, and the receiver still owes US a
+  // reaction whose card we cannot name. So we wait: when the receiver's owed
+  // reaction resolves, `Game::rewind` replays the clue with the card it played
+  // counted as a standing call (`standing`). Survives the rewind, which is what
+  // tells the replayed clue not to wait again.
+  struct DeferredRead {
+    int turn = -1;       // `state.turn_count` at the clue, the rewind's key
+    int owed_by = -1;    // the clue's receiver, who owes us the reaction
+    int standing = -2;   // -2 unresolved; -1 resolved by a non-play; else the order played
+    int thrown = -1;     // the order a resolving DISCARD threw, else -1
+    bool operator==(const DeferredRead&) const = default;
+  };
+  std::vector<DeferredRead> deferred_reads;
+
   // THROW IT IN A HOLE: every reactive play clue that has resolved, in order
   // (tiiah/CONVENTION.md §1e, v16.24.0) -- the evidence `tiiah::world_feasible`
   // judges a world of hole cards against.

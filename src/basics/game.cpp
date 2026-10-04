@@ -12,6 +12,7 @@
 #include "hanabi/conventions/tiiah/interpret_reactive.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/instrumentation/timer.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi {
 namespace {
@@ -698,6 +699,42 @@ void Game::handle_action(const Action& action) {
   // is superposed over was still needed. Runs after the interpretation, since
   // a clue's CALLED_TO_PLAY stamps are half the evidence.
   hanabi::tiiah::collapse_superpositions(*this, prev, effective);
+
+  // Throw It in a Hole: a clue we deferred can now be read (v20.12.0;
+  // tiiah/CONVENTION.md §1c). Its receiver owed us a reaction, and this is the
+  // receiver's next play or discard, which settles it: the card a PLAY pressed
+  // (a strike pressed Play too) is the standing call the clue's position rested
+  // on. Replay the game from the clue with that card counted, the way reactor
+  // re-reads a clue its reaction explains. Last, so the action is fully recorded
+  // before the replay reproduces it.
+  if (!deferred_reads.empty()) {
+    int actor = -1;
+    int standing = -1;
+    int thrown = -1;
+    if (const auto* p = std::get_if<PlayAction>(&action)) {
+      actor = p->player_index_v;
+      standing = p->order;
+    } else if (const auto* d = std::get_if<DiscardAction>(&action)) {
+      actor = d->player_index_v;
+      standing = d->failed ? d->order : -1;
+      thrown = d->failed ? -1 : d->order;
+    }
+    for (DeferredRead& d : deferred_reads) {
+      if (actor < 0 || d.standing != -2 || d.owed_by != actor) continue;
+      d.standing = standing;
+      d.thrown = thrown;
+      const int turn = d.turn;
+      hanabi::logging::log_branch("tiiah.deferred_read_resolved",
+                                  {{"turn", turn}, {"standing", standing}});
+      try {
+        *this = rewind(turn, InterpAction{ClueInterp::REACTIVE});
+      } catch (const std::exception& e) {
+        hanabi::logging::log_branch("tiiah.deferred_read_rewind_failed",
+                                    {{"turn", turn}, {"what", e.what()}});
+      }
+      return;
+    }
+  }
 }
 
 // --- Empathy elim (port of game.py:613-710) -------------------------------

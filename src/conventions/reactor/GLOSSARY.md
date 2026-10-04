@@ -13,7 +13,7 @@ yet implemented see [TODO.md](../../../TODO.md).
 Two orientation facts that most entries depend on:
 
 - **Slot 1 is the leftmost, newest card.** Draws prepend
-  (`src/basics/game.cpp:385`), so slot 1 has the highest `order`. "Left" =
+  (`src/basics/game.cpp:386`), so slot 1 has the highest `order`. "Left" =
   newer, "right" = older.
 - **Alice / Bob / Cathy / Zelda** are positional, not identities: Alice is the
   player to move, Bob the next player, Cathy the one after, Zelda the previous
@@ -113,7 +113,7 @@ The card the hand is expected to get rid of next: the card stamped
 if the hand holds none — the **newest** unclued card whose status is `NONE`,
 gated by `zcs_turn`. Any non-`NONE` status (`CALLED_TO_PLAY`, `CHOP_MOVED`,
 `PERMISSION_TO_DISCARD`) disqualifies a card, so a locked hand has no chop at
-all. `Game::chop`, `decide.cpp:433-460`.
+all. `Game::chop`, `decide.cpp:459-486`.
 
 A player always *chucks* their chop, except when its inference is a known orange
 card, which is *pitched* instead — see *pitch / chuck*.
@@ -175,12 +175,12 @@ Variant flag making every card of a given rank single-copy, hence critical.
 `CardStatus::CALLED_TO_DISCARD`. The convention has designated this card as
 the one to discard. **⚠ A physical action label**: it means "press the discard
 button", which on an inverted (Orange) suit is a *play* attempt.
-`card.h:25`; `decide.cpp:723-725`.
+`card.h:25`; `decide.cpp:749-751`.
 
 ### CTP — called to play
 `CardStatus::CALLED_TO_PLAY`. Queued to be played. Same physical-label caveat
 as CTD: on an inverted suit, pressing play sends the card to the discard pile.
-`card.h:24`; `decide.cpp:720-722`.
+`card.h:24`; `decide.cpp:746-748`.
 
 ### dark suits
 Black, Dark, Gray, Cocoa — one copy each, so always critical.
@@ -224,7 +224,7 @@ for the giver and the reacter. See *POV invariance*.
 ### elim
 Umbrella for the post-action inference pass: `card_elim`, optional
 `good_touch_elim`, link refresh, and hypo-stack recomputation.
-`src/basics/game.cpp:470-580`.
+`src/basics/game.cpp:471-581`.
 
 ### elim_* matrices
 The four functions that eliminate identities from the receiver's slots *left
@@ -328,14 +328,14 @@ empty. `include/hanabi/basics/card.h:80`, `:96-98`.
 ### info_lock
 A sticky promise the convention made about a card's identity, surviving later
 narrowing. Enforced in arrangement validity and playability checks.
-`card.h:83`; `decide.cpp:414-419`.
+`card.h:83`; `decide.cpp:440-445`.
 
 ### inverted suits (Orange, Dark Orange)
 Suits where the game rule **swaps what the two buttons do**: a *chuck* is the
 play attempt and a *pitch* sends the card to the discard pile (with a clue
 regain). Because CTP/CTD name buttons rather than outcomes, the convention must
 stamp CTD to get an orange card onto its stack. See *pitch / chuck*.
-`src/conventions/variants/inverted.cpp`; `src/basics/game.cpp:229-248`, `:312-326`.
+`src/conventions/variants/inverted.cpp`; `src/basics/game.cpp:230-249`, `:312-326`.
 
 ### known trash (kt)
 A card whose every possibility is basic trash, or which is duplicated by an
@@ -586,7 +586,7 @@ Suits that play 5→4→3→2→1. Copy counts flip to `{1,2,2,2,3}`. Orthogonal
 ### rewind
 Replay the game from `base` with an `InterpAction` injected at a given turn,
 used to re-interpret an earlier clue. Depth-capped at 4.
-`src/basics/game.cpp:584-677`.
+`src/basics/game.cpp:585-678`.
 
 ### sacrifice
 A non-critical card discarded when nothing is trash — the last-resort
@@ -622,7 +622,7 @@ won't be discarded. `src/basics/player_game.cpp:268-296`.
 ### signal_turn
 The turn a CTP/CTD was first stamped. The queue-order tiebreaker throughout —
 plays go in signal order, and only the newest CTD is discardable.
-`card.h:121`; `decide.cpp:832-844`, `:932-956`.
+`card.h:121`; `decide.cpp:858-870`, `:932-956`.
 
 ### special rank
 A rank with variant-specific clue-touch behaviour, combined with `rainbow_s` /
@@ -666,7 +666,7 @@ Per-observer belief about one card: `possible`, `inferred`, `info_lock`,
 
 ### touched
 A card that is clued, CTP'd, gentleman's-discarded, or finessed.
-`Game::is_touched`, `src/basics/game.cpp:122-126`. The `FINESSED` clause is
+`Game::is_touched`, `src/basics/game.cpp:123-127`. The `FINESSED` clause is
 unreachable in practice — nothing stamps that status.
 
 ### trash push
@@ -706,8 +706,8 @@ Suit family matched by White, Gray, Light, Null. No colour clue touches them.
 ### zcs_turn (zero-clue-stall turn)
 The turn the team ran out of clue tokens. Cards drawn after it are excluded
 from the chop, so a player who drew during the stall isn't expected to discard
-them. `include/hanabi/basics/game.h:286`; set at `decide.cpp:425`, read by
-`Game::chop` at `decide.cpp:836-842`. Under reactor0 (and TIIAH), a hand left
+them. `include/hanabi/basics/game.h:286`; set at `decide.cpp:451`, read by
+`Game::chop` at `decide.cpp:862-868`. Under reactor0 (and TIIAH), a hand left
 with no chop at all because of it discards the FIRST card drawn during the stall
 rather than pitching blind — floor rung `12.discard_stall_drawn`, reactor0
 DECISION_MAKING.md (v16.23.0).

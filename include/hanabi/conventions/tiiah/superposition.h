@@ -181,6 +181,13 @@ bool refute_worlds(Game& game, int antecedent, const IdentitySet& still);
 // anything.
 bool collapse_refused_target(Game& game, int giver, Identity gone);
 
+// The team learns, from a public event, that `gone` is already played (v20.12.0):
+// a reacter threw his fixed reaction card, a dead `gone`. If it is not already on
+// the shared view, one of the hole cards whose shared set admits it was the copy:
+// settle the one, or record the joint fact for the worlds. Returns whether any
+// hole card could have been it.
+bool team_learns_a_hole_card_was(Game& game, Identity gone);
+
 // §1e rule 6: never presume a partner's play STRUCK.
 //
 // Our own stacks can be short by exactly what we threw in the hole — a card we

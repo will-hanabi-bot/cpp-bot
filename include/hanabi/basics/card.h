@@ -154,6 +154,10 @@ struct ConvData {
   // waiting connection while deliberately keeping the call -- which is exactly
   // the position replay 1972716 T5 was in.
   int react_target_order = -1;
+  // THROW IT IN A HOLE: this card's REACTION call was fixed (v20.12.0), so it is
+  // now a discard to press at once. If its reacter clues instead, the reaction is
+  // off for good (`Game::interpret_clue`). Cleared with the call.
+  bool fixed_reaction = false;
   // THROW IT IN A HOLE: the identities this card could have been, for a card
   // that went into the hole without its player learning what it was. Empty for
   // every other card, and in every other variant.

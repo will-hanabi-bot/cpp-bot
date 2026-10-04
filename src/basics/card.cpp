@@ -97,6 +97,7 @@ ConvData ConvData::cleared() const {
   out.by = std::nullopt;
   // Paired with `urgent`, cleared above: it describes a live call, not history.
   out.react_target_order = -1;
+  out.fixed_reaction = false;
   return out;
 }
 

@@ -7,6 +7,7 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/reactor0/interpret_reaction.h"
 #include "hanabi/conventions/tiiah/interpret_reactive.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
@@ -345,26 +346,88 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // A refusal is stable by construction, and falls through to the ladders below
   // — the signal rides along with whatever the clue otherwise says.
   const bool refusal = read_refusal(prev, game, action);
+
+  // THE DEFERRED READ (v20.12.0, the user's ruling). A clue to Bob is a reverse
+  // reactive with US reacting if Bob holds a standing play. When Bob still owes US
+  // a reaction, the card he will answer with depends on our own target, which we
+  // cannot see -- so whether Bob holds a standing play, and what it is, is not ours
+  // to know yet. We wait. Bob's next play or discard settles his reaction to us,
+  // and `Game::handle_action` then rewinds to this clue with that card counted as
+  // the standing call (`Game::deferred_reads`).
+  //
+  // Replay 2019249 T4: will-bot67's Yellow to yagami was a reverse reactive pairing
+  // will-bot69's o15 with yagami's o9 -- the r2, leftmost playable once yagami's
+  // owed T1 reaction, the r1, has played. will-bot69 was that reaction's receiver
+  // and could not name the r1, so it read the Yellow as a stable MISTAKE.
+  const int clue_turn = game.state.turn_count;
+  const Game::DeferredRead* deferred = nullptr;
+  for (const Game::DeferredRead& d : game.deferred_reads) {
+    if (d.turn == clue_turn) deferred = &d;
+  }
+  std::optional<Game> forced_prev;
+  if (deferred && deferred->standing >= 0) {
+    const int standing = deferred->standing;
+    auto stamp = [standing](Game& g) {
+      g.with_meta(standing, [](ConvData& m) {
+        m.status = CardStatus::CALLED_TO_PLAY;
+        m.urgent = false;
+      });
+    };
+    forced_prev = prev;
+    stamp(*forced_prev);
+    stamp(game);
+  }
+  const Game& pos = forced_prev ? *forced_prev : prev;
+  // ...and when Bob settled it by DISCARDING, the clue was the fix of his reaction
+  // card, not a reverse reactive (the user's ruling): a fixed reaction card is
+  // thrown at once (`dead_call_fix` above stamps it). His reaction to us is void --
+  // the card it named was dead -- and the identity he threw was already played, by
+  // a hole card that admits it. Self-play seed 259 T4: Alice's Green fixed Bob's
+  // o7, a dead b1; Cathy, who had played her o10 into the hole, learns it was the b1.
+  if (deferred && deferred->standing == -1 && deferred->thrown >= 0) {
+    const auto thrown_id = prev.state.deck[deferred->thrown].id();
+    if (thrown_id && hanabi::tiiah::team_learns_a_hole_card_was(game, *thrown_id)) {
+      hanabi::reactor0::retire_pending_reaction(game, bob);
+      hanabi::logging::log_branch("tiiah.deferred_read_fix",
+                                  {{"turn", clue_turn}, {"thrown", deferred->thrown}});
+      return ClueInterp::FIX;
+    }
+  }
+  if (!refusal && !deferred && action.target == bob && cathy != action.giver &&
+      cathy == state.our_player_index) {
+    const auto& owed = prev.pending_reactions;
+    const int us = state.our_player_index;
+    const bool bob_owes_us = us < static_cast<int>(owed.size()) && owed[us] &&
+                             owed[us]->reacter == bob && owed[us]->receiver == us;
+    if (bob_owes_us && !hanabi::reactor::variants::has_standing_play(prev, bob) &&
+        !hanabi::reactor::variants::has_standing_play(prev, us)) {
+      game.deferred_reads.push_back(Game::DeferredRead{clue_turn, bob, -2});
+      hanabi::logging::log_branch("tiiah.deferred_read",
+                                  {{"turn", clue_turn}, {"giver", action.giver},
+                                   {"receiver", bob}});
+      return ClueInterp::REACTIVE;
+    }
+  }
   if (!refusal) {
     const bool reversed =
-        hanabi::reactor::variants::reverse_reactive_position(prev, action.giver);
+        hanabi::reactor::variants::reverse_reactive_position(pos, action.giver);
     if (reversed) {
       // A clue to Bob that FIXES his dead standing call is the fix below, not a
       // reverse reactive (v18.10.0): the call that puts the table in the reverse
       // position is the very one the fix is for. Replay 2013726 T5.
-      if (action.target == bob && !hanabi::clue_would_fix_dead_call(prev, action)) {
-        return interpret_reactive(prev, game, action, /*reacter=*/cathy,
+      if (action.target == bob && !hanabi::clue_would_fix_dead_call(pos, action)) {
+        return interpret_reactive(pos, game, action, /*reacter=*/cathy,
                                   /*receiver=*/bob);
       }
       // ...and a clue to Cathy is stable, which is the whole point of the flip.
     } else if (cathy != action.giver && action.target != bob &&
-               !hanabi::reactor::variants::inverted_stable(prev, action.giver,
+               !hanabi::reactor::variants::inverted_stable(pos, action.giver,
                                                            action.target)) {
       // ROLE INVERSION (v18.2.0): a clue to Cathy is also stable when Bob holds a
       // STANDING play -- any called card, not only a touch-known one -- and
       // Cathy does not. That is the only thing it changes: a clue to Bob stays
       // stable in that position too. Replay 2013645 T11.
-      return interpret_reactive(prev, game, action, /*reacter=*/bob,
+      return interpret_reactive(pos, game, action, /*reacter=*/bob,
                                 /*receiver=*/cathy);
     }
   }
@@ -393,10 +456,25 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     // dead there (§1c, v16.29.0), and the dead identity of a duplicate is live in
     // the world where the giver's hole card was something else.
     const int turn = game.state.turn_count;
-    game.with_meta(*fixed, [turn](ConvData& m) {
+    // ...but a REACTION call that is fixed becomes a discard, to be pressed at once
+    // (v20.12.0, the user's ruling). The reacter answers with the fixed card's
+    // Discard, which tells the seat waiting on that reaction -- its receiver, who
+    // cannot name the card -- that this clue was the fix and not a reverse
+    // reactive (`Game::deferred_reads`). Self-play seed 259: Bob owed Cathy a
+    // reaction on o7 and deferred; Cathy then played a b1, Alice's Green fixed o7
+    // as the dead b1, and Bob, his call withdrawn, played an unrelated r1 that
+    // Cathy took for his standing call.
+    const bool reaction_call = game.meta[*fixed].react_target_order >= 0;
+    game.with_meta(*fixed, [turn, reaction_call](ConvData& m) {
       m = m.cleared().reason(turn);
       m.note_mark = NoteMark::RESET;
       m.note_mark_turn = turn;
+      if (reaction_call) {
+        m.status = CardStatus::CALLED_TO_DISCARD;
+        m.urgent = true;
+        m.signal_turn = turn;
+        m.fixed_reaction = true;
+      }
     });
     game.disarm_reaction_elim(*fixed);
     repin_own_call(prev, game, action.giver);
