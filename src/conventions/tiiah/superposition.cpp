@@ -1482,8 +1482,8 @@ void note_hidden_action(Game& game, const Action& raw) {
     if (team && team->first.length() <= 1) team.reset();  // the receiver names it too
   }
 
-  if (named && game.state.is_playable(*named)) {
-    std::vector<int> knowers;
+  std::vector<int> knowers;
+  if (named) {
     for (int p = 0; p < game.state.num_players; ++p) {
       if (p == game.state.our_player_index) continue;
       // The player's own row takes it only if the player could name it: they
@@ -1496,7 +1496,49 @@ void note_hidden_action(Game& game, const Action& raw) {
       if (team && ours && p == team->second) continue;
       knowers.push_back(p);
     }
+  }
+  if (named && game.state.is_playable(*named)) {
     game.with_state([&](State& st) { st = st.with_pairwise_at_least(*named, knowers); });
+  } else if (named) {
+    // A HARD FLOOR (v20.14.0, the user's ruling), asked of each row alone and never
+    // of our own stacks: a card the pair watched go in that is at most ONE above
+    // the row raises the row to it, struck or not. If it landed, the stack reached
+    // it; if it struck, it was a duplicate, so the stack was already there -- a
+    // card one above a floor can only strike by being down already. For a 1 that is
+    // every time: however many copies of a 1 go in, that stack is at least 1.
+    //
+    // Replay 2019249 T33: will-bot69 and will-bot67 both watched yagami's y1 go in,
+    // but will-bot69's own stacks, wrong since it had settled its own o11 as the y1,
+    // booked it as a strike, so the pair's row kept yellow on 0 -- and will-bot69
+    // gave a Green finesse that will-bot67, reading yellow on 1, answered on o1 into
+    // a strike.
+    //
+    // Only where both of the pair SAW it: a third seat's card, which we name by
+    // sight. A card one of the two played is named only by that player's reading,
+    // and a misread one would floor the row above the truth (self-play seed 77).
+    //
+    // The STACK only, never the row's evidence: the pair cannot say whether this
+    // card landed or a hole card of theirs was the one that did, so the rank joins
+    // the row's BAND, which a hole card of that identity can be (`open_worlds`).
+    // Advancing the evidence named this card as the one down, and every world
+    // where an earlier hole card was that 1 read as a strike: self-play seed 77,
+    // where Bob's o9 was the y1 and Cathy's watched y1 the duplicate, flipped o9
+    // to the r1 and raised the row's red above the truth.
+    std::vector<int> floored;
+    for (int p : knowers) {
+      if (p == player || ours || !seen) continue;
+      if (game.state.pairwise_view(p).playable_away(*named) == 0) floored.push_back(p);
+    }
+    if (!floored.empty()) {
+      const Identity id = *named;
+      game.with_state([&](State& st) {
+        for (int p : floored) {
+          if (p < static_cast<int>(st.pairwise_play_stacks.size())) {
+            st.pairwise_play_stacks[p][id.suit_index] = id.rank;
+          }
+        }
+      });
+    }
   }
 
   if (known && team) {
