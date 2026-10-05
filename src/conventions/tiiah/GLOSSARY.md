@@ -560,3 +560,11 @@ card it is no candidate when `Player::order_playable` judges the play (v20.23.0)
 though it stays in the reading. A hole card we settle books its copy, but no play
 reveals it, so elimination never takes it out of our other cards. CONVENTION.md §2k,
 replay 2019676 T62.
+
+### rainbowy suit
+A suit whose every card is touched by more than one colour: Rainbow, Omni, Muddy
+Rainbow, Cocoa Rainbow (the user's definition, v20.24.0). A colour call names the
+colour's own next card, and a rainbowy card is called by rank, by a colour whose own
+suit is impossible, or -- Muddy and Cocoa, which no rank touches -- by a re-touch.
+Prism is NOT rainbowy (each Prism card has exactly one colour), though `rainbowy_suit`
+handles its colour calls the same way. CONVENTION.md §1f.

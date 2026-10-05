@@ -97,7 +97,7 @@ build/hanabi_reactor0_tests.exe   # reactor0 only         357 tests,  7 s
 build/hanabi_tests.exe            # convention-neutral    400 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
 build/hanabi_decision_tests.exe   # decision quality      221 tests,  0.7 s
-build/hanabi_tiiah_tests.exe      # Throw It in a Hole    268 tests,  0.3 s
+build/hanabi_tiiah_tests.exe      # Throw It in a Hole    270 tests,  0.3 s
 ```
 
 Pick the scope from the report's `Convention:` field:
@@ -199,7 +199,7 @@ move fell short. One file per game (`<database_id>.md`), indexed in its
 ## Self-play diagnostics
 
 `self_play_diagnostics/` holds a local harness in which three copies of the
-current build play Throw It in a Hole (5 Suits) against each other, with
+current build play Throw It in a Hole (6 Suits) against each other, with
 detectors for wrong inferences, calls never actioned, reactive-target
 disagreements and lagging stack views. Its `README.md` is the reference. It checks
 that a change does not damage play elsewhere. It does not define good play; the
@@ -217,6 +217,9 @@ build/self_play.exe --seeds 1..100 --jobs 12     --out self_play_diagnostics/run
   as an ordinary hidden `play` and ends the game on the third strike itself.
 - The simulator is variant-generic, with public stacks and strikes outside TIIAH,
   but only TIIAH is run unless the user asks otherwise.
+- Benchmarks run the **6-suit** variants by default (from v20.24.0; the user's call):
+  they are harder and catch longer-term accumulated desyncs. A base-vs-new A/B uses
+  the 6-suit form of each variant concerned (e.g. TIIAH & Rainbow (6 Suits)).
 - Each version's 100-game run (seeds 1–100) is saved as `results/<version>.md`.
   To compare with the previous version, freeze its `build/self_play.exe` under
   another name before rebuilding, and run both on the same seeds.

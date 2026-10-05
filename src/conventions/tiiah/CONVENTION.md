@@ -2392,10 +2392,35 @@ reads `{m1}`, its true identity. Until v20.13.0 a rank clue was never pinned (th
 White, Gray, Light Pink and Gray Pink in
 `tests/test_tiiah/test_special_suit_rank_pin.cpp`.
 
-The rainbowy suit is the one carrying `rainbowish` (Rainbow, Omni), `muddy`
-(Muddy Rainbow, Cocoa Rainbow) or `prism` — 16 of the 44 variants have exactly
-one. The non-orange proviso is defensive: no TIIAH variant pairs an inverted suit
-with a rainbowy one, so the guard has nothing to exclude today.
+The rainbowy suit is the one carrying `rainbowish` (Rainbow, Omni, and Muddy and
+Cocoa Rainbow, whose names contain it) or `prism` — 16 of the 44 variants have
+exactly one. The non-orange proviso is defensive: no TIIAH variant pairs an
+inverted suit with a rainbowy one, so the guard has nothing to exclude today.
+
+**Prism is not a rainbowy suit, though the code handles it like one (the user's
+definition, v20.24.0).** A rainbowy suit is one whose every card is touched by more
+than one colour; each Prism card is touched by exactly one, the colour its rank
+maps to. Its colour calls are read as here all the same: a colour call names the
+colour's own next card, and a Prism card is called by a rank clue (the slot-1 pin
+included), or by a colour whose own suit is impossible (the re-pin). The
+alternative — a colour call also naming the Prism next card when that colour touches
+it — was measured and not adopted: on TIIAH & Prism (6 Suits), seeds 1-300, it took
+the mean from 21.98 to 21.62, strikeouts from 132 to 140 and wrong inferences from
+4422 to 4701, since every ordinary colour call that also touches the Prism next card
+became a two-identity reading.
+
+**Muddy and Cocoa Rainbow: a re-touch, in any colour (the user's ruling, pinned in
+v20.24.0).** No rank touches a Muddy or Cocoa Rainbow card, so after the colour that
+first touched one it is called by a re-touch. A colour clue that touches only cards
+already clued calls the leftmost as the colour's own next card when the card can be
+that, and otherwise as the muddy suit's next playable. reactor0's ladder already
+reads it so: the pin above names the colour's own next card, and once a second
+colour has touched the card only the muddy suit fits it. An explicit pin was tried
+and dropped: computed on the shared stacks, it read two own-suit cards as muddy in
+300 self-play games (TIIAH & Muddy Rainbow, 6 Suits). Red is read as red only, as
+for every other rainbowy suit; v21's "Red names both" was measured and not adopted
+(TIIAH & Rainbow, 5 Suits: mean 18.75 to 18.23).
+`tests/test_tiiah/test_muddy_retouch.cpp`.
 
 **The giver's half (v18.19.0): a colour clue never *calls* a rainbow card.**
 Since a colour clue's call is read as its own suit, a colour stable play clue whose
@@ -3098,6 +3123,7 @@ no known play, and it chucked o46; it plays o6 now.
 | `tests/test_tiiah/test_reactions.cpp` | §1d — an inverted-only hand making the clue a double chuck, a double chuck over a critical card refused, and both parities resolving: the receiver is called to the button the reacter pressed |
 | `tests/test_tiiah/test_rainbowy.cpp` | §1f — a colour clue naming its own suit rather than the rainbowy one, a rank clue on a new slot-1 card pinned to the rainbow (v20.13.0) and left alone off slot 1 or when the rainbow's next card is not of its rank, the re-pin when the own suit is finished, and a superpositioned giver's call read on its own stacks (`{p1}`, v20.4.0; `{p1,p2}` from v16.24.0) |
 | `tests/test_tiiah/test_special_suit_rank_pin.cpp` | §1f — a rank 1 on a new slot-1 card reads `{w1}` / `{a1}` / `{i1}` in White, Gray, Light Pink and Gray Pink; not pinned when the special suit's next card is another rank, off slot 1, or in Null (v20.20.0) |
+| `tests/test_tiiah/test_muddy_retouch.cpp` | §1f — Muddy Rainbow (6 Suits): a Blue re-touch of a Red-clued m2 reads `{m2}`; a Blue re-touch of a Blue-clued b1 reads `{b1}` (v20.24.0; today's reading, pinned) |
 | `tests/test_tiiah/test_named_card_feasibility.cpp` | §1e World feasibility — a direct playable later named in the hole refutes the finesse world; not an unnamed card, a one-identity reading still in hand, one clued before the reactive, outside the settle-time prune, nor as licence to judge a lone world card (v20.21.0) |
 | `tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp` | §1e — replay 2019598 T9: o10, named `{g1}` in the hole, refutes o14's b2 world; o14 is named the y1 and yellow is on 1 in every view (v20.21.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2019598_yellow_for_y2_once_y1_known.cpp` | §1e, §2 — replay 2019598 T24: will-bot67 clues Yellow for will-bot69's y2 instead of a referential 5 (v20.21.0) |

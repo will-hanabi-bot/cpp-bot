@@ -86,7 +86,7 @@ struct Args {
   std::string out;
   std::string report;
   std::string log_dir = "logs";
-  std::string variant = "Throw It in a Hole (5 Suits)";
+  std::string variant = "Throw It in a Hole (6 Suits)";
   int players = 3;
   double endgame_timeout = 6.0;
 };
@@ -348,7 +348,7 @@ int main(int argc, char** argv) {
   md << "# Self-play results — " << hanabi::kBotVersion << "\n\n";
   md << "- Variant: " << args.variant << ", " << args.players << " players, seeds "
      << args.seed_from << ".." << args.seed_to << " (" << records.size() << " games)\n";
-  md << "- **25/25 (max score): " << perfect << " / " << records.size() << "**\n";
+  md << "- **Max score reached: " << perfect << " / " << records.size() << "**\n";
   md << "- Mean score: " << (records.empty() ? 0.0 : total / records.size())
      << "; strikeouts: " << strikeouts << "; harness errors/crashes: " << errors << "\n";
   md << "- Critical issues (classes 1-4): " << critical_total << " in "
