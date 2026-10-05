@@ -17,6 +17,7 @@
 // outside Game. Replay is fast in practice (single-digit ms for full games).
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -41,6 +42,11 @@ void emit_state_snapshot(GameLogger& logger, const Game& game, int turn);
 // Reconstruct a Game from a STATE record (the JSON returned by
 // build_state_snapshot). On failure throws std::runtime_error.
 Game apply_snapshot(const nlohmann::json& record);
+
+// The same, calling `each(prev, cur)` after every replayed action -- what
+// `replay_log --notes` reads the note segments from (v20.17.0).
+Game apply_snapshot(const nlohmann::json& record,
+                    const std::function<void(const Game&, const Game&)>& each);
 
 // JSON helpers for the Action variant. The hanab.live wire format isn't
 // used here — this is our own internal format that round-trips through

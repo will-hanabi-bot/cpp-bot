@@ -32,6 +32,22 @@ IdentitySet effective_set(const Thought& t) {
   return t.inferred.non_empty() ? t.inferred : t.possible;
 }
 
+bool in_any_hand(const State& state, int order) {
+  for (const auto& hand : state.hands) {
+    if (std::find(hand.begin(), hand.end(), order) != hand.end()) return true;
+  }
+  return false;
+}
+
+// What the team reads a hole card as: its superposition while open, then the
+// identity it settled as -- the team's (`named_in_hole`), else ours alone
+// (`private_named`). Empty for a card that never went into the hole unnamed.
+IdentitySet hole_reading(const ConvData& m) {
+  if (m.superposed()) return m.superposition;
+  if (m.named_in_hole.non_empty()) return m.named_in_hole;
+  return m.private_named;
+}
+
 bool contains(const std::vector<int>& v, int x) {
   return std::find(v.begin(), v.end(), x) != v.end();
 }
@@ -116,6 +132,23 @@ std::vector<std::pair<int, std::string>> compute_note_segments(const Game& prev,
                                   ? format_unknown_segment(state.turn_count)
                                   : format_reset_segment(state.turn_count));
       continue;
+    }
+
+    // A card in the HOLE (v20.17.0, the user's request): it left its hand without
+    // being named, and what the team reads it as goes on narrowing as other cards
+    // play. Note each narrowing, for every seat's hole cards -- nobody can see one,
+    // so the note is the only trace. Replay 2019408: will-bot67's o13, played as
+    // `{b1,g1,y2}`, lost the g1 and then the b1 and was the y2 by T17, long after it
+    // had left the hand. A card that left the hand with a known identity has no hole
+    // reading, and gets no note.
+    if (!in_any_hand(state, order)) {
+      const IdentitySet now = hole_reading(cur.meta[order]);
+      const IdentitySet before =
+          order < prev_meta_len ? hole_reading(prev.meta[order]) : IdentitySet::empty();
+      if (now != before && !now.is_empty() && now.length() <= kEmpathyNoteMax) {
+        out.emplace_back(order, format_empathy_segment(state.turn_count, now, state));
+        continue;
+      }
     }
 
     if (new_status != prev_status) {

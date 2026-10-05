@@ -129,9 +129,10 @@ TEST(Notes, APartnersCardIsNotNoted) {
       << "however far a partner's card narrows, it is not ours to note";
 }
 
-// A card that has left the hand cannot narrow in any sense a reader cares about,
-// and `compute_note_segments` walks every order in `meta` -- including played and
-// discarded ones -- so the hand check is what rules it out.
+// A card that has left the hand with no HOLE reading -- played or discarded with
+// its identity known, nothing superposed or settled in the hole -- is not noted,
+// however its thoughts move: `compute_note_segments` walks every order in `meta`,
+// played and discarded ones included. A hole card is (v20.17.0, below).
 TEST(Notes, ACardThatHasLeftTheHandIsNotNoted) {
   Game g = setup(base_opts());
   const int me = g.state.our_player_index;
@@ -144,6 +145,39 @@ TEST(Notes, ACardThatHasLeftTheHandIsNotNoted) {
                           g.state.hands[me].end());
 
   auto segs = hanabi::net::compute_note_segments(prev, g);
+  EXPECT_EQ(segment_for(segs, order), nullptr);
+}
+
+// A card in the HOLE is noted each time what the team reads it as narrows, though it
+// has left the hand (v20.17.0, the user's request; replay 2019408, where will-bot67's
+// o13 went in as {b1,g1,y2} and was the y2 by T17). Any seat's hole card: nobody can
+// see one.
+TEST(Notes, AHoleCardIsNotedAsItsReadingNarrows) {
+  Game g = setup(base_opts());
+  const int bob = static_cast<int>(TestPlayer::BOB);
+  const int order = g.state.hands[bob][0];
+  g.state.hands[bob].erase(g.state.hands[bob].begin());
+  g.meta[order].superposition = ids_of({kG1, kG2, kG3});
+
+  Game prev = g;
+  g.meta[order].superposition = ids_of({kG1, kG3});
+  auto segs = hanabi::net::compute_note_segments(prev, g);
+  ASSERT_NE(segment_for(segs, order), nullptr) << "the narrowing is noted";
+  EXPECT_EQ(*segment_for(segs, order),
+            hanabi::net::format_empathy_segment(g.state.turn_count, ids_of({kG1, kG3}), g.state));
+
+  // ...and the settle that ends it, named for the team.
+  prev = g;
+  g.meta[order].superposition = IdentitySet();
+  g.meta[order].named_in_hole = ids_of({kG3});
+  segs = hanabi::net::compute_note_segments(prev, g);
+  ASSERT_NE(segment_for(segs, order), nullptr) << "the settle is noted";
+  EXPECT_EQ(*segment_for(segs, order),
+            hanabi::net::format_empathy_segment(g.state.turn_count, ids_of({kG3}), g.state));
+
+  // No change, no note.
+  prev = g;
+  segs = hanabi::net::compute_note_segments(prev, g);
   EXPECT_EQ(segment_for(segs, order), nullptr);
 }
 

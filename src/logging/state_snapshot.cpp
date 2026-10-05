@@ -475,6 +475,11 @@ void emit_state_snapshot(GameLogger& logger, const Game& game, int turn) {
 // --- Snapshot reader / replayer ------------------------------------------
 
 Game apply_snapshot(const json& record) {
+  return apply_snapshot(record, std::function<void(const Game&, const Game&)>{});
+}
+
+Game apply_snapshot(const json& record,
+                    const std::function<void(const Game&, const Game&)>& each) {
   const json& replay = record.at("replay");
   std::string variant_name = replay.at("variant").get<std::string>();
   const Variant& variant = get_variant(variant_name);
@@ -512,7 +517,13 @@ Game apply_snapshot(const json& record) {
 
   for (const auto& a_json : replay.at("actions")) {
     Action a = action_from_internal_json(a_json);
-    game.handle_action(a);
+    if (each) {
+      const Game before = game;
+      game.handle_action(a);
+      each(before, game);
+    } else {
+      game.handle_action(a);
+    }
   }
 
   game.catchup = false;

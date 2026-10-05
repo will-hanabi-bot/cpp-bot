@@ -94,7 +94,7 @@ each and makes the full suite take ~7 minutes instead of ~23 seconds.
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         357 tests,  7 s
-build/hanabi_tests.exe            # convention-neutral    399 tests,  1.4 s
+build/hanabi_tests.exe            # convention-neutral    400 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
 build/hanabi_decision_tests.exe   # decision quality      213 tests,  0.7 s
 build/hanabi_tiiah_tests.exe      # Throw It in a Hole    252 tests,  0.3 s
@@ -285,7 +285,9 @@ When a bug report arrives with `(game_id, turn, expected vs actual)`:
    `--turn N` cuts the first later STATE back to turn N (its action history is
    truncated), so every seat's log can be replayed at every turn. `--trace`
    prints the DECIDE branches the rerun fired; `--stacks` prints the seat's
-   stack views as one JSON line.
+   stack views as one JSON line; `--notes` prints every note segment the
+   replayed actions produce (`order O: turn N: ...`), hole cards included --
+   outbound notes are not in the log, so this is how to see them.
 
    **Throw It in a Hole: print all seven stacks.** Whenever a specific turn of a
    TIIAH game is investigated, run

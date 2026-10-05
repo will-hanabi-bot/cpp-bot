@@ -40,6 +40,7 @@
 #include "hanabi/basics/game.h"
 #include "hanabi/logging/game_logger.h"
 #include "hanabi/logging/state_snapshot.h"
+#include "hanabi/net/notes.h"
 
 namespace {
 
@@ -52,12 +53,13 @@ struct Args {
   bool diff = false;
   bool trace = false;
   bool stacks = false;
+  bool notes = false;
   std::optional<std::string> emit_test_path;
 };
 
 void print_usage(std::ostream& os) {
   os << "Usage: replay_log <log_file> --turn <N> [--rerun] [--trace] [--diff] "
-        "[--stacks] [--emit-test <out.cpp>]\n";
+        "[--stacks] [--notes] [--emit-test <out.cpp>]\n";
 }
 
 std::optional<Args> parse_args(int argc, char** argv) {
@@ -74,6 +76,8 @@ std::optional<Args> parse_args(int argc, char** argv) {
       a.diff = true;
     } else if (s == "--stacks") {
       a.stacks = true;
+    } else if (s == "--notes") {
+      a.notes = true;
     } else if (s == "--emit-test" && i + 1 < argc) {
       a.emit_test_path = argv[++i];
     } else if (s == "-h" || s == "--help") {
@@ -332,6 +336,17 @@ int main(int argc, char** argv) {
 
   hanabi::Game game;
   try {
+    if (args.notes) {
+      // Every note segment the replayed actions produce, as the bot would have
+      // sent them (v20.17.0): "order O: turn N: segment".
+      game = hanabi::logging::apply_snapshot(
+          *state_rec, [](const hanabi::Game& before, const hanabi::Game& after) {
+            for (const auto& [order, seg] : hanabi::net::compute_note_segments(before, after)) {
+              std::cout << "order " << order << ": " << seg << "\n";
+            }
+          });
+      return 0;
+    }
     game = hanabi::logging::apply_snapshot(*state_rec);
   } catch (const std::exception& e) {
     std::cerr << "apply_snapshot failed: " << e.what() << "\n";
