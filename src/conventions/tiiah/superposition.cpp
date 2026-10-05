@@ -266,6 +266,28 @@ void correct_frozen_frames(Game& game, Identity id) {
   }
 }
 
+void known_play_lands_in_common(Game& game, Identity known, int order,
+                                bool presume_unexplained = true);
+
+// A card the TEAM names that lands ABOVE the shared view (v20.16.0): the gap below it
+// was filled by other hole cards, and the worlds say which -- `known_play_lands_in_common`
+// keeps only the worlds in which it lands and floors the shared view. Until v20.16.0
+// a shared settle above the view put nothing on it, and the card's set was cleared, so
+// no later enumeration counted it. Replay 2019408 T16: will-bot67's o13 settled as the
+// y2 with yellow on 0 in common (its o7, the y1, still unnamed). The y2 vanished from
+// the team's accounting; at T22 yagami's o3 `{r1,y3}` could only be strike-free as the
+// r1, red went to 1 everywhere, and at T34 his Red read o36 as `{r2}`, a real r1.
+void settle_above_the_shared_view(Game& game, int order, Identity id) {
+  const State& s = game.state;
+  if (s.common_play_stacks.empty()) return;
+  if (playable_on(s, s.common_play_stacks, id)) return;
+  if (s.shared_view().is_basic_trash(id)) return;
+  // Only as far as the worlds explain it: a card named after the fact may have
+  // been a strike, unlike a play its player knew (self-play seed 270, where a b2
+  // settled with no b1 to explain it floored the shared view's blue to 2, truly 1).
+  known_play_lands_in_common(game, id, order, /*presume_unexplained=*/false);
+}
+
 void settle(Game& game, int order, Identity id, bool shared) {
   const State& s = game.state;
   const bool ours = s.holder_of(order) == s.our_player_index;
@@ -307,6 +329,7 @@ void settle(Game& game, int order, Identity id, bool shared) {
     }
     m.superposition = IdentitySet::empty();
   });
+  if (shared) settle_above_the_shared_view(game, order, id);
 }
 
 // A card WE settled privately that a shared argument now names (v16.25.0): the
@@ -323,6 +346,7 @@ void settle_shared_only(Game& game, int order, Identity id) {
     m.named_in_hole = IdentitySet::single(id);
     m.private_named = IdentitySet::empty();
   });
+  settle_above_the_shared_view(game, order, id);
 }
 
 // Keep only what the SURVIVING worlds still allow each of our hole cards to be,
@@ -1402,7 +1426,8 @@ namespace {
 // o18 {r1,r2,y1,y2}; strike-free, they are {r1,y1} either way round, so red and
 // yellow are both on 1 and the r2 makes red 2. will-bot69 had reached that long
 // before; will-bot67's shared view sat on red 0 for the rest of the game.
-void known_play_lands_in_common(Game& game, Identity known, int order) {
+void known_play_lands_in_common(Game& game, Identity known, int order,
+                                bool presume_unexplained) {
   const State& s = game.state;
   if (s.common_play_stacks.empty()) return;
   if (playable_on(s, s.common_play_stacks, known)) {
@@ -1427,6 +1452,8 @@ void known_play_lands_in_common(Game& game, Identity known, int order) {
     prune_to_worlds(game, worlds, surviving, /*shared=*/true);
     // A FLOOR: the shared view rises, its evidence stays where it was.
     game.with_state([&floor](State& st) { st = st.with_common_floor(floor); });
+  } else if (!presume_unexplained) {
+    return;
   }
   // Whether or not a world names the missing cards, the team watched a card it
   // could name go down, and presumes it landed.

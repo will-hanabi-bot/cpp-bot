@@ -826,6 +826,12 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
   if (!game.meta[react_order].superposed()) return;
   if (wc.reacter < 0 || wc.reacter >= s.num_players) return;
   if (wc.reacter == s.our_player_index) return;  // our own card; we cannot see it
+  // The REACTER's card only (v20.16.0). On the reverse arm the receiver moves first,
+  // and its standing play is not the reaction: read as one, it took the bucket
+  // reading meant for the reacter. Self-play seed 270 T41: Bob's called o34
+  // `{b1,b2}` (the b1), played as the reverse reactive's standing play, settled for
+  // the team as the b2.
+  if (s.holder_of(react_order) != wc.reacter) return;
   if (react_order >= static_cast<int>(prev.state.deck.size())) return;
   auto seen = prev.state.deck[react_order].id();
   if (!seen) return;
