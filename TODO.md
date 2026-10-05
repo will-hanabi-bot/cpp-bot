@@ -29,7 +29,7 @@ trash and no play is called
 (`src/conventions/reactor0/interpret_clue.cpp:245-256`).
 
 **Today (reactor).** `try_stable`'s branch 2
-(`src/conventions/reactor/interpret_clue.cpp:488-509`) only intersects the
+(`src/conventions/reactor/interpret_clue.cpp:496-517`) only intersects the
 focus's `inferred` with the trash set and sets `meta.trash`. No status is
 stamped and **no play is called** — the clue conveys "this is garbage" and
 nothing more.
@@ -550,7 +550,7 @@ no-safe-button card there, it did **not** fall back to the card the rank-4
 referential discard had actually called to discard (a basic-trash Muddy Rainbow 1,
 a free clue regain). It gave `rank 3 → will-bot69` instead — which `ref_discard`
 reads as a **LOCK**, because the clue touches will-bot69's oldest unclued card
-(`reactor/interpret_clue.cpp:360-392` locks when `list_` contains the minimum
+(`reactor/interpret_clue.cpp:360-400` locks when `list_` contains the minimum
 unclued order). That buys nothing: will-bot69's chop was a Muddy Rainbow 4 whose
 own duplicate sat clued in the same hand, so they already had a free discard.
 
@@ -560,7 +560,7 @@ This is the third bullet of entry 18, promoted here with a reproducing replay.
 
 **Scope, after the v7.0.0 plan.** Both halves that remain are reactor's — the
 `0.0` fold is `reactor/state_eval.cpp:574-575` / `:590`, and the LOCK reading is
-reactor's `ref_discard` (`reactor/interpret_clue.cpp:360-392`). Fixing it is a
+reactor's `ref_discard` (`reactor/interpret_clue.cpp:360-400`). Fixing it is a
 tuning change in reactor's scoring, gated by reactor's 121-test corpus. The
 reactor0 half is **not** a tuning problem any more: it converts into an
 acceptance criterion of the new framework — *honouring an explicit called discard
@@ -1317,7 +1317,7 @@ card that strikes in *every* world, which a 20-candidate set cannot do.
 
 ## 52. `[engine]` A shared call is judged dead on a PRIVATE view
 
-`reactor0/call_invariants.cpp:160-217`. Rule 3, `drop_dead_play_calls`, erases a
+`reactor0/call_invariants.cpp:174-231`. Rule 3, `drop_dead_play_calls`, erases a
 standing CALLED_TO_PLAY when common knowledge can see the card is dead. Its own comment
 states the contract: *"Common knowledge only. The holder's own view may be narrower,
 but a call is a shared commitment and has to die for every seat at the same moment, or
@@ -1346,7 +1346,7 @@ Two consequences worth stating together:
 
 **Narrowed in v16.29.0, not closed.** Rule 3 now also keeps a call whose reading is a
 valid pitch in some strike-free world of the SHARED view
-(`pitch_candidates_in_shared_worlds`, `reactor0/call_invariants.cpp:139-158`). That half is the same at every seat, so a
+(`pitch_candidates_in_shared_worlds`, `reactor0/call_invariants.cpp:139-172`). That half is the same at every seat, so a
 call that is live on the team's worlds lives everywhere (replay 2012424). What remains
 is the other direction: a call dead on the shared worlds that one seat's private belief
 still keeps, as in 2010512.

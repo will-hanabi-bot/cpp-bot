@@ -45,7 +45,7 @@ std::vector<int> newly_touched_of(const Game& prev, const ClueAction& action) {
 
 // prev/post obvious playables + giver-visible connectables for `target`,
 // mirroring reactor's try_stable fill-in machinery
-// (src/conventions/reactor/interpret_clue.cpp:568-601).
+// (src/conventions/reactor/interpret_clue.cpp:576-609).
 std::vector<int> unique_concat(std::vector<int> a, const std::vector<int>& b) {
   std::unordered_set<int> seen(a.begin(), a.end());
   for (int x : b) {
@@ -665,7 +665,7 @@ namespace {
 // clears the meta when nothing survives, which would erase the very call
 // `ref_discard` just stamped. An empty result is left alone instead -- the CTD
 // is positional and does not depend on the inference, the same reasoning as the
-// v0.30 reset at `reactor/interpret_clue.cpp:443-460`.
+// v0.30 reset at `reactor/interpret_clue.cpp:451-468`.
 void narrow_stable_chuck(const Game& prev, Game& game, int receiver) {
   const State& state = game.state;
   for (int o : state.hands[receiver]) {
@@ -869,7 +869,7 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
   // Classify the rank over what the cards this clue ACTUALLY TOUCHED can be,
   // not over the whole variant's touch set. **This is where reactor0 diverges
   // from reactor** (which still scans `variant->touch_possibilities`, see
-  // reactor/interpret_clue.cpp:488-499 and its §1c).
+  // reactor/interpret_clue.cpp:496-507 and its §1c).
   //
   // Why: in an omni variant a rank clue touches the omni suit at EVERY rank
   // (`Variant::id_touched` returns true for any pinkish suit on any rank
@@ -1070,7 +1070,7 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
       // `variants::called_focus_status` is the shared helper for that
       // (it returns CTD for any inverted member of the set); reactor keeps it
       // at its own call site unconditionally
-      // (reactor/interpret_clue.cpp:545), reactor0 gates it on `orange_only`.
+      // (reactor/interpret_clue.cpp:553), reactor0 gates it on `orange_only`.
       // The gate is what makes a MIXED set safe here: `new_inferred` has
       // already dropped every inverted identity, so the helper would return
       // CTP anyway, but gating says so without depending on that.

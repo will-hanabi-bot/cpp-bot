@@ -243,7 +243,7 @@ receiver-CTD) have **no analogue** in the tree:
 - **Ordering is inconsistent.** `signal_turn` is the only timestamp, it is
   *set-once* (`card.cpp:113-118`), it is **absent** on three stamping paths
   (`reactor0/interpret_clue.cpp:556-559`, `reactor0/interpret_reaction.cpp:57-61`,
-  `reactor/interpret_clue.cpp:380-390`), and its missing-value convention differs
+  `reactor/interpret_clue.cpp:388-398`), and its missing-value convention differs
   across call sites (`99` / `99` / `0` / `-1` / `-1`).
 
 The hooks the new structures must attach to are `react_play` /

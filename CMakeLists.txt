@@ -517,6 +517,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2019408_named_hole_card_above_shared_view.cpp
   tests/test_tiiah/test_named_hole_card_above_the_shared_view.cpp
   tests/test_tiiah/test_receiver_standing_play_is_not_the_reaction.cpp
+  tests/test_tiiah/test_replay_2019555_outside_seat_reads_partner_clue_named_hole.cpp
   tests/test_tiiah/test_replay_2011327_a_known_play_is_in_every_view.cpp
   tests/test_tiiah/test_known_play_floor.cpp
   tests/test_tiiah/test_replay_2011397_the_frame_is_the_minimum_across_worlds.cpp

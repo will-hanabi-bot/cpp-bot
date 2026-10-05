@@ -373,7 +373,15 @@ std::optional<ClueInterp> ref_discard(const Game& prev, Game& game,
   const bool refers = clue.kind == ClueKind::RANK && lock_slot_refers(game) &&
                       ref_discard_target(prev.state, action).has_value();
   if (lock_order && contains(list_, *lock_order) && !refers) {
-    if (stall && state.next_player_index(receiver) == giver) {
+    // Throw It in a Hole reads a lock at 8 tokens as a LOCK (v20.18.0, the user's
+    // ruling), when 8 tokens are the only reason for the stall context -- the giver
+    // is not locked and it is not the endgame. Replay 2019555 T18: will-bot67's 3
+    // to will-bot69, with yagami loaded by a standing play, locked will-bot69 at 8
+    // tokens; read as a stall. A referential discard at 8 tokens stays a stall.
+    const bool eight_tokens_only =
+        game.convention == Convention::TIIAH && prev.state.clue_tokens == 8 &&
+        !prev.common.obvious_locked(prev, giver) && !game.shared_in_endgame();
+    if (stall && state.next_player_index(receiver) == giver && !eight_tokens_only) {
       return ClueInterp::STALL;
     }
     if (prev.common.thinks_locked(prev, receiver)) return ClueInterp::MISTAKE;

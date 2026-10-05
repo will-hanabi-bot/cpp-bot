@@ -447,7 +447,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    (`RankDirectPlayPitchesAMixedUsefulSet` keeps that hazard concrete).
 
    **reactor calls `called_focus_status` unconditionally at its own
-   site** (`src/conventions/reactor/interpret_clue.cpp:545`).
+   site** (`src/conventions/reactor/interpret_clue.cpp:553`).
    Returns `PLAY`. An *unnecessary* focus (every possibility trash or
    visible elsewhere) makes the clue a `STALL` instead (`:482-494`).
 2. **Play reveal** (`:532-537`) — the clue fills a previously-clued card in
@@ -469,7 +469,7 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    trash reveal (`variants::brownish_trash_reveal`) → `REVEAL`.
 5. **Lock** and 6. **Referential discard** (`:530-532`) — a clue touching at
    least one new card falls into reactor's `ref_discard`
-   (`src/conventions/reactor/interpret_clue.cpp:317-461`): touching the lock
+   (`src/conventions/reactor/interpret_clue.cpp:317-469`): touching the lock
    slot (oldest unclued) stamps the whole hand `CHOP_MOVED` → `LOCK`;
    otherwise the first unclued slot right of the focus is stamped
    `CALLED_TO_DISCARD` → `DISCARD`.
@@ -506,11 +506,11 @@ all-trash nor playable-rank (`:446-450`), rather than vacuously true.
    **The pink promise is made on the lock slot only (v19.0.0, user ruling).**
    In a pinkish variant a stable rank clue touching the receiver's lock slot
    marks that card as the clued rank (`variants::apply_rank_promise`,
-   `src/conventions/reactor/interpret_clue.cpp:381-390`) — **unless** the
+   `src/conventions/reactor/interpret_clue.cpp:389-398`) — **unless** the
    variant has pinkish ones or fives (`pink_s`), where it promises nothing; so
    `variants::violates_pink_promise` has nothing to check there
    (`src/conventions/variants/pinkish.cpp:55`). A **referential discard makes no
-   pink promise** (`reactor/interpret_clue.cpp:424-437`): it stamps its
+   pink promise** (`reactor/interpret_clue.cpp:432-445`): it stamps its
    discard and marks the focus `focused`, as in any other variant. Both are
    gated on the reactor0 family; the `reactor` convention keeps the promise in
    both places.
@@ -1024,7 +1024,7 @@ either/or gate.
 
 **The STABLE referential discard narrows too, but less (v16.11.0).** It is the
 one stamping path that used to narrow nothing: `reactor::ref_discard`
-(`reactor/interpret_clue.cpp:346-469`) stamps the slot and returns, so a note
+(`reactor/interpret_clue.cpp:346-477`) stamps the slot and returns, so a note
 reading "throw this away" still listed every critical the card could be — replay
 2008422 T1 called a card to discard holding all five 5s. reactor0 now filters at
 its own call site (`narrow_stable_chuck`, `interpret_clue.cpp:644-694`, called
@@ -1043,7 +1043,7 @@ three ways, each deliberate:
   would delete the call just stamped — is out of reach; an empty result is left
   alone instead. The CTD is positional and does not depend on the inference,
   which is the same reasoning as the v0.30 reset at
-  `reactor/interpret_clue.cpp:443-460`.
+  `reactor/interpret_clue.cpp:451-468`.
 
 Reactor is untouched by all of this: its corpus pins a stable CTD that lands on
 a critical dark null 5 (replay 1916791), which is why the filter sits at the
@@ -2080,9 +2080,10 @@ enforcement from inside their `waiting` block.
    plays as well as the live ones, and leaves the call under test out of that
    simulation — counting it would spend its own identity and make it read dead
    exactly when it is most alive
-   (`src/conventions/reactor0/call_invariants.cpp:178-217`). Since v16.29.0 it
+   (`src/conventions/reactor0/call_invariants.cpp:192-231`). Since v16.29.0 it
    also keeps a call whose reading is a valid pitch in some strike-free world of
-   the shared view (`:189-204`, helper `:128-147`; tiiah/CONVENTION.md §1c). Gated on
+   the shared view (`:222-229`, helper `:144-172`; tiiah/CONVENTION.md §1c) -- past the
+   64-world cap, in some world of one seat's hole cards alone (v20.18.0). Gated on
    `Variant::throw_it_in_a_hole`, so no other variant's calls change.
    Since v19.2.0 a stable call there that overlaps a called card just played is
    **rebased onto it before this rule sees it** — `{p1}` becomes `{p2}` — rather

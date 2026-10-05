@@ -116,9 +116,9 @@ card. If nothing is touched at all, the focus is slot 1 (`:47`).
   through `refer(..., left=true)`, and the **maximum** of those referents is
   the play target (`interpret_clue.cpp:285-289`).
 - `ref_discard`: the focus is the newest newly-touched card,
-  `max(newly_touched)` (`interpret_clue.cpp:395`).
+  `max(newly_touched)` (`interpret_clue.cpp:403`).
 - `trash_push` / `playable_rank`: likewise `max(newly_touched)`
-  (`interpret_clue.cpp:502`, `:487`).
+  (`interpret_clue.cpp:510`, `:487`).
 
 `refer` itself (`src/basics/player_game.cpp:24-35`) steps one slot in the
 given direction and **skips over already-touched cards**, wrapping around the
@@ -168,7 +168,7 @@ and after `elim()`; if elimination destroyed any of them, the move is
 
 ### 1a.4 Stable interpretations
 
-`try_stable` (`src/conventions/reactor/interpret_clue.cpp:465-659`) runs an
+`try_stable` (`src/conventions/reactor/interpret_clue.cpp:473-667`) runs an
 ordered chain. The first branch that yields a verdict wins.
 
 **1. Pink-promise gate** (`:443-445`) — variant-only, see §1b.2.
@@ -297,7 +297,7 @@ current length of anyone's hand.
 
 #### The parity table
 
-Dispatch is at `interpret_clue.cpp:852-856`.
+Dispatch is at `interpret_clue.cpp:860-864`.
 
 | Clue kind | Reacter's physical action | Receiver's action | Encoded at | Decoded at |
 |---|---|---|---|---|
@@ -313,7 +313,7 @@ The mnemonic the bot publishes over `/settings`
 > **even plays** = rank clue → two plays.
 
 With `/allplays` on, colour clues are promoted to play+play as well
-(`include/hanabi/basics/game.h:98-102`; `interpret_clue.cpp:852`).
+(`include/hanabi/basics/game.h:98-102`; `interpret_clue.cpp:860`).
 
 #### Shared setup: `reactive_context`
 
@@ -545,7 +545,7 @@ additionally skip a slot when the target was pre-clued and that slot wasn't
 #### Response inversion
 
 When a waiting connection was installed by a *stable* reading
-(`inverted == true`, from `interpret_clue.cpp:554-560`) and the reacter's
+(`inverted == true`, from `interpret_clue.cpp:562-568`) and the reacter's
 action is **unnatural**, the bot concludes the stable reading was wrong and
 rewinds.
 
@@ -565,7 +565,7 @@ processed the current action end-to-end, so the caller must not touch it again
 
 ### 1a.7 Rejecting a stable reading: `bad_stable`
 
-`interpret_stable` (`interpret_clue.cpp:798-827`) does not simply trust
+`interpret_stable` (`interpret_clue.cpp:806-835`) does not simply trust
 `try_stable`. It snapshots the game, runs the stable reading, and — **when the
 clue's target is not Bob** — asks `bad_stable` whether that reading is
 defensible. If not, it restores, re-simulates the clue, and re-reads it as
@@ -694,16 +694,16 @@ Also pinkish-only:
   receiver's **lock slot** — the oldest unclued card (`:30-37`), *not* the chop —
   promises that card has that rank. If the observer can see it and the rank
   doesn't match, the whole stable reading is aborted before any branch can
-  stamp a partial interpretation (`interpret_clue.cpp:484-486`). With
+  stamp a partial interpretation (`interpret_clue.cpp:492-494`). With
   `pink_s`, a special rank of 5 also permits a spoken 4, and a special rank of
   1 permits a spoken 2 (`pinkish.cpp:46-50`).
 - **`apply_rank_promise`** (`pinkish.cpp:62-80`) narrows the promised card's
   `inferred` to the clued rank; used by both the lock path
-  (`interpret_clue.cpp:367-376`) and the referential-discard path (`:382-385`).
+  (`interpret_clue.cpp:394-398`) and the referential-discard path (`:440-442`).
 - **`playable_rank_focus`** (`pinkish.cpp:82-94`) replaces the usual
   `max(newly_touched)` focus for the playable-rank branch with the
   **minimum-order** (rightmost, oldest) newly-touched-and-previously-unclued
-  card (`interpret_clue.cpp:512-514`).
+  card (`interpret_clue.cpp:520-522`).
 - **Blocked ranks** — with `pink_s`, `brown_s`, or `deceptive_s`, the special
   rank cannot be used as a clue value at all (`state.cpp:350-395`), and the
   `/settings` table renders those slots as `-`
@@ -731,7 +731,7 @@ at `state_eval.cpp:137-140`).
 **rank** clue to an **unloaded** target that does **not** touch their newest
 slot, in a game where some brown suit still has cards left to play, is read as
 `REVEAL` (a trash reveal) instead of falling through to `ref_play`
-(`interpret_clue.cpp:652-654`).
+(`interpret_clue.cpp:660-662`).
 
 ### 1b.5 Inverted suits (Orange, Dark Orange) — the buttons swap
 

@@ -154,6 +154,20 @@ IdentitySet pitch_candidates_in_shared_worlds(const Game& game) {
   for (const auto* w : hanabi::tiiah::strike_free(worlds)) {
     out = out.union_with(pitch_candidates(w->state));
   }
+  // Too many hole cards between the seats and the enumeration reads flat (v20.18.0):
+  // then each seat's own hole cards alone, still over the SHARED sets, so every seat
+  // computes it alike. Replay 2019555 T12: will-bot67's Red called yagami's o0, the
+  // r2, which plays where will-bot69's o7 was the r1; with 144 joint worlds the
+  // call read dead and was erased at will-bot69's seat.
+  if (worlds.size() <= 1) {
+    for (int p : everyone) {
+      const auto own = hanabi::tiiah::open_worlds(game, base, std::vector<int>{p}, 64, -1,
+                                                  /*shared=*/true);
+      for (const auto* w : hanabi::tiiah::strike_free(own)) {
+        out = out.union_with(pitch_candidates(w->state));
+      }
+    }
+  }
   return out;
 }
 

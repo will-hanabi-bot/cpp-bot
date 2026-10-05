@@ -590,11 +590,18 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     std::vector<int> holders{action.giver, action.target};
     const int me = before_ladder.state.our_player_index;
     if (me != action.giver && me != action.target) holders.push_back(me);
-    const auto all = open_worlds(
-        before_ladder,
-        before_ladder.state.with_stacks(view).with_band(
-            before_ladder.state.evidence_known_to_both(action.giver, action.target)),
-        holders);
+    const State frame_base = before_ladder.state.with_stacks(view).with_band(
+        before_ladder.state.evidence_known_to_both(action.giver, action.target));
+    auto all = open_worlds(before_ladder, frame_base, holders);
+    // Too many hole cards between the three seats and the enumeration reads flat --
+    // one world, which can never make the call. An outside seat then still tries
+    // the worlds of its OWN hole cards, the half this re-run exists for (v20.18.0).
+    // Replay 2019555 T12: o10, o12 and o15 of the pair with will-bot69's o7 `{r1,y1}`
+    // came to 144 worlds; read flat, will-bot67's Red to yagami's r2 found no call,
+    // though in the world where o7 was the r1 it is the r2.
+    if (all.size() <= 1 && holders.size() > 2) {
+      all = open_worlds(before_ladder, frame_base, me);
+    }
     const auto worlds = strike_free(all);
     if (worlds.size() > 1) {
       // Every world that makes the call, keeping the first one's reading.
