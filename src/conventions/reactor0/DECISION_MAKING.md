@@ -154,8 +154,9 @@ NOT-LOW iff any of VH1, H2, H3, H4, H5, or:
    is not that the card is in danger but that it is a play the team should be
    collecting, and Cathy is already expecting Alice to save it or get it played.
 
-   §3's precondition takes this same predicate as its second arm, for the same
-   reason. Tier and priority agree: a safe-but-playable chop is worth a clue.
+   §3's first arm (`priority_3_applies`) takes this same predicate as one of its
+   two "worth a clue" tests, for the same reason. Tier and priority agree: a
+   safe-but-playable chop is worth a clue.
 
 …or, when **Cathy's** chop is endangered (`:676-688`):
 
@@ -796,9 +797,26 @@ is judged from Alice's own inference, not common knowledge.
    Labelled **2c** for the reason 2b is. Replay 2019562 T31 is the motivating
    case (see H5).
 
-3. **Bob's chop is worth a clue** (so in particular he is not locked) **and he
-   has no safe play or discard.**
-   The same rule at every pace: `priority_3_applies`
+3. **Bob's chop is worth a clue or high clue count**. At least one of the following is true:
+   
+   - Bob is not locked, his chop is worth a clue (defined below), and he has no safe play or discard.
+   - The team has 6 or more clues available.
+
+   **The clue-count arm opens 3.1 only** (v20.22.0, the user's amendment and
+   ruling; `kPriority3ClueCount`, `rung_3`, `reactor0/decision.cpp:1751-1762`).
+   With 6 or more tokens a stable play clue to Bob is worth giving whatever his
+   chop. The locks, double discards and discard calls of 3.2-3.10 still need the
+   first arm, a stuck Bob: opened to every Bob, a lock outranked §4's fill-in at 8
+   tokens (`Reactor0CluePriority.FillInOutranksTheLockAtEightTokens`). The arm is
+   kept out of `priority_3_applies`, which also answers "is Bob stuck?" for the
+   TIIAH dupe filter in `analyse_clues`. Replay 2019598 T37: Red to yagami would
+   have called her o30, the r3, with red on 2 in every view. Her chop was a b4,
+   neither endangered nor playable, so nothing took the clue and will-bot69
+   discarded at 7 tokens; it gives the Red now
+   (`tests/test_tiiah/test_decision_making/test_replay_2019598_stable_red_at_high_clue_count.cpp`,
+   `tests/test_reactor0/test_decision_making/test_high_clue_count_stable_play.cpp`).
+
+   The first arm is the same at every pace: `priority_3_applies`
    (`reactor0/decision.cpp`). Through v13.1.0 a `pace() <= 2` arm waived the
    safe-action half; it was removed in v13.2.0 because it acted on BOB's behalf
    even when he had something safe to do. The late aggression it was reaching
@@ -936,7 +954,7 @@ is judged from Alice's own inference, not common knowledge.
        **In Throw It in a Hole, 3.7 also needs Bob's chop to be critical, playable
        or one away from playable** (v20.2.0, the user's ruling;
        `chop_worth_a_lock`, `state_eval.cpp:167-179`, read at
-       `decision.cpp:1815-1828`). The variant is hard enough that committing Bob's
+       `decision.cpp:1828-1841`). The variant is hard enough that committing Bob's
        whole hand is not worth it for anything further away, so Alice does
        something else, most often her own standing play. 3.6b goes with it, since
        it only ever replaces this lock; 3.6 and 3.10 need a critical chop anyway,
@@ -1011,7 +1029,7 @@ is judged from Alice's own inference, not common knowledge.
    a called y1 at 8 tokens, gave Blue on black's already-clued b3, a clue that
    saved nothing while black's chop was a same-hand dupe; it now plays the y1.
    §1-§3 are untouched, so a clue they find is still given at 8 tokens
-   (`decision.cpp:2032-2043`). `priority_4_applies`
+   (`decision.cpp:2045-2056`). `priority_4_applies`
    (`reactor0/decision.h`, `decision.cpp`), exported so each alternative can be
    asserted apart from the rung's ordering, the way `priority_3_applies` is.
    4a. Alice does not have a known playable card.

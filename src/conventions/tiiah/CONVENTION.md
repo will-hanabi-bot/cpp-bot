@@ -779,7 +779,7 @@ Two more things make it actually get given (v16.27.0):
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2224-2234`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2237-2247`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, ranked by §2a's stable play hierarchy (`settle_stable_play`, the
   same tiebreak every stable-play rung uses; before v18.17.0 its single term, "names
@@ -2862,7 +2862,7 @@ It now gives the Green.
 The user's ruling: the variant is hard, so rung 3.7 locks a stuck Bob only when his
 chop is **critical, playable or one away from playable**, judged on Alice's own
 stacks (`chop_worth_a_lock`, `src/conventions/reactor0/state_eval.cpp:167-179`, read
-at `src/conventions/reactor0/decision.cpp:1815-1828`). Anything further away is not
+at `src/conventions/reactor0/decision.cpp:1828-1841`). Anything further away is not
 worth committing his whole hand for, and Alice does something else instead, most
 often her own standing play. 3.6b (§2g) goes with the lock it replaces. 3.6 and 3.10
 already need a critical chop, and §4's lock, the forced branch, is unchanged. This
@@ -2883,7 +2883,7 @@ A change to reactor0's shared ladder, for every convention that delegates to it.
 tokens reactor0 §4, the forced-clue list whose floor always returns a clue, now opens
 only when Alice has no known play, or Bob is stuck on a hidden playable that a clue
 moves now, or a clue gets two plays (4a-4c, the pace arm's own qualifiers;
-`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2032-2043`). A discard
+`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2045-2056`). A discard
 is illegal at 8 tokens, but a play is not.
 
 Human diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T10: at 8
@@ -3083,6 +3083,7 @@ It now plays o9.
 | `tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp` | §1e — replay 2019598 T9: o10, named `{g1}` in the hole, refutes o14's b2 world; o14 is named the y1 and yellow is on 1 in every view (v20.21.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2019598_yellow_for_y2_once_y1_known.cpp` | §1e, §2 — replay 2019598 T24: will-bot67 clues Yellow for will-bot69's y2 instead of a referential 5 (v20.21.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2019742_discarded_card_is_no_finesse_evidence.cpp` | §1e — replay 2019742 T14: a discarded p2, one away, is no evidence about the T6 reactive's target; o6 stays `{r1,y2,b2}`, red stays on 0, and will-bot67 does not give the Red (v20.21.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2019598_stable_red_at_high_clue_count.cpp` | §2 (reactor0 DECISION_MAKING §3's clue-count arm) — replay 2019598 T37: at 7 tokens will-bot69 gives Red for yagami's r3 though her chop is not worth a clue (v20.22.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2014884_rainbow_one_clued_by_rank.cpp` | §1f, the giver's half — replay 2014884 T4: Bob's unclued ra1 is clued with 1, not Yellow (read as the y1) or Purple (read as `{p2,ra1}`) (v18.19.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2015013_colour_play_reveal_touching_rainbow.cpp` | §1b and §1f — replay 2015013 T37: will-bot67 gives Blue to yagami_black, a global play reveal of the clued b3 that also touches an unclued ra3, not a stalling 5 (v18.20.0) |
 | `tests/test_tiiah/test_colour_reveal_frame.cpp` | §1b — a colour reveal only the pair's stacks make playable yields to the leftmost newly touched card; the same reveal on the common stacks outranks it (v18.20.0) |

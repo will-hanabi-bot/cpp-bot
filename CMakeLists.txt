@@ -412,6 +412,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2018874_standing_call_on_shared_view_plays_now.cpp
   tests/test_tiiah/test_decision_making/test_replay_2019562_unlock_locked_bob_over_chop_discard.cpp
   tests/test_tiiah/test_decision_making/test_replay_2019598_yellow_for_y2_once_y1_known.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2019598_stable_red_at_high_clue_count.cpp
   tests/test_tiiah/test_decision_making/test_replay_2019742_discarded_card_is_no_finesse_evidence.cpp
   tests/test_tiiah/test_decision_making/test_replay_9000259_fixed_reaction_card_is_thrown.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
@@ -419,6 +420,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
   tests/test_reactor0/test_decision_making/test_locked_hand_throw.cpp
   tests/test_reactor0/test_decision_making/test_clue_priority.cpp
+  tests/test_reactor0/test_decision_making/test_high_clue_count_stable_play.cpp
   tests/test_reactor0/test_decision_making/test_stable_play_before_lock.cpp
   tests/test_reactor0/test_decision_making/test_calls.cpp
   tests/test_reactor0/test_decision_making/test_replay_1966091_lock_must_not_outrank_reaction.cpp

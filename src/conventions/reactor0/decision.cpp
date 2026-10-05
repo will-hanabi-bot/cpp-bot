@@ -1739,14 +1739,27 @@ const ClueCandidate* rung_unlock_bob(const Game& g, const std::vector<ClueCandid
   return first_of(g, select(cs, [](const ClueCandidate& c) { return c.unlocks_bob; }));
 }
 
+// §3.1 also opens at a HIGH CLUE COUNT, whatever Bob's chop (v20.22.0, the user's
+// amendment): with 6 or more tokens the team can afford a stable play clue Bob does
+// not strictly need. Only 3.1 -- the locks, double discards and discard calls below
+// stay for a Bob who is stuck (the user's ruling), or at 8 tokens a lock outranked
+// section 4's fill-in (`Reactor0CluePriority.FillInOutranksTheLockAtEightTokens`).
+// Kept out of `priority_3_applies`, which also answers "is Bob stuck?" for the dupe
+// filter in `analyse_clues`. Replay 2019598 T37: Red to yagami would have called her
+// o30, the r3 -- red on 2 in every view -- but her chop was a b4, not worth a clue,
+// so no rung took it and will-bot69 discarded at 7 tokens.
+constexpr int kPriority3ClueCount = 6;
+
 const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs) {
-  if (!priority_3_applies(g)) return nullptr;
+  const bool bob_stuck = priority_3_applies(g);
+  if (!bob_stuck && g.state.clue_tokens < kPriority3ClueCount) return nullptr;
   // 3.1 -- a stable play clue to Bob.
   if (clues_at_least(g, 2)) {
     if (auto* c = settle_stable_play(g, pool_stable_play(g, cs))) {
       return c;
     }
   }
+  if (!bob_stuck) return nullptr;  // the high-clue-count arm opens 3.1 only
   // 3.2 -- a double discard, when Cathy's chop is NOT expendable. It outranks
   // the stable discard below because it does two jobs at once: it clears two
   // unwanted cards AND it redirects Cathy off a chop she could not afford to
