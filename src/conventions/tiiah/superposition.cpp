@@ -775,8 +775,25 @@ void record_conditional(Game& game, int order, const std::vector<OpenWorld>& wor
 // must be direct or one away in this world; no other of them may be a direct
 // playable to its left, nor a direct playable at all when the called card is a
 // finesse; and none may be a finesse to its left when the called card is one too.
-// A card that is NOT in the hole is judged only by what that leaves certain -- we
-// cannot name it, so it constrains nothing.
+// A card of the receiver's that the world does not assign constrains only when the
+// TEAM has named it in the hole (v20.21.0, the user's ruling: `named_in_hole`, a
+// shared settle, so every seat refutes the same worlds), and only as one thing: a
+// direct playable, which the walk takes before any finesse, refutes a world that
+// makes the target a finesse. Replay 2019598: at T1 will-bot67's o14 was called
+// `{y1,b2}` with o10 beside it; o10 was called `{g1}` at T4 and went into the hole
+// named at T6, so o14 cannot have been the b2 finesse -- it is the y1. The limits,
+// each from what broke without it (self-play 1..150 and the corpus):
+// - only with `named_cards`, which only `prune_infeasible_worlds` passes: it runs
+//   between actions, while `open_worlds` also runs mid-reading, when a stable call's
+//   one-world reading looks named (2011397 T10);
+// - a name in the hole, not a one-identity reading on a card still in hand: those
+//   were wrong about half the time they decided a world;
+// - not a name whose identity is itself a conditional candidate;
+// - not a card already clued when the reactive was given (`ReactionRecord::clued`):
+//   a play the receiver already knew may have been passed over (2011327 T28);
+// - nothing else: a named card one away is no evidence, since a finesse also needs
+//   the reacter to hold the connector, and a named card never lets the rules on the
+//   world's own cards judge a lone world card.
 //
 // The frame is the shared view at clue time, what the receiver could reconstruct
 // of the walk, and the same at every seat.
@@ -786,7 +803,7 @@ void record_conditional(Game& game, int order, const std::vector<OpenWorld>& wor
 // {b2,p2} and {b2,b3}. In the world (p2, b2) slot 2 is a finesse and slot 3 a
 // direct playable, so yagami would have called slot 3 -- that world is refuted,
 // and the cards were the b2 and the b3.
-bool world_feasible(const Game& game, const OpenWorld& world) {
+bool world_feasible(const Game& game, const OpenWorld& world, bool named_cards) {
   // A joint fact rules 7 and 8 proved (v16.25.0): one of these cards WAS `id`.
   // Judged only when the world assigns every one of them.
   for (const HoleRequirement& req : game.hole_requirements) {
@@ -803,7 +820,7 @@ bool world_feasible(const Game& game, const OpenWorld& world) {
     }
     if (all_there && !met) return false;
   }
-  if (world.assignment.size() < 2) return true;
+  if (world.assignment.empty()) return true;
   const State& s = game.state;
   for (const ReactionRecord& r : game.reaction_records) {
     if (r.frame.size() != s.play_stacks.size()) continue;
@@ -813,12 +830,39 @@ bool world_feasible(const Game& game, const OpenWorld& world) {
     }
     if (target_slot < 0) continue;
 
-    struct Held { int order; int slot; Identity id; };
+    struct Held { int order; int slot; Identity id; bool named = false; };
     std::vector<Held> held;
     for (const auto& [o, id] : world.assignment) {
       if (std::find(r.called.begin(), r.called.end(), o) != r.called.end()) continue;
       for (size_t i = 0; i < r.receiver_hand.size(); ++i) {
         if (r.receiver_hand[i] == o) held.push_back({o, static_cast<int>(i) + 1, id});
+      }
+    }
+    if (held.empty()) continue;  // the world says nothing about this record
+    // The rules below on the world's own cards want two of them, as before v20.21.0:
+    // one card's reading already came from that very reaction.
+    const bool two_world_cards = held.size() >= 2;
+    // ...and the receiver's other cards the team has named in the hole (v20.21.0),
+    // when asked. A name conditional on the worlds is what is being judged, and a
+    // card already clued when the reactive was given may have been passed over as a
+    // play the receiver already knew (replay 2011327 T28, a known r4).
+    for (size_t i = 0; named_cards && i < r.receiver_hand.size(); ++i) {
+      const int o = r.receiver_hand[i];
+      if (std::find(r.called.begin(), r.called.end(), o) != r.called.end()) continue;
+      if (std::find(r.clued.begin(), r.clued.end(), o) != r.clued.end()) continue;
+      bool in_world = false;
+      for (const auto& [ao, aid] : world.assignment) {
+        if (ao == o) in_world = true;
+      }
+      if (in_world || o < 0 || o >= static_cast<int>(game.common.thoughts.size())) continue;
+      if (auto id = only_one(game.meta[o].named_in_hole)) {
+        bool conditional = false;
+        if (const auto& cond = game.meta[o].conditional) {
+          for (const auto& [cid, mask] : cond->support) {
+            if (cid == *id) conditional = true;
+          }
+        }
+        if (!conditional) held.push_back({o, static_cast<int>(i) + 1, *id, true});
       }
     }
     if (held.size() < 2) continue;
@@ -831,14 +875,25 @@ bool world_feasible(const Game& game, const OpenWorld& world) {
       const int away = frame.playable_away(id);
       return (away == 0 || away == 1) ? away : -1;
     };
+    // The target is judged only when it is one of the world's own cards: a named
+    // target is not what the world asserts.
     std::optional<int> target_kind;
     for (const Held& h : held) {
-      if (h.order == r.target_order) target_kind = kind(h.id);
+      if (h.order == r.target_order && !h.named) target_kind = kind(h.id);
     }
-    if (target_kind && *target_kind < 0) return false;
+    if (two_world_cards && target_kind && *target_kind < 0) return false;
     for (const Held& h : held) {
       if (h.order == r.target_order) continue;
       const int k = kind(h.id);
+      // A NAMED card refutes only as the user's rule states it: a direct playable,
+      // which the walk takes before any finesse, when the world makes the target a
+      // finesse. Its slot does not matter, and nothing it could be one away from is
+      // evidence -- a finesse also needs the reacter to hold the connector.
+      if (h.named) {
+        if (k == 0 && target_kind && *target_kind == 1) return false;
+        continue;
+      }
+      if (!two_world_cards) continue;
       if (k == 0 && (h.slot < target_slot || (target_kind && *target_kind == 1))) {
         return false;
       }
@@ -1750,7 +1805,7 @@ bool prune_infeasible_worlds(Game& game) {
   if (raw.size() <= 1) return false;
   std::vector<OpenWorld> feasible;
   for (const OpenWorld& w : raw) {
-    if (world_feasible(game, w)) feasible.push_back(w);
+    if (world_feasible(game, w, /*named_cards=*/true)) feasible.push_back(w);
   }
   if (feasible.empty() || feasible.size() == raw.size()) return false;
   std::vector<const OpenWorld*> surviving;

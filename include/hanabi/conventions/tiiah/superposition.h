@@ -122,7 +122,13 @@ void record_conditional(Game& game, int order, const std::vector<OpenWorld>& wor
 // in which one of our superposed cards would have out-ranked the card the reacter
 // actually called cannot be the world we are in. `open_worlds` drops such worlds
 // (all of them kept when none survives).
-bool world_feasible(const Game& game, const OpenWorld& world);
+//
+// With `named_cards`, the receiver's cards the team has NAMED in the hole count too
+// (v20.21.0), as a direct playable refuting a world whose target is a finesse. Only
+// `prune_infeasible_worlds` asks for it -- it settles between actions, after every
+// reading is complete. `open_worlds` runs while a clue is still being read, when a
+// call's single-world reading can look named (replay 2011397 T10).
+bool world_feasible(const Game& game, const OpenWorld& world, bool named_cards = false);
 
 // §1e, the STABLE half of "what a card means depends on what you threw away"
 // (v16.24.0). The stable ladder read the clue on one frame, `view`; a card it has

@@ -200,6 +200,7 @@ void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
   r.receiver = wc.receiver;
   r.receiver_hand = wc.receiver_hand;
   r.called = wc.receiver_called;
+  r.clued = wc.receiver_clued;
   r.frame = wc.receiver_frame;
   r.target_order = wc.receiver_hand[slots->second - 1];
   game.reaction_records.push_back(std::move(r));
@@ -365,6 +366,9 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     wc.receiver_frame = state.common_play_stacks;
     for (int o : state.hands[receiver]) {
       if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) wc.receiver_called.push_back(o);
+      if (o < static_cast<int>(prev.state.deck.size()) && prev.state.deck[o].clued) {
+        wc.receiver_clued.push_back(o);  // known before this clue (v20.21.0)
+      }
     }
   } else {
     // The reverse arm: the standing plays that made the position, read BEFORE this

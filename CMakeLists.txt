@@ -411,6 +411,8 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2018766_call_in_every_world_is_a_play.cpp
   tests/test_tiiah/test_decision_making/test_replay_2018874_standing_call_on_shared_view_plays_now.cpp
   tests/test_tiiah/test_decision_making/test_replay_2019562_unlock_locked_bob_over_chop_discard.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2019598_yellow_for_y2_once_y1_known.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2019742_discarded_card_is_no_finesse_evidence.cpp
   tests/test_tiiah/test_decision_making/test_replay_9000259_fixed_reaction_card_is_thrown.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
@@ -548,6 +550,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp
+  tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp
+  tests/test_tiiah/test_named_card_feasibility.cpp
   tests/test_tiiah/test_special_suit_rank_pin.cpp
   tests/test_tiiah/test_colour_reveal_frame.cpp
   tests/test_tiiah/test_pink_rank_clues.cpp

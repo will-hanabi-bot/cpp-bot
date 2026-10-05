@@ -124,6 +124,11 @@ struct ReactorWC {
   // plays one of these; a card this clue newly made playable does not confirm it
   // (`tiiah::confirm_reverse_reactive`, replay 2018428).
   std::vector<int> receiver_standing;
+  // THROW IT IN A HOLE, for world feasibility (v20.21.0): the receiver's cards
+  // already clued BEFORE this clue. A card the team names only later is evidence
+  // about the walk; one it already knew may have been passed over as a play in
+  // hand, by a human or an older build (replay 2011327 T28's r4).
+  std::vector<int> receiver_clued;
 
   bool operator==(const ReactorWC&) const = default;
 };
@@ -140,6 +145,7 @@ struct ReactionRecord {
   std::vector<int> called;
   std::vector<int> frame;
   int target_order = -1;
+  std::vector<int> clued;  // clued before the clue (`ReactorWC::receiver_clued`)
 
   bool operator==(const ReactionRecord&) const = default;
 };
