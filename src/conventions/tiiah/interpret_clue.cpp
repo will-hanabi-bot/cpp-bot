@@ -293,15 +293,30 @@ void pin_rainbowy_colour(const Game& prev, Game& game,
   }
 }
 
-// §1f for a RANK clue (v20.13.0, the user's ruling). A rank stable play clue that
-// calls a NEW card in slot 1 makes it the rainbowy suit's playable, unless that is
-// directly impossible: the rainbowy suit's next card on the shared view is not of
-// the clue's rank, or the card cannot be it. Replay 2019249 T14: yagami's 1 to
+// The special suit a rank clue's slot-1 call names (§1f, v20.20.0): the rainbowy
+// suit, or else a WHITE-ISH one -- touched by no colour but still by rank, so
+// White, Gray, Light Pink and Gray Pink. Null and Dark Null are white-ish too, but
+// brownish: no rank touches them. No TIIAH variant carries two special suits.
+std::optional<int> rank_pin_suit(const Variant& variant) {
+  if (auto r = rainbowy_suit(variant)) return r;
+  for (int s = 0; s < static_cast<int>(variant.suits.size()); ++s) {
+    const SuitType& t = variant.suits[s].suit_type;
+    if (t.whitish && !t.brownish) return s;
+  }
+  return std::nullopt;
+}
+
+// §1f for a RANK clue (v20.13.0, the user's ruling; white-ish suits since v20.20.0).
+// A rank stable play clue that calls a NEW card in slot 1 makes it the special
+// suit's playable (`rank_pin_suit`), unless that is directly impossible: the
+// special suit's next card on the shared view is not of the clue's rank -- the
+// clue only qualifies as a rank stable play clue when every card of that rank is
+// playable or trash -- or the card cannot be it. Replay 2019249 T14: yagami's 1 to
 // will-bot69 touched only its new slot-1 card, the m1, read as `{y1,g1,b1,m1}`.
-void pin_rainbowy_rank(const Game& prev, Game& game, const ClueAction& action) {
+void pin_special_rank(const Game& prev, Game& game, const ClueAction& action) {
   const State& state = game.state;
-  const auto rainbowy = rainbowy_suit(*state.variant);
-  if (!rainbowy) return;
+  const auto special = rank_pin_suit(*state.variant);
+  if (!special) return;
   const auto& hand = state.hands[action.target];
   if (hand.empty()) return;
   const int slot1 = hand.front();
@@ -312,10 +327,10 @@ void pin_rainbowy_rank(const Game& prev, Game& game, const ClueAction& action) {
   }
   if (prev.state.deck[slot1].clued) return;  // not a newly touched card
   const State shared = state.shared_view();
-  const bool reversed = state.variant->suits[*rainbowy].suit_type.reversed;
-  const int rank = shared.play_stacks[*rainbowy] + (reversed ? -1 : 1);
+  const bool reversed = state.variant->suits[*special].suit_type.reversed;
+  const int rank = shared.play_stacks[*special] + (reversed ? -1 : 1);
   if (rank != action.clue.value) return;
-  const Identity pin(*rainbowy, rank);
+  const Identity pin(*special, rank);
   if (shared.is_basic_trash(pin)) return;
   if (!game.common.thoughts[slot1].possibilities().contains(pin)) return;
   game.narrow_thought(slot1, IdentitySet::single(pin));
@@ -543,8 +558,8 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       // EVERY seat knows (v19.0.0), for the same reason a colour reveal does.
       out = reactor0::stable_rank(p, g, action, stall_ctx,
                                   &state.common_play_stacks);
-      // §1f for a rank clue: a new slot-1 call is the rainbowy playable.
-      pin_rainbowy_rank(p, g, action);
+      // §1f for a rank clue: a new slot-1 call is the special suit's playable.
+      pin_special_rank(p, g, action);
     } else {
       // A colour play reveal outranks the leftmost newly touched card only when
       // it is one on the stacks EVERY seat knows (v18.20.0) -- the same frame in

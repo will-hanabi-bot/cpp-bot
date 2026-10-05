@@ -548,6 +548,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp
+  tests/test_tiiah/test_special_suit_rank_pin.cpp
   tests/test_tiiah/test_colour_reveal_frame.cpp
   tests/test_tiiah/test_pink_rank_clues.cpp
   tests/test_tiiah/test_hole_play_named_by_sight.cpp

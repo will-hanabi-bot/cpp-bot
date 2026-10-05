@@ -541,3 +541,10 @@ identity X, and the holder watched the giver throw an X into the hole unnamed, t
 call is a **watched dupe**. The holder reads the card as X (trash), withdraws the
 call and throws it (`repin_own_call`, CONVENTION.md §1.3). Human diagnostic 2014561
 T56.
+
+### special suit (rank pin)
+The suit a rank stable play clue's new slot-1 call names (CONVENTION.md §1f,
+`rank_pin_suit`). It is the rainbowy suit (v20.13.0), or else a **white-ish** suit:
+one no colour touches but rank still does, so White, Gray, Light Pink and Gray Pink
+(v20.20.0). Null and Dark Null are white-ish but no rank touches them, so they are
+not special here. No TIIAH variant carries two special suits.
