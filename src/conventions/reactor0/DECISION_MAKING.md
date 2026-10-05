@@ -596,7 +596,7 @@ same as *loaded*.
 
 **What counts as a known play in Throw It in a Hole (v20.9.0).** The per-card test
 behind *loaded*, *locked*, §4's 4a and the play phase is `Player::order_playable`
-(`src/basics/player_game.cpp:162-190`). In a hole variant it also counts a call on
+(`src/basics/player_game.cpp:162-208`). In a hole variant it also counts a call on
 Alice's own card that plays in **every** world of her own hole cards (some identity
 of it playable in each), though no single identity plays on her belief. Replay
 2018766 T23: will-bot69's `{r2,y2}`, over its own hole card `{r1,y1}`, made it count
@@ -604,7 +604,9 @@ itself locked, and §4 clued instead of playing it. Since v20.11.0 it also count
 call on her own card whose reading plays on the **shared view**, though her private
 stacks lag it, provided every card between her stack and it is a candidate of her
 own unnamed hole cards and none of it is trash on her own view. Replay 2018874 T47: will-bot69's `{b5}`, with blue on 4 in every
-shared view but on 3 privately, made §4 give a 3 stall. See tiiah `CONVENTION.md` §2k.
+shared view but on 3 privately, made §4 give a 3 stall. Since v20.23.0 it also drops,
+from her own card's candidates, any identity with no copy left by her accounting (a
+*spent identity*): replay 2019676 T62. See tiiah `CONVENTION.md` §2k.
 
 **The call has to be live.** *Occupied* means "she has something better to do
 than spend a token on a LOW clue", so a call whose button could now only strike

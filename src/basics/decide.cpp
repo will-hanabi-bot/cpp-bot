@@ -1917,7 +1917,7 @@ PerformAction Game::take_action() const {
         // `m.order_trash(*this, o)`, i.e. it guarded only the empathy-trash
         // ones. But `Player::discardable` also admits cards whose every
         // possibility is *sieved* — covered elsewhere, so expendable
-        // (`player_game.cpp:306-310`) — and that is a discard-PILE judgement
+        // (`player_game.cpp:324-328`) — and that is a discard-PILE judgement
         // which says nothing about whether pressing Discard is safe. Replay
         // 1961419 T11: a clued rank 4 inferred {Red 4, Orange 4}, both copies
         // sieved, entered the pool that way, went out as a raw PerformDiscard

@@ -552,3 +552,11 @@ The suit a rank stable play clue's new slot-1 call names (CONVENTION.md §1f,
 one no colour touches but rank still does, so White, Gray, Light Pink and Gray Pink
 (v20.20.0). Null and Dark Null are white-ish but no rank touches them, so they are
 not special here. No TIIAH variant carries two special suits.
+
+### spent identity
+An identity none of whose copies is left by our own accounting: every one booked as
+played or thrown (`base_count`) or seen in a hand (`Player::unknown_ids`). On our own
+card it is no candidate when `Player::order_playable` judges the play (v20.23.0),
+though it stays in the reading. A hole card we settle books its copy, but no play
+reveals it, so elimination never takes it out of our other cards. CONVENTION.md §2k,
+replay 2019676 T62.

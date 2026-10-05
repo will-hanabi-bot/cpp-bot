@@ -167,6 +167,24 @@ bool Player::order_playable(const Game& game, int order, bool exclude_trash) con
   const Thought& thought = thoughts[order];
   IdentitySet poss = infer ? thought.possibilities() : thought.possible;
   IdentitySet p = exclude_trash ? poss.difference(state.trash_set) : poss;
+  // Throw It in a Hole (v20.23.0): on our OWN card, an identity none of whose
+  // copies is left by our own accounting -- every copy booked as played or thrown
+  // (`base_count`) or seen in a hand -- is no candidate for the play. A hidden play
+  // we later settle books its copy (`with_play`), but nothing reveals it, so it
+  // never reaches elimination and the identity stays in our other cards' readings.
+  // Judged here, for the play only, rather than by eliminating it: a settle that
+  // turns out wrong would then cost one decision, not every reading built on it.
+  // Replay 2019676: will-bot69's o33 `{r5,y5}` was settled as the y5 at T34, yet
+  // o6 read `{y5,p5}` all game, so at T62, with purple on 4, it chucked o46
+  // instead of playing the p5.
+  if (state.variant->throw_it_in_a_hole &&
+      state.holder_of(order) == state.our_player_index) {
+    IdentitySet left = IdentitySet::empty();
+    for (Identity i : p) {
+      if (unknown_ids(state, i) > 0) left = left.add(i);
+    }
+    if (left.non_empty()) p = left;
+  }
   if (p.non_empty() && p.intersect(state.playable_set) == p) return true;
   // Throw It in a Hole (v20.9.0, the user's ruling): a call on our OWN card that
   // plays in every world of our own hole cards -- some identity of it playable in

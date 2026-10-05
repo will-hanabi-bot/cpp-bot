@@ -39,7 +39,7 @@ colour name**, not the suit name, so partners and bot agree.
 ### anxiety play
 When locked but holding a card that *might* be playable, gamble on the slot
 with the highest playable probability.
-`src/basics/player_game.cpp:461-490`.
+`src/basics/player_game.cpp:479-508`.
 
 ### arrangement
 In the endgame solver, one concrete assignment of identities to our own
@@ -314,7 +314,7 @@ including a clue-regain rank. `state_eval.cpp:105-146`.
 ### hypo stacks
 The play stacks after simulating everyone's known plays to a fixpoint. Feeds
 `playable_away`, `hypo_score`, and the reactive play-target pool.
-`src/basics/player_game.cpp:494-621`.
+`src/basics/player_game.cpp:512-639`.
 
 ### IdentitySet
 Bitset over the ~30 card identities; the workhorse of empathy. Uses
@@ -352,14 +352,14 @@ A relation between several cards sharing one identity set — `PromisedLink`,
 
 ### loaded / unloaded
 Loaded = has an obvious playable or known trash, i.e. has something safe to
-do. `obvious_loaded`, `player_game.cpp:253-256`; the full-empathy variant is
+do. `obvious_loaded`, `player_game.cpp:271-274`; the full-empathy variant is
 `thinks_loaded`, `:216-219`.
 
 ### lock / locked
 A player with no safe action and every unclued card stamped `CHOP_MOVED`.
 Produced by the LOCK clue interpretation, which is a rank clue touching the
 *lock slot*. A lock protects the whole hand: nothing in it is safe to discard.
-`interpret_clue.cpp:355-401`; `player_game.cpp:241-266`.
+`interpret_clue.cpp:355-401`; `player_game.cpp:259-284`.
 
 ### lock slot
 The **oldest** (lowest-`order`, rightmost) unclued card. A rank clue that
@@ -370,7 +370,7 @@ card.
 
 ### locked discard
 The sacrifice choice when locked: minimise critical probability, then maximise
-a rank/distance score. `player_game.cpp:421-459`.
+a rank/distance score. `player_game.cpp:439-477`.
 
 ### low-clue-count gate
 At `clue_tokens < 3` and `pace() >= 3`, with a real play in hand, a clue must
@@ -617,7 +617,7 @@ Variant flag reducing the rank-1 count from 3 to 2.
 
 ### sieved
 An identity that is safe to lose because another copy is held somewhere it
-won't be discarded. `src/basics/player_game.cpp:268-296`.
+won't be discarded. `src/basics/player_game.cpp:286-314`.
 
 ### signal_turn
 The turn a CTP/CTD was first stamped. The queue-order tiebreaker throughout —
