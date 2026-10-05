@@ -653,6 +653,18 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
     auto bob_chop = chop_id_of(game, bob);
     if (bob_chop && s.is_critical(*bob_chop)) return ClueTier::HIGH;
   }
+  // H5 -- Bob is LOCKED and the clue unlocks him in any way: after it he has a play
+  // or a discard to make (v20.19.0, the user's criterion). A locked Bob can only
+  // clue or burn a card, so a clue that frees him is worth a token. Replay 2019562
+  // T31: will-bot67 was locked, and will-bot69's Blue would have called his b4; at
+  // 2 tokens every clue read LOW and will-bot69 discarded its chop instead.
+  // Not when Alice is OCCUPIED (the user's ruling): a call she can action comes
+  // first, so the clue stays at whatever tier the other criteria give it. Replays
+  // 1966696 T8 and 1966119 T5 hold their plays.
+  if (!requires_high_tier(game) && game.common.thinks_locked(game, bob) &&
+      !hypo.common.thinks_locked(hypo, bob)) {
+    return ClueTier::HIGH;
+  }
 
   // --- not low ----------------------------------------------------------
   // N5 — Bob has a playable chop he cannot just pitch a duplicate of. Any

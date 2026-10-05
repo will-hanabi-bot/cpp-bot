@@ -772,14 +772,14 @@ urgent return, which is the very thing being declined. The tier itself
 Two more things make it actually get given (v16.27.0):
 
 - **The tier gate does not apply to it** (`clue_is_admissible`,
-  `reactor0/decision.cpp:1214`), as it does not to the fix (§1h). A refusal stamps
+  `reactor0/decision.cpp:1219`), as it does not to the fix (§1h). A refusal stamps
   nothing, so it is always LOW, and an OCCUPIED reacter — which a reacter holding
   the urgent call always is — had every refusal rejected before its priority was
   consulted. Replay [2011854](https://hanab.live/shared-replay/2011854#27) T27:
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2208-2218`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2224-2234`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, ranked by §2a's stable play hierarchy (`settle_stable_play`, the
   same tiebreak every stable-play rung uses; before v18.17.0 its single term, "names
@@ -2429,7 +2429,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 3 — `rung_2b` (`reactor0/decision.cpp:1722-1726`), logged as `2b.fix`. Step 1
+and rung 2c (the unlock, v20.19.0) — `rung_2b` (`reactor0/decision.cpp:1727-1731`), logged as `2b.fix`. Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
 (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm of `clue_tier`,
@@ -2647,7 +2647,7 @@ card by sight, the frame the giver shares with the receiver advanced by that car
 the pair's worlds, through the same `receiver_reading` helper (`:588-634`) that
 `narrow_receiver_call` uses — so the giver and the reader cannot disagree about what a
 call says. It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
-(`src/conventions/reactor0/decision.cpp:1365-1387`) reads first. reactor0 cannot call
+(`src/conventions/reactor0/decision.cpp:1370-1392`) reads first. reactor0 cannot call
 into this convention, so `reactor0::analyse_clues` takes an optional
 `CandidateAnnotator` and the engine passes this one under TIIAH
 (`candidate_annotator`, `src/basics/decide.cpp:49-52`); outside TIIAH the field stays
@@ -2724,7 +2724,7 @@ played her call and Bob threw his chop. The reviewer: "Bob almost never stops to
 or save a playable card at risk on Cathy's chop."
 
 So a clue to Bob that touches his chop, without calling it to discard, is flagged
-`saves_stuck_bob_chop` (`reactor0/decision.cpp:1129-1132`) and exempt from the gate
+`saves_stuck_bob_chop` (`reactor0/decision.cpp:1134-1137`) and exempt from the gate
 (`:1157`) when all of the following hold:
 
 - §3's precondition holds (`priority_3_applies`): Bob has no safe action.
@@ -2803,7 +2803,7 @@ It now gives the Green.
 The user's ruling: the variant is hard, so rung 3.7 locks a stuck Bob only when his
 chop is **critical, playable or one away from playable**, judged on Alice's own
 stacks (`chop_worth_a_lock`, `src/conventions/reactor0/state_eval.cpp:167-179`, read
-at `src/conventions/reactor0/decision.cpp:1801-1814`). Anything further away is not
+at `src/conventions/reactor0/decision.cpp:1815-1828`). Anything further away is not
 worth committing his whole hand for, and Alice does something else instead, most
 often her own standing play. 3.6b (§2g) goes with the lock it replaces. 3.6 and 3.10
 already need a critical chop, and §4's lock, the forced branch, is unchanged. This
@@ -2824,7 +2824,7 @@ A change to reactor0's shared ladder, for every convention that delegates to it.
 tokens reactor0 §4, the forced-clue list whose floor always returns a clue, now opens
 only when Alice has no known play, or Bob is stuck on a hidden playable that a clue
 moves now, or a clue gets two plays (4a-4c, the pace arm's own qualifiers;
-`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2018-2029`). A discard
+`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2032-2043`). A discard
 is illegal at 8 tokens, but a play is not.
 
 Human diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T10: at 8
@@ -2947,6 +2947,7 @@ It now plays o9.
 | `tests/test_tiiah/test_named_hole_card_above_the_shared_view.cpp` | §1e — a hole card named as the y2 above an unnamed gap settles the other hole card as the y1 and floors common yellow at 2; with no y1 among it, the gap card stays superposed (v20.16.0) |
 | `tests/test_tiiah/test_receiver_standing_play_is_not_the_reaction.cpp` | §1d — on the reverse arm the receiver's standing play is not read as the reacter's card (self-play seed 270, v20.16.0) |
 | `tests/test_tiiah/test_replay_2019555_outside_seat_reads_partner_clue_named_hole.cpp` | §1b and §1e — replay 2019555 T12-T20: will-bot69, outside the pair, reads will-bot67's Red as yagami's `{r2}` through its own hole card's worlds; the T18 3 is a lock at 8 tokens, and o22 is not played (v20.18.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2019562_unlock_locked_bob_over_chop_discard.cpp` | §2 (reactor0 DECISION_MAKING H5 and 2c) — replay 2019562 T31: an unoccupied will-bot69 at 2 tokens gives Blue to unlock the locked will-bot67 (his b4) instead of discarding its chop (v20.19.0) |
 | `tests/test_tiiah/test_replay_2019408_named_hole_card_above_shared_view.cpp` | §1e — replay 2019408 T35: yagami's o3 stays `{r1,y3}`, and his T34 Red calls o36 `{r1}`, played (v20.16.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_9000259_fixed_reaction_card_is_thrown.cpp` | §1c and §1h — self-play seed 259 T5: Bob throws his fixed reaction card o7 at once (v20.12.0) |
 | `tests/test_tiiah/test_call_in_every_world_is_a_play.cpp` | §2k — our call `{r2,y2}` over our own hole card `{r1,y1}` is a known play; with `{r1,g1}` a world plays neither and it is not (v20.9.0) |

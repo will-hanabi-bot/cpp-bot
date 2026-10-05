@@ -685,8 +685,16 @@ hand. A NOT-LOW condition of the *pace-clue tier gate*: it lifts every clue
 that turn to at least MEDIUM, because the team is expecting that card to be
 saved or played. Weaker than *at-risk chop* — it ignores copies in Cathy's
 hand and in Alice's — which is the point: the card need not be in danger to be
-worth a clue. `src/conventions/reactor0/state_eval.cpp:211-227`;
+worth a clue. `src/conventions/reactor0/state_eval.cpp:213-225`;
 DECISION_MAKING.md, *Clue Tier Definitions*. Added after replay 1942330 T33.
+
+### unlock clue (H5, §2c)
+A clue after which a LOCKED Bob is no longer locked: it gives him a play or a
+discard to make. HIGH by H5, and given ahead of §3 by the General Clue
+Evaluation List's priority 2c, but neither while Alice is *occupied*.
+`ClueCandidate::unlocks_bob` (`include/hanabi/conventions/reactor0/decision.h`);
+`src/conventions/reactor0/state_eval.cpp:656-667`. Added in v20.19.0 after
+replay 2019562 T31.
 
 ### touched-card rank classification
 How reactor0 decides whether a rank clue is a direct play clue (§1c priority

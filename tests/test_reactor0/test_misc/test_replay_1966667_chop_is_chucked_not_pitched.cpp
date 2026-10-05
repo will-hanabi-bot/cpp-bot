@@ -774,6 +774,18 @@ TEST(MiscReplay1966667, T10ChopIsChuckedNotPitched) {
   // -- answered "not provably safe" for an unknown card, and that was read as
   // "so pitch it". Pitching strikes on any plain card that is not playable,
   // which is most of the deck here.
+  //
+  // Since v20.19.0 Alice does not discard at all here: yagami_black is LOCKED,
+  // Alice is not occupied, and the 1 to will-bot69 unlocks him (H5, §2c). With 5
+  // tokens that clue comes first.
+  hanabi::PerformAction first = game.take_action();
+  auto* unlock = std::get_if<hanabi::PerformRank>(&first);
+  ASSERT_NE(unlock, nullptr) << "the locked Bob is unlocked first (H5, §2c)";
+  EXPECT_EQ(unlock->target, 2);
+  EXPECT_EQ(unlock->value, 1);
+
+  // With no token to clue, the chop is still CHUCKED, not pitched.
+  game.state.clue_tokens = 0;
   hanabi::PerformAction action = game.take_action();
   auto* discard = std::get_if<hanabi::PerformDiscard>(&action);
   ASSERT_NE(discard, nullptr)

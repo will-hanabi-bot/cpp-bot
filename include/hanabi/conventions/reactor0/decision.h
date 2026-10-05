@@ -205,6 +205,9 @@ struct ClueCandidate {
   // stack just as a pitch does on a plain one, which is why this does not
   // simply read `new_plays`.
   bool bob_plays_now = false;
+  // Bob is LOCKED before this clue and not after it: it gives him a play or a
+  // discard (v20.19.0). H5 lifts such a clue to HIGH, and §2c gives it ahead of §3.
+  bool unlocks_bob = false;
   // Can the receiver READ THE CALL BACK to one identity? True when this clue's
   // reading is a stable play and the card it names is narrowed to exactly one
   // identity in the shared view once the clue has landed.

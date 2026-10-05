@@ -1051,6 +1051,11 @@ std::vector<ClueCandidate> analyse_clues(
           break;
         }
       }
+      // H5 / §2c (v20.19.0): Bob locked before the clue and not after it, and
+      // Alice not OCCUPIED -- a call she can action comes first.
+      c.unlocks_bob = !requires_high_tier(game) &&
+                      game.common.thinks_locked(game, bob_seat) &&
+                      !hypo.common.thinks_locked(hypo, bob_seat);
     }
 
     // Can the receiver read this call back to ONE identity? Only Throw It in a
@@ -1725,6 +1730,15 @@ const ClueCandidate* rung_2b(const Game& g, const std::vector<ClueCandidate>& cs
                   }));
 }
 
+// §2c -- Bob is LOCKED and a clue unlocks him: after it he has a play or a discard
+// (v20.19.0, the user's ruling). Ahead of §3, whose chop rescue assumes Bob is not
+// locked. The best such clue by the General Clue Evaluation score. Replay 2019562
+// T31: will-bot67 was locked, and will-bot69's Blue would have called his b4; no
+// rung took it, and will-bot69 discarded its chop.
+const ClueCandidate* rung_unlock_bob(const Game& g, const std::vector<ClueCandidate>& cs) {
+  return first_of(g, select(cs, [](const ClueCandidate& c) { return c.unlocks_bob; }));
+}
+
 const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs) {
   if (!priority_3_applies(g)) return nullptr;
   // 3.1 -- a stable play clue to Bob.
@@ -2203,6 +2217,8 @@ std::optional<PerformAction> choose_very_high_clue(
     rung = "2.reactive_discard";
   } else if ((pick = rung_2b(game, vh))) {
     rung = "2b.fix";
+  } else if ((pick = rung_unlock_bob(game, vh))) {
+    rung = "2c.unlock_bob";
   } else if ((pick = rung_3(game, vh))) {
     rung = "3.bob_chop";
   } else if ((pick = settle_stable_play(
@@ -2415,6 +2431,8 @@ std::optional<PerformAction> choose_clue(
     rung = "1.reactive_play";
   } else if ((pick = rung_2(game, ok))) {
     rung = "2.reactive_discard";
+  } else if ((pick = rung_unlock_bob(game, ok))) {
+    rung = "2c.unlock_bob";
   } else if ((pick = rung_3(game, ok))) {
     rung = "3.bob_chop";
   } else if ((pick = rung_4(game, ok))) {
