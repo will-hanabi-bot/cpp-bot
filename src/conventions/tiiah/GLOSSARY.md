@@ -568,3 +568,12 @@ colour's own next card, and a rainbowy card is called by rank, by a colour whose
 suit is impossible, or -- Muddy and Cocoa, which no rank touches -- by a re-touch.
 Prism is NOT rainbowy (each Prism card has exactly one colour), though `rainbowy_suit`
 handles its colour calls the same way. CONVENTION.md §1f.
+
+### giver's frame (per world)
+The stacks a stable clue's GIVER has in one world of the receiver's hole cards
+(v21.0.0, the user's ruling): the per-suit minimum over the giver's own hole-card
+worlds that stay strike-free given the receiver's cards. A receiver's play that lands
+only if the giver's hole card was the card below tells the giver what it was, though
+the receiver cannot know. A stable call is read on it in each world
+(`read_stable_over_worlds`), and the named dupe stands down when the reading names
+more than the dupe. CONVENTION.md §1e, replay 2020406 T28.

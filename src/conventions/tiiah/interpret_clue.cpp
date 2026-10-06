@@ -139,7 +139,14 @@ void repin_own_call(const Game& prev, Game& game, int giver) {
     // will toss it if yagami_blue already played the other copy" -- which is what
     // lets the giver call a card it may have played, when the call is named
     // (reactor0 `calls_a_card_we_may_have_played`).
-    if (giver >= 0 && giver != me) {
+    // ...except when the reading names more than that identity (v21.0.0): it was
+    // widened to the giver's frame in a world of our hole cards
+    // (`read_stable_over_worlds`), where the giver deduced its hole card from our
+    // play. A world exists in which the card is not trash, so we keep the call.
+    // Replay 2020406 T28: o26 `{p1,p3}`.
+    const bool widened_past_giver =
+        game.common.thoughts[o].inferred.difference(giver_meant).non_empty();
+    if (giver >= 0 && giver != me && !widened_past_giver) {
       const IdentitySet meant = game.common.thoughts[o].inferred.intersect(giver_meant);
       if (meant.length() == 1) {
         const Identity x = *meant.begin();

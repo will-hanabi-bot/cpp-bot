@@ -1335,12 +1335,69 @@ bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& act
   const State frame = s.with_stacks(view);
   // Worlds are replayed on the frame with its BAND: `view` may already carry the
   // floor these same worlds produced (v16.24.0).
-  const auto all = open_worlds(
-      game, frame.with_band(s.evidence_known_to_both(action.giver, action.target)),
-      holders);
-  if (all.size() <= 1) return false;
+  const State banded =
+      frame.with_band(s.evidence_known_to_both(action.giver, action.target));
+  const auto all = open_worlds(game, banded, holders);
   std::vector<OpenWorld> worlds;
   for (const OpenWorld* w : strike_free(all)) worlds.push_back(*w);
+
+  // THE GIVER'S FRAME IN EACH WORLD (v21.0.0, the user's ruling). Each world of the
+  // receiver's hole cards is read on the frame the GIVER has in that world: the
+  // per-suit minimum over the giver's own hole-card worlds that stay strike-free
+  // given the receiver's cards. The giver watched the receiver's cards go in, so a
+  // play of theirs that lands only if the giver's hole card was the card below tells
+  // the giver what it was -- and the giver may call on that. When nothing forces the
+  // giver's hole card the minimum ignores it, as v20.4.0's ruling has it.
+  // Replay 2020406: will-bot69's o9 `{r2,p2}` was the p2, which yagami watched land,
+  // so she knew her own o4 `{p1,i1}` had been the p1 and her Purple called the p3;
+  // in the world where o9 was the r2 she could not know, and Purple is the p1. o26
+  // reads `{p1,p3}`. Too many joint worlds, and the receiver's alone are read, as
+  // before.
+  if (action.giver != action.target) {
+    const auto joint =
+        open_worlds(game, banded, std::vector<int>{action.target, action.giver});
+    if (joint.size() > 1 && joint.size() < 64) {
+      auto receiver_part = [&](const OpenWorld& w) {
+        std::vector<std::pair<int, Identity>> part;
+        for (const auto& [o, id] : w.assignment) {
+          if (s.holder_of(o) == action.target) part.emplace_back(o, id);
+        }
+        return part;
+      };
+      std::vector<std::vector<std::pair<int, Identity>>> keys;
+      std::vector<std::vector<const OpenWorld*>> groups;
+      for (const OpenWorld& w : joint) {
+        if (w.struck) continue;  // keep only the giver sub-worlds that land
+        const auto key = receiver_part(w);
+        auto it = std::find(keys.begin(), keys.end(), key);
+        if (it == keys.end()) {
+          keys.push_back(key);
+          groups.push_back({&w});
+        } else {
+          groups[it - keys.begin()].push_back(&w);
+        }
+      }
+      if (keys.size() > 1) {
+        std::vector<OpenWorld> regrouped;
+        for (std::size_t g = 0; g < keys.size(); ++g) {
+          std::vector<int> floor = groups[g].front()->state.play_stacks;
+          for (const OpenWorld* w : groups[g]) {
+            for (std::size_t k = 0; k < floor.size(); ++k) {
+              const int v = w->state.play_stacks[k];
+              const bool reversed = s.variant->suits[k].suit_type.reversed;
+              if (reversed ? v > floor[k] : v < floor[k]) floor[k] = v;
+            }
+          }
+          OpenWorld rw;
+          rw.assignment = keys[g];
+          rw.state = s.with_stacks(floor);
+          regrouped.push_back(std::move(rw));
+        }
+        worlds = std::move(regrouped);
+      }
+    }
+  }
+  if (all.size() <= 1 && worlds.size() <= 1) return false;
   if (worlds.size() <= 1) return false;
 
   bool changed = false;

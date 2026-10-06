@@ -554,6 +554,8 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp
   tests/test_tiiah/test_muddy_retouch.cpp
+  tests/test_tiiah/test_replay_2020406_giver_frame_reads_p1_or_p3.cpp
+  tests/test_tiiah/test_giver_frame_per_world.cpp
   tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp
   tests/test_tiiah/test_named_card_feasibility.cpp
   tests/test_tiiah/test_settled_hole_card_frees_own_play.cpp
