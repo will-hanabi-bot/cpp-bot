@@ -1747,7 +1747,24 @@ const ClueCandidate* rung_2b(const Game& g, const std::vector<ClueCandidate>& cs
 // T31: will-bot67 was locked, and will-bot69's Blue would have called his b4; no
 // rung took it, and will-bot69 discarded its chop.
 const ClueCandidate* rung_unlock_bob(const Game& g, const std::vector<ClueCandidate>& cs) {
-  return first_of(g, select(cs, [](const ClueCandidate& c) { return c.unlocks_bob; }));
+  const ClueCandidate* best =
+      first_of(g, select(cs, [](const ClueCandidate& c) { return c.unlocks_bob; }));
+  // When the best unlock is a stable play clue, the stable play hierarchy settles
+  // among the unlocking ones (§3.1's criteria; v22.2.0, the user's ruling): the
+  // same safe action with more information about Bob's other good cards wins.
+  // Replay 2019562 T31: a 4 re-touching will-bot67's o5 calls exactly the b4
+  // (v22.2.0's re-touch call), as Blue does; Blue also names his b5.
+  if (best && is_stable_to_bob(g, *best) &&
+      best->reading.shape == ClueShape::STABLE_PLAY) {
+    if (const ClueCandidate* c = settle_stable_play(
+            g, select(cs, [&g](const ClueCandidate& c) {
+              return c.unlocks_bob && is_stable_to_bob(g, c) &&
+                     c.reading.shape == ClueShape::STABLE_PLAY;
+            }))) {
+      return c;
+    }
+  }
+  return best;
 }
 
 // §3.1 also opens at a HIGH CLUE COUNT, whatever Bob's chop (v20.22.0, the user's

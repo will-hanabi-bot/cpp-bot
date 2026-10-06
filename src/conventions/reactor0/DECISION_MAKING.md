@@ -792,9 +792,15 @@ is judged from Alice's own inference, not common knowledge.
 2c. **Alice has a clue that unlocks Bob** (v20.19.0, the user's ruling): Bob is
    LOCKED, and after the clue he has a play or a discard to make — the clues H5
    lifts to HIGH (`ClueCandidate::unlocks_bob`, set in `analyse_clues` at
-   `reactor0/decision.cpp:1065-1069`; `rung_unlock_bob`, `:1733-1740`). Tiebreak:
-   the default. Logged as `2c.unlock_bob`, in both `choose_clue` and Precedence
-   step 1 (`:2221`, `:2435`).
+   `reactor0/decision.cpp:1067-1069`; `rung_unlock_bob`, `:1749-1768`). Tiebreak:
+   the default, except that when the best unlock is a stable play clue to Bob,
+   the stable play hierarchy (3.1's) settles among the unlocking stable plays
+   (v22.2.0, the user's ruling). The same safe action with more information
+   about Bob's other good cards wins. Outside Throw It in a Hole that hierarchy
+   is the default tiebreak, so nothing changes there. Replay 2019562 T31: a 4
+   re-touching will-bot67's o5 calls exactly the b4, as Blue does, and Blue also
+   names his b5. Logged as `2c.unlock_bob`, in both `choose_clue` and
+   Precedence step 1 (`:2262`, `:2476`).
 
    It sits ahead of §3, whose chop rescue presumes Bob is not locked, so the two
    never compete for the same Bob. Like H5 it does not apply while Alice is
@@ -808,7 +814,7 @@ is judged from Alice's own inference, not common knowledge.
    - The team has 6 or more clues available.
 
    **The clue-count arm opens 3.1 only** (v20.22.0, the user's amendment and
-   ruling; `kPriority3ClueCount`, `rung_3`, `reactor0/decision.cpp:1762-1773`).
+   ruling; `kPriority3ClueCount`, `rung_3`, `reactor0/decision.cpp:1779-1790`).
    With 6 or more tokens a stable play clue to Bob is worth giving whatever his
    chop. The locks, double discards and discard calls of 3.2-3.10 still need the
    first arm, a stuck Bob: opened to every Bob, a lock outranked §4's fill-in at 8
@@ -966,7 +972,7 @@ is judged from Alice's own inference, not common knowledge.
        **In Throw It in a Hole, 3.7 also needs Bob's chop to be critical, playable
        or one away from playable** (v20.2.0, the user's ruling;
        `chop_worth_a_lock`, `state_eval.cpp:167-179`, read at
-       `decision.cpp:1839-1852`). The variant is hard enough that committing Bob's
+       `decision.cpp:1856-1869`). The variant is hard enough that committing Bob's
        whole hand is not worth it for anything further away, so Alice does
        something else, most often her own standing play. 3.6b goes with it, since
        it only ever replaces this lock; 3.6 and 3.10 need a critical chop anyway,
@@ -1041,7 +1047,7 @@ is judged from Alice's own inference, not common knowledge.
    a called y1 at 8 tokens, gave Blue on black's already-clued b3, a clue that
    saved nothing while black's chop was a same-hand dupe; it now plays the y1.
    §1-§3 are untouched, so a clue they find is still given at 8 tokens
-   (`decision.cpp:2056-2067`). `priority_4_applies`
+   (`decision.cpp:2073-2084`). `priority_4_applies`
    (`reactor0/decision.h`, `decision.cpp`), exported so each alternative can be
    asserted apart from the rung's ordering, the way `priority_3_applies` is.
    4a. Alice does not have a known playable card.

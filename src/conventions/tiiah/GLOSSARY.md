@@ -505,6 +505,14 @@ The holder's play of the card is evidence in its own right. Its discard is §1e 
 A call on a card **not** clued before is not deferred. CONVENTION.md §1e, human
 diagnostic 2014076 T14.
 
+### re-touch rank call
+A stable rank clue from Alice to Bob that touches no new card, from an Alice who is
+not locked and not at 8 clues, in a variant with no pinkish suit, calls the
+**rightmost** touched card that could be playable, read as its playable identities
+(v22.2.0). A card already called is passed over; with nothing playable it stays a
+stall. `reactor0/interpret_clue.cpp`, step 7 of `stable_rank`. CONVENTION.md §1b,
+replay 2021455 T61.
+
 ### safe-to-lose chop / occupied save
 Cathy's chop is **safe to lose** when it is not critical, and it is not playable
 unless it is duplicated. Duplicated means a second copy in Cathy's own hand, or a

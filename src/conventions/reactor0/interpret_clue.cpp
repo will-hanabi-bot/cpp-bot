@@ -1143,7 +1143,40 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
     return interp;
   }
 
-  // 7. Touches no new cards, conveys nothing else.
+  // 7. Touches no new cards, conveys nothing else -- except, in Throw It in a
+  // Hole, a RE-TOUCH CALL (v22.2.0, the user's ruling; tiiah/CONVENTION.md §1b).
+  // A stable rank clue from Alice to Bob that touches no new card, from an Alice
+  // who is not locked and not at 8 clues, in a variant with no pinkish suit,
+  // calls the RIGHTMOST touched card that could be playable, read as its playable
+  // identities. A card already called says nothing new and is passed over. Replay
+  // 2021455 T61: yagami's 5 re-touched only will-bot69's slot-5 `{p5,pr5}`, with
+  // purple on 4 and prism on 3, and was read as a stall; it calls the p5.
+  if (state.variant->throw_it_in_a_hole && clue.kind == ClueKind::RANK &&
+      action.target == (action.giver + 1) % state.num_players &&
+      !variants::includes_pinkish(state) &&
+      !prev.common.obvious_locked(prev, action.giver) &&
+      prev.state.clue_tokens != 8) {
+    const auto& hand = state.hands[action.target];
+    for (auto it = hand.rbegin(); it != hand.rend(); ++it) {
+      const int o = *it;
+      if (!contains(action.list_, o)) continue;
+      if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+      const IdentitySet playable = game.common.thoughts[o].possibilities().filter(
+          [&state](Identity i) { return state.is_playable(i); });
+      if (playable.is_empty()) continue;
+      game.with_thought(o, [&playable](const Thought& t) {
+        Thought out = t;
+        out.inferred = playable;
+        return out;
+      });
+      game.with_meta(o, [](ConvData& m) {
+        m.focused = true;
+        m.status = CardStatus::CALLED_TO_PLAY;
+      });
+      hanabi::logging::log_branch("reactor0.retouch_call", {{"order", o}});
+      return ClueInterp::PLAY;
+    }
+  }
   return ClueInterp::STALL;
 }
 

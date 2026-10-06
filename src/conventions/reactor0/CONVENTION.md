@@ -274,7 +274,7 @@ contradicted card to its global empathy the moment the contradiction happens
 
 ## §1c Stable rank — eight priorities
 
-`stable_rank` (`interpret_clue.cpp:852-1148`). The pink-promise gate runs
+`stable_rank` (`interpret_clue.cpp:852-1181`). The pink-promise gate runs
 first, then the rank is classified, then priority 0 (v19.0.0) and the ladder
 below. The line citations inside the numbered priorities predate v19.0.0's
 insertion and have drifted; the priority-0 ones are current.
