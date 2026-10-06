@@ -1,5 +1,6 @@
 #include "hanabi/conventions/tiiah/interpret_clue.h"
 
+#include <algorithm>
 #include <optional>
 
 #include "hanabi/basics/fix.h"
@@ -549,7 +550,9 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
 
   // One run of the ladder on `frame`. Scoped so the swap is RELEASED before the
   // re-pin below, which has to see our own belief rather than the pair's view.
-  auto run_ladder = [&](Game& g, const std::vector<int>& frame) {
+  auto run_ladder = [&](Game& g, const std::vector<int>& frame,
+                        const std::vector<int>* reveal_frame = nullptr) {
+    if (!reveal_frame) reveal_frame = &state.common_play_stacks;
     const bool swap = SharedStacks::needed(g.state, frame);
     std::optional<Game> prev_shared;
     if (swap) {
@@ -571,8 +574,7 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       // A colour play reveal outranks the leftmost newly touched card only when
       // it is one on the stacks EVERY seat knows (v18.20.0) -- the same frame in
       // every world below, since the rule is about global knowledge.
-      out = reactor0::stable_colour(p, g, action, stall_ctx,
-                                    &state.common_play_stacks);
+      out = reactor0::stable_colour(p, g, action, stall_ctx, reveal_frame);
       // §1f, applied to whatever the ladder called.
       pin_rainbowy_colour(p, g, action);
     }
@@ -696,6 +698,142 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
           if (narrow_own_privately(game, ord, allowed)) narrowed = true;
         }
         if (narrowed) game.elim();
+      }
+    }
+  }
+  // A COLOUR REVEAL THAT IS GLOBAL IN SOME WORLDS (v22.1.0, the user's ruling). The
+  // reveal must be global (v18.20.0), and on the stacks every seat knows it may fail
+  // only because a hole card is unnamed. If a world exists in which the colour clue
+  // promises a playable, that is assumed: the shared worlds of every seat's hole
+  // cards are tried with each world's stacks as the reveal frame, and the hole
+  // collapses, for every seat, onto those that make the call (ASCR, §1e).
+  //
+  // Except when the called card is TRASH in a world that does not make the call: the
+  // clue may then be asking for the dupe to be thrown, and the collapse waits for the
+  // holder (v18.12.0; human diagnostic 2014076 T14).
+  //
+  // Replay 2021427 T13: black's Green re-touched yagami_green's known 2, o6 (the g2),
+  // and newly touched o7 (the g5). will-bot69's o13 `{g1,b1}` was the g1, so green
+  // was on 0 globally and every seat read a stall. In the world where o13 was the g1
+  // the Green is a reveal of the g2: o13 collapses to the g1, and o6 is called.
+  if (!called_something(game) && action.clue.kind == ClueKind::COLOUR &&
+      action.giver != action.target) {
+    const State& bs = before_ladder.state;
+    std::vector<int> everyone;
+    for (int p = 0; p < bs.num_players; ++p) everyone.push_back(p);
+    const State shared_base = bs.common_evidence.empty()
+                                  ? bs.shared_view()
+                                  : bs.shared_view().with_band(bs.common_evidence);
+    const auto all = open_worlds(before_ladder, shared_base, everyone, 64, -1,
+                                 /*shared=*/true);
+    const auto worlds = strike_free(all);
+    // Only a REVEAL, and only when the clue calls nothing for a reason every seat
+    // shares: no newly touched card could, on what the clue publicly says of it, be
+    // a direct play in any world. A seat that can SEE a newly touched card refuses a
+    // direct call on it that the receiver, who cannot, still reads; letting the
+    // world reveal answer that refusal splits the giver from the receiver
+    // (self-play Prism seed 200 T10: the giver read the newly touched o9 as `{i4}`,
+    // the receiver as a direct `{b1}`, and struck).
+    bool newly_touched_could_play = false;
+    for (int o : action.list_) {
+      if (prev.state.deck[o].clued) continue;
+      for (Identity i : before_ladder.common.thoughts[o].possible) {
+        if (bs.with_stacks(view).is_playable(i)) newly_touched_could_play = true;
+        for (const OpenWorld* w : worlds) {
+          if (w->state.is_playable(i)) newly_touched_could_play = true;
+        }
+      }
+    }
+    if (worlds.size() > 1 && !newly_touched_could_play) {
+      std::vector<const OpenWorld*> calling;
+      std::optional<Game> first;
+      std::optional<ClueInterp> first_interp;
+      std::vector<int> first_called;
+      bool split = false;  // worlds calling different cards: no one reading to assume
+      for (const OpenWorld* w : worlds) {
+        // The call frame is the pair's view, raised to the world where it is behind.
+        std::vector<int> frame = view;
+        for (std::size_t k = 0; k < frame.size() && k < w->state.play_stacks.size();
+             ++k) {
+          const int v = w->state.play_stacks[k];
+          const bool reversed = bs.variant->suits[k].suit_type.reversed;
+          if (reversed ? v < frame[k] : v > frame[k]) frame[k] = v;
+        }
+        Game g = before_ladder;
+        auto i2 = run_ladder(g, frame, &w->state.play_stacks);
+        if (!called_something(g)) continue;
+        // Worlds that call DIFFERENT cards read the clue different ways, and there is
+        // no one reading to assume: nothing collapses (replay 2014561 T18: where blue
+        // was on 2 the Blue revealed o18's b3, where it was on 3 -- the truth -- it
+        // called the newly touched b4).
+        std::vector<int> called_here;
+        for (int o : g.state.hands[action.target]) {
+          if (g.meta[o].status == CardStatus::CALLED_TO_PLAY &&
+              prev.meta[o].status != CardStatus::CALLED_TO_PLAY) {
+            called_here.push_back(o);
+          }
+        }
+        if (!first) {
+          first = std::move(g);
+          first_interp = i2;
+          first_called = called_here;
+        }
+        if (called_here == first_called) calling.push_back(w);
+        else split = true;
+      }
+      bool trash_elsewhere = false;
+      if (first && calling.size() < worlds.size()) {
+        for (int o : first_called) {
+          const IdentitySet reading = first->common.thoughts[o].possibilities();
+          // ...and a world is assumed only if this seat cannot rule it out: a call
+          // that is trash on our own view promises nothing we can believe. Replay
+          // 2014561 T18: the team's set for black's o21 had lost its truth, the b3,
+          // so no shared world had blue on 3; every seat that watched o21 land knew
+          // the re-touched b3 was already down.
+          bool trash_here = reading.non_empty();
+          for (Identity i : reading) {
+            if (!bs.is_basic_trash(i)) trash_here = false;
+          }
+          if (trash_here) trash_elsewhere = true;
+          for (const OpenWorld* w : worlds) {
+            if (std::find(calling.begin(), calling.end(), w) != calling.end()) continue;
+            bool all_trash = reading.non_empty();
+            for (Identity i : reading) {
+              if (!w->state.is_basic_trash(i)) all_trash = false;
+            }
+            if (all_trash) trash_elsewhere = true;
+          }
+        }
+      }
+      // ...and the call must be on a card that was already clued: a reveal.
+      bool reveal = first.has_value();
+      for (int o : first_called) {
+        if (!prev.state.deck[o].clued) reveal = false;
+      }
+      if (reveal && !split && calling.size() < worlds.size() && !trash_elsewhere) {
+        game = std::move(*first);
+        interp = first_interp;
+        collapse_to_worlds(game, all, calling, /*shared=*/true);
+        // Several hole cards may each be the card below the call (2021427: o5 and
+        // o13 could both be the g1), and card by card the collapse cannot say so.
+        // The call names a playable, so the card below it is down: the team learns
+        // that one of them was it -- settled when one, the joint fact when several.
+        for (int o : game.state.hands[action.target]) {
+          if (game.meta[o].status != CardStatus::CALLED_TO_PLAY ||
+              prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+            continue;
+          }
+          const IdentitySet reading = game.common.thoughts[o].possibilities();
+          if (reading.length() != 1) continue;
+          const Identity id = *reading.begin();
+          const bool reversed = bs.variant->suits[id.suit_index].suit_type.reversed;
+          if (const auto below = reversed ? id.next() : id.prev()) {
+            team_learns_a_hole_card_was(game, *below);
+          }
+        }
+        hanabi::logging::log_branch("tiiah.ascr",
+                                    {{"site", "colour_reveal"},
+                                     {"worlds", static_cast<int>(calling.size())}});
       }
     }
   }

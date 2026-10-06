@@ -933,9 +933,20 @@ bool chop_is_duplicated(const Game& game, int player, int chop, Identity id) {
 // or a called card in anyone else's hand whose common reading is that one
 // identity. A locked Cathy throws nothing. Judged from Alice's full visibility, so
 // a chop we cannot see is never safe.
+//
+// Nor does a Cathy with a KNOWN SAFE ACTION throw it (v22.1.0, the user's ruling):
+// an obvious play, known trash or a CTD on common knowledge, or a standing play
+// such as the call a stable colour clue made -- read over the worlds where it calls
+// only in some (tiiah/CONVENTION.md §1b). A fill-in colour clue that calls nothing
+// gives her none. Replay 2021427 T18: yagami_green's chop was the critical prism 5,
+// but black's T13 Green had called her g2, so will-bot69 may save black's p2.
 bool cathy_chop_is_safe_to_lose(const Game& game) {
   const State& s = game.state;
   const int cathy = cathy_of(game);
+  if (!has_no_safe_action(game, cathy) ||
+      hanabi::reactor::variants::has_standing_play(game, cathy)) {
+    return true;
+  }
   auto chop = game.chop(cathy);
   if (!chop) return true;  // locked
   auto id = s.deck[*chop].id();

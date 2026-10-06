@@ -396,6 +396,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2014076_save_bobs_playable_chop_while_occupied.cpp
   tests/test_tiiah/test_decision_making/test_occupied_save_of_bobs_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2021427_save_playable_chop_cathy_has_safe_action.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp
   tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp
@@ -553,6 +554,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2020406_giver_frame_reads_p1_or_p3.cpp
   tests/test_tiiah/test_giver_frame_per_world.cpp
   tests/test_tiiah/test_bucket_first.cpp
+  tests/test_tiiah/test_colour_reveal_through_worlds.cpp
   tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp
   tests/test_tiiah/test_named_card_feasibility.cpp
   tests/test_tiiah/test_settled_hole_card_frees_own_play.cpp

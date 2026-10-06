@@ -509,7 +509,10 @@ diagnostic 2014076 T14.
 Cathy's chop is **safe to lose** when it is not critical, and it is not playable
 unless it is duplicated. Duplicated means a second copy in Cathy's own hand, or a
 called card in anyone else's hand whose common reading is that one identity. A
-locked Cathy is safe. When it is safe, Bob has no safe action (`priority_3_applies`),
+locked Cathy is safe, and so is a Cathy with a **known safe action** (v22.1.0): an
+obvious play, known trash or a CTD on common knowledge, or a standing play such as
+the call a stable colour clue made. A fill-in colour clue that calls nothing gives
+her none. When it is safe, Bob has no safe action (`priority_3_applies`),
 and his chop is a playable card at risk that no known call duplicates, a clue touching
 Bob's chop without calling it to discard is an **occupied save**
 (`saves_stuck_bob_chop`). It is exempt from the tier gate, so an
