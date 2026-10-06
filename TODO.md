@@ -1290,6 +1290,10 @@ whoever fits rather than giving up. Dropping a holder is conservative in one dir
 an excluded card can neither advance a stack nor strike — and it over-claims only for a
 card that strikes in *every* world, which a 20-candidate set cannot do.
 
+v22.3.0 raised one site's cap to 256 — the giver-frame joint enumeration in
+`read_stable_over_worlds` (replay 2021573 T26, CONVENTION.md §1e) — which postpones the
+cliff there without removing it. Every other site is still all-or-nothing at 64.
+
 ---
 
 ## 52. `[engine]` A shared call is judged dead on a PRIVATE view

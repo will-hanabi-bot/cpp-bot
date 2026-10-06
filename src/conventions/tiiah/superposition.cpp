@@ -1353,10 +1353,21 @@ bool read_stable_over_worlds(const Game& prev, Game& game, const ClueAction& act
   // in the world where o9 was the r2 she could not know, and Purple is the p1. o26
   // reads `{p1,p3}`. Too many joint worlds, and the receiver's alone are read, as
   // before.
+  //
+  // The joint enumeration is capped at 256, not the usual 64 (v22.3.0). Past the cap
+  // it reads flat and the giver's worlds are lost, and the receiver's own worlds alone
+  // can strike on a frame the giver's hole cards would have raised. Regrouping
+  // leaves at most one world per receiver assignment, which its own 64 cap bounds,
+  // so the 64-bit world masks downstream are unaffected. Replay 2021573 T26:
+  // yagami_green's four unnamed hole cards with black's `{r1,g1,b1}` came to more
+  // than 64 joint worlds. On red 0 every world in which green's own o19 or o22 was
+  // a red card struck, and black's Yellow on o28 (the y3) read `{y4}`, not
+  // `{y2,y3,y4}`; from there green's views carried yellow 4, and its T39 reactive
+  // relied on a y5 that struck.
   if (action.giver != action.target) {
-    const auto joint =
-        open_worlds(game, banded, std::vector<int>{action.target, action.giver});
-    if (joint.size() > 1 && joint.size() < 64) {
+    const auto joint = open_worlds(
+        game, banded, std::vector<int>{action.target, action.giver}, /*cap=*/256);
+    if (joint.size() > 1 && joint.size() < 256) {
       auto receiver_part = [&](const OpenWorld& w) {
         std::vector<std::pair<int, Identity>> part;
         for (const auto& [o, id] : w.assignment) {
