@@ -1026,13 +1026,13 @@ TEST(TiiahReplay2011319, DiscardedPlayableWasAlreadyPlayed) {
   EXPECT_FALSE(game.meta[5].superposed()) << "order 5 was the p1 yagami could see";
   // v16.24.0: our Purple at T8 reads {p1, p2} -- p2 in the world where our own o5
   // was the p1 -- and yagami's discard of the p1 is what settles o5 (rule 7 on a
-  // card named up to the worlds). Order 9 stays {r2, p2}: the T14 Red on o20 reads
-  // {r2, r3}, since in the world where o9 was the r2 the call is the r3, so no rule
-  // names o9 by T14. Purple is the MINIMUM across those two worlds, 1.
-  EXPECT_TRUE(game.meta[9].superposed()) << "order 9 is still {r2, p2}";
+  // card named up to the worlds). Order 9 is named the p2 (v22.0.0): T4's Yellow,
+  // answered by yagami's r1, reads the bucket half alone, `{p2}`. Until v22.0.0 it
+  // read `{r2,p2}` with the r2 as the finesse half, and purple stayed on 1.
+  EXPECT_FALSE(game.meta[9].superposed()) << "T4's Yellow reads the bucket {p2} (v22.0.0)";
   EXPECT_EQ(game.state.play_stacks[4], 1) << "our purple: on 1 whichever o9 was";
-  EXPECT_EQ(game.state.common_play_stacks[4], 1)
-      << "shared: the discard is public, and so is the p1 it settles";
+  EXPECT_EQ(game.state.common_play_stacks[4], 2)
+      << "shared: the discard settles the p1, and the p2 is named on top of it";
 
   // No gentleman's discard: order 16 learned nothing from the p1 going.
   EXPECT_NE(game.meta[16].status, hanabi::CardStatus::GENTLEMANS_DISCARD);

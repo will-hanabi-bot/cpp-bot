@@ -13,6 +13,11 @@
 // yagami's r4 reads as a known play, and a Rank 5 to her is a reactive double
 // play -- her b3, and will-bot69's r5 behind the r4 -- which rung 1 prefers to
 // any discard.
+//
+// Since v22.0.0 the bot gives Green to yagami instead, equally a reverse reactive
+// (her known r4 is a sure play): her o31, the b3, and will-bot69's o27, the p4 -- a
+// bucket pairing, purple into the blue bucket below, both landing. The user's
+// ruling: the 5 and the Green are both acceptable.
 
 #include <gtest/gtest.h>
 
@@ -1544,7 +1549,9 @@ TEST(TiiahStallDrawnCard, OrderThirtyIsNotBlindPlayed) {
   const auto* play = std::get_if<hanabi::PerformPlay>(&action);
   EXPECT_FALSE(play && play->target == 30) << "order 30 is an unknown card";
   const auto* rank = std::get_if<hanabi::PerformRank>(&action);
-  ASSERT_NE(rank, nullptr) << "the reactive double play";
-  EXPECT_EQ(rank->target, 2);
-  EXPECT_EQ(rank->value, 5);
+  const auto* colour = std::get_if<hanabi::PerformColour>(&action);
+  ASSERT_TRUE(rank || colour) << "the reactive double play";
+  EXPECT_EQ(rank ? rank->target : colour->target, 2) << "to yagami";
+  if (rank) EXPECT_EQ(rank->value, 5) << "the 5: her b3, will-bot69's r5";
+  if (colour) EXPECT_EQ(colour->value, 2) << "or Green: her b3, will-bot69's p4";
 }

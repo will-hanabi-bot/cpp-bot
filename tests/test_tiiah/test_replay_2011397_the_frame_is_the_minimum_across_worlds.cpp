@@ -16,6 +16,10 @@
 // world slot 3 was a direct b2 and slot 2 a finesse p2, and yagami would have called
 // slot 3. The cards were the b2 and the b3, every view reads 10131, the target is
 // the p2, and will-bot69 answers on its slot 1 -- a b4, which lands.
+//
+// Since v22.0.0 the T6 Green reads the bucket half alone, so o9 is `{b2}` from the
+// start and there is no p2 world to collapse onto: the first test pins that the Blue
+// then names the b3.
 
 #include <gtest/gtest.h>
 
@@ -44,8 +48,8 @@ void expect_every_view(const hanabi::Game& game, const std::vector<int>& stacks)
 
 }  // namespace
 
-// T11, will-bot69's seat: the Blue is read in both worlds of its o9, so nothing
-// collapses o9 onto the p2.
+// T11, will-bot69's seat: o9 is named the b2 (v22.0.0), so the Blue is the b3 and
+// nothing collapses o9 onto the p2.
 TEST(TiiahReplay2011397, TheStableBlueIsReadInBothWorlds) {
   const char* kSnapshotJson = R"json(
 {
@@ -845,16 +849,14 @@ TEST(TiiahReplay2011397, TheStableBlueIsReadInBothWorlds) {
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
 
-  const hanabi::IdentitySet b2b3 = hanabi::IdentitySet::empty()
-                                       .add(hanabi::Identity{3, 2})
-                                       .add(hanabi::Identity{3, 3});
+  // v22.0.0: T6's Green, answered by yagami's p1, reads the bucket half alone, so o9
+  // is named the b2 -- it was. Until v22.0.0 it read `{b2,p2}` (the p2 the finesse
+  // half), and the stable Blue on o8 read `{b2,b3}` across those two worlds.
   EXPECT_EQ(game.meta[8].status, hanabi::CardStatus::CALLED_TO_PLAY);
-  EXPECT_EQ(game.common.thoughts[8].inferred, b2b3)
-      << "the b2 if o9 was the p2, the b3 if o9 was the b2";
-  const hanabi::IdentitySet b2p2 = hanabi::IdentitySet::empty()
-                                       .add(hanabi::Identity{3, 2})
-                                       .add(hanabi::Identity{4, 2});
-  EXPECT_EQ(game.meta[9].superposition, b2p2) << "o9 was never collapsed onto the p2";
+  EXPECT_EQ(game.common.thoughts[8].inferred,
+            hanabi::IdentitySet::single(hanabi::Identity{3, 3}))
+      << "o9 was the b2, so the Blue calls the b3";
+  EXPECT_FALSE(game.meta[9].superposed()) << "T6 reads the bucket {b2}; there is no p2 world";
   EXPECT_EQ(game.state.common_play_stacks[4], 1) << "purple is not on 2 in any view";
   EXPECT_EQ(game.state.play_stacks[4], 1);
 }

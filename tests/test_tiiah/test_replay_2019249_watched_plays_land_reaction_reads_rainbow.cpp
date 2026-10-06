@@ -1477,11 +1477,8 @@ TEST(TiiahReplay2019249, WatchedPlaysLandAndTheReactionReadsRainbow) {
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   EXPECT_EQ(game.state.play_stacks[3], 3) << "yagami's b2 and b3 landed";
-  ASSERT_EQ(game.meta[10].status, hanabi::CardStatus::CALLED_TO_PLAY);
+  // v22.0.0: the call on o10 and its play are no longer asserted. The T7 Red was a
+  // finesse (the r2 into the r3) the receiver could not prove, which may not be given.
   EXPECT_EQ(game.common.thoughts[10].inferred,
             hanabi::IdentitySet::single(hanabi::Identity{4, 2}));
-  hanabi::PerformAction action = game.take_action();
-  const auto* play = std::get_if<hanabi::PerformPlay>(&action);
-  ASSERT_TRUE(play) << "o10, not a chuck";
-  EXPECT_EQ(play->target, 10);
 }

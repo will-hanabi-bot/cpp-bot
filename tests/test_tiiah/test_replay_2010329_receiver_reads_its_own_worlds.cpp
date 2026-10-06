@@ -688,17 +688,12 @@ TEST(TiiahReplay2010329, ReceiverReadsItsOwnWorlds) {
   const int called = 12;
   const int mine = 10;
 
-  ASSERT_TRUE(game.meta[mine].superposed())
-      << "the world this turns on has to still be open";
-  EXPECT_TRUE(game.meta[mine].superposition.contains(hanabi::Identity{0, 2}))
-      << "and one of its readings is the r2 that makes the r3 playable";
-
+  // v22.0.0: the r2 world of o10, and the r3 it makes playable, are no longer
+  // asserted. o10 was the r2 of will-bot67's own T1 5, a finesse (yagami's r1 into
+  // the r2) the receiver could not prove, which may not be given; o10 now reads the
+  // bucket `{g1,b1}`.
+  (void)mine;
   EXPECT_EQ(game.meta[called].status, hanabi::CardStatus::CALLED_TO_PLAY);
-  EXPECT_TRUE(game.common.thoughts[called].inferred.contains(hanabi::Identity{0, 3}))
-      << "so the reading offers the r3 -- which is what the card actually is";
-  EXPECT_TRUE(game.meta[called].conditional.has_value())
-      << "and records which world the r3 needed, so a later collapse can "
-         "withdraw it (the v16.13.0 contract)";
 
   hanabi::PerformAction action = game.take_action();
   const auto* play = std::get_if<hanabi::PerformPlay>(&action);

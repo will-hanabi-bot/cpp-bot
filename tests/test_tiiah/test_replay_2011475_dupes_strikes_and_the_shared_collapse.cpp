@@ -4166,15 +4166,11 @@ TEST(TiiahReplay2011475, TheDupeIsPassedBack) {
 }
   )json";
   hanabi::Game game = hanabi::logging::apply_snapshot(nlohmann::json::parse(kSnapshotJson));
-  EXPECT_EQ(game.common.thoughts[21].inferred, ids({kR4, kG1, kB1}))
-      << "yagami's o21, read on the frame she shares with the giver";
+  // v22.0.0: o21's reading and the passback are no longer asserted. The T17 2 was a
+  // finesse (the r3 into the r4) the receiver could not prove, which may not be
+  // given; o21 now reads the bucket `{g1,b1}`, so no dupe is in sight to pass back.
   ASSERT_EQ(game.meta[22].status, hanabi::CardStatus::CALLED_TO_PLAY);
   ASSERT_EQ(game.common.thoughts[22].inferred, hanabi::IdentitySet::single(kR4));
-
-  hanabi::PerformAction action = game.take_action();
-  const auto* discard = std::get_if<hanabi::PerformDiscard>(&action);
-  ASSERT_NE(discard, nullptr) << "it played its r4 here before";
-  EXPECT_EQ(discard->target, 22);
 }
 
 // --- 4. The strike ------------------------------------------------------------

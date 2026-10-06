@@ -37,6 +37,10 @@ int anchor_of(const State& state, const ClueAction& action) {
   return reactor0::colour_clue_value(*state.variant, action.clue.value);
 }
 
+// Defined with §1d's receiver reading, below.
+bool finesse_from_the_card(const Game& game, ClueKind kind, const IdentitySet& could,
+                           const IdentitySet& react_live, int react_order);
+
 // The stacks as they will stand once `player` has played everything they
 // already know about — §1c's "stack simulation". Walks to a fixpoint so a chain
 // of known plays advances in order.
@@ -597,8 +601,8 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       //
       // Except in the ENDGAME, pace <= 1 (v18.4.0): there a pairing may break the
       // bucket relation whatever the players can name, and each reads it by §1d's
-      // core rule -- the bucket and a finesse if they leave anything, else any
-      // playable. Human diagnostic 2013726 T27
+      // core rule -- the bucket (or the finesse, when provable) if it leaves
+      // anything, else any playable. Human diagnostic 2013726 T27
       // (v18_human_vs_bot_diagnostics/2013726.md): 4 to green gets black's r4 and
       // green's `{g1,n3}`, and was illegal here, so blue gave a Red instead.
       const bool endgame = state.pace() <= 1;
@@ -608,6 +612,21 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                                  target.id) &&
           !both_know_their_own(game, react_order, target.order)) {
         return std::nullopt;
+      }
+      // A FINESSE IS GIVEABLE ONLY WHEN THE RECEIVER CAN PROVE IT (v22.0.0, the
+      // user's ruling): its target, as the clue leaves it, cannot be any card of
+      // the bucket half (`finesse_from_the_card`). Otherwise the receiver reads the
+      // bucket half alone (`keep_convention_half`) and would misread it. No endgame
+      // exemption, since the receiver reads it the same way there. The giver's
+      // alone, like the test above: a reject, never a retarget.
+      if (action.giver == state.our_player_index && connector && !double_chuck) {
+        const Thought& tt = game.common.thoughts[target.order];
+        const IdentitySet could =
+            tt.inferred.non_empty() ? tt.inferred.intersect(tt.possible) : tt.possible;
+        if (!finesse_from_the_card(game, action.clue.kind, could,
+                                   IdentitySet::single(*connector), react_order)) {
+          return std::nullopt;
+        }
       }
     }
 
@@ -791,8 +810,6 @@ namespace {
 // Defined with §1d's receiver reading, below.
 bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
                     Identity seen, int react_order);
-bool finesse_from_the_card(const Game& game, const ReactorWC& wc,
-                           const IdentitySet& could, Identity seen, int react_order);
 }  // namespace
 
 // WHAT THE REACTER PLAYED, read by the RECEIVER once the reaction has resolved
@@ -877,11 +894,9 @@ void narrow_reacter_play(const Game& prev, Game& game, const ReactorWC& wc,
                                      /*shared=*/true);
   if (!br.allowed.non_empty()) return;
   if (!narrow_superposition(game, react_order, br.allowed)) return;
-  // A finesse pairing reads wider than it needs to: there the reacter knows its card
-  // outright, and the receiver cannot tell a finesse from a direct pairing without
-  // knowing its own target. The bucket set is a superset of what the reacter knows,
-  // so this under-credits them and the shared stacks lag -- safe in the direction
-  // that matters, and TODO.md 49.
+  // A finesse the receiver cannot prove may not be given (v22.0.0), so a pairing
+  // that reaches here, past `proven_finesse`, is a bucket one and the bucket set is
+  // what the reacter knows.
   if (game.meta[react_order].superposed()) {
     record_conditional(game, react_order, br.worlds, br.support);
   }
@@ -957,6 +972,19 @@ ReceiverReading receiver_reading(const Variant& variant,
   return out;
 }
 
+// THE BUCKET FIRST (v22.0.0, the user's ruling): keep only the half the convention
+// names -- the finesse half when the finesse is provable (`finesse_from_the_card`),
+// else the bucket half alone. Until v22.0.0 the receiver read the union of the two.
+// E.g. 5 to Cathy answered by Bob's g1 reads her target `{p1,t1}`, not
+// `{p1,t1,g2}`; the giver may not give a finesse the receiver cannot prove (the walk).
+void keep_convention_half(ReceiverReading& rr, bool proven) {
+  const IdentitySet keep = proven ? rr.finesse : rr.bucket;
+  rr.allowed = rr.allowed.intersect(keep);
+  rr.support.erase(std::remove_if(rr.support.begin(), rr.support.end(),
+                                  [&keep](const auto& pr) { return !keep.contains(pr.first); }),
+                   rr.support.end());
+}
+
 // The receiver's card this reaction has just called: a CALLED_TO_PLAY that was
 // not one before it. -1 when there is none.
 int new_play_call(const Game& prev, const Game& game, int receiver) {
@@ -1005,7 +1033,8 @@ bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
   const IdentitySet& before = prev.common.thoughts[target].inferred;
   const IdentitySet& possible = game.common.thoughts[target].possible;
   const IdentitySet could = before.non_empty() ? before.intersect(possible) : possible;
-  return finesse_from_the_card(game, wc, could, seen, react_order);
+  return finesse_from_the_card(game, wc.clue.kind, could, IdentitySet::single(seen),
+                               react_order);
 }
 
 // The test itself, on a frame every seat computes alike (v17.2.0): the SHARED view,
@@ -1016,8 +1045,8 @@ bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
 // The reacter's card itself is left out of the worlds (`react_order`): its identity
 // is the one being asked about, and at the receiver's seat it is already in the
 // hole while at the other two it is not yet.
-bool finesse_from_the_card(const Game& game, const ReactorWC& wc,
-                           const IdentitySet& could, Identity seen, int react_order) {
+bool finesse_from_the_card(const Game& game, ClueKind kind, const IdentitySet& could,
+                           const IdentitySet& react_live, int react_order) {
   const State& s = game.state;
   std::vector<int> everyone;
   for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
@@ -1025,8 +1054,7 @@ bool finesse_from_the_card(const Game& game, const ReactorWC& wc,
                                                : s.shared_view().with_band(s.common_evidence);
   const auto worlds =
       open_worlds(game, base, everyone, 64, react_order, /*shared=*/true);
-  const ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind,
-                                              IdentitySet::single(seen));
+  const ReceiverReading rr = receiver_reading(*s.variant, worlds, kind, react_live);
   return could.intersect(rr.finesse).non_empty() &&
          could.intersect(rr.bucket).is_empty();
 }
@@ -1037,7 +1065,7 @@ bool finesse_from_the_card(const Game& game, const ReactorWC& wc,
 // to its bluff or mistake reading. Before that stands, the receiver's slot is read
 // in the worlds, at every seat alike:
 //
-//   1. The bucket rule (the bucket half and the finesse half of §1d): if some world
+//   1. The bucket rule (§1d's bucket half, or its finesse half when provable): if some world
 //      lets a card of that reading play, the target is it.
 //   2. Otherwise any identity of the target that is ONE AWAY on the frame, bucket
 //      or not, and plays in some world.
@@ -1092,12 +1120,16 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   const IdentitySet could = before.non_empty() ? before.intersect(possible) : possible;
   if (could.is_empty()) return;
 
-  // ASCR (§1e): the bucket rule first -- the bucket and finesse halves of §1d --
+  // ASCR (§1e): the bucket rule first -- §1d's bucket half, or its finesse half when provable --
   // then any one-away reading, bucket or not; whichever plays in some world. A
   // reading every world allows is no evidence about the hole, and the stamp failed
   // for some other reason -- its clue-time frame, say -- which this is not here to
   // second-guess (replay 2011885 T10).
-  const ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
+  ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
+  {  // the bucket first (v22.0.0, `keep_convention_half`)
+    keep_convention_half(
+        rr, finesse_from_the_card(game, wc.clue.kind, could, react_live, react_order));
+  }
   const std::vector<IdentitySet> tiers{
       could.intersect(rr.allowed),
       could.filter([&base](Identity i) { return base.playable_away(i) == 1; })};
@@ -1243,17 +1275,23 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
                   : std::vector<int>{wc.receiver, wc.giver};
   const auto worlds = open_worlds(game, base, holders);
 
-  const ReceiverReading rr =
-      receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
-  const IdentitySet& allowed = rr.allowed;
-  const auto& support = rr.support;
-
-  if (!allowed.non_empty()) return;
+  ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
   // The baseline comes from `prev` rather than from `old_inferred`: unlike
   // `target_play`, `stamp_receiver_call` writes through `narrow_thought` and so
   // leaves no `old_inferred` to roll back to. `prev` is the game before the
   // reaction was processed, which is exactly the pre-stamp inference.
   const IdentitySet& before = prev.common.thoughts[target].inferred;
+  {  // the bucket first (v22.0.0, `keep_convention_half`)
+    const IdentitySet& possible = game.common.thoughts[target].possible;
+    const IdentitySet could =
+        before.non_empty() ? before.intersect(possible) : possible;
+    keep_convention_half(
+        rr, finesse_from_the_card(game, wc.clue.kind, could, react_live, react_order));
+  }
+  const IdentitySet& allowed = rr.allowed;
+  const auto& support = rr.support;
+
+  if (!allowed.non_empty()) return;
   // Never empty the card: an inference that explains nothing is worse than the
   // generic one the stamp already left (1i). Judged against what the card could be
   // BEFORE the stamp (v16.26.0), not against the stamp's own set: that set is the
@@ -1314,8 +1352,20 @@ void annotate_candidate(const Game& game, const Game& hypo,
                    .with_band(hs.evidence_known_to_both(giver, receiver));
   if (seen && base.is_playable(*seen)) base = base.with_play(*seen);
   const auto worlds = open_worlds(hypo, base, std::vector<int>{receiver, giver});
-  const ReceiverReading rr = receiver_reading(*s.variant, worlds, c.action.clue.kind,
-                                              react_live);
+  ReceiverReading rr = receiver_reading(*s.variant, worlds, c.action.clue.kind,
+                                        react_live);
+  {  // the bucket first (v22.0.0, `keep_convention_half`)
+    // What the receiver's card could be once the clue lands: its reading before the
+    // clue, cut by the clue's touch (the stamp has not been read by the receiver).
+    const IdentitySet& possible = hypo.common.thoughts[target].possible;
+    const IdentitySet pre = target < static_cast<int>(game.common.thoughts.size())
+                                ? game.common.thoughts[target].inferred
+                                : IdentitySet::empty();
+    const IdentitySet could =
+        pre.intersect(possible).non_empty() ? pre.intersect(possible) : possible;
+    keep_convention_half(rr, finesse_from_the_card(hypo, c.action.clue.kind, could,
+                                                   react_live, react_order));
+  }
   c.receiver_reading_size =
       rr.allowed.intersect(hypo.common.thoughts[target].possible).length();
 }
@@ -1347,7 +1397,8 @@ std::optional<std::pair<IdentitySet, int>> reaction_team_reading(const Game& gam
     const Thought& t = game.common.thoughts[target];
     const IdentitySet could =
         t.inferred.non_empty() ? t.inferred.intersect(t.possible) : t.possible;
-    finesse = finesse_from_the_card(game, *wc, could, id, order);
+    finesse = finesse_from_the_card(game, wc->clue.kind, could, IdentitySet::single(id),
+                                    order);
   }
   if (finesse) {
     team = IdentitySet::single(id);

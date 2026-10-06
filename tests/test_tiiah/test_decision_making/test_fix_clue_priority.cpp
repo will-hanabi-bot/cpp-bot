@@ -142,3 +142,47 @@ TEST(TiiahFixCluePriority, WithNothingToFixSheActionsHerOwnCall) {
   ASSERT_NE(play, nullptr) << "nothing outranks her own actionable call here";
   EXPECT_EQ(play->target, order_at(g, TestPlayer::ALICE, 1));
 }
+
+// Human diagnostic 2013726 T5 in miniature (rung 2b; the reviewer: "the fix does
+// need to be given, and in that situation 2 is actually the better clue to give").
+// Red and blue on 1. Bob's slot 1 is called as `{r1,b2}` and is the r1, already
+// down; his slot 2 is the b2. A 2 and a Blue both cut the call to the dead r1, and
+// the 2 is given (v18.8.0 reverted v18.6.0's colour preference). The replay this
+// replaces rested on a T3 finesse the receiver could not prove, which v22.0.0 does
+// not give.
+TEST(TiiahFixCluePriority, TheDeadR1OrB2IsFixedWithATwo) {
+  SetupOptions opts;
+  opts.variant_name = "Throw It in a Hole (5 Suits)";
+  opts.play_stacks = std::vector<int>{1, 0, 0, 1, 0};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},  // Alice (us), the giver
+      {"r1", "b2", "g4", "y4", "p4"},  // Bob
+      {"y1", "r3", "g3", "b3", "p3"},  // Cathy
+  };
+  opts.starting = TestPlayer::ALICE;
+  opts.clue_tokens = 5;
+  use_tiiah(opts);
+  Game g = setup(std::move(opts));
+  pin_call(g, order_at(g, TestPlayer::CATHY, 1), IdentitySet::single(Identity{1, 1}));
+  const int dead = order_at(g, TestPlayer::BOB, 1);
+  pin_call(g, dead, IdentitySet::empty().add(Identity{0, 1}).add(Identity{3, 2}));
+
+  PerformAction action;
+  ASSERT_NO_THROW(action = g.take_action());
+  const auto* rank = std::get_if<PerformRank>(&action);
+  ASSERT_NE(rank, nullptr) << "the rank 2 fix";
+  EXPECT_EQ(rank->target, static_cast<int>(TestPlayer::BOB));
+  EXPECT_EQ(rank->value, 2);
+
+  // ...and it is read as the fix, not merely as a play clue on the b2.
+  const std::vector<int> touched =
+      g.state.clue_touched(g.state.hands[static_cast<int>(TestPlayer::BOB)], ClueKind::RANK, 2);
+  Game after = g.simulate(Action{ClueAction{static_cast<int>(TestPlayer::ALICE),
+                                            static_cast<int>(TestPlayer::BOB), touched,
+                                            BaseClue{ClueKind::RANK, 2}}});
+  ASSERT_FALSE(after.move_history.empty());
+  const auto* interp = std::get_if<ClueInterp>(&after.move_history.back());
+  ASSERT_NE(interp, nullptr);
+  EXPECT_EQ(*interp, ClueInterp::FIX);
+  EXPECT_NE(after.meta[dead].status, CardStatus::CALLED_TO_PLAY);
+}

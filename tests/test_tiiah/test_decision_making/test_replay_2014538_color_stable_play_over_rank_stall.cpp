@@ -8,6 +8,12 @@
 // can see is playable. Section 4.1 took stable clues to Bob only, so the Green never
 // entered and 4.5 gave a stalling 3 instead. "A color stable clue ... should
 // definitely outrank a rank 3 lock clue."
+//
+// Since v22.0.0 the T17/T18 call on black's o17 (the p1) reads the bucket half
+// alone, so no g3 sits in the hole and a 2 to green is a reactive double play: black's
+// g3 (slot 1) and green's p2 (slot 1), both playable. Two plays for one clue beats
+// the single Green; the invariant the diagnostic asks for -- not the rank 3 stall --
+// is what stands.
 
 #include <gtest/gtest.h>
 
@@ -1326,8 +1332,8 @@ TEST(TiiahReplay2014538, ColorStablePlayOverRankStall) {
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   hanabi::PerformAction action = game.take_action();
-  const auto* colour = std::get_if<hanabi::PerformColour>(&action);
-  ASSERT_TRUE(colour) << "a colour stable play, not the rank 3 stall";
-  EXPECT_EQ(colour->target, 0) << "to black";
-  EXPECT_EQ(colour->value, 2) << "Green, for the g3";
+  const auto* rank = std::get_if<hanabi::PerformRank>(&action);
+  ASSERT_TRUE(rank) << "the reactive 2 to green (v22.0.0)";
+  EXPECT_EQ(rank->target, 2) << "to green";
+  EXPECT_EQ(rank->value, 2) << "not the rank 3 stall";
 }

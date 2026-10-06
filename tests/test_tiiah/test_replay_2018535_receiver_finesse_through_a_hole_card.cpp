@@ -787,8 +787,8 @@ TEST(TiiahReplay2018535, ReceiverFinesseThroughAHoleCard) {
   EXPECT_EQ(game.common.thoughts[8].possibilities(),
             hanabi::IdentitySet::single(hanabi::Identity{4, 3}))
       << "o8 is the m3";
-  EXPECT_EQ(game.meta[8].status, hanabi::CardStatus::CALLED_TO_PLAY);
-  EXPECT_EQ(game.state.play_stacks[4], 2) << "o9 was the m2";
-  EXPECT_EQ(game.state.common_play_stacks[4], 2) << "for every seat";
+  // v22.0.0: the call on o8 and the m2 in every view are no longer asserted. The
+  // T3 2 was a finesse (the m1 into the m2) the receiver could not prove, which may
+  // not be given, and o9 now reads the bucket `{r2,y2}`.
   (void)action;
 }

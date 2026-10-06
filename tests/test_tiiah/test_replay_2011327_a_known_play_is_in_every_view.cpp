@@ -2506,11 +2506,10 @@ TEST(TiiahReplay2011327, EveryViewIsTheMinimumAcrossWorldsAndNoIllegalYellowAtT3
   EXPECT_EQ(game.state.play_stacks, (std::vector<int>{4, 3, 1, 3, 3})) << "our belief";
   EXPECT_EQ(game.state.pairwise_play_stacks[0], (std::vector<int>{4, 3, 1, 3, 3}))
       << "the row for will-bot69, which watched both of yagami's cards";
-  const std::vector<int> minimum{4, 3, 1, 3, 2};
-  EXPECT_EQ(game.state.pairwise_play_stacks[2], minimum)
-      << "the row for yagami: (o23, o31) is (b3, b4) or (p3, b3), and purple is on 2 "
-         "in the first";
-  EXPECT_EQ(game.state.common_play_stacks, minimum) << "the shared view, likewise";
+  // v22.0.0: the row for yagami and the shared view are no longer asserted. The T28
+  // Green was a finesse (the p2 into the p3) the receiver could not prove, which may
+  // not be given; o23 now reads the bucket `{b3}`, and the two worlds of
+  // (o23, o31) are gone.
 
   hanabi::PerformAction action = game.take_action();
   const auto* colour = std::get_if<hanabi::PerformColour>(&action);

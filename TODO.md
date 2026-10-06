@@ -1181,14 +1181,14 @@ the comment at the seam (`decide.cpp:676-680`) deliberately avoided.
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:263`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:267`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
 what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
 REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:702-716`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:315`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:319`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has
@@ -1266,29 +1266,6 @@ against purple 2). What is left there is the genuinely two-wide case: will-bot67
 `{r1,y1}` pair is two candidates for everyone, so its red 1 is knowledge only it and
 the seats watching hold, and `common_play_stacks` is right to lag. Whether any
 divergence remains that is NOT of that kind is the open question.
-
----
-
-## 49. `[tiiah]` A finesse pairing is read wider than it needs to be by the receiver
-
-CONVENTION.md §1d. `narrow_reacter_play` (v16.19.0) reconstructs what the reacter
-knows about its own blind play as *the playables of the bucket of the identity the
-receiver saw*. That is exact for a direct pairing. For a **finesse** it is not: there
-the reacter was told its card outright — it is the connector — while the bucket may
-hold more than one playable.
-
-The receiver cannot tell the two apart, because which it is depends on how far off its
-OWN target was, and the receiver cannot see its own hand. So it takes the bucket set,
-which is a superset of what the reacter actually knows.
-
-The cost is only that the shared stacks lag: a set of two where one would do keeps
-`common_play_stacks` waiting a turn or two longer. It never over-claims, which is the
-direction that matters.
-
-**Narrowed in v17.1.0.** When the called card's public touch information rules out
-every card of the bucket half, the finesse is proven and the reacter's card is named
-(`proven_finesse`, CONVENTION.md §1d). What remains open is a called card that could
-be either half. The receiver could only settle that by knowing its own card.
 
 ---
 

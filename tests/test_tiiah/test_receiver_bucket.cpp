@@ -6,9 +6,10 @@
 // the generic reading: every playable the stacks and their own negative
 // information still allowed.
 //
-// What they may write is the union of §1d's two readings, intersected with what
-// the card could already be: the bucket one step along from the reacter's, and
-// the continuation of the card the reacter played.
+// What they may write is ONE of §1d's two readings, intersected with what the card
+// could already be: the bucket one step along from the reacter's, or -- only when
+// the finesse is provable -- the continuation of the card the reacter played
+// (v22.0.0; until then the union of the two).
 #include <gtest/gtest.h>
 
 #include <variant>
@@ -70,46 +71,26 @@ TEST(TiiahReceiverBucket, AColourClueLeavesTheBucketBelow) {
 }
 
 // The same clue with the reacter holding a g1 instead. Green is bucket 1 too,
-// so the bucket half is unchanged — but now the continuation is the g2, which
-// the Blue clue says nothing against, so it survives.
-TEST(TiiahReceiverBucket, TheFinesseContinuationSurvivesWhenItCan) {
+// so the bucket half is unchanged. The continuation is the g2, which the Blue
+// clue says nothing against -- but the card could be a bucket card too, so the
+// finesse is not provable and the bucket alone stands (v22.0.0; until then the
+// g2 survived).
+TEST(TiiahReceiverBucket, AnUnprovableContinuationDrops) {
   Game g = clue_and_react(replay_opts("g1"), "Alice clues blue to Cathy", "p5");
 
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 5), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5,
-              {"r1", "y1", "g2"});
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5, {"r1", "y1"});
 }
 
 // A RANK clue reads the relation the other way: the receiver is one bucket
 // HIGHER than the reacter. Rank 4 anchors on 4, so the slots pair the same way.
-// Bob's r1 is bucket 0, so Cathy is bucket 1 — green and blue.
+// Bob's r1 is bucket 0, so Cathy is bucket 1 — green and blue. The r2 the r1
+// continues into is an unprovable finesse, so it is not read (v22.0.0).
 TEST(TiiahReceiverBucket, ARankClueLeavesTheBucketAbove) {
   SetupOptions opts = replay_opts("r1");
   opts.hands[2] = {"p2", "g3", "b4", "y4", "b1"};  // her slot 5 is a b1
   Game g = clue_and_react(std::move(opts), "Alice clues 4 to Cathy", "p5");
 
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 5), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5,
-              {"g1", "b1", "r2"});
-}
-
-// The POV difference, pinned so it is deliberate. The REACTER cannot name what
-// they played, so they read the bucket off the inference the clue left them and
-// carry every continuation it allows — a wider set than the seats that watched
-// the card. Seats differing on what they can see is this variant (§1.1).
-TEST(TiiahReceiverBucket, TheReacterReadsAWiderSetThanTheSeatsThatSaw) {
-  SetupOptions opts = replay_opts("g1");
-  opts.init = [](Game& g) {
-    g.convention = Convention::TIIAH;
-    g.state.our_player_index = 1;  // we are Bob, the reacter
-  };
-  Game g = clue_and_react(std::move(opts), "Alice clues blue to Cathy", "");
-
-  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 5), CardStatus::CALLED_TO_PLAY);
-  const IdentitySet infs =
-      g.common.thoughts[order_at(g, TestPlayer::CATHY, 5)].inferred;
-  EXPECT_TRUE(infs.contains(g.state.expand_short("g2")))
-      << "from our own seat the card we played could have been the b1 or the "
-         "g1, so both continuations stand";
-  EXPECT_GT(infs.length(), 2);
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5, {"g1", "b1"});
 }

@@ -767,7 +767,10 @@ is judged from Alice's own inference, not common knowledge.
    (`v18_human_vs_bot_diagnostics/2013726.md`) is a fix given this way and judged
    correct by the reviewer. Green's 2 fixes blue's dead `{r1,b2}` (the r1, already
    down). v18.6.0 briefly preferred a colour fix instead and was reverted in
-   v18.8.0 (`tests/test_tiiah/test_decision_making/test_replay_2013726_fix_dead_call_with_two.cpp`).
+   v18.8.0. Since v22.0.0 the replay no longer reaches the fix (its T3 clue is a TIIAH
+   finesse the receiver could not prove), and a fixture of the same shape pins the 2
+   (`TiiahFixCluePriority.TheDeadR1OrB2IsFixedWithATwo`,
+   `tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp`).
 
    Labelled **2b** rather than renumbered, so the ~60 references to "priority 3",
    "3.1"–"3.9" and "§4" across these documents and `decision.cpp`'s comments keep

@@ -392,9 +392,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_colour_preference.cpp
   tests/test_tiiah/test_decision_making/test_fix_clue_priority.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_trash_reveal_over_lock.cpp
-  tests/test_tiiah/test_decision_making/test_replay_2013726_fix_dead_call_with_two.cpp
   tests/test_tiiah/test_decision_making/test_own_dupe_filter.cpp
-  tests/test_tiiah/test_decision_making/test_replay_2013726_save_playable_chop_despite_own_dupe.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014076_save_bobs_playable_chop_while_occupied.cpp
   tests/test_tiiah/test_decision_making/test_occupied_save_of_bobs_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp
@@ -414,7 +412,6 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2019598_yellow_for_y2_once_y1_known.cpp
   tests/test_tiiah/test_decision_making/test_replay_2019598_stable_red_at_high_clue_count.cpp
   tests/test_tiiah/test_decision_making/test_replay_2019676_settled_hole_card_frees_known_p5.cpp
-  tests/test_tiiah/test_decision_making/test_replay_2019742_discarded_card_is_no_finesse_evidence.cpp
   tests/test_tiiah/test_decision_making/test_replay_9000259_fixed_reaction_card_is_thrown.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
@@ -520,7 +517,6 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_watched_one_floors_the_row.cpp
   tests/test_tiiah/test_watched_play_lands_on_a_joint_fact.cpp
   tests/test_tiiah/test_replay_2019249_watched_plays_land_reaction_reads_rainbow.cpp
-  tests/test_tiiah/test_replay_2019408_named_hole_card_above_shared_view.cpp
   tests/test_tiiah/test_named_hole_card_above_the_shared_view.cpp
   tests/test_tiiah/test_receiver_standing_play_is_not_the_reaction.cpp
   tests/test_tiiah/test_replay_2019555_outside_seat_reads_partner_clue_named_hole.cpp
@@ -556,6 +552,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_muddy_retouch.cpp
   tests/test_tiiah/test_replay_2020406_giver_frame_reads_p1_or_p3.cpp
   tests/test_tiiah/test_giver_frame_per_world.cpp
+  tests/test_tiiah/test_bucket_first.cpp
   tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp
   tests/test_tiiah/test_named_card_feasibility.cpp
   tests/test_tiiah/test_settled_hole_card_frees_own_play.cpp

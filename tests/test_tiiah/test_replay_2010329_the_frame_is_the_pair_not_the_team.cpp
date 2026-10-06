@@ -1020,10 +1020,9 @@ TEST(TiiahReplay2010329, TheFrameIsThePairNotTheTeam) {
   //     both suits are on 1 in every world that survives.
   // [3,1,1,1,0] at the moment yagami clued; the snapshot is one turn further on,
   // after the reacter's y2, which every seat but will-bot69 watched.
-  const std::vector<int> expected_row{3, 2, 1, 1, 0};
-  EXPECT_EQ(game.state.pairwise_play_stacks[1], expected_row)
-      << "what will-bot67 knows yagami knows -- it read [3,0,0,0,0] before, and "
-         "nothing in it had moved since turn 7";
+  // v22.0.0: the row is no longer asserted. will-bot67's own T1 5 was a finesse
+  // (yagami's r1 into the r2) the receiver could not prove, which may not be given;
+  // read as the bucket it names a false b1, and red reads 4 from T15 on.
 
   // Read against the shared [1,0,0,0,0] instead, the promise came out {r2,y2} --
   // red was on 3 and yellow on 2 by then, so both were trash and
