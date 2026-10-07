@@ -62,12 +62,14 @@ TEST(TiiahReacterBucketInTheWorlds, TheBucketReadingInTheWorldsReplacesTheFrames
       << "bucket 0 in the worlds of our hole card, not the frame's g2/b2";
 }
 
-// The control: no hole card, so no world plays a bucket-0 2, and the reading is the
-// frame's playables as before.
-TEST(TiiahReacterBucketInTheWorlds, WithNoHoleTheFramesPlayablesStand) {
+// The control: no hole card, so no world plays a bucket-0 2. Our 2 could answer
+// Bob's g2 only with the frame's g2 or b2, out of the bucket, and Bob -- reading
+// bucket 2 from either -- would find the p1 among his card's possibilities. The
+// violation is known and not one the receiver could see through, so since v22.4.0
+// the pairing is no pairing, and our 2 is not called (until then it read {g2,b2}).
+TEST(TiiahReacterBucketInTheWorlds, WithNoHoleTheOutOfBucketPairingIsNoPairing) {
   Game g = play_out(/*into_the_hole=*/false);
   const int ours = order_at(g, TestPlayer::ALICE, 2);
 
-  ASSERT_EQ(g.meta[ours].status, CardStatus::CALLED_TO_PLAY) << "guard: we react";
-  EXPECT_EQ(g.common.thoughts[ours].inferred, set_of(g, {"g2", "b2"}));
+  EXPECT_NE(g.meta[ours].status, CardStatus::CALLED_TO_PLAY);
 }

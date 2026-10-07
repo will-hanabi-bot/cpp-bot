@@ -4,6 +4,7 @@
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_clue.h"
+#include "hanabi/conventions/tiiah/buckets.h"
 #include "hanabi/conventions/variants/predicates.h"
 
 #include <algorithm>
@@ -197,11 +198,45 @@ SlotElims slot_elims(const Game& prev, const ReactorWC& wc, int slot,
   // 1. A directly playable card. The receiver advances a stack with it by
   //    pressing Play on a plain suit and Discard on an inverted one; even
   //    parity means the reacter matches that button, odd means he opposes it.
+  // Throw It in a Hole: the bucket rule is a LEGALITY constraint too (v22.4.0, the
+  // user's ruling). A slot whose pairing the reacter could answer only with an
+  // out-of-bucket card the receiver would misread was blocked, as a known 5 would
+  // block it, so passing it over says nothing about it being playable. Replay
+  // 2022760: had green been on 2 for everyone, the 3's y2-into-y3 finesse would
+  // leave the g3 open on the passed-over o26, since o17 could only be the m1.
+  const bool hole = s.variant->throw_it_in_a_hole && s.pace() > 1;
+  const int slot_order =
+      slot - 1 < static_cast<int>(wc.receiver_hand.size()) ? wc.receiver_hand[slot - 1] : -1;
+  const IdentitySet slot_poss =
+      slot_order >= 0 && slot_order < static_cast<int>(prev.common.thoughts.size())
+          ? prev.common.thoughts[slot_order].possibilities()
+          : IdentitySet::empty();
+  // Judged on the SHARED view, which every seat computes alike, as the walk's own
+  // known-violation test is.
+  const State shared = s.shared_view();
+  auto legally_paired = [&](Identity i) {
+    if (!hole) return true;
+    const auto want = hanabi::tiiah::bucket_of(*s.variant, i.suit_index);
+    if (!want) return true;  // an inverted suit is in no bucket (§1d)
+    return cand.exists([&](Identity c) {
+      if (!shared.is_playable(c)) return false;
+      const auto from = hanabi::tiiah::bucket_of(*s.variant, c.suit_index);
+      if (!from) return true;
+      const int named = wc.clue.kind == ClueKind::RANK ? (*from + 1) % 3 : (*from + 2) % 3;
+      if (named == *want) return true;
+      // Out of the bucket: legal only when the receiver's bucket reading is empty.
+      return !slot_poss.exists([&](Identity x) {
+        const auto b = hanabi::tiiah::bucket_of(*s.variant, x.suit_index);
+        return b && *b == named && shared.is_playable(x);
+      });
+    });
+  };
   out.direct = IdentitySet::create(
       [&](Identity i) {
         if (!s.is_playable(i)) return false;
         const bool reacter_pitches = variants::is_inverted_id(s, i) != even;
-        return reacter_pitches ? pitchable : chuckable;
+        if (!(reacter_pitches ? pitchable : chuckable)) return false;
+        return legally_paired(i);
       },
       n);
 

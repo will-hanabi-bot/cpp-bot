@@ -596,14 +596,14 @@ TEST(TiiahReplay2010246, AnIllegalBucketPairingIsNotRetargeted) {
   // will-bot69 could not see its own card, never evaluated the relation, and
   // played slot 2 -- the pairing the giver had skipped.
   //
-  // The clue is now illegal to give, so the deferral is not on offer and the
-  // reaction gets answered instead.
+  // Since v22.4.0 the first pairing's violation is KNOWN from public information:
+  // the bucket rule is a legality layer every seat applies, so the reacter walks
+  // past the r1 pairing too and reads the y2 finesse behind it. That is the split
+  // v16.15.0 guarded against, made consistent rather than forbidden, and the rank 2
+  // is a clue will-bot67 may give.
   hanabi::PerformAction action = game.take_action();
-  const auto* play = std::get_if<hanabi::PerformPlay>(&action);
-  ASSERT_NE(play, nullptr)
-      << "not the rank 2 to yagami: its first pairing is bucket-illegal, so it "
-         "is not a clue this convention permits";
-  EXPECT_EQ(play->target, 6)
-      << "and what is left is the card T1's reactive called -- answering the "
-         "reaction rather than deferring with something unreadable";
+  const auto* rank = std::get_if<hanabi::PerformRank>(&action);
+  ASSERT_NE(rank, nullptr) << "the rank 2 to yagami";
+  EXPECT_EQ(rank->target, 0);
+  EXPECT_EQ(rank->value, 2);
 }

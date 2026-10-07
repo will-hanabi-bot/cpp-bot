@@ -89,7 +89,7 @@ Outcome outcome_of(const State& s, int order, CardStatus button) {
 
 // The receiver's button, given the clue kind and the button the reacter was
 // told to press. Fixed by the resolution parity table in react_play /
-// react_discard (reactor0/interpret_reaction.cpp:82, :88-91, :131, :136-139).
+// react_discard (reactor0/interpret_reaction.cpp:84, :88-91, :131, :136-139).
 // The receiver is not stamped at clue time on the phases that matter here, so
 // the reading has to come from the parity rather than from the meta.
 //

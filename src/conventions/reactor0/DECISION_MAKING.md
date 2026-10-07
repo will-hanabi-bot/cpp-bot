@@ -1633,7 +1633,7 @@ button the receiver was promised.
 | double discard clue | reactive rank Phase C | `interpret_reactive.cpp:578-648` |
 | a play REVEAL (stamps nothing; still a play clue) | `playables_result` | `src/basics/clue_result.cpp:177` |
 | reactive play / discard clue | reactive rank Phase A; colour modes 1 and 2 | `interpret_reactive.cpp:398-484`; `:670-756`, `:758-855` |
-| lock clue | `predicts_reactive_lock` | `interpret_reaction.cpp:31-47` |
+| lock clue | `predicts_reactive_lock` | `interpret_reaction.cpp:32-48` |
 | "this clue creates a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |
 | new touches, for the default tiebreak | `elim_result` / `bad_touch_result` | `src/basics/clue_result.cpp` |
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |

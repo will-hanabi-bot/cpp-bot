@@ -949,7 +949,7 @@ Six rules govern it:
    cannot see that. So the reading is vetted a second time against the LIVE
    stacks, and a call with no surviving identity that is playable *now* is
    forgotten rather than bombed on. Applied to a DEFERRED reaction only
-   (`deferred`, `reactor0/interpret_reaction.cpp:414`, v16.28.0). Under reactor0
+   (`deferred`, `reactor0/interpret_reaction.cpp:449`, v16.28.0). Under reactor0
    that changes nothing -- when the reacter answers immediately no other seat has
    moved, so the two frames coincide -- but Throw It in a Hole reads the frame
    off the view the giver and receiver SHARE while the live stacks are our own
@@ -1166,7 +1166,7 @@ held capture is dropped (`Game::disarm_reaction_elim`,
 `src/basics/decide.cpp:70-82`). Two withdrawals do this:
 - `erase_call` in the call invariants (rules 1–4, including rule 3's dead call),
   at `reactor0/call_invariants.cpp:53`;
-- Throw It in a Hole's fix, at `tiiah/interpret_clue.cpp:530`.
+- Throw It in a Hole's fix, at `tiiah/interpret_clue.cpp:544`.
 
 A bluff's `drop_call` does not. That is how the reaction itself reads the card, and
 the capture is armed after it.

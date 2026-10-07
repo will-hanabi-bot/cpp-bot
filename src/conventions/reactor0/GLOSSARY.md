@@ -435,7 +435,7 @@ The rlocks reading: a reactive dc-target on the receiver's **oldest slot**
 locks the whole hand (`CHOP_MOVED` on every card) instead of calling a
 discard. Applies uniformly in both dc modes and conservatively even when
 the oldest slot is actually trash. Bound at clue time via
-`ReactorWC::rlocks`. `src/conventions/reactor0/interpret_reaction.cpp:24-49`.
+`ReactorWC::rlocks`. `src/conventions/reactor0/interpret_reaction.cpp:26-51`.
 Exempt from the pointless-double-discard filter — a lock protects a whole hand,
 so it is never a
 *pointless double discard*. Because the `CHOP_MOVED` stamps land a turn later

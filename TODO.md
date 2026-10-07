@@ -1154,7 +1154,7 @@ bucket relation — is called from one place, `Game::interpret_play`
 (`src/basics/decide.cpp:692-712`). So it is skipped whenever the reacter's action
 reaches a seat as a **discard**, even though the reaction machinery below it gets
 the button right: `reacter_button_pressed`
-(`src/conventions/reactor0/interpret_reaction.cpp:530-540`) already knows that a
+(`src/conventions/reactor0/interpret_reaction.cpp:565-575`) already knows that a
 plain card can only reach a strike via the Play button, and stamps the receiver
 `CALLED_TO_PLAY` accordingly. Only the narrowing is missing, so the receiver keeps
 the generic "every playable the stacks allow" reading.
@@ -1181,14 +1181,14 @@ the comment at the seam (`decide.cpp:676-680`) deliberately avoided.
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:267`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:296`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
-what the called card may be (`reactor0/interpret_reaction.cpp:365-390`).
+what the called card may be (`reactor0/interpret_reaction.cpp:400-425`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
-REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:702-716`) —
+REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:737-751`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:319`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:348`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has

@@ -398,6 +398,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2014538_color_stable_play_over_rank_stall.cpp
   tests/test_tiiah/test_decision_making/test_replay_2021427_save_playable_chop_cathy_has_safe_action.cpp
   tests/test_tiiah/test_decision_making/test_replay_2021455_retouch_five_calls_the_p5.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2022760_green_three_needs_a_legal_pairing.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp
   tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp
@@ -557,6 +558,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_bucket_first.cpp
   tests/test_tiiah/test_colour_reveal_through_worlds.cpp
   tests/test_tiiah/test_retouch_rank_call.cpp
+  tests/test_tiiah/test_known_bucket_violation.cpp
   tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp
   tests/test_tiiah/test_named_card_feasibility.cpp
   tests/test_tiiah/test_settled_hole_card_frees_own_play.cpp

@@ -295,6 +295,20 @@ void pin_rainbowy_colour(const Game& prev, Game& game,
         prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
       continue;
     }
+    // ...and when the ladder read the call on a frame AHEAD of the shared view (a
+    // per-world rerun), its own-suit card is further up than the pin: keep the
+    // own-suit identities it named and drop the rainbowy ones (v22.4.0). Narrowing
+    // to the pin would empty the reading, which `narrow_thought` refuses, and the
+    // rainbowy identity survived. Replay 2022760 T10: green's Green on black's o18
+    // read `{g2,m1}` in the world where o7 was the g1; the m1 kept a world with
+    // green on 0 alive for the team, though the call was green's.
+    const IdentitySet inferred = game.common.thoughts[o].inferred;
+    const IdentitySet own_ids =
+        inferred.filter([own](Identity i) { return i.suit_index == own; });
+    if (pin->suit_index == own && !inferred.contains(*pin) && own_ids.non_empty()) {
+      game.narrow_thought(o, own_ids);
+      return;
+    }
     if (!game.common.thoughts[o].possibilities().contains(*pin)) return;
     game.narrow_thought(o, IdentitySet::single(*pin));
     return;

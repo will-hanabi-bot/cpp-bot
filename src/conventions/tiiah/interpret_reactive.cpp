@@ -160,6 +160,35 @@ bool both_know_their_own(const Game& game, int react_order, int target_order) {
   return react_live.length() == 1 && target_live.length() == 1;
 }
 
+// THE BUCKET RULE AS A LEGALITY LAYER (§1d, v22.4.0, the user's ruling). Would the
+// receiver, having watched the reacter play `react`, still name its target? It reads
+// the bucket the relation names from that card; when the bucket offers a playable
+// among `target_poss` on `faced`, it names that card -- not the target. An empty
+// bucket reading leaves it its own playable, and both players know what they hold.
+bool receiver_bucket_empty(const State& faced, ClueKind kind, Identity react,
+                           const IdentitySet& target_poss) {
+  const auto want = required_target_bucket(*faced.variant, kind, react);
+  if (!want) return true;
+  return !target_poss.exists([&](Identity x) {
+    const auto b = bucket_of(*faced.variant, x.suit_index);
+    return b && *b == *want && faced.is_playable(x);
+  });
+}
+
+// Can the reacter answer a direct target LEGALLY: with a playable card of the bucket
+// the relation names, or with an out-of-bucket playable the receiver would not
+// misread? Judged on public information (the reacter's empathy, the target's
+// possibilities), so every seat that walks reaches the same answer. A pairing that
+// fails it is KNOWN illegal, and the walk goes past it (replay 2022760 T22).
+bool reacter_can_legally_answer(const State& faced, ClueKind kind, Identity target_id,
+                                const IdentitySet& react_playables,
+                                const IdentitySet& target_poss) {
+  return react_playables.exists([&](Identity c) {
+    return bucket_relation_holds(*faced.variant, kind, c, target_id) ||
+           receiver_bucket_empty(faced, kind, c, target_poss);
+  });
+}
+
 }  // namespace
 
 // THE FRAME A REACTIVE'S TARGET IS WALKED IN (§1e, v16.24.0): the MINIMUM, suit
@@ -337,7 +366,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   wc.even_parity = true;
   wc.rlocks = false;  // no reactive lock in this convention
   // The frame the giver chose the target in, and the one `stamp_receiver_call`
-  // builds the receiver's reading in (`reactor0/interpret_reaction.cpp:365-390`).
+  // builds the receiver's reading in (`reactor0/interpret_reaction.cpp:400-425`).
   // A deferral resolves later, against stacks that have moved, and under TIIAH
   // they may also have moved differently for different seats — so the reading has
   // to bind to a view that does not move with our own.
@@ -351,7 +380,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // reading -- so the receiver never played the `b2` it had been handed.
   //
   // One frame, two questions: the deferral's Rule 3
-  // (`reactor0/interpret_reaction.cpp:695-709`) reads the same field to ask
+  // (`reactor0/interpret_reaction.cpp:730-744`) reads the same field to ask
   // whether the REACTER's card was playable at clue time, which wants the giver's
   // and the reacter's pair instead. Recorded in TODO.md rather than fixed here.
   wc.clue_play_stacks = state.stacks_known_to_both(action.giver, receiver);
@@ -464,9 +493,18 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       auto b = bucket_of(*state.variant, i.suit_index);
       return from && b && *b == *from;
     });
+    // An out-of-bucket reacter card makes a LEGAL pairing in a world only if the
+    // receiver, reading the bucket from it there, would find nothing and fall back to
+    // its playable (v22.4.0, the user's ruling). Otherwise the world asks for an
+    // illegal reactive and is no world. Replay 2022760 T22: where green was on 2 the
+    // g3 played directly, but o17 could only answer as the m1, and the receiver would
+    // have read the r3. At pace <= 1 a pairing may break the relation (v18.4.0).
+    const IdentitySet target_poss = game.common.thoughts[target.order].possibilities();
     auto works = [&](const OpenWorld& w, Identity i) {
       const State* f = faced_in(w);
-      return f && f->is_playable(i);
+      if (!f || !f->is_playable(i)) return false;
+      return in_bucket.contains(i) || state.pace() <= 1 ||
+             receiver_bucket_empty(*f, action.clue.kind, i, target_poss);
     };
     const auto found = ascr_find(ascr_worlds, {in_bucket, react_live}, works,
                                  /*require_evidence=*/false);
@@ -568,6 +606,30 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       if (r == AscrOutcome::REJECT) return std::nullopt;
       continue;  // shared: walk on, and so does the reacter
     }
+    // A KNOWN BUCKET VIOLATION (v22.4.0, the user's ruling): a direct target the
+    // reacter can answer only with an out-of-bucket card the receiver would misread
+    // is no pairing. Unlike the giver's legality test below this rests on public
+    // information -- the reacter's empathy and the target's possibilities -- so every
+    // walking seat walks past it alike. A world may still make it legal (ASCR).
+    // Not at pace <= 1, where a pairing may break the relation (v18.4.0).
+    // "Known" means GLOBALLY known: the violation must hold on the common view as
+    // well as on the pair's frame. The two seats of a pair can hold different rows,
+    // and a verdict that rests on one row alone steers the giver and the reacter to
+    // different pairings (self-play 6 Suits, seeds 54 and 212).
+    auto known_violation = [&](const State& faced) {
+      return !reacter_can_legally_answer(
+          faced, action.clue.kind, target.id,
+          react_live.filter([&faced](Identity i) { return faced.is_playable(i); }),
+          game.common.thoughts[target.order].possibilities());
+    };
+    if (!connector && !double_chuck && state.pace() > 1 && known_violation(after) &&
+        known_violation(reacter_faces(game, receiver, receiver_acts_first,
+                                      &state.common_play_stacks))) {
+      const AscrOutcome r = ascr_pairing(target, react_order);
+      if (r == AscrOutcome::READ) return ClueInterp::REACTIVE;
+      if (r == AscrOutcome::REJECT) return std::nullopt;
+      continue;
+    }
 
     if (auto actual = state.deck[react_order].id()) {
       // giver-only: reject, never retarget. The reacter cannot see their own
@@ -611,6 +673,9 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
           !bucket_relation_holds(*state.variant, action.clue.kind, *actual,
                                  target.id) &&
           !both_know_their_own(game, react_order, target.order)) {
+        // A globally known violation (below, the walk) is one readers understand,
+        // but the giver does not give one (v22.4.0): taking the exception here cost
+        // 0.3 points and 9 strikeouts per 300 games of 6 Suits in self-play.
         return std::nullopt;
       }
       // A FINESSE IS GIVEABLE ONLY WHEN THE RECEIVER CAN PROVE IT (v22.0.0, the

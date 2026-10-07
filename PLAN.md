@@ -180,7 +180,7 @@ The implementation should invent none of these:
 | two new plays | `new_play_facts(...).count >= 2` | `reactor0/state_eval.cpp:184-201` |
 | finesse (H4) | rank Phase B | `reactor0/interpret_reactive.cpp:384-448` |
 | double discard | rank Phase C | `reactor0/interpret_reactive.cpp:449-483` |
-| reactive lock | `predicts_reactive_lock` | `reactor0/interpret_reaction.cpp:31-47` |
+| reactive lock | `predicts_reactive_lock` | `reactor0/interpret_reaction.cpp:32-48` |
 | "does this clue create a play" | `hanabi::playables_result` | `src/basics/clue_result.cpp:177` |
 | new touches / fill-ins / elims | `elim_result` | `src/basics/clue_result.cpp` |
 | trash touched (default tiebreak) | `bad_touch_result` | `src/basics/clue_result.cpp` |
@@ -242,7 +242,7 @@ receiver-CTD) have **no analogue** in the tree:
   could share a suit under their non-global inferences.
 - **Ordering is inconsistent.** `signal_turn` is the only timestamp, it is
   *set-once* (`card.cpp:113-118`), it is **absent** on three stamping paths
-  (`reactor0/interpret_clue.cpp:556-559`, `reactor0/interpret_reaction.cpp:57-61`,
+  (`reactor0/interpret_clue.cpp:556-559`, `reactor0/interpret_reaction.cpp:58-62`,
   `reactor/interpret_clue.cpp:388-398`), and its missing-value convention differs
   across call sites (`99` / `99` / `0` / `-1` / `-1`).
 
