@@ -153,7 +153,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:741-751`), read by
+(`src/conventions/tiiah/superposition.cpp:749-759`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -176,7 +176,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:806-906`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:814-914`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 Since v20.21.0 the settle also counts a receiver's card the team has **named in the
 hole** (not conditional, not already clued when the reactive was given --
@@ -253,7 +253,7 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:450-505`. Rule 4
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:458-513`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past. What it
 learns is private: it moves our belief and no pairwise row (v17.3.0).
 
@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1514-1561`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1538-1585`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -284,12 +284,12 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:1166-1201`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:1180-1215`. CONVENTION.md §1d.
 
 Since v22.0.0 it is also the **only finesse that may be given**, and it decides the
 receiver's own reading. A proven finesse reads as the card after the reacter's. Any
 other pairing reads as the bucket half alone (`keep_convention_half`,
-`interpret_reactive.cpp:1116-1127`), never the union of the two halves.
+`interpret_reactive.cpp:1125-1136`), never the union of the two halves.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -429,7 +429,8 @@ v18.0.0 to v18.2.0) — a clue to **Bob** is reactive, with
 that position reactor0's positional rule stands: a clue to Cathy is the reactive
 one and Bob answers it. Once the deck is nearly out (fewer cards left than seats)
 a clue to Bob in the position is a stable stall instead (v22.7.0; replay 2023552
-T53). Not the same as reactor's rule, where a clue to Bob makes
+T53). Its receiver's target is read on the giver's and the reacter's frame, the one
+the walk named it in (v22.8.0; replay 2023572 T8). Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
 (`src/conventions/variants/hole.cpp:158-186`), read by `tiiah::interpret_clue` and

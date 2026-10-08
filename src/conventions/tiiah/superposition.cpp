@@ -257,6 +257,14 @@ void correct_frozen_frames(Game& game, Identity id) {
   const auto& st = game.state.variant->suits[id.suit_index].suit_type;
   auto raise = [&](ReactorWC& wc) {
     if (id.suit_index >= static_cast<int>(wc.clue_play_stacks.size())) return;
+    // ...except a REVERSE reactive's frame, the giver's and the reacter's (v22.8.0),
+    // when we are one of that pair: we could not name our own card at clue time, so
+    // the pair's frame did not count it, and it stays as frozen. Replay 2023572 T9:
+    // blue, the reacter, learnt its o2 was the b1, and raising its frame turned the
+    // b1 green's 4 had named into a b2.
+    const int me = game.state.our_player_index;
+    const bool reverse = wc.receiver == game.state.next_player_index(wc.giver);
+    if (reverse && (me == wc.giver || me == wc.reacter)) return;
     int& h = wc.clue_play_stacks[id.suit_index];
     if (st.reversed ? id.rank < h : id.rank > h) h = id.rank;
   };

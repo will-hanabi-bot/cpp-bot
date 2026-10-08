@@ -383,7 +383,16 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // (`reactor0/interpret_reaction.cpp:730-744`) reads the same field to ask
   // whether the REACTER's card was playable at clue time, which wants the giver's
   // and the reacter's pair instead. Recorded in TODO.md rather than fixed here.
-  wc.clue_play_stacks = state.stacks_known_to_both(action.giver, receiver);
+  //
+  // Except on the REVERSE reactive (v22.8.0, the user's ruling): there the
+  // target is read on the frame the walk named it in, the giver's and the REACTER's.
+  // Replay 2023572 T8: green's 4 to black named black's o11 as the b1, since blue, the
+  // reacter, could not name the b1 it had played into the hole; on green's and
+  // black's frame the b1 was down and the bots wrote `{b2}`. Read as the b1, the call
+  // is stale once every 1 is down (Rule 5), and black has no standing play at T11.
+  wc.clue_play_stacks = receiver == state.next_player_index(action.giver)
+                            ? reacter_frame(game, action.giver, reacter)
+                            : state.stacks_known_to_both(action.giver, receiver);
   // Which seat moves first, and so which stacks everything below is judged
   // against. The receiver goes first only on the REVERSE reactive, where he
   // is the giver's Bob and the known play in his hand is what made the clue
@@ -1146,10 +1155,15 @@ int new_play_call(const Game& prev, const Game& game, int receiver) {
 std::vector<OpenWorld> receiver_worlds(const Game& game, const ReactorWC& wc) {
   const State& s = game.state;
   const bool at_receiver = wc.receiver == s.our_player_index;
+  // The reverse reactive reads on the giver's and the reacter's frame (v22.8.0,
+  // `interpret_reactive` above), at every seat alike.
+  const bool reverse = wc.receiver == s.next_player_index(wc.giver);
   const State base =
-      at_receiver ? s.private_base()
-                  : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
-                        .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
+      reverse ? s.with_stacks(reacter_frame(game, wc.giver, wc.reacter))
+                    .with_band(s.evidence_known_to_both(wc.giver, wc.reacter))
+      : at_receiver ? s.private_base()
+                    : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
+                          .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
   const std::vector<int> holders =
       at_receiver ? std::vector<int>{wc.receiver}
                   : std::vector<int>{wc.receiver, wc.giver};
@@ -1244,10 +1258,15 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   // The worlds the receiver's reading ranges over, exactly as `narrow_receiver_call`
   // reads them.
   const bool at_receiver = wc.receiver == s.our_player_index;
+  // The reverse reactive reads on the giver's and the reacter's frame (v22.8.0,
+  // `interpret_reactive` above), at every seat alike.
+  const bool reverse = wc.receiver == s.next_player_index(wc.giver);
   const State base =
-      at_receiver ? s.private_base()
-                  : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
-                        .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
+      reverse ? s.with_stacks(reacter_frame(game, wc.giver, wc.reacter))
+                    .with_band(s.evidence_known_to_both(wc.giver, wc.reacter))
+      : at_receiver ? s.private_base()
+                    : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
+                          .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
   const std::vector<int> holders =
       at_receiver ? std::vector<int>{wc.receiver}
                   : std::vector<int>{wc.receiver, wc.giver};
@@ -1407,10 +1426,15 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   // on will-bot67's belief (green 1) the g1 world struck, and the call on her o21
   // read `{r4,b1}` instead of `{g1,b1,r4}`.
   const bool at_receiver = wc.receiver == s.our_player_index;
+  // The reverse reactive reads on the giver's and the reacter's frame (v22.8.0,
+  // `interpret_reactive` above), at every seat alike.
+  const bool reverse = wc.receiver == s.next_player_index(wc.giver);
   const State base =
-      at_receiver ? s.private_base()
-                  : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
-                        .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
+      reverse ? s.with_stacks(reacter_frame(game, wc.giver, wc.reacter))
+                    .with_band(s.evidence_known_to_both(wc.giver, wc.reacter))
+      : at_receiver ? s.private_base()
+                    : s.with_stacks(s.stacks_known_to_both(wc.giver, wc.receiver))
+                          .with_band(s.evidence_known_to_both(wc.giver, wc.receiver));
   const std::vector<int> holders =
       at_receiver ? std::vector<int>{wc.receiver}
                   : std::vector<int>{wc.receiver, wc.giver};
