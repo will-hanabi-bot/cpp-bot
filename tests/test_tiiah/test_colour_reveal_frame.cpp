@@ -1,11 +1,12 @@
-// A colour play reveal outranks the leftmost newly touched card only when it is
-// a reveal on the stacks EVERY seat knows (tiiah/CONVENTION.md §1b, v18.20.0).
+// A colour play reveal outranks the leftmost newly touched card when it is a
+// reveal on the stacks the giver and the receiver share (tiiah/CONVENTION.md §1b,
+// v22.5.0; v18.20.0 had required the stacks EVERY seat knows).
 //
 // The stable ladder reads a clue on the stacks its giver and receiver share
 // (§1.3), and on those a previously-clued card may be revealed as playable when it
 // is not on the common stacks: a play into the hole that its own player cannot
-// name moves the pair's view and not the common one. Replay 2015013 T35 is the
-// case, and T37 is the reveal that was global. Here Cathy plays an unnamed p1;
+// name moves the pair's view and not the common one. Replay 2022792 T30 is the
+// case (it reversed replay 2015013 T35's ruling). Here Cathy plays an unnamed p1;
 // Alice and Bob both watched it, so their view has purple on 1, and nobody's
 // common view does.
 #include <gtest/gtest.h>
@@ -39,9 +40,9 @@ SetupOptions reveal_opts() {
 
 }  // namespace
 
-// Only the pair knows purple is on 1, so Purple is not a reveal of the p2: it
-// calls the leftmost newly touched card.
-TEST(TiiahColourRevealFrame, APairOnlyRevealYieldsToTheLeftmostNewCard) {
+// Only the pair knows purple is on 1, and that is enough: Purple reveals the p2,
+// and the leftmost newly touched card is not called.
+TEST(TiiahColourRevealFrame, AWatchedRevealOutranksTheLeftmostNewCard) {
   SetupOptions opts = reveal_opts();
   opts.starting = TestPlayer::CATHY;
   Game g = setup(std::move(opts));
@@ -55,14 +56,14 @@ TEST(TiiahColourRevealFrame, APairOnlyRevealYieldsToTheLeftmostNewCard) {
       << "but Alice and Bob both watched it";
 
   g = take_turn(std::move(g), "Alice clues purple to Bob");
-  EXPECT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY)
-      << "the leftmost newly touched card is called";
-  EXPECT_NE(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_PLAY)
-      << "the clued 2 was not revealed to every seat";
+  EXPECT_EQ(status_at(g, TestPlayer::BOB, 5), CardStatus::CALLED_TO_PLAY)
+      << "the clued 2 is revealed on the pair's stacks";
+  EXPECT_NE(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY)
+      << "the leftmost newly touched card is not called";
 }
 
 // The same clue with purple on 1 in full view: the reveal is global, and it
-// outranks the leftmost newly touched card.
+// outranks the leftmost newly touched card as well.
 TEST(TiiahColourRevealFrame, AGlobalRevealOutranksTheLeftmostNewCard) {
   SetupOptions opts = reveal_opts();
   opts.play_stacks = std::vector<int>{0, 0, 0, 0, 1};

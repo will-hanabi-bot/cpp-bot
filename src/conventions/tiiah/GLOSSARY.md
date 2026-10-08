@@ -43,16 +43,16 @@ outside TIIAH. CONVENTION.md §1.3.
 Since v16.12.0 it is the FLOOR rather than the reading: what a clue means is read
 against the *pairwise view* below, and the common stacks are what is left when we
 are not one of the two seats a clue is between. The one exception is the
-*global play reveal* below (v18.20.0).
+*global play reveal* below (historical: v18.20.0, reversed by v22.5.0).
 
 ### global play reveal
-A colour play reveal whose card is also revealed as playable on the *common
-stacks*, not just the *pairwise view* the clue is read on. Only a global one
-outranks the leftmost newly touched card; otherwise the colour clue is read as a
-direct play of that card. The receiver cannot know the giver knows the stack is
-high enough. `reveal_frame` in `reactor0::stable_colour`, which TIIAH passes
-`common_play_stacks`. CONVENTION.md §1b, replay 2015013 T35 and T37.
-
+Historical (v18.20.0 to v22.4.0). A colour play reveal whose card is also revealed
+as playable on the *common stacks*, not just the *pairwise view* the clue is read
+on; only a global one used to outrank the leftmost newly touched card. Since
+v22.5.0 a reveal on the *pairwise view* outranks it (`reveal_frame` in
+`reactor0::stable_colour` is the ladder's own frame), and a reveal that is not
+global collapses the hole card under it for every seat. CONVENTION.md §1b, replay
+2022792 T30 (and 2015013 T35, the case the old rule came from).
 ### pinkish re-touch (global frame)
 reactor0's pink tempo, pink trash and pink identity clues (reactor0 GLOSSARY),
 read here on the *common stacks*: the tempo clue's next playable pink and the
@@ -274,7 +274,9 @@ walking seat goes past it (v22.4.0), judged on the common view and on the pair's
 alike. A violation both players see through -- the receiver's bucket reading finds
 nothing, and the reacter's empathy offers no playable of the bucket the target names,
 so each falls back to its playable -- is **globally known** and stands. Readers
-understand it; the giver does not yet give one (v22.4.0). `reacter_can_legally_answer`, `tiiah/interpret_reactive.cpp`.
+understand it; the giver does not yet give one (v22.4.0). After a known violation
+the receiver's target is the finesse from the reacter's card if it can be (a *proven
+finesse*), and only otherwise any other stack playable (replay 2022852 T33). `reacter_can_legally_answer`, `tiiah/interpret_reactive.cpp`.
 CONVENTION.md §1d, replay 2022760 T22.
 
 ### proven finesse

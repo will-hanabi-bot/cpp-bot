@@ -173,8 +173,9 @@ play in reactor0.** Priority:
    `stable_colour` takes an optional `reveal_frame`: a stack vector on which the
    reveal must also hold, or the ladder moves on to the direct play
    (`interpret_clue.cpp:473-482`, v18.20.0). reactor0 never passes one, so this
-   convention is unchanged. Throw It in a Hole passes its common stacks
-   (tiiah/CONVENTION.md §1b, the *global play reveal*).
+   convention is unchanged. Throw It in a Hole passes the frame its ladder runs
+   on, the pair's stacks (tiiah/CONVENTION.md §1b, v22.5.0; until then its common
+   stacks, the *global play reveal*).
 
    **Actionable, not merely playable.** `obvious_playables` answers "could this
    card play", which in an inverted variant is a different question from "can

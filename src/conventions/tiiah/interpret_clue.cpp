@@ -564,9 +564,7 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
 
   // One run of the ladder on `frame`. Scoped so the swap is RELEASED before the
   // re-pin below, which has to see our own belief rather than the pair's view.
-  auto run_ladder = [&](Game& g, const std::vector<int>& frame,
-                        const std::vector<int>* reveal_frame = nullptr) {
-    if (!reveal_frame) reveal_frame = &state.common_play_stacks;
+  auto run_ladder = [&](Game& g, const std::vector<int>& frame) {
     const bool swap = SharedStacks::needed(g.state, frame);
     std::optional<Game> prev_shared;
     if (swap) {
@@ -579,16 +577,20 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     std::optional<ClueInterp> out;
     if (action.clue.kind != ClueKind::COLOUR) {
       // A pinkish re-touch (pink tempo / trash / identity) rests on the stacks
-      // EVERY seat knows (v19.0.0), for the same reason a colour reveal does.
+      // EVERY seat knows (v19.0.0).
       out = reactor0::stable_rank(p, g, action, stall_ctx,
                                   &state.common_play_stacks);
       // §1f for a rank clue: a new slot-1 call is the special suit's playable.
       pin_special_rank(p, g, action);
     } else {
-      // A colour play reveal outranks the leftmost newly touched card only when
-      // it is one on the stacks EVERY seat knows (v18.20.0) -- the same frame in
-      // every world below, since the rule is about global knowledge.
-      out = reactor0::stable_colour(p, g, action, stall_ctx, reveal_frame);
+      // A colour play reveal outranks the leftmost newly touched card when it is
+      // one on the stacks the giver and the receiver share (v22.5.0, the user's
+      // ruling, reversing v18.20.0's every-seat frame): the receiver is the one
+      // who must see the reveal. Replay 2022792 T30: yagami_black's Green
+      // re-touched yagami_blue's clued o2, the g3, with green on 2 for the pair;
+      // yagami_green had green on 1, so on the common stacks blue read the newly
+      // touched o26 instead.
+      out = reactor0::stable_colour(p, g, action, stall_ctx, &frame);
       // §1f, applied to whatever the ladder called.
       pin_rainbowy_colour(p, g, action);
     }
@@ -606,6 +608,30 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
 
   const Game before_ladder = game;
   std::optional<ClueInterp> interp = run_ladder(game, view);
+  auto newly_called = [&](const Game& g) {
+    std::vector<int> out;
+    for (int o : g.state.hands[action.target]) {
+      if (g.meta[o].status == CardStatus::CALLED_TO_PLAY &&
+          prev.meta[o].status != CardStatus::CALLED_TO_PLAY) {
+        out.push_back(o);
+      }
+    }
+    return out;
+  };
+  // Whether a newly touched card could, on what the clue publicly says of it, be a
+  // direct play on the pair's view. A seat that cannot see it reads that call
+  // first, so a reveal found only in a world must not answer a seat that refused it
+  // by sight (below, and v22.1.0's block).
+  auto newly_touched_could_play_on_view = [&]() {
+    const State on_view = before_ladder.state.with_stacks(view);
+    for (int o : action.list_) {
+      if (prev.state.deck[o].clued) continue;
+      for (Identity i : before_ladder.common.thoughts[o].possible) {
+        if (on_view.is_playable(i)) return true;
+      }
+    }
+    return false;
+  };
 
   // §1e, v16.24.0: the ladder read the call in ONE frame -- the minimum across the
   // worlds of the pair's hole cards -- and in each of those worlds it names a
@@ -644,10 +670,24 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
     if (worlds.size() > 1) {
       // Every world that makes the call, keeping the first one's reading.
       std::vector<const OpenWorld*> calling;
+      // A colour REVEAL found only in a world stands only when no newly touched
+      // card could be a direct play on the pair's view (v22.5.0). Otherwise the
+      // seat that cannot see that card reads the direct call on its first run and
+      // never reaches the worlds, while a seat that sees it refused it and finds
+      // the reveal: giver and receiver split (self-play 6 Suits seed 40 T40).
+      const bool direct_first = action.clue.kind == ClueKind::COLOUR &&
+                                newly_touched_could_play_on_view();
       for (const OpenWorld* w : worlds) {
         Game g = before_ladder;
         auto i2 = run_ladder(g, w->state.play_stacks);
         if (!called_something(g)) continue;
+        if (direct_first) {
+          bool reveal = true;
+          for (int o : newly_called(g)) {
+            if (!prev.state.deck[o].clued) reveal = false;
+          }
+          if (reveal) continue;
+        }
         if (calling.empty()) {
           game = std::move(g);
           interp = i2;
@@ -715,12 +755,12 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       }
     }
   }
-  // A COLOUR REVEAL THAT IS GLOBAL IN SOME WORLDS (v22.1.0, the user's ruling). The
-  // reveal must be global (v18.20.0), and on the stacks every seat knows it may fail
-  // only because a hole card is unnamed. If a world exists in which the colour clue
-  // promises a playable, that is assumed: the shared worlds of every seat's hole
-  // cards are tried with each world's stacks as the reveal frame, and the hole
-  // collapses, for every seat, onto those that make the call (ASCR, §1e).
+  // A COLOUR REVEAL IN SOME WORLDS (v22.1.0, the user's ruling). On the pair's stacks
+  // the reveal (v22.5.0) may fail only because a hole card is unnamed. If a world
+  // exists in which the colour clue promises a playable, that is assumed: the shared
+  // worlds of every seat's hole cards are tried, each raising the pair's view to the
+  // world's stacks, and the hole collapses, for every seat, onto those that make the
+  // call (ASCR, §1e).
   //
   // Except when the called card is TRASH in a world that does not make the call: the
   // clue may then be asking for the dupe to be thrown, and the collapse waits for the
@@ -730,8 +770,27 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   // and newly touched o7 (the g5). will-bot69's o13 `{g1,b1}` was the g1, so green
   // was on 0 globally and every seat read a stall. In the world where o13 was the g1
   // the Green is a reveal of the g2: o13 collapses to the g1, and o6 is called.
-  if (!called_something(game) && action.clue.kind == ClueKind::COLOUR &&
-      action.giver != action.target) {
+  //
+  // A reveal already called on the pair's view (v22.5.0) is collapsed the same way
+  // when the common stacks do not make it: every seat reads the reveal, so every
+  // seat learns the hole card under it. The pair's frame may rest on the worlds of
+  // our own hole cards (§1e), whose narrowing is otherwise private.
+  bool reveal_ahead_of_common = false;
+  if (action.clue.kind == ClueKind::COLOUR && action.giver != action.target &&
+      called_something(game)) {
+    const std::vector<int> called = newly_called(game);
+    bool reveal = true;
+    for (int o : called) {
+      if (!prev.state.deck[o].clued) reveal = false;
+    }
+    if (reveal) {
+      Game g = before_ladder;
+      run_ladder(g, before_ladder.state.common_play_stacks);
+      reveal_ahead_of_common = newly_called(g) != called;
+    }
+  }
+  if ((!called_something(game) || reveal_ahead_of_common) &&
+      action.clue.kind == ClueKind::COLOUR && action.giver != action.target) {
     const State& bs = before_ladder.state;
     std::vector<int> everyone;
     for (int p = 0; p < bs.num_players; ++p) everyone.push_back(p);
@@ -774,19 +833,13 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
           if (reversed ? v < frame[k] : v > frame[k]) frame[k] = v;
         }
         Game g = before_ladder;
-        auto i2 = run_ladder(g, frame, &w->state.play_stacks);
+        auto i2 = run_ladder(g, frame);
         if (!called_something(g)) continue;
         // Worlds that call DIFFERENT cards read the clue different ways, and there is
         // no one reading to assume: nothing collapses (replay 2014561 T18: where blue
         // was on 2 the Blue revealed o18's b3, where it was on 3 -- the truth -- it
         // called the newly touched b4).
-        std::vector<int> called_here;
-        for (int o : g.state.hands[action.target]) {
-          if (g.meta[o].status == CardStatus::CALLED_TO_PLAY &&
-              prev.meta[o].status != CardStatus::CALLED_TO_PLAY) {
-            called_here.push_back(o);
-          }
-        }
+        const std::vector<int> called_here = newly_called(g);
         if (!first) {
           first = std::move(g);
           first_interp = i2;

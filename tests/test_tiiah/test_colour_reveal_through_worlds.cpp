@@ -1,11 +1,11 @@
-// A COLOUR REVEAL THAT IS GLOBAL IN SOME WORLDS (tiiah/CONVENTION.md §1b, v22.1.0,
-// the user's ruling; replay 2021427 T13).
+// A COLOUR REVEAL IN SOME WORLDS (tiiah/CONVENTION.md §1b, v22.1.0, the user's
+// ruling; replay 2021427 T13).
 //
-// A colour play reveal must be global (v18.20.0). When it fails on the stacks every
-// seat knows only because a hole card is unnamed, and some world of the hole cards
-// makes it a reveal, that world is assumed: the call stands and the hole collapses
-// for every seat. Unless the called card is trash in another world -- then the clue
-// may be asking for a dupe to be thrown, and the collapse waits (v18.12.0).
+// A colour play reveal is judged on the pair's stacks (v22.5.0). When it fails there
+// only because a hole card is unnamed, and some world of the hole cards makes it a
+// reveal, that world is assumed: the call stands and the hole collapses for every
+// seat. Unless the called card is trash in another world -- then the clue may be
+// asking for a dupe to be thrown, and the collapse waits (v18.12.0).
 #include <gtest/gtest.h>
 
 #include <vector>
@@ -93,7 +93,7 @@ int cathys_g2(const Game& g) {
 
 }  // namespace
 
-// Our `{g1,b1}` went in. On the stacks every seat knows green is on 0, so the Green
+// Our `{g1,b1}` went in. On the stacks we can name green is on 0, so the Green
 // is no reveal there, and the g4 cannot be a direct play. Where our card was the g1
 // it reveals the g2: that world is assumed, our card is the g1 for every seat, and
 // the g2 is called.
@@ -108,11 +108,13 @@ TEST(TiiahColourRevealThroughWorlds, TheRevealCallsAndTheHoleCollapses) {
 
 // Control (2014076's shape): our `{g1,b1}` and `{g2,r1}` went in. Where they were the
 // g1 and the r1 the Green reveals the g2; where they were the g1 and the g2, Cathy's
-// g2 is trash, and the clue may be asking for it to be thrown. Nothing collapses.
+// g2 is trash, and the clue may be asking for it to be thrown. The call stands, as
+// §1e's (v22.5.0: the reveal holds on that world's pair frame), but nothing
+// collapses: that waits for the holder (v18.12.0).
 TEST(TiiahColourRevealThroughWorlds, TrashInAnotherWorldDefers) {
   Game g = position({{"g1", "b1"}, {"g2", "r1"}});
   const int g2 = cathys_g2(g);
   ASSERT_GE(g2, 0);
-  EXPECT_NE(g.meta[g2].status, CardStatus::CALLED_TO_PLAY);
+  EXPECT_EQ(g.meta[g2].status, CardStatus::CALLED_TO_PLAY);
   EXPECT_EQ(g.state.common_play_stacks[2], 0) << "nothing collapsed";
 }
