@@ -96,7 +96,7 @@ cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         357 tests,  7 s
 build/hanabi_tests.exe            # convention-neutral    400 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
-build/hanabi_decision_tests.exe   # decision quality      233 tests,  0.7 s
+build/hanabi_decision_tests.exe   # decision quality      234 tests,  0.7 s
 build/hanabi_tiiah_tests.exe      # Throw It in a Hole    281 tests,  0.3 s
 ```
 
@@ -130,7 +130,9 @@ Two rules:
   user says otherwise** (the user's rule, from v22.9.0). Run base and candidate on
   seeds 1–200 of that one variant (200 games, not 300, from v22.10.0; the user's
   call) -- not plain 6 Suits, and not the replay's own variant -- and save
-  `results/<version>.md` on it (see *Self-play diagnostics*).
+  `results/<version>.md` on it (see *Self-play diagnostics*). Report each arm's
+  mean score, strikeouts, **max scores (30/30)** and cards ever read wrongly, base
+  against candidate, in the summary and the commit message.
 - On Windows a running test binary is locked, so a rebuild cannot relink it
   while it is executing. Let the run finish first (see README §5.7).
 

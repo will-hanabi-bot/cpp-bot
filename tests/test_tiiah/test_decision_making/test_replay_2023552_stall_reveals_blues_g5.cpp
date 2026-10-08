@@ -1,15 +1,16 @@
-// TIIAH replay 2023552 (Throw It in a Hole & Omni, 5 Suits; buckets {r,y} {g,b} {o}).
-// Seats: 0 yagami_black (human), 1 yagami_green (us), 2 yagami_blue.
-// (tiiah/CONVENTION.md §1c, v22.7.0, the user's ruling.)
+// TIIAH replay 2023552 (Throw It in a Hole & Omni, 5 Suits), yagami_green at T53
+// (tiiah/CONVENTION.md §1c, v22.10.0, the user's call). Seats: 0 yagami_black,
+// 1 yagami_green (us), 2 yagami_blue.
 //
-// T53, one card left: blue (our Bob) holds a known b5 and black nothing, the reverse
-// position. Once the deck is nearly out a clue to Bob is a stable stall, not a
-// reverse reactive, so clues to blue are candidates again. We no longer play o47,
-// the b2 (live, a misplay: our view had blue on 1 after the T31 misread), and clue
-// blue. (Which clue reveals the g5 is v22.10.0's: our model of blue credits blue
-// with our hole cards -- test_replay_2023552_stall_reveals_blues_g5.cpp.)
+// One card left. Blue holds the g5 (o48) and the o2 (o42, omni), and reads both as
+// `{g5,o2}`: blue watched our two hole cards, the r5 and the y4, land, so it knows
+// its o32 is the b5. Our model of blue now books the r5 on our stacks as a spent copy
+// too, so a clue touching o42 but not o48 is newly useful: blue learns o48 is the g5.
+// Until v22.10.0 our model read o48 `{g5,b5}` and we gave a rank 5 that revealed
+// nothing.
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <variant>
 
 #include "hanabi/basics/action.h"
@@ -21,7 +22,7 @@
 
 // Variant: Throw It in a Hole & Omni (5 Suits). 3 players, our_player_index=1.
 
-TEST(TiiahReplay2023552, LateDeckClueToBobIsAStall) {
+TEST(TiiahReplay2023552, StallRevealsBluesG5) {
   // Reconstruct exactly the Game the live bot saw at turn 53.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
@@ -2233,11 +2234,18 @@ TEST(TiiahReplay2023552, LateDeckClueToBobIsAStall) {
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   hanabi::PerformAction action = game.take_action();
-  EXPECT_FALSE(std::holds_alternative<hanabi::PerformPlay>(action)) << "not the b2";
-  const bool clue_to_blue =
-      (std::holds_alternative<hanabi::PerformColour>(action) &&
-       std::get<hanabi::PerformColour>(action).target == 2) ||
-      (std::holds_alternative<hanabi::PerformRank>(action) &&
-       std::get<hanabi::PerformRank>(action).target == 2);
-  EXPECT_TRUE(clue_to_blue) << "a stall to blue";
+  int target = -1;
+  hanabi::ClueKind kind = hanabi::ClueKind::RANK;
+  int value = 0;
+  if (const auto* r = std::get_if<hanabi::PerformRank>(&action)) {
+    target = r->target, value = r->value;
+  } else if (const auto* c = std::get_if<hanabi::PerformColour>(&action)) {
+    target = c->target, kind = hanabi::ClueKind::COLOUR, value = c->value;
+  }
+  ASSERT_EQ(target, 2) << "a clue to blue";
+  const auto touched = game.state.clue_touched(game.state.hands[2], kind, value);
+  const auto has = [&](int o) {
+    return std::find(touched.begin(), touched.end(), o) != touched.end();
+  };
+  EXPECT_TRUE(has(42) && !has(48)) << "touches the o2 and not the g5, so blue can tell them apart";
 }

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "hanabi/basics/game.h"
+#include "hanabi/basics/player_elim.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/conventions/reactor/interpret_reaction.h"
 #include "hanabi/conventions/reactor/interpret_reactive.h"
@@ -1520,10 +1521,81 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
 // will-bot69's n3. Rank 1's bucket half added the r5, so will-bot69 would have
 // read {r5,n3}; the Red did not touch the card, which ruled the r5 out, and it
 // read {n3}. Tied everywhere else, the default tiebreak took the Rank 1.
+namespace {
+
+// OUR MODEL OF A PARTNER CREDITS THEM WITH OUR HOLE CARDS (v22.10.0, was TODO 61, the
+// user's call; replay 2023552 T53). `players[p]` counts copies off the cards we can
+// name, and our own unnamed hole cards are not among them -- but the partner watched
+// them land and knows the true stacks, which hold at least everything on ours. So
+// before asking "does this clue leave them knowing a card is worth keeping", every
+// identity on OUR stacks that no named card accounts for is booked as a spent copy in
+// their model, and the count re-run. 2023552 T53: green's o27 and o35 were the r5 and
+// the y4 in some order, both down on green's stacks; blue knew its o32 was then the
+// b5 and read o48 `{g5,o2}`, but green's model of blue read `{g5,b5}`, all useful, so
+// no clue looked newly useful and green gave a rank 5 that revealed nothing.
+Player with_stacks_spent(const Game& game, Player pl) {
+  const State& s = game.state;
+  bool added = false;
+  for (int k = 0; k < static_cast<int>(s.play_stacks.size()); ++k) {
+    const bool rev = s.variant->suits[k].suit_type.reversed;
+    for (int r = 1; r <= 5; ++r) {
+      const bool down = rev ? (s.play_stacks[k] <= r && s.play_stacks[k] <= 5)
+                            : r <= s.play_stacks[k];
+      if (!down) continue;
+      const Identity id{k, r};
+      auto& certains = pl.certain_map[id.to_ord()];
+      // A played card already accounts for it: a certain entry off every hand.
+      auto in_a_hand = [&s](int order) {
+        for (const auto& hand : s.hands) {
+          if (std::find(hand.begin(), hand.end(), order) != hand.end()) return true;
+        }
+        return false;
+      };
+      const bool accounted = std::any_of(certains.begin(), certains.end(),
+                                         [&](const MatchEntry& e) {
+                                           return e.order < 0 || !in_a_hand(e.order);
+                                         });
+      if (accounted) continue;
+      if (static_cast<int>(certains.size()) >= s.card_count[id.to_ord()]) continue;
+      certains.push_back(MatchEntry{-2, -1});  // the copy on the stack
+      added = true;
+    }
+  }
+  if (!added) return pl;
+  for (int o : s.hands[pl.player_index]) pl.dirty.insert(o);
+  return card_elim(std::move(pl), s).second;
+}
+
+void credit_partner_with_our_hole(const Game& game, const Game& hypo,
+                                  reactor0::ClueCandidate& c) {
+  const State& s = game.state;
+  const int me = s.our_player_index;
+  const int p = c.action.target;
+  if (p == me || p < 0 || p >= s.num_players) return;
+  auto all_useful = [&s](const Thought& t) {
+    const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+    if (set.is_empty()) return false;
+    return set.forall([&s](Identity i) { return !s.is_basic_trash(i); });
+  };
+  const Player before = with_stacks_spent(game, game.players[p]);
+  const Player after = with_stacks_spent(hypo, hypo.players[p]);
+  bool newly = false;
+  for (int o : s.hands[p]) {
+    if (all_useful(after.thoughts[o]) && !all_useful(before.thoughts[o])) {
+      newly = true;
+      break;
+    }
+  }
+  c.newly_useful = newly;
+}
+
+}  // namespace
+
 void annotate_candidate(const Game& game, const Game& hypo,
                         reactor0::ClueCandidate& c) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return;
+  credit_partner_with_our_hole(game, hypo, c);
   if (c.reading.shape != reactor0::ClueShape::REACTIVE_PLAY) return;
   const int react_order = c.reading.reacter_side.order;
   const int target = c.reading.receiver_side.order;

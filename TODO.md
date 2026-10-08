@@ -1499,19 +1499,3 @@ own way:
 
 Both change behaviour, so the user chose to leave them for a separate change
 (human diagnostic 2018541).
-
-## 61. `[tiiah]` Our model of a partner does not credit them with our own hole cards
-
-When we judge what a clue tells a partner, we read their empathy, `players[p]`. That
-is built from common knowledge, so it leaves out our own unnamed hole cards, though
-the partner watched them land and can name them. Replay 2023552 T53 (v22.7.0):
-- green's two hole cards were the r5 and the y4, in some order, so blue knew its o32
-  was the b5;
-- green's model of blue kept o32 `{r5,b5}` and read o48 `{g5,b5}`, all useful. So no
-  clue looked `newly_useful`, and green gave a rank 5 that revealed nothing;
-- blue really read o48 `{g5,o2}`, and a clue touching only its omni o42 (any rank 1-4)
-  would have shown the g5.
-
-The fix is to read the partner's empathy in each world of our hole cards (they know
-which world they are in), and take a clue as newly useful only if it is so in every
-world. Planned as v22.10.0, the user's call.
