@@ -480,7 +480,15 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       // A clue to Bob that FIXES his dead standing call is the fix below, not a
       // reverse reactive (v18.10.0): the call that puts the table in the reverse
       // position is the very one the fix is for. Replay 2013726 T5.
-      if (action.target == bob && !hanabi::clue_would_fix_dead_call(pos, action)) {
+      // ...nor once the deck is NEARLY OUT (v22.7.0, the user's ruling): fewer
+      // cards left than seats, and a clue to Bob is a stable stall, read with the
+      // stall context below. Replay 2023552 T53 (one card left): blue held a known
+      // b5 and black nothing, so every clue to blue read as a reverse reactive with
+      // no pairing -- a MISTAKE -- and green could not give the stall that showed
+      // blue its g5. Not on the shared pace: human diagnostic 2013726 T30 had it
+      // low with seven cards left, and its Brown is a reverse reactive.
+      if (action.target == bob && !hanabi::clue_would_fix_dead_call(pos, action) &&
+          !hanabi::reactor::variants::reverse_reactive_off_late(pos)) {
         return interpret_reactive(pos, game, action, /*reacter=*/cathy,
                                   /*receiver=*/bob);
       }

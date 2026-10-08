@@ -175,7 +175,14 @@ bool reverse_reactive_position(const Game& prev, int giver) {
 
 bool reverse_reactive(const Game& prev, int giver, int target) {
   if (!reverse_reactive_position(prev, giver)) return false;
+  // Not once the deck is nearly out (v22.7.0): there a clue to Bob is a stable
+  // stall. The clue to Cathy stays stable as before.
+  if (reverse_reactive_off_late(prev)) return false;
   return target == prev.state.next_player_index(giver);
+}
+
+bool reverse_reactive_off_late(const Game& prev) {
+  return prev.state.cards_left < prev.state.num_players;
 }
 
 bool reverse_reactive(const Game& prev, const ClueAction& action) {

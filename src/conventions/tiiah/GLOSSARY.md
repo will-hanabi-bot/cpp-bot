@@ -427,10 +427,12 @@ does not — the *reverse-reactive position* (v18.3.0; a touch-known play only f
 v18.0.0 to v18.2.0) — a clue to **Bob** is reactive, with
 **Cathy** reacting and Bob receiving, and a clue to **Cathy** is stable. Outside
 that position reactor0's positional rule stands: a clue to Cathy is the reactive
-one and Bob answers it. Not the same as reactor's rule, where a clue to Bob makes
+one and Bob answers it. Once the deck is nearly out (fewer cards left than seats)
+a clue to Bob in the position is a stable stall instead (v22.7.0; replay 2023552
+T53). Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:158-183`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:158-186`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch

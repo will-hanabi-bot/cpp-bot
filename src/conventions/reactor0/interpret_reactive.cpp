@@ -1055,8 +1055,10 @@ bool dispatch_is_reactive(const Game& game, const ClueAction& action) {
   if (s.variant->throw_it_in_a_hole &&
       variants::reverse_reactive_position(game, action.giver)) {
     // ...except a clue to Bob that fixes his dead standing call (v18.10.0), which
-    // the reading side takes as the fix.
-    return action.target == bob && !hanabi::clue_would_fix_dead_call(game, action);
+    // the reading side takes as the fix, and any clue once the deck is nearly out
+    // (v22.7.0), which is a stable stall there.
+    return action.target == bob && !hanabi::clue_would_fix_dead_call(game, action) &&
+           !variants::reverse_reactive_off_late(game);
   }
   // Role inversion (v18.2.0): Bob holds a standing call and Cathy does not, so a
   // clue to Cathy is stable too. The reading side makes the same test.

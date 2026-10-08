@@ -105,4 +105,11 @@ bool reverse_reactive_position(const Game& prev, int giver);
 bool reverse_reactive(const Game& prev, int giver, int target);
 bool reverse_reactive(const Game& prev, const ClueAction& action);
 
+// The deck is nearly out -- fewer cards left than seats -- and a clue to Bob in the
+// reverse position is a stable stall rather than a reverse reactive (v22.7.0, the
+// user's ruling; replay 2023552 T53). Public, so every seat agrees; not the shared
+// pace, which human diagnostic 2013726 T30 shows can be low with a reverse
+// reactive still the right reading.
+bool reverse_reactive_off_late(const Game& prev);
+
 }  // namespace hanabi::reactor::variants

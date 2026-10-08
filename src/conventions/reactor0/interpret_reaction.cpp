@@ -231,9 +231,16 @@ SlotElims slot_elims(const Game& prev, const ReactorWC& wc, int slot,
       });
     });
   };
+  // ...and so is "directly playable" itself (v22.7.0): a slot passed over says it
+  // was not a target on the frame every seat WALKED, and an identity playable only
+  // on our own stacks never was one. Replay 2023552 T18-T20: green's o25, the b2,
+  // lost the b2 because green knew blue was on 1 (black's unnamed b1); on the
+  // shared view blue was on 0, the b2 one away, and the walk could not have paired
+  // it. At T31 green then read o25 as the g5 alone.
+  const State& playable_on = hole ? shared : s;
   out.direct = IdentitySet::create(
       [&](Identity i) {
-        if (!s.is_playable(i)) return false;
+        if (!playable_on.is_playable(i)) return false;
         const bool reacter_pitches = variants::is_inverted_id(s, i) != even;
         if (!(reacter_pitches ? pitchable : chuckable)) return false;
         return legally_paired(i);
