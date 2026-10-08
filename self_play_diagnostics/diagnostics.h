@@ -125,6 +125,8 @@ class Diagnostics {
   int div_pair_turns_ = 0;    // ...or some pair view differed between its members
   std::map<std::tuple<std::string, std::string, int, int, int>, int> seen_;  // dedup
   std::vector<Issue> issues_;
+  // Cards whose COMMON reading the seats currently hold differently (onsets only).
+  std::map<int, bool> thought_div_;
 };
 
 }  // namespace hanabi::selfplay

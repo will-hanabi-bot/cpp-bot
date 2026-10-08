@@ -240,6 +240,39 @@ void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
   game.reaction_records.push_back(std::move(r));
 }
 
+std::optional<std::pair<int, std::optional<ReactorWC>>> promote_displaced_reaction(
+    Game& game, int reacter) {
+  if (!game.state.variant->throw_it_in_a_hole) return std::nullopt;
+  for (const auto& p : game.pending_reactions) {
+    if (p && p->reacter == reacter) return std::nullopt;  // it owes a live one
+  }
+  auto& dr = game.displaced_reactions;
+  for (auto it = dr.rbegin(); it != dr.rend(); ++it) {
+    if (it->reacter != reacter) continue;
+    const ReactorWC w = *it;
+    dr.erase(std::next(it).base());
+    if (w.receiver < 0 || w.receiver >= static_cast<int>(game.pending_reactions.size())) {
+      return std::nullopt;
+    }
+    auto stash = std::make_pair(w.receiver, game.pending_reactions[w.receiver]);
+    game.pending_reactions[w.receiver] = w;
+    return stash;
+  }
+  return std::nullopt;
+}
+
+void restore_displaced_slot(Game& game,
+                            const std::optional<std::pair<int, std::optional<ReactorWC>>>& stash) {
+  if (!stash) return;
+  auto& slot = game.pending_reactions[stash->first];
+  if (!slot) {
+    slot = stash->second;  // the promoted entry was consumed: the newer one returns
+  } else if (stash->second) {
+    game.displaced_reactions.push_back(*slot);  // not consumed: keep both
+    slot = stash->second;
+  }
+}
+
 bool confirm_reverse_reactive(Game& game, int actor, int order, bool was_play) {
   if (!game.state.variant->throw_it_in_a_hole) return false;
   if (game.waiting.empty()) return false;
@@ -426,6 +459,32 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   game.waiting.push_back(wc);
   if (static_cast<int>(game.pending_reactions.size()) != state.num_players) {
     game.pending_reactions.assign(state.num_players, std::nullopt);
+  }
+  // Keep a still-owed reaction from another reacter that this one displaces (v22.11.0).
+  // Self-play seed 2 (TIIAH & Black, 6 Suits): T3's reactive to Bob, Alice
+  // reacting, was overwritten by T4's reverse reactive to the same receiver; when
+  // Alice played her reaction card at T7 the team reading no longer found it, the
+  // giver and the reacter moved the shared view, and the receiver did not.
+  {
+    auto& prior = game.pending_reactions[receiver];
+    if (prior && prior->reacter != reacter) {
+      // The receiver's own seat never knew the reacter's card (`react_order` -1):
+      // any next play or discard of the reacter's settles it.
+      const auto& rh = state.hands[prior->reacter];
+      if (prior->react_order < 0 ||
+          std::find(rh.begin(), rh.end(), prior->react_order) != rh.end()) {
+        game.displaced_reactions.push_back(*prior);
+      }
+    }
+    // Prune entries whose card has left its reacter's hand.
+    auto& dr = game.displaced_reactions;
+    dr.erase(std::remove_if(dr.begin(), dr.end(),
+                            [&](const ReactorWC& w) {
+                              if (w.react_order < 0) return false;
+                              const auto& h = state.hands[w.reacter];
+                              return std::find(h.begin(), h.end(), w.react_order) == h.end();
+                            }),
+             dr.end());
   }
   game.pending_reactions[receiver] = wc;
 
@@ -1647,6 +1706,10 @@ std::optional<std::pair<IdentitySet, int>> reaction_team_reading(const Game& gam
   if (!game.waiting.empty() && answers(game.waiting.front())) wc = &game.waiting.front();
   for (const auto& pr : game.pending_reactions) {
     if (!wc && pr && answers(*pr)) wc = &*pr;
+  }
+  // ...or one a later reactive to the same receiver displaced (v22.11.0).
+  for (const auto& dw : game.displaced_reactions) {
+    if (!wc && answers(dw)) wc = &dw;
   }
   if (!wc) return std::nullopt;
   if (wc->receiver == s.our_player_index) return std::nullopt;  // it reads it itself

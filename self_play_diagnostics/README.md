@@ -113,6 +113,7 @@ issue is reported once, at its first occurrence per (class, kind, seat, card).
 | 5 | `strike` | each strike, with the striker's reading, who called the card, which teammates saw the card was dead, the striker's belief and shared rank for the suit against the true one, and whether the deck had run out |
 | div | `common`, `pair`, `call` | informational, the first time in a game that the seats disagree about the common view, one pair view between its two members, or which cards are called and what the common reading of a called card is (the receiver of a pending reactive is exempt for the reacter's hand) |
 | onset | `common`, `pair` | informational, every action after which a view that agreed across seats no longer does, with the action that did it (and for a play or miss, every seat's common reading of the card beforehand, whether it was the reacter's urgent call, and every seat's shared view afterwards); `analysis` groups these to find where divergence starts |
+| div | `thought` | informational, the ONSET of a split in a card's COMMON reading between seats (every card in a hand, every turn), with the action that made it; the shared views' splits are downstream of these (v22.11.0) |
 | stat | `divergence` | one per game: how many actions left the common views, or some pair view, in disagreement |
 | stat | `called_play` | every play of a card its holder held `CALLED_TO_PLAY`: whether it landed, whether it was the reacter's urgent call, whether the holder's reading held the truth, and how many cards stood superposed (all, and the holder's own) |
 

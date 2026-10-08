@@ -121,6 +121,15 @@ void record_reaction(const Game& prev, Game& game, const ReactorWC& wc,
 // outside Throw It in a Hole.
 bool confirm_reverse_reactive(Game& game, int actor, int order, bool was_play);
 
+// A reaction a newer reactive to the same receiver displaced (`Game::displaced_
+// reactions`, v22.11.0): put back in its receiver's slot when its reacter plays or
+// discards, so the deferred path reads it; `restore_displaced_slot` returns the
+// newer entry afterwards.
+std::optional<std::pair<int, std::optional<ReactorWC>>> promote_displaced_reaction(
+    Game& game, int reacter);
+void restore_displaced_slot(Game& game,
+                            const std::optional<std::pair<int, std::optional<ReactorWC>>>& stash);
+
 // THE TEAM's reading of a reacter's blind play, predicted at the GIVER's and the
 // REACTER's seats (v17.2.0): what the receiver will be able to name at reaction
 // time -- a proven finesse's connector, else the reacter's bucket on the shared

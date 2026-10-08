@@ -973,7 +973,7 @@ std::optional<ClueInterp> stable_rank(const Game& prev, Game& game,
 
   // The orange-only reading sits BELOW the play reveal of priority 2. When the
   // clue pins a previously-clued orange to a playable one, the reveal already
-  // says everything — empathy carries the chuck, since `decide.cpp:950-959`
+  // says everything — empathy carries the chuck, since `decide.cpp:958-967`
   // routes an empathy-pinned playable orange through PerformDiscard. Claiming
   // it at priority 1 would also trip the `unnecessary_focus` test below, which
   // counts the focus's OWN pinned identity as "visible elsewhere"

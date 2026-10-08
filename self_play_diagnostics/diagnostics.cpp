@@ -255,6 +255,35 @@ void Diagnostics::after_action(const Sim& sim, const Outcome& o) {
 
 void Diagnostics::note_onsets(const Sim& sim, const Outcome& o, int turn) {
   if (!variant_->throw_it_in_a_hole) return;
+  // The COMMON reading of every card in a hand, which by definition is one thing:
+  // the onset of a split between seats (class "div", kind "thought"), with the
+  // action that made it. The shared view's splits are downstream of these.
+  {
+    const TrueState& t = sim.truth();
+    for (const auto& hand : t.hands) {
+      for (int ord : hand) {
+        std::vector<std::string> sets;
+        for (int s = 0; s < np_; ++s) {
+          const Game& g = sim.seat(s);
+          if (ord >= static_cast<int>(g.common.thoughts.size())) { sets.push_back("?"); continue; }
+          sets.push_back(set_str(g.common.thoughts[ord].possibilities()));
+        }
+        const bool div = std::any_of(sets.begin(), sets.end(),
+                                     [&](const std::string& x) { return x != sets[0]; });
+        const bool was = thought_div_[ord];
+        thought_div_[ord] = div;
+        if (!div || was) continue;
+        std::string kind = o.kind == Outcome::Kind::CLUE            ? "clue"
+                           : o.kind == Outcome::Kind::DISCARD       ? "discard"
+                           : o.kind == Outcome::Kind::PLAY_LANDED   ? "play"
+                                                                    : "miss";
+        add(Issue{"div", "thought", turn, t.holder[ord], ord,
+                  json{{"sets", sets}, {"truth", id_str(t.deck[ord])},
+                       {"action", kind}, {"action_actor", o.actor},
+                       {"action_order", o.order}, {"disagree", cur_disagree_}}});
+      }
+    }
+  }
   // The TEAM's set for every hole card, which the shared view is built from: the
   // name the team gave it, else the set the shared view keeps for a card we
   // settled privately, else its superposition. One thing at every seat.

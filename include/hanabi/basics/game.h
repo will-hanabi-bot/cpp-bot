@@ -329,6 +329,13 @@ class Game {
   // and a giver's reactive clue always has the same receiver, so a repeat from
   // the same giver simply replaces its own entry.
   std::vector<std::optional<ReactorWC>> pending_reactions;
+  // THROW IT IN A HOLE (v22.11.0): the reverse reactive breaks that "one per seat"
+  // -- a receiver can be owed a reaction by Cathy (reverse) while still owed one by
+  // Bob (ordinary) -- so an entry a newer reactive to the same receiver displaces,
+  // while its reacter's card is still called, is kept here. Read only to name the
+  // reaction's card for the team when it is finally played (`reaction_team_reading`),
+  // which is what keeps the shared view one thing at every seat.
+  std::vector<ReactorWC> displaced_reactions;
 
   // THROW IT IN A HOLE: a clue this seat could not read yet (v20.12.0, the user's
   // ruling; tiiah/CONVENTION.md §1c). The clue would be a reverse reactive with us

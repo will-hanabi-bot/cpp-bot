@@ -592,10 +592,14 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   if (is_reactor0_family(convention)) {
     if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
       hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
-    } else if (hanabi::reactor0::resolve_deferred_reaction(
-                   prev, *this, action.player_index_v, action.order,
-                   /*was_play=*/false)) {
-      hanabi::reactor0::enforce_call_invariants(*this);
+    } else {
+      const auto stash = hanabi::tiiah::promote_displaced_reaction(*this, action.player_index_v);
+      if (hanabi::reactor0::resolve_deferred_reaction(
+              prev, *this, action.player_index_v, action.order,
+              /*was_play=*/false)) {
+        hanabi::reactor0::enforce_call_invariants(*this);
+      }
+      hanabi::tiiah::restore_displaced_slot(*this, stash);
     }
   }
 
@@ -686,6 +690,9 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
   if (is_reactor0_family(convention)) {
     ReactorWC deferred;
     deferred.receiver = -1;
+    const auto stash = waiting.empty() || waiting.front().reacter != action.player_index_v
+                           ? hanabi::tiiah::promote_displaced_reaction(*this, action.player_index_v)
+                           : std::nullopt;
     if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
       hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
     } else if (hanabi::reactor0::resolve_deferred_reaction(
@@ -705,6 +712,7 @@ void Game::interpret_play(const Game& prev, const PlayAction& action) {
         hanabi::reactor0::enforce_call_invariants(*this);
       }
     }
+    hanabi::tiiah::restore_displaced_slot(*this, stash);
   }
 
   if (!waiting.empty()) {
