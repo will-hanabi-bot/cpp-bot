@@ -128,11 +128,29 @@ struct BucketReading {
   std::vector<OpenWorld> worlds;
 };
 
+//
+// `must_play`: the DIRECT target the pairing was walked to (v23.1.0, the user's
+// ruling). It plays on the frame, so it is the target, and a world in which it does
+// not play is not one the clue speaks of -- the reading ranges over the worlds where
+// it still plays (all of them, should none). The opposite of ASCR, which keeps the
+// worlds that make a pairing work: here the pairing already works on the frame, and
+// a bucket reading that exists only where the target is dead would collapse the hole
+// to the one world the clue rules out. Replay 2024288 T45: o38 was `{y2,g5}`, the y2
+// target played on the frame (yellow 1), and the green bucket read `{g5}` only where
+// o38 was the y2 -- where the y2 target was already down.
 BucketReading bucket_over_worlds(const Game& game, const State& base, int holder,
                                  int bucket, int except_order = -1,
-                                 bool shared = false) {
+                                 bool shared = false,
+                                 std::optional<Identity> must_play = std::nullopt) {
   BucketReading out;
   out.worlds = open_worlds(game, base, holder, /*cap=*/64, except_order, shared);
+  if (must_play) {
+    std::vector<OpenWorld> playing;
+    for (const OpenWorld& w : out.worlds) {
+      if (w.state.is_playable(*must_play)) playing.push_back(w);
+    }
+    if (!playing.empty()) out.worlds = std::move(playing);
+  }
   for (std::size_t w = 0; w < out.worlds.size(); ++w) {
     const IdentitySet here = IdentitySet::create([&](Identity i) {
       auto b = bucket_of(*game.state.variant, i.suit_index);
@@ -908,7 +926,8 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
             reacter == state.our_player_index
                 ? (state.play_evidence.empty() ? own : own.with_band(state.play_evidence))
                 : own.with_band(state.evidence_known_to_both(action.giver, reacter));
-        const auto br = bucket_over_worlds(game, world_base, reacter, from);
+        const auto br = bucket_over_worlds(game, world_base, reacter, from, -1,
+                                           /*shared=*/false, target.id);
         const IdentitySet& allowed = br.allowed;
         const auto& worlds = br.worlds;
         const auto& support = br.support;
