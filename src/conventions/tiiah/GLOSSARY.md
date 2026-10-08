@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1438-1485`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1514-1561`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -284,12 +284,12 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:1090-1125`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:1166-1201`. CONVENTION.md §1d.
 
 Since v22.0.0 it is also the **only finesse that may be given**, and it decides the
 receiver's own reading. A proven finesse reads as the card after the reacter's. Any
 other pairing reads as the bucket half alone (`keep_convention_half`,
-`interpret_reactive.cpp:1040-1051`), never the union of the two halves.
+`interpret_reactive.cpp:1116-1127`), never the union of the two halves.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -366,7 +366,10 @@ receiver's one-away cards, leftmost first, are tried in the worlds of the hole
 cards. The first that plays outright in some world, with a reaction valid there,
 is the pairing, and the worlds collapse to those (CONVENTION.md §1d, v19.3.0;
 replay 2017491). Since v20.6.0 subsumed by *ASCR* in the walk, which tries every
-target in the worlds before the next. `interpret_reactive`, `src/conventions/tiiah/interpret_reactive.cpp`.
+target in the worlds before the next. Since v22.6.0 the walk also tries, after the
+frame's targets, the receiver's cards two or more away on the frame that are at most
+one away in some world, the reacter's card the connector where one away (replay
+2023126 T13). `interpret_reactive`, `src/conventions/tiiah/interpret_reactive.cpp`.
 
 ### receiver world fallback
 How a reaction is read when the shared stamp finds nothing the receiver's target can

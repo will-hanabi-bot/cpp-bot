@@ -338,9 +338,49 @@ int main(int argc, char** argv) {
   try {
     if (args.notes) {
       // Every note segment the replayed actions produce, as the bot would have
-      // sent them (v20.17.0): "order O: turn N: segment".
+      // sent them (v20.17.0): "order O: turn N: segment". With --trace, the
+      // DECIDE branches each replayed action fired are printed before its notes
+      // (`turn N: {...}`), which is how to see why an earlier clue was read as
+      // it was -- the live log records branches only for the bot's own turns.
+      std::optional<hanabi::logging::GameLogger> hist_logger;
+      std::optional<hanabi::logging::CurrentLoggerGuard> hist_guard;
+      std::string hist_path;
+      std::streampos hist_pos = 0;
+      if (args.trace) {
+        std::filesystem::path dir =
+            std::filesystem::temp_directory_path() / "hanabi_replay_trace";
+        std::filesystem::remove_all(dir);
+        std::filesystem::create_directories(dir);
+        hist_logger.emplace("trace", report_id >= 0 ? report_id : 0, dir.string());
+        hist_path = hist_logger->path();
+        hist_guard.emplace(&*hist_logger);
+      }
+      auto flush_branches = [&](int turn_no) {
+        if (!args.trace) return;
+        std::ifstream tf(hist_path);
+        tf.seekg(hist_pos);
+        std::string line;
+        while (std::getline(tf, line)) {
+          json r;
+          try {
+            r = json::parse(line);
+          } catch (const std::exception&) {
+            continue;
+          }
+          if (r.value("ch", r.value("record", "")) != "DECIDE") continue;
+          for (const char* k : {"ch", "record", "ts", "turn", "game_id", "database_id",
+                                "bot", "bot_name"}) {
+            r.erase(k);
+          }
+          std::cout << "turn " << turn_no << ": " << r.dump() << "\n";
+        }
+        tf.clear();
+        hist_pos = tf.tellg();
+        if (hist_pos < 0) hist_pos = 0;
+      };
       game = hanabi::logging::apply_snapshot(
-          *state_rec, [](const hanabi::Game& before, const hanabi::Game& after) {
+          *state_rec, [&](const hanabi::Game& before, const hanabi::Game& after) {
+            flush_branches(before.state.turn_count);
             for (const auto& [order, seg] : hanabi::net::compute_note_segments(before, after)) {
               std::cout << "order " << order << ": " << seg << "\n";
             }

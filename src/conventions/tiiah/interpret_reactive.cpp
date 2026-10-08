@@ -454,7 +454,11 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   enum class AscrOutcome { NONE, READ, REJECT };
   std::optional<std::vector<OpenWorld>> ascr_all;
   std::vector<const OpenWorld*> ascr_worlds;
-  auto ascr_pairing = [&](const ReceiverTarget& target, int react_order) -> AscrOutcome {
+  // `world_one_away`: a target beyond the frame (below) is a target in every world
+  // where it is at most ONE away, not only where it plays outright, and where it is
+  // one away the reacter's card is its connector (v22.6.0, the user's ruling).
+  auto ascr_pairing = [&](const ReceiverTarget& target, int react_order,
+                          bool world_one_away = false) -> AscrOutcome {
     if (state.variant->suits[target.id.suit_index].suit_type.inverted) {
       return AscrOutcome::NONE;  // a double chuck plays nothing
     }
@@ -470,16 +474,30 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     // The stacks the reacter faces in each world, after the receiver's queued plays,
     // where this target plays outright.
     std::vector<std::optional<State>> faced(ascr_worlds.size());
+    std::vector<std::optional<Identity>> bridge(ascr_worlds.size());
+    IdentitySet bridges = IdentitySet::empty();
     for (std::size_t w = 0; w < ascr_worlds.size(); ++w) {
       State f = reacter_faces(game, receiver, receiver_acts_first,
                               &ascr_worlds[w]->state.play_stacks);
-      if (f.playable_away(target.id) == 0) faced[w] = std::move(f);
-    }
-    auto faced_in = [&](const OpenWorld& w) -> const State* {
-      for (std::size_t k = 0; k < ascr_worlds.size(); ++k) {
-        if (ascr_worlds[k] == &w) return faced[k] ? &*faced[k] : nullptr;
+      const int away = f.playable_away(target.id);
+      if (away == 0) {
+        faced[w] = std::move(f);
+      } else if (world_one_away && away == 1) {
+        if (auto c = hanabi::reactor::variants::connector_of(f, target.id)) {
+          bridge[w] = *c;
+          bridges = bridges.add(*c);
+        }
       }
-      return nullptr;
+    }
+    auto index_of = [&](const OpenWorld& w) -> std::size_t {
+      for (std::size_t k = 0; k < ascr_worlds.size(); ++k) {
+        if (ascr_worlds[k] == &w) return k;
+      }
+      return ascr_worlds.size();
+    };
+    auto faced_in = [&](const OpenWorld& w) -> const State* {
+      const std::size_t k = index_of(w);
+      return k < ascr_worlds.size() && faced[k] ? &*faced[k] : nullptr;
     };
     const IdentitySet react_live =
         hanabi::reactor::effective_possible_for(game, react_order);
@@ -501,18 +519,37 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     // have read the r3. At pace <= 1 a pairing may break the relation (v18.4.0).
     const IdentitySet target_poss = game.common.thoughts[target.order].possibilities();
     auto works = [&](const OpenWorld& w, Identity i) {
+      const std::size_t k = index_of(w);
+      if (k < ascr_worlds.size() && bridge[k]) return i == *bridge[k];
       const State* f = faced_in(w);
       if (!f || !f->is_playable(i)) return false;
       return in_bucket.contains(i) || state.pace() <= 1 ||
              receiver_bucket_empty(*f, action.clue.kind, i, target_poss);
     };
-    const auto found = ascr_find(ascr_worlds, {in_bucket, react_live}, works,
-                                 /*require_evidence=*/false);
+    // The connector of a one-away world is the finesse half; it stands with the
+    // bucket half, as one reading (2023126: `{r2}` where red was 1, `{g2,b2}` where 2).
+    const auto found = ascr_find(ascr_worlds,
+                                 {in_bucket.union_with(react_live.intersect(bridges)), react_live},
+                                 works, /*require_evidence=*/false);
     if (!found) return AscrOutcome::NONE;
     if (auto actual = state.deck[react_order].id()) {
-      // giver-only: §1g, as in the walk. The card we can see must work somewhere.
+      // giver-only: §1g, as in the walk. The card we can see must work somewhere --
+      // and somewhere we cannot rule out by sight: a world whose hole cards we can
+      // see to be otherwise is not one the team is in, and a clue resting on it
+      // splits the receiver, who can see them too, from the reacter (v22.6.0;
+      // self-play 6 Suits seed 176 T10: purple was on 1, Bob's r2 worked only where
+      // it was on 2, and Cathy read no pairing).
+      auto seen_possible = [&](const OpenWorld* w) {
+        return std::all_of(w->assignment.begin(), w->assignment.end(),
+                           [&](const std::pair<int, Identity>& a) {
+                             const auto seen = state.deck[a.first].id();
+                             return !seen || *seen == a.second;
+                           });
+      };
       const bool sound = std::any_of(ascr_worlds.begin(), ascr_worlds.end(),
-                                     [&](const OpenWorld* w) { return works(*w, *actual); });
+                                     [&](const OpenWorld* w) {
+                                       return seen_possible(w) && works(*w, *actual);
+                                     });
       if (!sound) return AscrOutcome::REJECT;
       if (action.giver == state.our_player_index && state.pace() > 1 &&
           !bucket_relation_holds(*state.variant, action.clue.kind, *actual, target.id) &&
@@ -866,6 +903,45 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       game.pending_reactions[receiver]->react_before = react_before;
     }
     return ClueInterp::REACTIVE;
+  }
+
+  // ASCR BEYOND THE FRAME (v22.6.0, the user's ruling; replay 2023126 T13). The walk
+  // offers only cards playable or one away on the frame, a MINIMUM over the hole's
+  // worlds; by ASCR a card is a target in every world where it is at most one away.
+  // With no target left on the frame, each such card, leftmost first, goes through
+  // ASCR: direct worlds want a bucket playable (legality included), one-away worlds
+  // the connector. 2023126: green could not name its own hole cards o6 `{r1,o2}` and
+  // o8 `{r2,y2}`, so on the frame red was 0 and blue's r3 two away; wherever o6 was
+  // the r1 it is at most one away, and black's Red asked for green's o18 as the r2
+  // (o8 the y2) or a g2/b2 (the r2 down). The b4 is no target: no world has b2-b3.
+  // A copy: an ASCR attempt that cannot stamp restores `game`, hands and all. Not on
+  // the reverse arm, whose dispatch the seats may not share: a seat that finds no
+  // pairing there reads the clue as stable, as the others may (self-play seed 242).
+  const std::vector<int> receiver_hand =
+      receiver_acts_first ? std::vector<int>{} : state.hands[receiver];
+  for (int o : receiver_hand) {
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+    const auto id = state.deck[o].id();
+    if (!id || state.variant->suits[id->suit_index].suit_type.inverted) continue;
+    const int away = after.playable_away(*id);
+    if (away == 0 || away == 1) continue;  // the frame's own, walked above
+    int target_slot = 0;
+    for (size_t i = 0; i < receiver_hand.size(); ++i) {
+      if (receiver_hand[i] == o) target_slot = static_cast<int>(i) + 1;
+    }
+    const int react_slot = hanabi::reactor::calc_slot(anchor, target_slot, hand_size);
+    if (react_slot < 1 || react_slot > static_cast<int>(state.hands[reacter].size())) {
+      continue;
+    }
+    const AscrOutcome r = ascr_pairing(ReceiverTarget{o, *id, away},
+                                       state.hands[reacter][react_slot - 1],
+                                       /*world_one_away=*/true);
+    if (r != AscrOutcome::NONE) {
+      hanabi::logging::log_branch("tiiah.ascr_beyond_frame",
+                                  {{"target", o}, {"read", r == AscrOutcome::READ}});
+    }
+    if (r == AscrOutcome::READ) return ClueInterp::REACTIVE;
+    if (r == AscrOutcome::REJECT) return std::nullopt;
   }
 
   return std::nullopt;
