@@ -96,7 +96,7 @@ cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         357 tests,  7 s
 build/hanabi_tests.exe            # convention-neutral    400 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
-build/hanabi_decision_tests.exe   # decision quality      232 tests,  0.7 s
+build/hanabi_decision_tests.exe   # decision quality      233 tests,  0.7 s
 build/hanabi_tiiah_tests.exe      # Throw It in a Hole    281 tests,  0.3 s
 ```
 
@@ -126,6 +126,11 @@ Two rules:
   correctness suite before committing — reactor0 leans on shared machinery
   (`target_play`, `ref_discard`, `elim`, `chop`, snapshots), so a change that
   looks convention-local can break the other convention's corpus.
+- **TIIAH changes: the benchmark A/B is TIIAH & Black (6 Suits) only, unless the
+  user says otherwise** (the user's rule, from v22.9.0). Run base and candidate on
+  seeds 1–200 of that one variant (200 games, not 300, from v22.10.0; the user's
+  call) -- not plain 6 Suits, and not the replay's own variant -- and save
+  `results/<version>.md` on it (see *Self-play diagnostics*).
 - On Windows a running test binary is locked, so a rebuild cannot relink it
   while it is executing. Let the run finish first (see README §5.7).
 
@@ -199,7 +204,7 @@ move fell short. One file per game (`<database_id>.md`), indexed in its
 ## Self-play diagnostics
 
 `self_play_diagnostics/` holds a local harness in which three copies of the
-current build play Throw It in a Hole (6 Suits) against each other, with
+current build play Throw It in a Hole & Black (6 Suits) against each other, with
 detectors for wrong inferences, calls never actioned, reactive-target
 disagreements and lagging stack views. Its `README.md` is the reference. It checks
 that a change does not damage play elsewhere. It does not define good play; the
@@ -217,9 +222,13 @@ build/self_play.exe --seeds 1..100 --jobs 12     --out self_play_diagnostics/run
   as an ordinary hidden `play` and ends the game on the third strike itself.
 - The simulator is variant-generic, with public stacks and strikes outside TIIAH,
   but only TIIAH is run unless the user asks otherwise.
-- Benchmarks run the **6-suit** variants by default (from v20.24.0; the user's call):
-  they are harder and catch longer-term accumulated desyncs. A base-vs-new A/B uses
-  the 6-suit form of each variant concerned (e.g. TIIAH & Rainbow (6 Suits)).
+- Benchmarks run the **6-suit** variants (from v20.24.0; the user's call): they are
+  harder and catch longer-term accumulated desyncs.
+- The benchmark is **TIIAH & Black (6 Suits)**, and unless the user says otherwise
+  it is the ONLY variant a base-vs-new A/B runs (from v22.9.0; the user's call), to
+  measure play in the hard TIIAH variants and save time. It replaces plain TIIAH
+  (6 Suits) and the per-variant arms (Rainbow, Prism, ...) used before; reports up to
+  v22.8.0 are plain 6 Suits.
 - Each version's 100-game run (seeds 1–100) is saved as `results/<version>.md`.
   To compare with the previous version, freeze its `build/self_play.exe` under
   another name before rebuilding, and run both on the same seeds.

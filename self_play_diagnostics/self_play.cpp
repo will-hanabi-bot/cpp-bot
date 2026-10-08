@@ -86,7 +86,7 @@ struct Args {
   std::string out;
   std::string report;
   std::string log_dir = "logs";
-  std::string variant = "Throw It in a Hole (6 Suits)";
+  std::string variant = "Throw It in a Hole & Black (6 Suits)";
   int players = 3;
   double endgame_timeout = 6.0;
 };

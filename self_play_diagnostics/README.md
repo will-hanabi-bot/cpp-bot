@@ -1,7 +1,7 @@
 # Self-play diagnostics
 
 A local harness that has three copies of the current bot play **Throw It in a Hole
-(6 Suits)** against each other, and a set of detectors that report where the
+& Black (6 Suits)** against each other, and a set of detectors that report where the
 bots' readings go wrong. It is used to check that a change does not damage play
 elsewhere: run the previous version and the candidate on the same seeds and compare.
 What good play *is* comes from the human diagnostics in
@@ -23,7 +23,7 @@ build/self_play.exe --seeds 1..100 --jobs 12 \
 | `--out DIR` | none | `games.jsonl` (one line per game) and `issues.jsonl` (one line per issue) |
 | `--report FILE` | none | the Markdown summary; it is also printed to stdout |
 | `--log-dir DIR` | `logs` | per-seat game logs; `''` turns them off |
-| `--variant NAME` | `Throw It in a Hole (6 Suits)` | any hanab.live variant name |
+| `--variant NAME` | `Throw It in a Hole & Black (6 Suits)` | any hanab.live variant name |
 | `--players N` | `3` | seat count |
 
 `results/` is committed, with one file per version's 100-game run on seeds 1–100.
@@ -161,11 +161,14 @@ or the reacter's side of a reactive, a fix or a refusal re-call.
 
 To compare a candidate with the previous version, freeze the previous
 `build/self_play.exe` under another name before rebuilding. Then run both on the
-same seeds (seeds 1–300 at the live 6 s endgame is the usual check) and compare
+same seeds (seeds 1–200 at the live 6 s endgame is the usual check since v22.10.0;
+1–300 before) and compare
 max-score games, the cards ever read wrongly, and strikeouts. A version's own
 100-game run on seeds 1–100 is saved as `results/<version>.md`. Benchmarks use the
-6-suit variants (TIIAH (6 Suits) by default, since v20.24.0): they are harder and
-catch longer-term accumulated desyncs. Reports up to v20.23.0 are 5 Suits.
+6-suit variants: they are harder and catch longer-term accumulated desyncs. The
+default is TIIAH & Black (6 Suits) since v22.9.0 (the user's call, for the hard TIIAH
+variants); from v20.24.0 to v22.8.0 it was TIIAH (6 Suits), and reports up to v20.23.0
+are 5 Suits.
 
 ## Tests
 

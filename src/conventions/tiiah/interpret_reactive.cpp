@@ -1251,9 +1251,34 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   // it played, and a fallback read off its inference would collapse the worlds on a
   // guess (replay 2015109 T9: will-bot67's own `{r1,r2,y1,y2}` reaction kept half
   // the worlds). It keeps the stamp's reading.
+  //
+  // Unless every identity the reacter's card could be lies in ONE bucket (v22.9.0):
+  // the bucket half of the reading is then the same whichever card it was, so there
+  // is no guess to collapse on, and the seat reads the bucket half alone (the
+  // finesse half would name a different card per identity). Replay 2023897 T5:
+  // blue's own `{g1,b1}` reaction into black's o10 left blue reading no call, so at
+  // T8 blue saw no standing play on black and gave a reverse reactive it took for
+  // a stable clue.
   const auto played = prev.state.deck[react_order].id();
-  if (!played) return;
-  const IdentitySet react_live = IdentitySet::single(*played);
+  IdentitySet react_live = IdentitySet::empty();
+  bool bucket_only = false;
+  if (played) {
+    react_live = IdentitySet::single(*played);
+  } else {
+    react_live = prev.common.thoughts[react_order].possibilities();
+    std::optional<int> one;
+    bool single = react_live.non_empty();
+    for (Identity i : react_live) {
+      const auto b = bucket_of(*s.variant, i.suit_index);
+      if (!b || (one && *one != *b)) {
+        single = false;
+        break;
+      }
+      one = b;
+    }
+    if (!single) return;
+    bucket_only = true;
+  }
 
   // The worlds the receiver's reading ranges over, exactly as `narrow_receiver_call`
   // reads them.
@@ -1288,11 +1313,13 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
   {  // the bucket first (v22.0.0, `keep_convention_half`)
     keep_convention_half(
-        rr, finesse_from_the_card(game, wc.clue.kind, could, react_live, react_order));
+        rr, !bucket_only &&
+                finesse_from_the_card(game, wc.clue.kind, could, react_live, react_order));
   }
-  const std::vector<IdentitySet> tiers{
-      could.intersect(rr.allowed),
-      could.filter([&base](Identity i) { return base.playable_away(i) == 1; })};
+  std::vector<IdentitySet> tiers{could.intersect(rr.allowed)};
+  if (!bucket_only) {
+    tiers.push_back(could.filter([&base](Identity i) { return base.playable_away(i) == 1; }));
+  }
   std::vector<const OpenWorld*> world_ptrs;
   for (const OpenWorld& w : worlds) world_ptrs.push_back(&w);
   const auto found = ascr_find(

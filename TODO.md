@@ -1514,4 +1514,4 @@ the partner watched them land and can name them. Replay 2023552 T53 (v22.7.0):
 
 The fix is to read the partner's empathy in each world of our hole cards (they know
 which world they are in), and take a clue as newly useful only if it is so in every
-world. Planned as v22.9.0, the user's call.
+world. Planned as v22.10.0, the user's call.

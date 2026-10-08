@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1538-1585`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1565-1612`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -379,7 +379,10 @@ hole cards: first the bucket rule (bucket and finesse halves), then any one-away
 identity. The first reading that plays in some world is called (unless one identity
 of it plays in every world, v20.8.0), and
 the worlds collapse to those that make it. Otherwise the stamp's bluff or mistake
-reading stands. The receiver's half of *ASCR*, on `ascr_find` since v20.6.0.
+reading stands. The receiver's half of *ASCR*, on `ascr_find` since v20.6.0. A seat
+that did not watch the reacter's card (the reacter's own) reads it too when every
+identity that card could be is in one bucket, on the bucket half alone (v22.9.0;
+replay 2023897 T5).
 `receiver_world_fallback`, `src/conventions/tiiah/interpret_reactive.cpp`. CONVENTION.md §1d.
 
 ### rebased call
