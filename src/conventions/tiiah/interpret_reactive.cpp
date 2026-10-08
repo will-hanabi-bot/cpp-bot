@@ -400,8 +400,8 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                /*all_plays=*/false};
   wc.even_parity = true;
   wc.rlocks = false;  // no reactive lock in this convention
-  // The turn this clue is given on, which picks the bucket shift under six suit
-  // buckets (EXPERIMENTAL, `buckets.h`). Reaction-time readers take it from
+  // The turn this clue is given on, which picks the bucket shift under single-suit
+  // buckets (v23.0.0, `buckets.h`). Reaction-time readers take it from
   // `wc.turn`, never from the turn they are reading on.
   const int clue_turn = wc.turn;
   // The frame the giver chose the target in, and the one `stamp_receiver_call`

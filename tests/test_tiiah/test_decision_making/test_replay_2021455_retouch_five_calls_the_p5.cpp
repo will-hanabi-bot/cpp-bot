@@ -19,7 +19,11 @@
 
 // Variant: Throw It in a Hole & Prism (6 Suits). 3 players, our_player_index=1.
 
-TEST(TiiahReplay2021455, RetouchFiveCallsTheP5) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2021455, DISABLED_RetouchFiveCallsTheP5) {
   // Reconstruct exactly the Game the live bot saw at turn 62.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(

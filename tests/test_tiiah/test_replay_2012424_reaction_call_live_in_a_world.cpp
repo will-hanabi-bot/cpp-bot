@@ -21,7 +21,11 @@
 #include "replay_helpers.h"
 #include "test_harness.h"
 
-TEST(TiiahReplay2012424, TheReactionsCallIsLiveInAWorld) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2012424, DISABLED_TheReactionsCallIsLiveInAWorld) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",

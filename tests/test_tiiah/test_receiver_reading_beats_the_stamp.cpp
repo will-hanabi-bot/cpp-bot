@@ -30,26 +30,28 @@ using namespace hanabi;
 using namespace hanabi::test;
 using namespace hanabi::test::tiiah;
 
-// Our belief has green and blue on 1; the pair (Bob, us) and the team have
-// nothing. Bob clues Purple to us and Cathy reacts with her p1 -- bucket 2, a
-// colour clue -- so our called card is in bucket 1: on OUR stacks the g2 or the
-// b2, or the p2 the p1 continues into. Our untouched cards could only be the r1,
-// the y1 or the g2, so the stamp's pair-frame reading is {r1,y1} and ours is {g2}.
+// Four suits, so the buckets are {R,Y}, {G}, {B}. Our belief has green on 1; the
+// pair (Bob, us) and the team have nothing. Bob clues Blue to us and Cathy reacts
+// with her b1 -- bucket 2, a colour clue -- so our called card is in bucket 1: on
+// OUR stacks the g2, or the b2 the b1 continues into. Our untouched cards could
+// only be the r1, the y1 or the g2, so the stamp's pair-frame reading is {r1,y1}
+// and ours is {g2}. Blue anchors on 4 and Cathy reacts on slot 1, so the call is
+// our slot 3.
 TEST(TiiahReceiverReading, TheBucketReadingReplacesADisjointStamp) {
   SetupOptions opts;
-  opts.variant_name = "Throw It in a Hole (5 Suits)";
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},  // Alice (us), the receiver
-      {"r4", "y4", "g4", "b4", "p4"},  // Bob, the giver
-      {"p1", "y3", "g3", "b3", "r3"},  // Cathy, the reacter
+      {"r4", "y4", "g4", "b4", "g5"},  // Bob, the giver
+      {"b1", "y3", "g3", "b3", "r3"},  // Cathy, the reacter
   };
-  opts.play_stacks = std::vector<int>{0, 0, 1, 1, 0};
+  opts.play_stacks = std::vector<int>{0, 0, 1, 0};
   opts.starting = TestPlayer::BOB;
   opts.clue_tokens = 6;
   use_tiiah(opts);
   Game g = setup(std::move(opts));
   // What we know that the others do not: every shared view is a step behind.
-  const std::vector<int> zero(5, 0);
+  const std::vector<int> zero(4, 0);
   for (auto& row : g.state.pairwise_play_stacks) row = zero;
   for (auto& row : g.state.pairwise_evidence) row = zero;
   g.state.common_play_stacks = zero;
@@ -59,7 +61,7 @@ TEST(TiiahReceiverReading, TheBucketReadingReplacesADisjointStamp) {
   g.catchup = true;
   g.handle_action(ClueAction{static_cast<int>(TestPlayer::BOB),
                              static_cast<int>(TestPlayer::ALICE), touched,
-                             BaseClue{ClueKind::COLOUR, 4}});
+                             BaseClue{ClueKind::COLOUR, 3}});
   g.handle_action(TurnAction{g.state.turn_count,
                              static_cast<int>(TestPlayer::CATHY)});
   g.catchup = false;

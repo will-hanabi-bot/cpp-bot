@@ -106,27 +106,30 @@ TEST(TiiahReactions, TheReceiverIsCalledToTheButtonTheReacterPressed) {
 }
 
 // The ordinary case of the same wiring: a double PITCH, where the reacter
-// presses Play and the receiver is called to play in turn.
+// presses Play and the receiver is called to play in turn. Four suits, so the
+// buckets are {R,Y}, {G}, {B}: Bob's g1 is bucket 1, a colour clue names the
+// bucket above for the reacter, and Cathy's b1 (Blue anchors on 4, target slot 2,
+// so slot 2) is the pitch.
 TEST(TiiahReactions, ADoublePitchCallsTheReceiverToPlay) {
   SetupOptions opts;
-  opts.variant_name = "Throw It in a Hole (5 Suits)";
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"r1", "g1", "y4", "b4", "p4"},
-      {"y3", "g3", "p1", "b3", "r3"},
+      {"r1", "g1", "y4", "b4", "r4"},
+      {"y3", "b1", "g3", "b3", "r3"},
   };
   opts.starting = TestPlayer::ALICE;
   use_tiiah(opts);
   Game g = setup(std::move(opts));
   g = fully_known(std::move(g), TestPlayer::BOB, /*slot=*/1, "r1");
 
-  g = take_turn(std::move(g), "Alice clues purple to Bob");
+  g = take_turn(std::move(g), "Alice clues blue to Bob");
   ASSERT_EQ(interp_of(g), ClueInterp::REACTIVE);
-  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 3), CardStatus::CALLED_TO_PLAY);
+  ASSERT_EQ(status_at(g, TestPlayer::CATHY, 2), CardStatus::CALLED_TO_PLAY);
 
   g = hidden_action(std::move(g), TestPlayer::BOB, /*slot=*/1,
                     /*reached_the_hole=*/true, "b2");
-  g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/3,
+  g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/2,
                     /*reached_the_hole=*/true, "y2");
 
   EXPECT_EQ(status_at(g, TestPlayer::BOB, /*slot=*/2), CardStatus::CALLED_TO_PLAY)

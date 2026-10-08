@@ -46,7 +46,11 @@ const hanabi::Identity kR4{0, 4}, kG1{2, 1}, kB1{3, 1};
 
 // --- 1. o4 stays open, and the note says so ---------------------------------
 
-TEST(TiiahReplay2011475, TheCallOnO4IsNotedAsTheTeamReadsIt) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011475, DISABLED_TheCallOnO4IsNotedAsTheTeamReadsIt) {
   const char* kPrev = R"json(
 {
   "bot": "will-bot69",
@@ -921,7 +925,11 @@ TEST(TiiahReplay2011475, TheCallOnO4IsNotedAsTheTeamReadsIt) {
   EXPECT_TRUE(noted) << "the new call on yagami's o4 is noted";
 }
 
-TEST(TiiahReplay2011475, O4StaysOpenUntilTheGreenTwo) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011475, DISABLED_O4StaysOpenUntilTheGreenTwo) {
   const char* kT24 = R"json(
 {
   "bot": "will-bot69",
@@ -4175,7 +4183,11 @@ TEST(TiiahReplay2011475, TheDupeIsPassedBack) {
 
 // --- 4. The strike ------------------------------------------------------------
 
-TEST(TiiahReplay2011475, AStrikeSaysTheCardWasAlreadyDown) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011475, DISABLED_AStrikeSaysTheCardWasAlreadyDown) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",

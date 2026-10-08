@@ -20,7 +20,11 @@
 
 // Variant: Throw It in a Hole & Rainbow (5 Suits). 3 players, our_player_index=2.
 
-TEST(TiiahReplay2018517, ReceiverWorldFallbackCollapsesHole) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2018517, DISABLED_ReceiverWorldFallbackCollapsesHole) {
   // Reconstruct exactly the Game the live bot saw at turn 21.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(

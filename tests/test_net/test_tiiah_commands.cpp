@@ -113,7 +113,8 @@ TEST(TiiahCommands, TheSettingsLineNamesTheBucketsAndTheDispatch) {
   EXPECT_NE(line.find("REACTIVE"), std::string::npos)
       << "the dispatch is the first thing a partner needs";
   EXPECT_NE(line.find("known play"), std::string::npos);
-  EXPECT_NE(line.find("buckets [R,Y][G,B][P]"), std::string::npos)
-      << "five suits, none inverted: " << line;
+  EXPECT_NE(line.find("buckets [R][Y][G][B][P]"), std::string::npos)
+      << "five suits, none inverted: one bucket each (v23.0.0): " << line;
+  EXPECT_NE(line.find("epoch"), std::string::npos) << "the epoch shift";
   EXPECT_NE(line.find("Red=1"), std::string::npos) << "the anchors";
 }

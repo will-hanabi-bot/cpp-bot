@@ -32,7 +32,11 @@
 
 // Variant: Throw It in a Hole (5 Suits). 3 players, our_player_index=1.
 
-TEST(TiiahStallDrawnCard, OrderThirtyIsNotBlindPlayed) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahStallDrawnCard, DISABLED_OrderThirtyIsNotBlindPlayed) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",

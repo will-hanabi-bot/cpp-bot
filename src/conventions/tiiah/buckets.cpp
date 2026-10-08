@@ -6,25 +6,41 @@
 
 namespace hanabi::tiiah {
 
-bool six_suit_buckets(const Variant& variant) {
-  if (!variant.throw_it_in_a_hole || variant.suits.size() != 6) return false;
-  for (const auto& suit : variant.suits) {
-    if (suit.suit_type.inverted) return false;
-  }
-  return true;
-}
+namespace {
 
-int bucket_count(const Variant& variant) { return six_suit_buckets(variant) ? 6 : 3; }
-
-std::array<std::vector<int>, 3> suit_buckets(const Variant& variant) {
-  // Inverted suits are dropped before anything is counted, so what follows is
-  // indexed by POSITION AMONG THE REMAINING SUITS, not by suit index.
+// The non-inverted suits, in suit-index order.
+std::vector<int> bucketed_suits(const Variant& variant) {
   std::vector<int> remaining;
   remaining.reserve(variant.suits.size());
   for (size_t i = 0; i < variant.suits.size(); ++i) {
     if (variant.suits[i].suit_type.inverted) continue;
     remaining.push_back(static_cast<int>(i));
   }
+  return remaining;
+}
+
+int non_inverted_count(const Variant& variant) {
+  int n = 0;
+  for (const auto& suit : variant.suits) n += suit.suit_type.inverted ? 0 : 1;
+  return n;
+}
+
+}  // namespace
+
+bool single_suit_buckets(const Variant& variant) {
+  if (!variant.throw_it_in_a_hole) return false;
+  const int n = non_inverted_count(variant);
+  return n == 5 || n == 6;
+}
+
+int bucket_count(const Variant& variant) {
+  return single_suit_buckets(variant) ? non_inverted_count(variant) : 3;
+}
+
+std::array<std::vector<int>, 3> suit_buckets(const Variant& variant) {
+  // Inverted suits are dropped before anything is counted, so what follows is
+  // indexed by POSITION AMONG THE REMAINING SUITS, not by suit index.
+  const std::vector<int> remaining = bucketed_suits(variant);
 
   // Each row says which re-indexed positions each bucket covers.
   static const std::array<std::vector<int>, 3> kEmpty{};
@@ -46,9 +62,9 @@ std::array<std::vector<int>, 3> suit_buckets(const Variant& variant) {
 }
 
 std::vector<std::vector<int>> variant_buckets(const Variant& variant) {
-  if (six_suit_buckets(variant)) {
+  if (single_suit_buckets(variant)) {
     std::vector<std::vector<int>> out;
-    for (int i = 0; i < 6; ++i) out.push_back({i});
+    for (int s : bucketed_suits(variant)) out.push_back({s});
     return out;
   }
   const auto three = suit_buckets(variant);
@@ -60,7 +76,14 @@ std::optional<int> bucket_of(const Variant& variant, int suit_index) {
     return std::nullopt;
   }
   if (variant.suits[suit_index].suit_type.inverted) return std::nullopt;
-  if (six_suit_buckets(variant)) return suit_index;
+  if (single_suit_buckets(variant)) {
+    // Its position among the non-inverted suits.
+    int position = 0;
+    for (int i = 0; i < suit_index; ++i) {
+      if (!variant.suits[i].suit_type.inverted) ++position;
+    }
+    return position;
+  }
   const auto buckets = suit_buckets(variant);
   for (size_t b = 0; b < buckets.size(); ++b) {
     for (int s : buckets[b]) {
@@ -72,7 +95,7 @@ std::optional<int> bucket_of(const Variant& variant, int suit_index) {
 
 int bucket_shift(const Variant& variant, ClueKind kind, int clue_turn) {
   int k = 1;
-  if (six_suit_buckets(variant)) {
+  if (single_suit_buckets(variant)) {
     // ceil(turn / 3), turn 1-based. A turn before the first (a test position set
     // up without any action) is read as the first.
     const int epoch = (std::max(clue_turn, 1) + 2) / 3;

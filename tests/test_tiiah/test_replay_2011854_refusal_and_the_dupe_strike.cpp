@@ -34,7 +34,11 @@ const hanabi::Identity kG4{2, 4}, kP2{4, 2}, kB4{3, 4};
 
 }  // namespace
 
-TEST(TiiahReplay2011854, WeRefuseTheDeadPOneWithPurple) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011854, DISABLED_WeRefuseTheDeadPOneWithPurple) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",
@@ -3186,7 +3190,11 @@ TEST(TiiahReplay2011854, WeRefuseTheDeadPOneWithPurple) {
   EXPECT_TRUE(g.meta[5].superposed()) << "o5 was the b1: nothing may name it the p1";
 }
 
-TEST(TiiahReplay2011854, TheDupeStrikeIsCommonKnowledge) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011854, DISABLED_TheDupeStrikeIsCommonKnowledge) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",

@@ -44,7 +44,11 @@ void expect_every_view(const hanabi::Game& game, const std::vector<int>& stacks)
 // T22, cut from a later record (will-bot67 did not act on T22). The r2 it knew at
 // T11 is in every view, which forces will-bot69's two hole cards to be {r1,y1}
 // between them, and the y2 at T19 lands on the shared view's yellow 1.
-TEST(TiiahReplay2011327, EveryViewIs22121AtT22) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011327, DISABLED_EveryViewIs22121AtT22) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",
@@ -789,7 +793,11 @@ TEST(TiiahReplay2011327, EveryViewIs22121AtT22) {
 // her o23 -- in the hole as {b3, p3} -- could be the b3. Nothing has settled which by
 // T38, so every view the two of them share is the MINIMUM of those two worlds,
 // 43132, while our own belief sees both cards and holds 43133 (§1e).
-TEST(TiiahReplay2011327, EveryViewIsTheMinimumAcrossWorldsAndNoIllegalYellowAtT38) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011327, DISABLED_EveryViewIsTheMinimumAcrossWorldsAndNoIllegalYellowAtT38) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot67",

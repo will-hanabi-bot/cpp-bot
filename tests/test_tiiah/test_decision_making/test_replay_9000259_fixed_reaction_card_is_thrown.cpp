@@ -19,7 +19,11 @@
 
 // Variant: Throw It in a Hole (5 Suits). 3 players, our_player_index=1.
 
-TEST(TiiahReplay9000259, FixedReactionCardIsThrown) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay9000259, DISABLED_FixedReactionCardIsThrown) {
   // Reconstruct exactly the Game the live bot saw at turn 5.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(

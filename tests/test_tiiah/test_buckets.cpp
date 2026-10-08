@@ -59,18 +59,20 @@ TEST(TiiahBuckets, ThreeRemainingSuitsTakeOneEach) {
             (std::vector<std::vector<int>>{{0}, {1}, {2}}));
 }
 
+// Six non-inverted suits: one bucket per suit, by suit index (v23.0.0).
 TEST(TiiahBuckets, BucketOf) {
   const Variant& v = get_variant("Throw It in a Hole (6 Suits)");
   EXPECT_EQ(bucket_of(v, 0), 0);
-  EXPECT_EQ(bucket_of(v, 1), 0);
-  EXPECT_EQ(bucket_of(v, 2), 1);
-  EXPECT_EQ(bucket_of(v, 3), 1);
-  EXPECT_EQ(bucket_of(v, 4), 2);
-  EXPECT_EQ(bucket_of(v, 5), 2);
+  EXPECT_EQ(bucket_of(v, 1), 1);
+  EXPECT_EQ(bucket_of(v, 2), 2);
+  EXPECT_EQ(bucket_of(v, 3), 3);
+  EXPECT_EQ(bucket_of(v, 4), 4);
+  EXPECT_EQ(bucket_of(v, 5), 5);
   EXPECT_EQ(bucket_of(v, 6), std::nullopt) << "out of range";
 
   // An inverted suit has no bucket at all: it is never a reactive target.
   const Variant& orange = get_variant("Throw It in a Hole & Orange (6 Suits)");
   EXPECT_EQ(bucket_of(orange, 5), std::nullopt);
-  EXPECT_EQ(bucket_of(orange, 4), 2);
+  // Its five non-inverted suits are one bucket each (v23.0.0).
+  EXPECT_EQ(bucket_of(orange, 4), 4);
 }

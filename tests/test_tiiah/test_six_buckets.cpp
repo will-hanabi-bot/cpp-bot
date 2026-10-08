@@ -1,10 +1,12 @@
-// EXPERIMENTAL (branch exp/six-buckets): six suit buckets with an epoch shift.
+// Single-suit buckets with an epoch shift (v23.0.0).
 //
-// A TIIAH variant with six non-inverted suits gives every suit its own bucket,
-// numbered by suit index (red 0 ... black 5). The clue's EPOCH is ceil(turn / 3),
+// A TIIAH variant with five or six non-inverted suits gives every one of them its
+// own bucket, numbered by position among the non-inverted suits (red 0 ... black
+// 5 in & Black (6 Suits); orange in none). The clue's EPOCH is ceil(turn / 3),
 // turn 1-based: on an odd epoch a rank clue puts the receiver's target one bucket
 // UP from the reacter's card and a colour clue one DOWN; on an even epoch two.
-// Every other TIIAH variant keeps three buckets and +-1 (`buckets.h`).
+// A TIIAH variant with fewer non-inverted suits keeps three buckets and +-1
+// (`buckets.h`).
 #include <gtest/gtest.h>
 
 #include <variant>
@@ -26,7 +28,7 @@ using hanabi::tiiah::bucket_of;
 using hanabi::tiiah::bucket_shift;
 using hanabi::tiiah::named_bucket;
 using hanabi::tiiah::reacter_bucket_for;
-using hanabi::tiiah::six_suit_buckets;
+using hanabi::tiiah::single_suit_buckets;
 using hanabi::tiiah::variant_buckets;
 
 namespace {
@@ -54,18 +56,45 @@ void use_tiiah_at_turn(SetupOptions& opts, int turn) {
 
 TEST(TiiahSixBuckets, BlackSixSuitsHasOneBucketPerSuit) {
   const Variant& v = get_variant(kBlack);
-  ASSERT_TRUE(six_suit_buckets(v));
+  ASSERT_TRUE(single_suit_buckets(v));
   EXPECT_EQ(bucket_count(v), 6);
   EXPECT_EQ(variant_buckets(v),
             (std::vector<std::vector<int>>{{0}, {1}, {2}, {3}, {4}, {5}}));
   for (int s = 0; s < 6; ++s) EXPECT_EQ(bucket_of(v, s), s);
 }
 
-TEST(TiiahSixBuckets, OtherTiiahVariantsKeepThreeBuckets) {
-  for (const char* name : {"Throw It in a Hole (5 Suits)",
-                           "Throw It in a Hole & Orange (6 Suits)"}) {
+// Five suits, and & Orange (6 Suits), whose five non-inverted suits are buckets
+// 0-4 while orange is in none.
+TEST(TiiahSixBuckets, FiveNonInvertedSuitsHaveOneBucketEach) {
+  const Variant& five = get_variant("Throw It in a Hole (5 Suits)");
+  ASSERT_TRUE(single_suit_buckets(five));
+  EXPECT_EQ(bucket_count(five), 5);
+  for (int s = 0; s < 5; ++s) EXPECT_EQ(bucket_of(five, s), s);
+  // Wraps mod 5: rank from purple (4) on an odd epoch is red; colour from red on
+  // an even epoch is blue (3).
+  EXPECT_EQ(named_bucket(five, ClueKind::RANK, 1, 4), 0);
+  EXPECT_EQ(named_bucket(five, ClueKind::COLOUR, 4, 0), 3);
+
+  const Variant& orange = get_variant("Throw It in a Hole & Orange (6 Suits)");
+  ASSERT_TRUE(single_suit_buckets(orange));
+  EXPECT_EQ(bucket_count(orange), 5);
+  int position = 0;
+  for (int s = 0; s < static_cast<int>(orange.suits.size()); ++s) {
+    if (orange.suits[s].suit_type.inverted) {
+      EXPECT_EQ(bucket_of(orange, s), std::nullopt) << "orange is in no bucket";
+    } else {
+      EXPECT_EQ(bucket_of(orange, s), position++);
+    }
+  }
+  EXPECT_EQ(position, 5);
+  EXPECT_EQ(variant_buckets(orange).size(), 5u);
+}
+
+TEST(TiiahSixBuckets, FourSuitTiiahVariantsKeepThreeBuckets) {
+  for (const char* name : {"Throw It in a Hole (4 Suits)",
+                           "Throw It in a Hole & Orange (5 Suits)"}) {
     const Variant& v = get_variant(name);
-    EXPECT_FALSE(six_suit_buckets(v)) << name;
+    EXPECT_FALSE(single_suit_buckets(v)) << name;
     EXPECT_EQ(bucket_count(v), 3) << name;
     EXPECT_EQ(variant_buckets(v).size(), 3u) << name;
     // +-1 on every turn, whatever the epoch.
@@ -75,7 +104,7 @@ TEST(TiiahSixBuckets, OtherTiiahVariantsKeepThreeBuckets) {
     }
   }
   // A six-suit variant OUTSIDE Throw It in a Hole is not a TIIAH variant at all.
-  EXPECT_FALSE(six_suit_buckets(get_variant("Black (6 Suits)")));
+  EXPECT_FALSE(single_suit_buckets(get_variant("Black (6 Suits)")));
 }
 
 TEST(TiiahSixBuckets, TheShiftFollowsTheEpoch) {

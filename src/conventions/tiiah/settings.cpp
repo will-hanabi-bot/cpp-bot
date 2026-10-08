@@ -54,8 +54,8 @@ std::string format_settings(const Variant& variant) {
          "does not (Cathy reacts, Bob receives), else stable as reactor0; every "
          "reactive is EVEN, anchors " +
          anchors + "; buckets " + buckets +
-         (six_suit_buckets(variant)
-              ? "; EXPERIMENTAL six buckets: with epoch = ceil(turn / 3), rank: the "
+         (single_suit_buckets(variant)
+              ? "; one bucket per suit: with epoch = ceil(turn / 3), rank: the "
                 "target sits one bucket UP from the reacter's card on an odd epoch, "
                 "two UP on an even one, colour as many DOWN"
               : "; rank: the target sits one bucket UP from the reacter's card, "

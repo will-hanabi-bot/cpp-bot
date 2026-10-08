@@ -307,10 +307,11 @@ seat's worlds (`advance_common_from_worlds`, §1e), not "assuming none of the
 superposed cards were played". Returns the state unchanged outside TIIAH.
 
 ### bucket
-One of three groups of suits, used by the reactive clues to say what a card IS
-when the stacks cannot show it. Inverted suits are dropped first, the rest are
-re-indexed from 0, and the map is keyed on how many remain — 3 → one suit each,
-4 → `{[0,1],[2],[3]}`, 5 → `{[0,1],[2,3],[4]}`, 6 → `{[0,1],[2,3],[4,5]}`.
+One of the groups of suits, used by the reactive clues to say what a card IS
+when the stacks cannot show it. Inverted suits are in none. Five or six
+non-inverted suits: one bucket per non-inverted suit (v23.0.0, below). Three or
+four: three buckets, the inverted suits dropped first, the rest re-indexed from 0
+and mapped on how many remain — 3 → one suit each, 4 → `{[0,1],[2],[3]}`.
 `suit_buckets` / `bucket_of`, `src/conventions/tiiah/buckets.cpp`.
 CONVENTION.md §1a.
 
@@ -324,22 +325,22 @@ reacter cannot see — steering the walk with it made the giver and the reacter
 name different slots (replay 2010246 T2). For readers it is purely the
 **inference**: what the two called cards are. CONVENTION.md §1d.
 
-**EXPERIMENTAL (branch `exp/six-buckets`):** a TIIAH variant with six non-inverted
-suits has six buckets, one per suit, numbered by suit index (`variant_buckets`), and
-the relation moves by the [bucket shift](#bucket-shift) of the clue's
+**Single-suit buckets (v23.0.0):** a TIIAH variant with five or six non-inverted
+suits has one bucket per non-inverted suit, numbered by position among them
+(`variant_buckets`; orange in none), and the relation moves by the [bucket shift](#bucket-shift) of the clue's
 [epoch](#epoch). CONVENTION.md §1a.
 
 ### epoch
-EXPERIMENTAL (branch `exp/six-buckets`). `ceil(T / 3)` for the 1-based turn T a
+`ceil(T / 3)` for the 1-based turn T a
 reactive clue was given on: turns 1-3 are epoch 1, turns 4-6 epoch 2, and so on.
-It picks the [bucket shift](#bucket-shift) under six buckets. A reaction is read in
+It picks the [bucket shift](#bucket-shift) under single-suit buckets. A reaction is read in
 its CLUE's epoch (`wc.turn`), not its own. `bucket_shift`,
 `src/conventions/tiiah/buckets.cpp`. CONVENTION.md §1d.
 
 ### bucket shift
 How many buckets a reactive clue's relation moves from the reacter's card to the
 receiver's target: `+k` for a rank clue, `−k` for a colour clue, wrapping mod the
-bucket count. `k` is 1 with three buckets; with six (EXPERIMENTAL) it is 1 on an
+bucket count. `k` is 1 with three buckets; with single-suit buckets (v23.0.0) it is 1 on an
 odd [epoch](#epoch) and 2 on an even one. `bucket_shift` / `named_bucket` /
 `reacter_bucket_for`, `src/conventions/tiiah/buckets.cpp`. CONVENTION.md §1d.
 

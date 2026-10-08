@@ -95,21 +95,22 @@ TEST(TiiahReceiverWorldFallback, WithNoHoleTheReadingIsUnchanged) {
   EXPECT_EQ(g.state.common_play_stacks[0], 0);
 }
 
-// A CONDITIONAL reading (v20.8.0; replay 2018766). Green, blue and purple are on 2.
-// Cathy throws a 1 she knows only as a 1, so the team reads it as the r1 or the y1:
-// two worlds. Alice's 2 then touches her r2, which plays as the r2 in the one world
-// and the y2 in the other (the g2, b2 and p2 are trash).
+// A CONDITIONAL reading (v20.8.0; replay 2018766), in four suits: the buckets are
+// {R,Y}, {G}, {B}, and Bob's b3 reacts into the red/yellow bucket. Green and blue
+// are on 2. Cathy throws a 1 she knows only as a 1, so the team reads it as the r1
+// or the y1: two worlds. Alice's 2 then touches her r2, which plays as the r2 in the
+// one world and the y2 in the other (the g2 and b2 are trash).
 // Together they cover every world, but neither identity holds in both, so the
 // reading rests on the hole: the call stands, and nothing collapses.
 TEST(TiiahReceiverWorldFallback, AReadingConditionalOnEveryWorldStillCalls) {
   SetupOptions opts;
-  opts.variant_name = "Throw It in a Hole (5 Suits)";
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"y3", "g4", "b4", "y4", "p3"},
+      {"y3", "g4", "r4", "y4", "b3"},
       {"r2", "g3", "y4", "b4", "r1"},
   };
-  opts.play_stacks = std::vector<int>{0, 0, 2, 2, 2};
+  opts.play_stacks = std::vector<int>{0, 0, 2, 2};
   opts.clue_tokens = 5;
   opts.starting = TestPlayer::CATHY;
   use_tiiah(opts);

@@ -50,6 +50,37 @@ SetupOptions gotten_opts(const char* cathy_slot_5) {
   return opts;
 }
 
+// The same position in four suits (buckets {r,y} {g} {b}: the three-bucket rule),
+// for the listed fallback test. Nothing is played. Cathy's only card that is
+// playable or one away is the g1 on her slot 4; Bob's slot 4 is the y1 the sum rule
+// pairs with it under a 3 (a rank clue names green, bucket 1, from yellow, bucket 0).
+SetupOptions gotten_opts_4_suits(const char* cathy_slot_5) {
+  SetupOptions opts;
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"b4", "b5", "b1", "y1", "b3"},
+      {"y4", "b3", "y5", "g1", cathy_slot_5},
+  };
+  opts.starting = TestPlayer::ALICE;
+  opts.clue_tokens = 6;
+  use_tiiah(opts);
+  return opts;
+}
+
+// Stamp the call a stable Green would have left on Cathy's g1.
+void call_g1(Game& g, int order) {
+  const Identity g1{2, 1};
+  g.state.deck[order].clued = true;
+  g.with_thought(order, [g1](const Thought& t) {
+    Thought out = t;
+    out.possible = IdentitySet::single(g1);
+    out.inferred = IdentitySet::single(g1);
+    return out;
+  });
+  g.with_meta(order, [](ConvData& m) { m.status = CardStatus::CALLED_TO_PLAY; });
+}
+
 // Stamp the call a stable Blue would have left on Cathy's b1.
 void call_b1(Game& g, int order) {
   const Identity b1{3, 1};
@@ -65,21 +96,22 @@ void call_b1(Game& g, int order) {
 
 }  // namespace
 
-// Cathy's b1 is her only target and it is already gotten, so the walk takes it
-// anyway: the 3 is an ordinary reactive, and Bob's y1 is called as the reaction.
+// Four suits: Cathy's g1 is her only target and it is already gotten, so the walk
+// takes it anyway: the 3 is an ordinary reactive, and Bob's y1 is called as the
+// reaction.
 TEST(TiiahAllTargetsGotten, TheWalkFallsBackToTheLeftmostCalledTarget) {
-  Game g = setup(gotten_opts("p4"));
-  const int b1 = order_at(g, TestPlayer::CATHY, 4);
+  Game g = setup(gotten_opts_4_suits("r4"));
+  const int g1 = order_at(g, TestPlayer::CATHY, 4);
   const int y1 = order_at(g, TestPlayer::BOB, 4);
-  call_b1(g, b1);
+  call_g1(g, g1);
 
   g = take_turn(std::move(g), "Alice clues 3 to Cathy");
 
   ASSERT_EQ(interp_of(g), ClueInterp::REACTIVE);
   ASSERT_FALSE(g.waiting.empty());
   EXPECT_EQ(g.waiting.front().reacter, 1) << "Bob reacts";
-  EXPECT_EQ(g.waiting.front().receiver_target_order, b1)
-      << "the gotten b1 is the target, there being nothing else to get";
+  EXPECT_EQ(g.waiting.front().receiver_target_order, g1)
+      << "the gotten g1 is the target, there being nothing else to get";
   EXPECT_EQ(g.meta[y1].status, CardStatus::CALLED_TO_PLAY)
       << "Bob's slot 4, the y1, is the reaction";
 }

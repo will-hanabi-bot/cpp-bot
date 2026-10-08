@@ -35,18 +35,19 @@ std::optional<ClueInterp> interp_of(const Game& g) {
   return std::nullopt;
 }
 
-// Replay 2008177 T3, to the card. Green is on 1; Cathy's only playable is the
-// b1 on her slot 4, and Bob's slot 3 is the r1 the sum rule will name.
+// Replay 2008177 T3's shape, moved to four suits (buckets {R,Y}, {G}, {B}: the
+// three-bucket rule). Nothing is played; Cathy's only playable is the g1 on her
+// slot 4, and Bob's slot 3 is the r1 the sum rule will name.
 SetupOptions replay_opts() {
   SetupOptions opts;
-  opts.variant_name = "Throw It in a Hole (5 Suits)";
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"b4", "b5", "r1", "y1", "p3"},
-      {"y4", "b3", "y5", "b1", "y2"},
+      {"b4", "b5", "r1", "y1", "b3"},
+      {"y4", "b3", "y5", "g1", "y2"},
   };
   opts.starting = TestPlayer::ALICE;
-  opts.play_stacks = std::vector<int>{0, 0, 1, 0, 0};
+  opts.play_stacks = std::vector<int>{0, 0, 0, 0};
   opts.clue_tokens = 6;
   use_tiiah(opts);
   return opts;
@@ -72,8 +73,8 @@ TEST(TiiahOrdinaryReactive, AClueToCathyIsReactiveWithBobReacting) {
 
 // The sum rule names the slot and the bucket names the card, exactly as they do
 // on a reverse reactive: anchor 2, target slot 4, so react_slot + 4 = 2 (mod 5)
-// = slot 3. Blue is bucket 1 and this is a RANK clue, so the reacter sits one
-// bucket lower — bucket 0, red and yellow — and green is already on 1.
+// = slot 3. Green is bucket 1 and this is a RANK clue, so the reacter sits one
+// bucket lower — bucket 0, red and yellow.
 TEST(TiiahOrdinaryReactive, TheSumRuleAndTheBucketNameTheReactersCard) {
   Game g = setup(replay_opts());
 
@@ -91,7 +92,7 @@ TEST(TiiahOrdinaryReactive, TheReacterPlaysTheCalledSlot) {
   SetupOptions opts = replay_opts();
   opts.starting = TestPlayer::CATHY;  // so Alice's clue lands on Bob's turn
   Game g = setup(std::move(opts));
-  g = take_turn(std::move(g), "Cathy discards y5", "p2");
+  g = take_turn(std::move(g), "Cathy discards y5", "b2");
   g = take_turn(std::move(g), "Alice clues 2 to Cathy");
   ASSERT_EQ(interp_of(g), ClueInterp::REACTIVE);
 

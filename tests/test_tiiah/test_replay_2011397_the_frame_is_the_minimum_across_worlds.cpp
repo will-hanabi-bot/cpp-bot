@@ -50,7 +50,11 @@ void expect_every_view(const hanabi::Game& game, const std::vector<int>& stacks)
 
 // T11, will-bot69's seat: o9 is named the b2 (v22.0.0), so the Blue is the b3 and
 // nothing collapses o9 onto the p2.
-TEST(TiiahReplay2011397, TheStableBlueIsReadInBothWorlds) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011397, DISABLED_TheStableBlueIsReadInBothWorlds) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot69",
@@ -863,7 +867,11 @@ TEST(TiiahReplay2011397, TheStableBlueIsReadInBothWorlds) {
 
 // T14, will-bot69's seat: the T6 reaction has settled both hole cards, and the
 // reactive is walked on the true 10131.
-TEST(TiiahReplay2011397, TheTargetIsThePurpleTwoAndTheAnswerIsSlotOne) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011397, DISABLED_TheTargetIsThePurpleTwoAndTheAnswerIsSlotOne) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot69",

@@ -26,19 +26,20 @@ using namespace hanabi::test::tiiah;
 
 namespace {
 
-// Replay 2008217, to the card. Alice clues Blue to Cathy — an ordinary reactive
-// (§1c), Bob reacting. Anchor 4, Bob answers on his slot 4, so Cathy's slot is
-// (4 + 5) mod 5 = 5.
+// Replay 2008217's shape, moved to four suits (buckets {R,Y}, {G}, {B}: the
+// three-bucket rule). Alice clues Blue to Cathy — an ordinary reactive (§1c), Bob
+// reacting. Anchor 4, Bob answers on his slot 4, so Cathy's slot is (4 + 5) mod 5
+// = 5.
 //
 // Bob's slot 4 is what the clue names; the fixture varies it per test, since it
 // is the card whose bucket the receiver reads.
 SetupOptions replay_opts(const std::string& bob_slot4) {
   SetupOptions opts;
-  opts.variant_name = "Throw It in a Hole (5 Suits)";
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"y5", "p4", "y3", bob_slot4, "g4"},
-      {"p2", "g3", "b4", "y4", "r1"},
+      {"y5", "r4", "y3", bob_slot4, "g4"},
+      {"r2", "g3", "b4", "y4", "r1"},
   };
   opts.starting = TestPlayer::ALICE;
   opts.clue_tokens = 7;
@@ -59,24 +60,26 @@ Game clue_and_react(SetupOptions opts, const std::string& clue,
 
 }  // namespace
 
-// The replay. Bob plays a b1 — bucket 1 — and the clue is a COLOUR one, so
-// Cathy is one bucket lower: red and yellow. The finesse branch would add the
-// b2 that the b1 continues into, and a card the Blue clue did not touch cannot
-// be blue, so it drops.
+// The replay's shape. Bob plays a b1 — bucket 2 — and the clue is a COLOUR one,
+// so Cathy is one bucket lower: green. The finesse branch would add the b2 that
+// the b1 continues into, and a card the Blue clue did not touch cannot be blue,
+// so it drops.
 TEST(TiiahReceiverBucket, AColourClueLeavesTheBucketBelow) {
-  Game g = clue_and_react(replay_opts("b1"), "Alice clues blue to Cathy", "p5");
+  SetupOptions opts = replay_opts("b1");
+  opts.hands[2] = {"r2", "g3", "b4", "y4", "g1"};  // her slot 5 is a g1
+  Game g = clue_and_react(std::move(opts), "Alice clues blue to Cathy", "b5");
 
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 5), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5, {"r1", "y1"});
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5, {"g1"});
 }
 
-// The same clue with the reacter holding a g1 instead. Green is bucket 1 too,
-// so the bucket half is unchanged. The continuation is the g2, which the Blue
-// clue says nothing against -- but the card could be a bucket card too, so the
-// finesse is not provable and the bucket alone stands (v22.0.0; until then the
-// g2 survived).
+// The same clue with the reacter holding a g1 instead. Green is bucket 1, so the
+// bucket half is the bucket below it: red and yellow. The continuation is the g2,
+// which the Blue clue says nothing against -- but the card could be a bucket card
+// too, so the finesse is not provable and the bucket alone stands (v22.0.0; until
+// then the g2 survived).
 TEST(TiiahReceiverBucket, AnUnprovableContinuationDrops) {
-  Game g = clue_and_react(replay_opts("g1"), "Alice clues blue to Cathy", "p5");
+  Game g = clue_and_react(replay_opts("g1"), "Alice clues blue to Cathy", "b5");
 
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 5), CardStatus::CALLED_TO_PLAY);
   expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5, {"r1", "y1"});
@@ -84,13 +87,11 @@ TEST(TiiahReceiverBucket, AnUnprovableContinuationDrops) {
 
 // A RANK clue reads the relation the other way: the receiver is one bucket
 // HIGHER than the reacter. Rank 4 anchors on 4, so the slots pair the same way.
-// Bob's r1 is bucket 0, so Cathy is bucket 1 — green and blue. The r2 the r1
-// continues into is an unprovable finesse, so it is not read (v22.0.0).
+// Bob's b1 is bucket 2, so Cathy is bucket 0, wrapping — red and yellow. The b2
+// the b1 continues into is an unprovable finesse, so it is not read (v22.0.0).
 TEST(TiiahReceiverBucket, ARankClueLeavesTheBucketAbove) {
-  SetupOptions opts = replay_opts("r1");
-  opts.hands[2] = {"p2", "g3", "b4", "y4", "b1"};  // her slot 5 is a b1
-  Game g = clue_and_react(std::move(opts), "Alice clues 4 to Cathy", "p5");
+  Game g = clue_and_react(replay_opts("b1"), "Alice clues 4 to Cathy", "b5");
 
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 5), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5, {"g1", "b1"});
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/5, {"r1", "y1"});
 }

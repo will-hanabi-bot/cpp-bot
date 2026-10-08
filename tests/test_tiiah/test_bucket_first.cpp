@@ -52,17 +52,43 @@ Game clue_and_react(SetupOptions opts, const std::string& clue) {
                        /*reached_the_hole=*/true, "t5");
 }
 
+// Four suits: red, yellow (bucket 0), green (1), blue (2) -- the three-bucket
+// rule. Nothing played. Bob's slot 4 is the card the clue names for him.
+SetupOptions four_suits(const std::string& bob_slot4,
+                        std::vector<std::string> cathy) {
+  SetupOptions opts;
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r4", "y4", "g4", bob_slot4, "g3"},
+      std::move(cathy),
+  };
+  opts.starting = TestPlayer::ALICE;
+  opts.clue_tokens = 7;
+  use_tiiah(opts);
+  return opts;
+}
+
+Game clue_and_react_4_suits(SetupOptions opts, const std::string& clue) {
+  Game g = setup(std::move(opts));
+  g = take_turn(std::move(g), clue);
+  EXPECT_FALSE(g.waiting.empty()) << "the fixture did not produce a reactive";
+  return hidden_action(std::move(g), TestPlayer::BOB, /*slot=*/4,
+                       /*reached_the_hole=*/true, "b5");
+}
+
 }  // namespace
 
-// The user's example. Alice's 5 to Cathy (anchor 5) pairs Bob's slot 4 with
-// Cathy's slot 1. Bob plays the g1, bucket 1; a rank clue names the bucket above,
-// purple and teal. Cathy's slot 1 was not touched, so it could also be the g2 the
-// g1 continues into -- not provably a finesse, so the bucket alone: `{p1,t1}`.
+// The user's example, in four suits. Alice's 5 to Cathy (anchor 5) pairs Bob's
+// slot 4 with Cathy's slot 1. Bob plays the b1, bucket 2; a rank clue names the
+// bucket above, wrapping to red and yellow. Cathy's slot 1 was not touched, so it
+// could also be the b2 the b1 continues into -- not provably a finesse, so the
+// bucket alone: `{r1,y1}`.
 TEST(TiiahBucketFirst, AnUnprovableFinesseReadsTheBucketAlone) {
-  Game g = clue_and_react(six_suits("g1", {"p1", "g2", "p5", "b5", "y5"}),
-                          "Alice clues 5 to Cathy");
+  Game g = clue_and_react_4_suits(four_suits("b1", {"r1", "b2", "r5", "g5", "y5"}),
+                                  "Alice clues 5 to Cathy");
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/1, {"p1", "t1"});
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/1, {"r1", "y1"});
 }
 
 // Alice's Yellow to Cathy (anchor 2) pairs Bob's slot 4 with Cathy's slot 3. Bob

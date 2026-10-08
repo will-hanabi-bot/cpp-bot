@@ -23,7 +23,11 @@
 #include "replay_helpers.h"
 #include "test_harness.h"
 
-TEST(TiiahReplay2011830, TheCalledGreenFiveIsPlayed) {
+// DISABLED in v23.0.0: this game was recorded under the 3-bucket rule, and v23.0.0
+// changed what a reactive clue means in this variant (single-suit buckets with an
+// epoch shift, CONVENTION.md §1a), so replaying it no longer tests what it was
+// written for. Kept for reference.
+TEST(TiiahReplay2011830, DISABLED_TheCalledGreenFiveIsPlayed) {
   const char* kSnapshotJson = R"json(
 {
   "bot": "will-bot69",
