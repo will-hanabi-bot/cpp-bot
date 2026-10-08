@@ -359,9 +359,20 @@ because an ordinary discard still refunds: the rule is about the hole.
 
 ### §1a Buckets
 
+> **EXPERIMENTAL (branch `exp/six-buckets`, `v22.11.0-exp6b`; the user's A/B).**
+> A TIIAH variant with **six non-inverted suits** (`six_suit_buckets`,
+> `src/conventions/tiiah/buckets.cpp:9-15`) has **six** buckets, one per suit,
+> numbered by suit index — red 0, …, black 5 in `& Black (6 Suits)`
+> (`variant_buckets`, `:48-56`; `bucket_of`, `:58-71`). The table below then does
+> not apply. The relation's shift depends on the clue's **epoch**, `ceil(T / 3)`
+> for the 1-based turn T the clue was given on: ±1 on an odd epoch, ±2 on an even
+> one (`bucket_shift`, `:73-82`; §1d). `& Orange (6 Suits)` and every five-suit or
+> smaller variant keep three buckets and ±1. Tests:
+> `tests/test_tiiah/test_six_buckets.cpp`.
+
 Drop the inverted suits, re-index what is left from 0, and map on the count that
-**remains** (`suit_buckets`, `src/conventions/tiiah/buckets.cpp:7-34`;
-`bucket_of`, `:36-48`):
+**remains** (`suit_buckets`, `src/conventions/tiiah/buckets.cpp:19-46`;
+`bucket_of`, `:58-71`):
 
 | Suits remaining | Bucket 0 | Bucket 1 | Bucket 2 |
 |---|---|---|---|
@@ -374,7 +385,9 @@ So `& Orange (6 Suits)` uses the five-suit row, `& Orange (5 Suits)` the
 four-suit row, and `& Orange (4 Suits)` — Red, Green, Blue — the three-suit one.
 An inverted suit is in **no** bucket: it is never a reactive target (§1d).
 
-Three buckets is what makes the ±1 of §1d unambiguous.
+Three buckets is what makes the ±1 of §1d unambiguous. With six (above),
++1, −1, +2 and −2 are distinct and non-zero mod 6, so the clue kind is still
+unambiguous and a target never shares the reacter's suit.
 
 ### §1b Stable clues — reactor0's, with two exceptions
 
@@ -1047,9 +1060,18 @@ stack cannot otherwise convey:
   **higher** than the reacter's card (wrapping);
 - a **colour** clue means a finesse, *or* one bucket **lower** (wrapping).
 
+**EXPERIMENTAL (branch `exp/six-buckets`).** Under six buckets (§1a) "one" is the
+`bucket_shift` of the clue's turn: one on an odd epoch (turns 1-3, 7-9, …), two on
+an even one (turns 4-6, …), wrapping mod 6 (`named_bucket` / `reacter_bucket_for`,
+`src/conventions/tiiah/buckets.cpp:88-96`). The turn is the turn the CLUE was
+given on — `state.turn_count` at clue time, `wc.turn` at reaction time — never the
+turn the reaction lands on, which may be in the next epoch. Every relation site
+calls those helpers; the fallback ladder (the bucket, else a provable finesse, else
+any playable) is unchanged.
+
 **The finesse and the bucket relation are disjoint by definition**, so a clue is
 never both and there is no precedence between them to settle. `required_target_bucket`
-/ `bucket_relation_holds` (`src/conventions/tiiah/interpret_reactive.cpp:81-95`)
+/ `bucket_relation_holds` (`src/conventions/tiiah/interpret_reactive.cpp:83-97`)
 are the relation; the finesse is a target one away, whose *connector* is the one
 card that bridges to it (`interpret_reactive.cpp:690-704`).
 

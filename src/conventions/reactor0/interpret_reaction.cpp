@@ -222,7 +222,7 @@ SlotElims slot_elims(const Game& prev, const ReactorWC& wc, int slot,
       if (!shared.is_playable(c)) return false;
       const auto from = hanabi::tiiah::bucket_of(*s.variant, c.suit_index);
       if (!from) return true;
-      const int named = wc.clue.kind == ClueKind::RANK ? (*from + 1) % 3 : (*from + 2) % 3;
+      const int named = hanabi::tiiah::named_bucket(*s.variant, wc.clue.kind, wc.turn, *from);
       if (named == *want) return true;
       // Out of the bucket: legal only when the receiver's bucket reading is empty.
       return !slot_poss.exists([&](Identity x) {

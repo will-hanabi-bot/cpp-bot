@@ -41,7 +41,7 @@ std::string format_settings(const Variant& variant) {
   anchors += "}";
 
   std::string buckets;
-  for (const auto& bucket : suit_buckets(variant)) {
+  for (const auto& bucket : variant_buckets(variant)) {
     buckets += "[";
     for (size_t i = 0; i < bucket.size(); ++i) {
       if (i) buckets += ",";
@@ -54,8 +54,13 @@ std::string format_settings(const Variant& variant) {
          "does not (Cathy reacts, Bob receives), else stable as reactor0; every "
          "reactive is EVEN, anchors " +
          anchors + "; buckets " + buckets +
-         "; rank: the target sits one bucket UP from the reacter's card, colour "
-         "one DOWN; inverted suits are in no bucket and are skipped as targets "
+         (six_suit_buckets(variant)
+              ? "; EXPERIMENTAL six buckets: with epoch = ceil(turn / 3), rank: the "
+                "target sits one bucket UP from the reacter's card on an odd epoch, "
+                "two UP on an even one, colour as many DOWN"
+              : "; rank: the target sits one bucket UP from the reacter's card, "
+                "colour one DOWN") +
+         "; inverted suits are in no bucket and are skipped as targets "
          "unless nothing else plays, when the clue is a double chuck";
 }
 

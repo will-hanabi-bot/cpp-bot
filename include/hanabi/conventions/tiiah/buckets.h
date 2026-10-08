@@ -1,15 +1,25 @@
-// Throw It in a Hole — the three suit buckets.
+// Throw It in a Hole — the suit buckets.
 //
 // A card in the hole is invisible, so the reactive clues (CONVENTION.md §1c)
 // cannot name an identity the way a stable clue does. Instead the clue KIND
 // encodes the relationship between the reacter's suit and the receiver's: under
-// a rank clue the receiver's target sits one bucket higher, under a colour clue
-// one bucket lower, wrapping. Three buckets is what makes ±1 unambiguous.
+// a rank clue the receiver's target sits `bucket_shift` buckets higher, under a
+// colour clue as many lower, wrapping.
+//
+// EXPERIMENTAL (branch exp/six-buckets): a TIIAH variant with six non-inverted
+// suits gives every suit its own bucket, numbered by suit index, and the shift
+// depends on the clue's EPOCH, ceil(turn / 3): +-1 on an odd epoch, +-2 on an
+// even one. +1, -1, +2, -2 are distinct and non-zero mod 6, so the clue kind is
+// never ambiguous and a target never sits in the reacter's own suit. Every other
+// TIIAH variant keeps three buckets and +-1, which is what makes +-1 unambiguous
+// there.
 #pragma once
 
 #include <array>
 #include <optional>
 #include <vector>
+
+#include "hanabi/basics/clue.h"
 
 namespace hanabi {
 struct Variant;
@@ -17,8 +27,16 @@ struct Variant;
 
 namespace hanabi::tiiah {
 
-// The three buckets, each holding the ORIGINAL suit indices it covers, in
-// ascending order.
+// Six non-inverted suits under Throw It in a Hole: one bucket per suit, and the
+// epoch-dependent shift (EXPERIMENTAL, branch exp/six-buckets).
+bool six_suit_buckets(const Variant& variant);
+
+// How many buckets the variant has: 6 under `six_suit_buckets`, else 3.
+int bucket_count(const Variant& variant);
+
+// The THREE-bucket table, each bucket holding the ORIGINAL suit indices it
+// covers, in ascending order. Under `six_suit_buckets` the variant does not use it
+// (`variant_buckets` is what it uses).
 //
 // Inverted (Orange / Dark Orange) suits are removed first and belong to no
 // bucket: they are never a reactive target in the first place (§1c), and the
@@ -35,7 +53,24 @@ namespace hanabi::tiiah {
 // reads as "no suit has a bucket" and so proposes nothing.
 std::array<std::vector<int>, 3> suit_buckets(const Variant& variant);
 
+// The buckets the variant actually uses: six single-suit buckets, bucket i being
+// suit i, under `six_suit_buckets`; else `suit_buckets`.
+std::vector<std::vector<int>> variant_buckets(const Variant& variant);
+
 // Which bucket `suit_index` sits in, or nullopt for an inverted suit.
 std::optional<int> bucket_of(const Variant& variant, int suit_index);
+
+// How many buckets UP a reactive clue given on `clue_turn` (1-based, the turn
+// the clue itself was given) moves from the reacter's card to the target:
+// positive for a rank clue, negative for a colour clue. Three buckets: +-1.
+// Six buckets: +-1 when ceil(clue_turn / 3) is odd, +-2 when it is even.
+int bucket_shift(const Variant& variant, ClueKind kind, int clue_turn);
+
+// The bucket the receiver's target must sit in, given the reacter's bucket.
+int named_bucket(const Variant& variant, ClueKind kind, int clue_turn, int from);
+
+// The inverse: the bucket the reacter's card must sit in, given the target's.
+int reacter_bucket_for(const Variant& variant, ClueKind kind, int clue_turn,
+                       int target_bucket);
 
 }  // namespace hanabi::tiiah

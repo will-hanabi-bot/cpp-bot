@@ -39,8 +39,9 @@ int anchor_of(const State& state, const ClueAction& action) {
 }
 
 // Defined with §1d's receiver reading, below.
-bool finesse_from_the_card(const Game& game, ClueKind kind, const IdentitySet& could,
-                           const IdentitySet& react_live, int react_order);
+bool finesse_from_the_card(const Game& game, ClueKind kind, int clue_turn,
+                           const IdentitySet& could, const IdentitySet& react_live,
+                           int react_order);
 
 // The stacks as they will stand once `player` has played everything they
 // already know about — §1c's "stack simulation". Walks to a fixpoint so a chain
@@ -75,21 +76,21 @@ State reacter_faces(const Game& game, int receiver, bool receiver_acts_first,
   return base ? game.state.with_stacks(*base) : game.state.shared_view();
 }
 
-// Which bucket the receiver's target must sit in, given the reacter's card and
-// the clue kind (CONVENTION.md §1d): one HIGHER for a rank clue, one LOWER for
-// a colour clue, wrapping. Nullopt when the reacter's suit has no bucket, which
-// is what an inverted suit has.
+// Which bucket the receiver's target must sit in, given the reacter's card, the
+// clue kind and the turn the clue was given (CONVENTION.md §1d): `bucket_shift`
+// HIGHER for a rank clue, LOWER for a colour clue, wrapping. Nullopt when the
+// reacter's suit has no bucket, which is what an inverted suit has.
 std::optional<int> required_target_bucket(const Variant& variant, ClueKind kind,
-                                          Identity reacter_id) {
+                                          int clue_turn, Identity reacter_id) {
   auto from = bucket_of(variant, reacter_id.suit_index);
   if (!from) return std::nullopt;
-  return kind == ClueKind::RANK ? (*from + 1) % 3 : (*from + 2) % 3;
+  return named_bucket(variant, kind, clue_turn, *from);
 }
 
 // Does this pairing satisfy §1d's bucket relation?
-bool bucket_relation_holds(const Variant& variant, ClueKind kind,
+bool bucket_relation_holds(const Variant& variant, ClueKind kind, int clue_turn,
                            Identity reacter_id, Identity target_id) {
-  auto want = required_target_bucket(variant, kind, reacter_id);
+  auto want = required_target_bucket(variant, kind, clue_turn, reacter_id);
   if (!want) return false;
   auto got = bucket_of(variant, target_id.suit_index);
   return got && *got == *want;
@@ -166,9 +167,9 @@ bool both_know_their_own(const Game& game, int react_order, int target_order) {
 // the bucket the relation names from that card; when the bucket offers a playable
 // among `target_poss` on `faced`, it names that card -- not the target. An empty
 // bucket reading leaves it its own playable, and both players know what they hold.
-bool receiver_bucket_empty(const State& faced, ClueKind kind, Identity react,
-                           const IdentitySet& target_poss) {
-  const auto want = required_target_bucket(*faced.variant, kind, react);
+bool receiver_bucket_empty(const State& faced, ClueKind kind, int clue_turn,
+                           Identity react, const IdentitySet& target_poss) {
+  const auto want = required_target_bucket(*faced.variant, kind, clue_turn, react);
   if (!want) return true;
   return !target_poss.exists([&](Identity x) {
     const auto b = bucket_of(*faced.variant, x.suit_index);
@@ -181,12 +182,12 @@ bool receiver_bucket_empty(const State& faced, ClueKind kind, Identity react,
 // misread? Judged on public information (the reacter's empathy, the target's
 // possibilities), so every seat that walks reaches the same answer. A pairing that
 // fails it is KNOWN illegal, and the walk goes past it (replay 2022760 T22).
-bool reacter_can_legally_answer(const State& faced, ClueKind kind, Identity target_id,
-                                const IdentitySet& react_playables,
+bool reacter_can_legally_answer(const State& faced, ClueKind kind, int clue_turn,
+                                Identity target_id, const IdentitySet& react_playables,
                                 const IdentitySet& target_poss) {
   return react_playables.exists([&](Identity c) {
-    return bucket_relation_holds(*faced.variant, kind, c, target_id) ||
-           receiver_bucket_empty(faced, kind, c, target_poss);
+    return bucket_relation_holds(*faced.variant, kind, clue_turn, c, target_id) ||
+           receiver_bucket_empty(faced, kind, clue_turn, c, target_poss);
   });
 }
 
@@ -399,6 +400,10 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                /*all_plays=*/false};
   wc.even_parity = true;
   wc.rlocks = false;  // no reactive lock in this convention
+  // The turn this clue is given on, which picks the bucket shift under six suit
+  // buckets (EXPERIMENTAL, `buckets.h`). Reaction-time readers take it from
+  // `wc.turn`, never from the turn they are reading on.
+  const int clue_turn = wc.turn;
   // The frame the giver chose the target in, and the one `stamp_receiver_call`
   // builds the receiver's reading in (`reactor0/interpret_reaction.cpp:400-425`).
   // A deferral resolves later, against stacks that have moved, and under TIIAH
@@ -573,8 +578,8 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     // The bucket the relation names for the reacter's card (§1d) comes first.
     const auto want = bucket_of(*state.variant, target.id.suit_index);
     const std::optional<int> from =
-        want ? std::optional<int>(action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
-                                                                     : (*want + 1) % 3)
+        want ? std::optional<int>(
+                   reacter_bucket_for(*state.variant, action.clue.kind, clue_turn, *want))
              : std::nullopt;
     const IdentitySet in_bucket = react_live.filter([&](Identity i) {
       auto b = bucket_of(*state.variant, i.suit_index);
@@ -593,7 +598,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       const State* f = faced_in(w);
       if (!f || !f->is_playable(i)) return false;
       return in_bucket.contains(i) || state.pace() <= 1 ||
-             receiver_bucket_empty(*f, action.clue.kind, i, target_poss);
+             receiver_bucket_empty(*f, action.clue.kind, clue_turn, i, target_poss);
     };
     // The connector of a one-away world is the finesse half; it stands with the
     // bucket half, as one reading (2023126: `{r2}` where red was 1, `{g2,b2}` where 2).
@@ -621,7 +626,8 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
                                      });
       if (!sound) return AscrOutcome::REJECT;
       if (action.giver == state.our_player_index && state.pace() > 1 &&
-          !bucket_relation_holds(*state.variant, action.clue.kind, *actual, target.id) &&
+          !bucket_relation_holds(*state.variant, action.clue.kind, clue_turn, *actual,
+                                 target.id) &&
           !both_know_their_own(game, react_order, target.order)) {
         return AscrOutcome::REJECT;
       }
@@ -724,7 +730,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     // different pairings (self-play 6 Suits, seeds 54 and 212).
     auto known_violation = [&](const State& faced) {
       return !reacter_can_legally_answer(
-          faced, action.clue.kind, target.id,
+          faced, action.clue.kind, clue_turn, target.id,
           react_live.filter([&faced](Identity i) { return faced.is_playable(i); }),
           game.common.thoughts[target.order].possibilities());
     };
@@ -776,7 +782,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       const bool endgame = state.pace() <= 1;
       if (action.giver == state.our_player_index && !connector && !double_chuck &&
           !endgame &&
-          !bucket_relation_holds(*state.variant, action.clue.kind, *actual,
+          !bucket_relation_holds(*state.variant, action.clue.kind, clue_turn, *actual,
                                  target.id) &&
           !both_know_their_own(game, react_order, target.order)) {
         // A globally known violation (below, the walk) is one readers understand,
@@ -794,7 +800,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         const Thought& tt = game.common.thoughts[target.order];
         const IdentitySet could =
             tt.inferred.non_empty() ? tt.inferred.intersect(tt.possible) : tt.possible;
-        if (!finesse_from_the_card(game, action.clue.kind, could,
+        if (!finesse_from_the_card(game, action.clue.kind, clue_turn, could,
                                    IdentitySet::single(*connector), react_order)) {
           return std::nullopt;
         }
@@ -891,8 +897,8 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         // counts — sitting in the bucket the relation names. Worked example:
         // red on 2 with the receiver holding a called r3, a rank clue, and a
         // green target gives the reacter `{r4, y1}` — the playables of bucket 0.
-        const int from = action.clue.kind == ClueKind::RANK ? (*want + 2) % 3
-                                                            : (*want + 1) % 3;
+        const int from =
+            reacter_bucket_for(*state.variant, action.clue.kind, clue_turn, *want);
         // ...in every world the reacter's own hole plays leave open, which is
         // `bucket_over_worlds` above -- the same reading the RECEIVER reconstructs
         // at reaction time.
@@ -1129,8 +1135,8 @@ struct ReceiverReading {
 };
 
 ReceiverReading receiver_reading(const Variant& variant,
-                                 const std::vector<OpenWorld>& worlds,
-                                 ClueKind kind, const IdentitySet& react_live) {
+                                 const std::vector<OpenWorld>& worlds, ClueKind kind,
+                                 int clue_turn, const IdentitySet& react_live) {
   ReceiverReading out;
   IdentitySet& allowed = out.allowed;
   auto& support = out.support;
@@ -1155,7 +1161,7 @@ ReceiverReading receiver_reading(const Variant& variant,
   }
   for (std::size_t w = 0; w < worlds.size(); ++w) {
     if (one_bucket && from) {
-      const int want = kind == ClueKind::RANK ? (*from + 1) % 3 : (*from + 2) % 3;
+      const int want = named_bucket(variant, kind, clue_turn, *from);
       const IdentitySet here = IdentitySet::create(
           [&](Identity i) {
             auto b = bucket_of(variant, i.suit_index);
@@ -1248,8 +1254,8 @@ bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
   const IdentitySet& before = prev.common.thoughts[target].inferred;
   const IdentitySet& possible = game.common.thoughts[target].possible;
   const IdentitySet could = before.non_empty() ? before.intersect(possible) : possible;
-  return finesse_from_the_card(game, wc.clue.kind, could, IdentitySet::single(seen),
-                               react_order);
+  return finesse_from_the_card(game, wc.clue.kind, wc.turn, could,
+                               IdentitySet::single(seen), react_order);
 }
 
 // The test itself, on a frame every seat computes alike (v17.2.0): the SHARED view,
@@ -1260,8 +1266,9 @@ bool proven_finesse(const Game& prev, const Game& game, const ReactorWC& wc,
 // The reacter's card itself is left out of the worlds (`react_order`): its identity
 // is the one being asked about, and at the receiver's seat it is already in the
 // hole while at the other two it is not yet.
-bool finesse_from_the_card(const Game& game, ClueKind kind, const IdentitySet& could,
-                           const IdentitySet& react_live, int react_order) {
+bool finesse_from_the_card(const Game& game, ClueKind kind, int clue_turn,
+                           const IdentitySet& could, const IdentitySet& react_live,
+                           int react_order) {
   const State& s = game.state;
   std::vector<int> everyone;
   for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
@@ -1269,7 +1276,8 @@ bool finesse_from_the_card(const Game& game, ClueKind kind, const IdentitySet& c
                                                : s.shared_view().with_band(s.common_evidence);
   const auto worlds =
       open_worlds(game, base, everyone, 64, react_order, /*shared=*/true);
-  const ReceiverReading rr = receiver_reading(*s.variant, worlds, kind, react_live);
+  const ReceiverReading rr =
+      receiver_reading(*s.variant, worlds, kind, clue_turn, react_live);
   return could.intersect(rr.finesse).non_empty() &&
          could.intersect(rr.bucket).is_empty();
 }
@@ -1370,11 +1378,13 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   // reading every world allows is no evidence about the hole, and the stamp failed
   // for some other reason -- its clue-time frame, say -- which this is not here to
   // second-guess (replay 2011885 T10).
-  ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
+  ReceiverReading rr =
+      receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live);
   {  // the bucket first (v22.0.0, `keep_convention_half`)
     keep_convention_half(
         rr, !bucket_only &&
-                finesse_from_the_card(game, wc.clue.kind, could, react_live, react_order));
+                finesse_from_the_card(game, wc.clue.kind, wc.turn, could, react_live,
+                                      react_order));
   }
   std::vector<IdentitySet> tiers{could.intersect(rr.allowed)};
   if (!bucket_only) {
@@ -1527,7 +1537,8 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
                   : std::vector<int>{wc.receiver, wc.giver};
   const auto worlds = open_worlds(game, base, holders);
 
-  ReceiverReading rr = receiver_reading(*s.variant, worlds, wc.clue.kind, react_live);
+  ReceiverReading rr =
+      receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live);
   // The baseline comes from `prev` rather than from `old_inferred`: unlike
   // `target_play`, `stamp_receiver_call` writes through `narrow_thought` and so
   // leaves no `old_inferred` to roll back to. `prev` is the game before the
@@ -1538,7 +1549,8 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
     const IdentitySet could =
         before.non_empty() ? before.intersect(possible) : possible;
     keep_convention_half(
-        rr, finesse_from_the_card(game, wc.clue.kind, could, react_live, react_order));
+        rr, finesse_from_the_card(game, wc.clue.kind, wc.turn, could, react_live,
+                                  react_order));
   }
   const IdentitySet& allowed = rr.allowed;
   const auto& support = rr.support;
@@ -1675,8 +1687,10 @@ void annotate_candidate(const Game& game, const Game& hypo,
                    .with_band(hs.evidence_known_to_both(giver, receiver));
   if (seen && base.is_playable(*seen)) base = base.with_play(*seen);
   const auto worlds = open_worlds(hypo, base, std::vector<int>{receiver, giver});
+  // The turn the candidate clue would be given on: this one.
+  const int clue_turn = s.turn_count;
   ReceiverReading rr = receiver_reading(*s.variant, worlds, c.action.clue.kind,
-                                        react_live);
+                                        clue_turn, react_live);
   {  // the bucket first (v22.0.0, `keep_convention_half`)
     // What the receiver's card could be once the clue lands: its reading before the
     // clue, cut by the clue's touch (the stamp has not been read by the receiver).
@@ -1686,8 +1700,8 @@ void annotate_candidate(const Game& game, const Game& hypo,
                                 : IdentitySet::empty();
     const IdentitySet could =
         pre.intersect(possible).non_empty() ? pre.intersect(possible) : possible;
-    keep_convention_half(rr, finesse_from_the_card(hypo, c.action.clue.kind, could,
-                                                   react_live, react_order));
+    keep_convention_half(rr, finesse_from_the_card(hypo, c.action.clue.kind, clue_turn,
+                                                   could, react_live, react_order));
   }
   c.receiver_reading_size =
       rr.allowed.intersect(hypo.common.thoughts[target].possible).length();
@@ -1724,8 +1738,8 @@ std::optional<std::pair<IdentitySet, int>> reaction_team_reading(const Game& gam
     const Thought& t = game.common.thoughts[target];
     const IdentitySet could =
         t.inferred.non_empty() ? t.inferred.intersect(t.possible) : t.possible;
-    finesse = finesse_from_the_card(game, wc->clue.kind, could, IdentitySet::single(id),
-                                    order);
+    finesse = finesse_from_the_card(game, wc->clue.kind, wc->turn, could,
+                                    IdentitySet::single(id), order);
   }
   if (finesse) {
     team = IdentitySet::single(id);

@@ -560,6 +560,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_world_replay_band.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
+  tests/test_tiiah/test_six_buckets.cpp
   tests/test_tiiah/test_bucket_legality.cpp
   tests/test_tiiah/test_reactions.cpp
   tests/test_tiiah/test_rainbowy.cpp
