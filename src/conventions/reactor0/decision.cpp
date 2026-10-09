@@ -2221,11 +2221,44 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
 
 }  // namespace
 
+// A reactive FINESSE whose connector is a card already called to play elsewhere
+// (v23.6.0, the user's ruling): the reacter would spend its play on a duplicate.
+// Judged by sight -- the giver sees both cards -- and, for a call on our own hand,
+// on our reading when it is that one identity. Replay 2024676 T5: will-bot69 owed
+// an urgent r2 reaction and instead gave a VERY HIGH 4 to yagami, a finesse through
+// will-bot67's g1 while yagami's own g1 was already called; yagami played it at T7
+// and will-bot67's g1 struck at T9.
+bool finesse_dupes_a_call(const Game& game, const ClueCandidate& c) {
+  if (c.reading.shape != ClueShape::REACTIVE_PLAY) return false;
+  const State& s = game.state;
+  const int react = c.reading.reacter_side.order;
+  const int target = c.reading.receiver_side.order;
+  if (react < 0 || target < 0) return false;
+  const auto rid = id_of(s, react);
+  const auto tid = id_of(s, target);
+  if (!rid || !tid || rid->suit_index != tid->suit_index) return false;
+  const bool reversed = s.variant->suits[rid->suit_index].suit_type.reversed;
+  if (tid->rank != rid->rank + (reversed ? -1 : 1)) return false;  // not a finesse
+  for (int p = 0; p < s.num_players; ++p) {
+    for (int o : s.hands[p]) {
+      if (o == react || game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      std::optional<Identity> called = id_of(s, o);
+      if (!called && p == s.our_player_index) {
+        const IdentitySet live = game.me().thoughts[o].possibilities();
+        if (live.length() == 1) called = live.head();
+      }
+      if (called && *called == *rid) return true;
+    }
+  }
+  return false;
+}
+
 std::optional<PerformAction> choose_very_high_clue(
     const Game& game, const std::vector<ClueCandidate>& cands) {
   std::vector<ClueCandidate> vh;
   int vh_seen = 0;
   for (const ClueCandidate& c : cands) {
+    if (finesse_dupes_a_call(game, c)) continue;
     // A REFUSAL joins this step rather than the tier (tiiah/CONVENTION.md §1c):
     // refusing is done INSTEAD of reacting, so it has to outrank the pending
     // reaction, and step 1 is the only place above it. Kept out of `clue_tier`
