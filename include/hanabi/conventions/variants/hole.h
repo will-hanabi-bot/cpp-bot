@@ -88,6 +88,10 @@ bool inverted_stable(const Game& prev, int giver, int target);
 //   holds    | REACTIVE, Cathy reacts, Bob gets | stable
 //   else     | stable                           | REACTIVE, Bob reacts (reactor0's)
 //
+// `player` still owes a reaction: the waiting connection's reacter, or the reacter
+// of a deferred one in `pending_reactions` (v23.10.0). Counts as loaded.
+bool owes_a_reaction(const Game& game, int player);
+
 bool reverse_reactive_position(const Game& prev, int giver);
 
 // The top-left square above: this clue is a REVERSE reactive. `position` and a

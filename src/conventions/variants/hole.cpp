@@ -155,6 +155,21 @@ bool inverted_stable(const Game& prev, int giver, int target) {
   return reverse_reactive_position(prev, giver);
 }
 
+// A seat still owing a reaction is LOADED (v23.10.0, the user's ruling): every seat
+// knows the reaction is outstanding -- the waiting connection, or the durable copy
+// a deferral leaves in `pending_reactions` until the reacter plays, discards or
+// clues it off -- even where the call on its card is stamped differently, which is
+// why `is_standing_play` leaves the call itself out. Replay 2025289 T4: yagami_blue
+// deferred black's T1 Purple with a clue of its own, still owed the reaction, and
+// black's second Purple to green was stable; green read it as reactive.
+bool owes_a_reaction(const Game& game, int player) {
+  if (!game.waiting.empty() && game.waiting.front().reacter == player) return true;
+  for (const auto& pr : game.pending_reactions) {
+    if (pr && pr->reacter == player) return true;
+  }
+  return false;
+}
+
 bool reverse_reactive_position(const Game& prev, int giver) {
   const State& s = prev.state;
   const int bob = s.next_player_index(giver);
@@ -170,7 +185,8 @@ bool reverse_reactive_position(const Game& prev, int giver) {
   // into black's n4, which v16.29.0 gave -- was not available. An uncalled card
   // counts only as a SURE play, one nothing in the hole could have made trash
   // (v20.3.0, replay 2018428; `is_standing_play`).
-  return has_standing_play(prev, bob) && !has_standing_play(prev, cathy);
+  auto loaded = [&prev](int p) { return has_standing_play(prev, p) || owes_a_reaction(prev, p); };
+  return loaded(bob) && !loaded(cathy);
 }
 
 bool reverse_reactive(const Game& prev, int giver, int target) {

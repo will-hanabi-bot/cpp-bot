@@ -464,7 +464,7 @@ T53). Its receiver's target is read on the giver's and the reacter's frame, the 
 the walk named it in (v22.8.0; replay 2023572 T8). Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:158-186`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:173-202`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch
@@ -671,3 +671,9 @@ the finesse is read first (2022852). CONVENTION.md §1d (replay 2024288 T45-T47)
 A predicted receiver reading that leaves out the target's true identity, which the
 giver can see. Ranks after every reading that holds it in priority 1's
 fewest-candidates tiebreak (v23.5.0). CONVENTION.md §2b (diagnostic 2013726 T27).
+
+### loaded (for the reverse position)
+A seat with a standing play, or one that still owes a reaction -- the waiting
+connection's reacter, or the reacter of a deferred one in `pending_reactions` --
+until it plays, discards or clues it off (v23.10.0). The reverse position holds
+when Bob is loaded and Cathy is not. CONVENTION.md §1c (replay 2025289 T4).

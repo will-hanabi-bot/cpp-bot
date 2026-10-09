@@ -607,7 +607,7 @@ was no standing play. The 1 was stable, a call on o23, as will-bot69 read it.
 **Not once the deck is nearly out (v22.7.0, the user's ruling).** With fewer cards
 left than seats, a clue to Bob in the reverse position is a stable stall, read with
 the stall context, not a reverse reactive. A clue to Cathy stays stable, as before.
-`reverse_reactive_off_late` (`src/conventions/variants/hole.cpp:184-186`) is applied
+`reverse_reactive_off_late` (`src/conventions/variants/hole.cpp:200-202`) is applied
 by `reverse_reactive`, `dispatch_is_reactive` and `tiiah::interpret_clue`.
 - Replay [2023552](https://hanab.live/shared-replay/2023552) T53, one card left:
   blue held a known b5 and black nothing. Every clue to blue read as a reverse
@@ -678,8 +678,18 @@ covers the sure play and a play of the card the reverse clue newly touched (v20.
 
 TIIAH runs **both** dispatches — reactor0's positional one and the reverse — and
 the **position** decides which seat's clue carries the reaction. The position
-holds when **Bob has a standing play and Cathy does not**
-(`reverse_reactive_position`, `src/conventions/variants/hole.cpp:158-174`):
+holds when **Bob is loaded and Cathy is not**
+(`reverse_reactive_position`, `src/conventions/variants/hole.cpp:173-190`). A seat
+is loaded when it has a standing play, or **still owes a reaction** (v23.10.0, the
+user's ruling; `owes_a_reaction`, `:158-171`): the waiting connection's reacter, or
+the reacter of a deferred one in `pending_reactions`, until it plays, discards or
+clues it off. Every seat knows the reaction is outstanding even where the call on
+its card is stamped differently, which is why the pending call itself stays out of
+`is_standing_play`. Replay [2025289](https://hanab.live/shared-replay/2025289#4)
+T1-T6: yagami_blue deferred black's T1 Purple with a clue of its own and still owed
+the reaction, so black's T4 Purple to green was stable; green read it as reactive,
+and at T6 misplayed the r1 that reading gave its o13. It now reads o15 as the p1
+(`test_replay_2025289_owed_reaction_loads_bob.cpp`).
 
 | position | a clue to **Bob** | a clue to **Cathy** |
 |---|---|---|
@@ -3750,6 +3760,7 @@ left:
 | `tests/test_tiiah/test_decision_making/test_replay_2024676_finesse_duping_a_call_is_not_very_high.cpp` | §2 (reactor0 Precedence step 1) — replay 2024676 T5, will-bot69: a VERY HIGH finesse whose connector dupes yagami's called g1 does not outrank its owed r2 reaction; it plays the r2 (v23.6.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2025193_no_five_ahead_of_a_lower_playable.cpp` | §2 (reactor0 Actionable card priority rung 7) — replay 2025193 T49, will-bot69: its called p2 is played before its known b5 (v23.8.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2025193_stuck_bobs_critical_chop_is_saved.cpp` | §2e — replay 2025193 T50, will-bot67: will-bot69 holds a called p2 and yagami's chop is the critical p4; the 4 to yagami is exempt from the tier gate and given (v23.9.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2025289_owed_reaction_loads_bob.cpp` | §1c — replay 2025289 T6, yagami_green: blue still owes its deferred T1 reaction, so it is loaded and black's T4 Purple to green is stable; green plays o15 (v23.10.0) |
 | `tests/test_tiiah/test_known_bucket_violation.cpp` | §1d — the legality layer: a known purple 2 answers a t1 under a 1 when r1/y1/p1 are down (a globally known violation); with yellow not down the receiver would read the y1, and it is no pairing (v22.4.0) |
 | `tests/test_tiiah/test_retouch_rank_call.cpp` | §1b — a 5 to Bob re-touching his `{b5,p5}` and `{r5,b5}` calls the rightmost possible play as `{p5}`; not at 8 clues, nor with nothing playable (v22.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2021455_retouch_five_calls_the_p5.cpp` | §1b — replay 2021455 T61-T62: yagami's 5 re-touching will-bot69's o8 `{p5,pr5}` calls the p5, and will-bot69 plays it (v22.2.0) |
