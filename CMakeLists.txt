@@ -290,6 +290,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_misc/test_replay_1978081_superseded_call_drops_the_reaction.cpp
   tests/test_reactor0/test_misc/test_replay_1974194_stale_reading_is_not_acted_on.cpp
   tests/test_reactor0/test_misc/test_replay_1973410_blind_clue_names_the_p5.cpp
+  tests/test_reactor0/test_misc/test_replay_2024746_known_play_outranks_positional_discard.cpp
   tests/test_reactor0/test_misc/test_replay_1973413_blind_clue_names_the_y5.cpp
   tests/test_reactor0/test_misc/test_replay_1974331_a_clued_spare_orange_is_pitchable.cpp
   tests/test_reactor0/test_deferral_keeps_call.cpp

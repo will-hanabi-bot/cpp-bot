@@ -891,12 +891,13 @@ taking a truncated search's preference.
 In the final round (the deck empty), with Bob still to act: a discard by Alice,
 who owes no reaction and holds no card the team can see is a *certain play*,
 names Bob's card **in the same slot**, which he plays on his final turn whatever
-it could be. Alice gives it for a card of Bob's she can see is playable -- unless
-he already knows that card by global empathy, when she may use the turn otherwise,
-though any discard she makes then names it; when Bob holds no play the remaining
-play is hers, and she gambles on rule 0b's selection instead (a *required play*,
-else any playable identity, Play button only); with neither, she does not
-discard. `ConvData::positional_play` marks the named card.
+it could be. The reader is Bob, unless he holds a play the team can see is
+certain -- that always comes first -- and then Cathy, if she still acts and holds
+none herself; otherwise nobody (v23.7.0). Alice gives it for a card of the
+reader's she can see is playable; when the reader is Bob and he holds no play the
+remaining play is hers, and she gambles on rule 0b's selection instead (a
+*required play*, else any playable identity, Play button only); otherwise, while
+somebody reads it, she does not discard. `ConvData::positional_play` marks the named card.
 `src/conventions/reactor0/positional_discard.cpp`; CONVENTION.md §1j,
 DECISION_MAKING.md Precedence step -1 (v23.2.0, the user's ruling; replay 2024288
 T61).

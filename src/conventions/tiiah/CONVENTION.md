@@ -3170,9 +3170,10 @@ Strikes stay hidden: Bob's play goes into the hole like any other. Replay
 [2024288](https://hanab.live/shared-replay/2024288#61) T61-T62: the deck was
 empty, will-bot69 held the u5 in slot 5 and acted last, and will-bot67 gambled
 its slot 1 into a strike. A discard of its slot 5 names the u5, and will-bot69
-plays it (test below). will-bot67 stalls there instead, by the user's
-exception: will-bot69 already knows o9 is the u5 (§1e, a card below a landing we
-saw is spent, v23.4.0), and plays it at T62.
+plays it (test below). will-bot67 stalls there instead: will-bot69 already
+knows o9 is the u5 (§1e, a card below a landing we saw is spent, v23.4.0), and a
+play the team can see is certain always comes first (v23.7.0), so nobody reads a
+discard and will-bot69 plays it at T62.
 
 **Two rungs of this convention's own run ahead of reactor0's** (v16.25.0), both from
 §1: the PASSBACK (§1j) before the pending reaction, since playing a card whose unnamed

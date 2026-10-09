@@ -647,9 +647,11 @@ more than the dupe. CONVENTION.md §1e, replay 2020406 T28.
 ### positional discard
 reactor0's final-round convention, used here unchanged: with the deck empty and
 Bob still to act, Alice's discard -- when she owes no reaction and the team sees
-no certain play in her hand on the shared stacks -- names Bob's card in the same
-slot, which he plays. reactor0's GLOSSARY.md and CONVENTION.md §1j (v23.2.0;
-replay 2024288 T61, where will-bot69's u5 sat in slot 5).
+no certain play in her hand on the shared stacks -- names the reader's card in
+the same slot, which they play. The reader is Bob, unless he holds a play the team
+can see is certain, then Cathy if she still acts and holds none, else nobody
+(v23.7.0). reactor0's GLOSSARY.md and CONVENTION.md §1j (v23.2.0; replay 2024288
+T61, where will-bot69's u5 sat in slot 5).
 
 ### spent below a seen landing
 A partner's card we watched land puts every card of its suit below it on the

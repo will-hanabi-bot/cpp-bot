@@ -40,26 +40,51 @@ bool common_certain_play(const Game& game, int player) {
   return false;
 }
 
-// Bob's cards we can see play now, as slot indices (0-based, slot 1 first).
-std::vector<int> bob_playable_slots(const Game& game, int bob) {
+// A card of `player`'s the team can see certainly plays (`common_certain_play`'s
+// test, card by card), or -1.
+int common_certain_card(const Game& game, int player) {
   const State& s = game.state;
+  const State shared = s.shared_view();
+  for (int o : s.hands[player]) {
+    const IdentitySet live = game.common.thoughts[o].possibilities();
+    if (live.non_empty() &&
+        live.forall([&](Identity i) { return !inverted(s, i) && shared.is_playable(i); })) {
+      return o;
+    }
+  }
+  return -1;
+}
+
+// The reader's cards we can see play when their turn comes, as slot indices
+// (0-based, slot 1 first). For Cathy, after Bob's certain play has landed.
+std::vector<int> playable_slots(const Game& game, int alice, int reader) {
+  const State& s = game.state;
+  State at = s;
+  const int bob = s.next_player_index(alice);
+  if (reader != bob) {
+    const int o = common_certain_card(game, bob);
+    if (o >= 0) {
+      if (const auto id = s.deck[o].id(); id && s.is_playable(*id)) at = s.with_play(*id);
+    }
+  }
   std::vector<int> out;
-  for (std::size_t k = 0; k < s.hands[bob].size(); ++k) {
-    const auto id = s.deck[s.hands[bob][k]].id();
-    if (!id || inverted(s, *id) || !s.is_playable(*id)) continue;
+  for (std::size_t k = 0; k < s.hands[reader].size(); ++k) {
+    const auto id = s.deck[s.hands[reader][k]].id();
+    if (!id || inverted(s, *id) || !at.is_playable(*id)) continue;
     out.push_back(static_cast<int>(k));
   }
   return out;
 }
 
-// A seat still to act after Bob in this final round holds the card after `id`.
-bool unblocks_a_later_seat(const State& s, int bob, Identity id) {
+// A seat still to act after `reader` in this final round holds the card after `id`.
+bool unblocks_a_later_seat(const State& s, int reader, Identity id) {
   if (!s.endgame_turns) return false;
   const auto next = id.next();
   if (!next) return false;
-  for (int i = 2; i < *s.endgame_turns; ++i) {
-    const int seat = (s.current_player_index + i) % s.num_players;
-    if (seat == bob) continue;
+  int seat = reader;
+  for (int i = 0; i < s.num_players; ++i) {
+    seat = s.next_player_index(seat);
+    if (seat == s.current_player_index) break;  // back round to Alice: the round is over
     for (int o : s.hands[seat]) {
       const auto seen = s.deck[o].id();
       if (seen && *seen == *next) return true;
@@ -68,34 +93,23 @@ bool unblocks_a_later_seat(const State& s, int bob, Identity id) {
   return false;
 }
 
-// A stall: a legal clue to a seat other than Bob where there is one, so that it
-// cannot read as a play clue on his last turn.
-std::optional<PerformAction> stall_clue(const Game& game, int bob) {
+// A stall: a legal clue to a seat other than the reader where there is one, so that
+// it cannot read as a play clue on their last turn.
+std::optional<PerformAction> stall_clue(const Game& game, int reader) {
   const State& s = game.state;
   if (!s.can_clue()) return std::nullopt;
-  std::optional<PerformAction> to_bob;
+  std::optional<PerformAction> to_reader;
   for (int i = 1; i < s.num_players; ++i) {
     const int target = (s.our_player_index + s.num_players - i) % s.num_players;
     for (const Clue& clue : s.all_valid_clues(target)) {
       const PerformAction a = clue.kind == ClueKind::COLOUR
                                   ? PerformAction{PerformColour{clue.target, clue.value}}
                                   : PerformAction{PerformRank{clue.target, clue.value}};
-      if (target != bob) return a;
-      if (!to_bob) to_bob = a;
+      if (target != reader) return a;
+      if (!to_reader) to_reader = a;
     }
   }
-  return to_bob;
-}
-
-// Bob already knows this card is a play, by GLOBAL EMPATHY: every reading of it
-// the team holds plays on the shared stacks. Then Alice need not name it (the
-// user's exception, v23.2.0).
-bool bob_knows_play(const Game& game, int order) {
-  const State& s = game.state;
-  const IdentitySet live = game.common.thoughts[order].possibilities();
-  const State shared = s.shared_view();
-  return live.non_empty() &&
-         live.forall([&](Identity i) { return !inverted(s, i) && shared.is_playable(i); });
+  return to_reader;
 }
 
 }  // namespace
@@ -116,20 +130,37 @@ bool positional_position(const Game& game, int alice) {
   return !common_certain_play(game, alice);
 }
 
+// The seat a positional discard by `alice` speaks to (v23.7.0, the user's ruling):
+// Bob -- unless Bob has a play the team can see is certain, which always comes
+// first; then Cathy, if she still acts and has no such play herself; else nobody.
+// Replay 2024746 T56-T57 (reactor0): Noah threw his slot 5 with the deck empty;
+// will-bot69 knew its p5 and will-bot67 its r5, so the discard said nothing, but
+// will-bot69 played its slot 5 -- a dead g3 -- instead of the p5.
+std::optional<int> positional_reader(const Game& game, int alice) {
+  const State& s = game.state;
+  if (!positional_position(game, alice)) return std::nullopt;
+  const int bob = s.next_player_index(alice);
+  if (!common_certain_play(game, bob)) return bob;
+  if (*s.endgame_turns < 3) return std::nullopt;  // Cathy has no turn left
+  const int cathy = s.next_player_index(bob);
+  if (cathy == alice || common_certain_play(game, cathy)) return std::nullopt;
+  return cathy;
+}
+
 std::optional<PerformAction> positional_discard_signal(const Game& game) {
   const State& s = game.state;
   const int us = s.our_player_index;
-  if (s.current_player_index != us || !positional_position(game, us)) return std::nullopt;
+  if (s.current_player_index != us) return std::nullopt;
+  const auto reader = positional_reader(game, us);
+  if (!reader) return std::nullopt;
   if (!hanabi::endgame::certain_plays(game).empty()) return std::nullopt;
   if (s.clue_tokens >= 8) return std::nullopt;  // a discard is illegal here
-  const int bob = s.next_player_index(us);
   std::optional<int> best;
   bool best_unblocks = false;
-  for (int k : bob_playable_slots(game, bob)) {
+  for (int k : playable_slots(game, us, *reader)) {
     if (k >= static_cast<int>(s.hands[us].size())) continue;  // no slot of ours to name it
-    if (bob_knows_play(game, s.hands[bob][k])) continue;  // nothing to tell him
     const bool unblocks =
-        unblocks_a_later_seat(s, bob, *s.deck[s.hands[bob][k]].id());
+        unblocks_a_later_seat(s, *reader, *s.deck[s.hands[*reader][k]].id());
     if (!best || (unblocks && !best_unblocks)) {
       best = k;
       best_unblocks = unblocks;
@@ -137,17 +168,20 @@ std::optional<PerformAction> positional_discard_signal(const Game& game) {
   }
   if (!best) return std::nullopt;
   hanabi::logging::log_branch("reactor0.positional_discard_given",
-                              {{"slot", *best + 1}, {"bob_order", s.hands[bob][*best]}});
+                              {{"slot", *best + 1}, {"reader", *reader},
+                               {"reader_order", s.hands[*reader][*best]}});
   return PerformAction{PerformDiscard{s.hands[us][*best]}};
 }
 
 std::optional<PerformAction> positional_gamble(const Game& game) {
   const State& s = game.state;
   const int us = s.our_player_index;
-  if (s.current_player_index != us || !positional_position(game, us)) return std::nullopt;
-  if (!hanabi::endgame::certain_plays(game).empty()) return std::nullopt;
+  if (s.current_player_index != us) return std::nullopt;
+  const auto reader = positional_reader(game, us);
   const int bob = s.next_player_index(us);
-  if (!bob_playable_slots(game, bob).empty()) return std::nullopt;  // Bob has a play
+  if (!reader || *reader != bob) return std::nullopt;  // Bob has a play of his own
+  if (!hanabi::endgame::certain_plays(game).empty()) return std::nullopt;
+  if (!playable_slots(game, us, bob).empty()) return std::nullopt;  // Bob has a play
   // The play is ours. A gamble that presses Discard (an inverted chuck) would read
   // as positional, so only the Play button is bet on.
   auto is_play = [](const std::optional<PerformAction>& a) {
@@ -169,29 +203,18 @@ PerformAction positional_guard(const Game& game, const PerformAction& chosen) {
   const auto* d = std::get_if<PerformDiscard>(&chosen);
   if (!d) return chosen;
   const int us = s.our_player_index;
-  if (s.current_player_index != us || !positional_position(game, us)) return chosen;
+  if (s.current_player_index != us) return chosen;
+  const auto reader = positional_reader(game, us);
+  if (!reader) return chosen;  // nobody reads it: a discard is only a discard
   if (auto sig = positional_discard_signal(game); sig && *sig == chosen) return chosen;
-  const int bob = s.next_player_index(us);
-  // A play Bob already knows (the exception): Alice was free not to name it, but a
-  // discard is read all the same, so the one she makes names it. Self-play seed
-  // 117 T61 (Black): at 0 clues our slot-5 discard sent Bob's last turn to his p1
-  // instead of the r5 he knew.
-  for (int k : bob_playable_slots(game, bob)) {
-    if (k >= static_cast<int>(s.hands[us].size())) continue;
-    const PerformAction named{PerformDiscard{s.hands[us][k]}};
-    if (named == chosen) return chosen;
-    hanabi::logging::log_branch("reactor0.positional_guard",
-                                {{"replaced", d->target}, {"by", s.hands[us][k]}});
-    return named;
-  }
-  if (auto clue = stall_clue(game, bob)) {
+  if (auto clue = stall_clue(game, *reader)) {
     hanabi::logging::log_branch("reactor0.positional_guard", {{"replaced", d->target},
                                                              {"by", "stall_clue"}});
     return *clue;
   }
-  // A slot Bob does not hold names nothing.
+  // A slot the reader does not hold names nothing.
   const auto& ours = s.hands[us];
-  for (std::size_t k = s.hands[bob].size(); k < ours.size(); ++k) {
+  for (std::size_t k = s.hands[*reader].size(); k < ours.size(); ++k) {
     hanabi::logging::log_branch("reactor0.positional_guard",
                                 {{"replaced", d->target}, {"by", ours[k]}});
     return PerformAction{PerformDiscard{ours[k]}};
@@ -212,7 +235,8 @@ void read_positional_discard(const Game& prev, Game& game, const DiscardAction& 
   if (action.failed) return;  // a misplay pressed Play
   const State& ps = prev.state;
   const int alice = action.player_index_v;
-  if (!positional_position(prev, alice)) return;
+  const auto reader = positional_reader(prev, alice);
+  if (!reader) return;
   // A discard that throws a card called to discard says what that call says (one
   // that answers a reaction is ruled out with the position).
   if (action.order < static_cast<int>(prev.meta.size()) &&
@@ -223,9 +247,8 @@ void read_positional_discard(const Game& prev, Game& game, const DiscardAction& 
   const auto it = std::find(hand.begin(), hand.end(), action.order);
   if (it == hand.end()) return;
   const std::size_t slot = static_cast<std::size_t>(it - hand.begin());
-  const int bob = ps.next_player_index(alice);
-  if (slot >= ps.hands[bob].size()) return;  // names nothing
-  const int card = ps.hands[bob][slot];
+  if (slot >= ps.hands[*reader].size()) return;  // names nothing
+  const int card = ps.hands[*reader][slot];
   game.with_meta(card, [](ConvData& m) {
     m.positional_play = true;
     m.status = CardStatus::CALLED_TO_PLAY;
@@ -238,7 +261,8 @@ void read_positional_discard(const Game& prev, Game& game, const DiscardAction& 
       live.filter([&](Identity i) { return !inverted(ps, i) && shared.is_playable(i); });
   if (playable.non_empty()) game.narrow_thought(card, playable);
   hanabi::logging::log_branch("reactor0.positional_discard_read",
-                              {{"slot", static_cast<int>(slot) + 1}, {"order", card}});
+                              {{"slot", static_cast<int>(slot) + 1}, {"reader", *reader},
+                               {"order", card}});
 }
 
 }  // namespace hanabi::reactor0

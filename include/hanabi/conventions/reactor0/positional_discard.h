@@ -5,9 +5,10 @@
 //     Bob's hand she can see is playable; Bob plays his card in that slot.
 //   * Every discard Alice makes in that position is read so, whatever the card
 //     in Bob's slot could be.
-//   * A play Bob already knows by global empathy need not be named (the user's
-//     exception): Alice may use the turn otherwise, but a discard she makes then
-//     names that play.
+//   * A play the team can see is certain always comes first (v23.7.0, the user's
+//     ruling): a Bob holding one plays it and ignores the discard, which then
+//     speaks to Cathy -- if she still acts and holds no certain play herself --
+//     and otherwise to nobody (`positional_reader`).
 //   * When Bob holds no play, the remaining play is Alice's: she gambles on Rule
 //     0b's selection -- the leftmost clued card that could be the card, else the
 //     leftmost -- on the Play button (a play is never read as positional).
@@ -40,6 +41,11 @@ namespace hanabi::reactor0 {
 // certain play in Alice's hand as the team reads it.
 bool positional_position(const Game& game, int alice);
 
+// The seat a positional discard by `alice` speaks to: Bob, or Cathy when Bob holds
+// a play the team can see is certain, or nobody (`std::nullopt`) when Cathy has no
+// turn left or a certain play of her own.
+std::optional<int> positional_reader(const Game& game, int alice);
+
 // Our discard, as Alice: the slot of a playable card in Bob's hand, when the
 // position holds, we hold no certain play ourselves, and some playable of Bob's
 // sits in a slot we have. `std::nullopt` otherwise.
@@ -49,10 +55,9 @@ std::optional<PerformAction> positional_discard_signal(const Game& game);
 // play, else its selection over every playable identity, on the Play button only.
 std::optional<PerformAction> positional_gamble(const Game& game);
 
-// The guard when there is no message: in the position, a discard we would make
-// that is not a signal becomes the discard naming a play Bob already knows, else a
-// stall clue, else the discard of a slot Bob does not hold. Any other action is
-// returned unchanged.
+// The guard when there is no message: while somebody reads our discard, one we
+// would make that is not a signal becomes a stall clue, else the discard of a slot
+// the reader does not hold. Any other action is returned unchanged.
 PerformAction positional_guard(const Game& game, const PerformAction& chosen);
 
 // Our play, as Bob: the card a positional discard named, while the deck is empty.

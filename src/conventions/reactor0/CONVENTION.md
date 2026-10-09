@@ -2153,16 +2153,24 @@ The user's ruling, for reactor0 and Throw It in a Hole alike. In the final round
 seat, still has a turn, Alice owed no reaction, the card she threw was not called
 to discard, and the team could see no certain play in her hand (every reading of
 a card of hers playing, or chucking on an inverted suit, on the shared stacks).
-Bob then plays **his card in the same slot** on his final turn, whatever it could
-be: every such discard is read so.
+Its **reader** then plays **his card in the same slot** on his final turn,
+whatever it could be: every such discard is read so.
+
+The reader (v23.7.0, the user's ruling; `positional_reader`,
+`reactor0/positional_discard.cpp:139-148`) is Bob -- unless Bob holds a play the
+team can see is certain, which always comes first: he plays it and ignores the
+discard. Then it is Cathy, if she still acts and holds no such play herself;
+otherwise nobody reads it. Replay [2024746](https://hanab.live/shared-replay/2024746#56)
+T56-T57: Noah's slot-5 discard, with will-bot69's p5 and will-bot67's r5 both
+known, spoke to nobody; will-bot69 had played its slot 5 into a dead g3.
 
 - Read in `Game::interpret_discard` (`decide.cpp:680-683`), after the call
   invariants so they cannot take the instruction back, by
-  `read_positional_discard` (`reactor0/positional_discard.cpp:211-242`). The card
+  `read_positional_discard` (`reactor0/positional_discard.cpp:234-266`). The card
   is marked `ConvData::positional_play`, `CALLED_TO_PLAY` and urgent, and its
   reading narrows to the playables where it has any.
-- A failed discard is a misplay and says nothing; a slot Bob does not hold names
-  nothing.
+- A failed discard is a misplay and says nothing; a slot the reader does not hold
+  names nothing.
 - How Alice gives it, gambles instead when Bob has no play, and avoids a
   discard when there is no message: DECISION_MAKING.md, Precedence step -1.
 
@@ -2234,6 +2242,7 @@ makes. Reactor is unaffected throughout; its decision rules stay in
 | `tests/test_reactor0/test_pink_rank_clues.cpp` | §1c priority 0 — the pink tempo clue (and one pink card never being one), the pink trash clue moving on to the next card, the pink identity clue, the giver never giving a misnaming tempo clue, a tempo clue on Pink-Ones; and priorities 5/6 — a referential discard and a Pink-Ones lock making no pink promise (v19.0.0) |
 | `tests/test_basics/test_rank_played_in.cpp` | §1c priority 0 — `variants::rank_played_in`: ascending `value <= stack`, descending `value >= stack` (v19.0.0) |
 | `tests/test_reactor0/test_rank_ref_discard_on_lock_slot.cpp` | §1c priorities 5/6 in Clue Starved — a lock-slot rank clue with a target is a referential discard; without one it is still a lock (v20.0.0) |
+| `tests/test_reactor0/test_misc/test_replay_2024746_known_play_outranks_positional_discard.cpp` | §1j — replay 2024746 T57: with will-bot69's p5 and will-bot67's r5 both known, Noah's slot-5 discard speaks to nobody; will-bot69 plays its p5, not its slot 5 (v23.7.0) |
 | `tests/test_reactor0/test_misc/test_replay_1942525_omni_rank_reads_as_direct_play.cpp` | bug 1.3 end to end |
 | `tests/test_reactor0/test_misc/test_replay_1957905_orange_chuck_must_be_playable.cpp` | bug_report_4_1_0.txt end to end — no orange colour clue, and the rank-2 chuck is chosen |
 | `tests/test_reactor0/test_misc/test_replay_1942458_colour_mode2_walks_dc_targets.cpp` | bug 1.1 — mode 2 walks to a live dc-target |

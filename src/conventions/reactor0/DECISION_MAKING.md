@@ -296,41 +296,47 @@ Two things outrank the phases below, and one thing sits between them:
     in the final round: the deck is empty, Bob (the next seat) still acts, Alice
     owes no reaction, and Alice holds no **certain** play as the team reads her
     hand on the shared stacks (`positional_position`,
-    `reactor0/positional_discard.cpp:103-117`; the certain-play test is
-    `common_certain_play`, `:27-41`). Then, in order:
-    - **As Bob**, we play the card a positional discard named
-      (`positional_play`, `:202-209`), ahead of everything, our own certain
-      plays included. Every such discard is read, whatever the card could be
-      (CONVENTION.md §1j).
+    `reactor0/positional_discard.cpp:117-131`; the certain-play test is
+    `common_certain_play`, `:27-41`). **Who reads the discard** (v23.7.0, the
+    user's ruling; `positional_reader`, `:139-148`): Bob -- unless Bob holds a
+    play the team can see is certain, which always comes first; then Cathy, if
+    she still acts and holds no such play herself; else nobody, and the discard
+    is only a discard. Then, in order:
+    - **As the reader**, we play the card a positional discard named
+      (`positional_play`, `:225-232`), ahead of everything, our own certain
+      plays included -- a reader holds no play the team can see is certain.
+      Every such discard is read, whatever the card could be (CONVENTION.md §1j).
     - **As Alice**, with no certain play of our own (`endgame::certain_plays`),
-      we discard the slot matching a card in Bob's hand we can see is playable
-      (`positional_discard_signal`, `:119-142`). Among several, one whose
-      successor a later seat of the round holds, else the leftmost; only slots
-      we have can name his.
-    - **The user's exception:** a playable card Bob already knows by GLOBAL
-      EMPATHY -- every reading the team holds of it plays on the shared stacks
-      (`bob_knows_play`, `:93-99`) -- need not be named. Alice is free to use
-      the turn otherwise: her own required play, or a clue.
-    - **As Alice, when Bob holds no play**, the remaining play is ours: Rule
-      0b's required play, else its selection over every playable identity --
-      the leftmost clued card that could be one, else the leftmost -- on the
-      Play button only, since a chuck would read as positional
-      (`positional_gamble`, `:144-165`; `endgame::gamble_on`,
+      we discard the slot matching a card in the reader's hand we can see is
+      playable -- Cathy's judged after Bob's certain play has landed
+      (`positional_discard_signal`, `:150-174`; `playable_slots`, `:60-77`).
+      Among several, one whose successor a later seat of the round holds, else
+      the leftmost; only slots we have can name the reader's.
+    - **As Alice, when the reader is Bob and he holds no play**, the remaining
+      play is ours: Rule 0b's required play, else its selection over every
+      playable identity -- the leftmost clued card that could be one, else the
+      leftmost -- on the Play button only, since a chuck would read as positional
+      (`positional_gamble`, `:176-199`; `endgame::gamble_on`,
       `forced_endgame.cpp:552-613`).
-    - Otherwise the ladder decides, and a discard it chooses that is not a
-      signal is replaced (`positional_guard`, `:167-200`), in order: by the
-      discard naming a play Bob already knows (a discard is read all the same --
-      self-play seed 117 T61, Black: at 0 clues our slot-5 discard sent Bob's
-      last turn to a p1 instead of the r5 he knew); by a stall clue (to a seat
-      other than Bob where there is one); by the discard of a slot Bob does not
-      hold.
+    - Otherwise the ladder decides, and while somebody reads our discard one it
+      chooses that is not a signal is replaced (`positional_guard`, `:201-223`):
+      by a stall clue (to a seat other than the reader where there is one), else
+      by the discard of a slot the reader does not hold.
+    Replay [2024746](https://hanab.live/shared-replay/2024746#56) T56-T57
+    (reactor0): with the deck empty Noah threw his slot 5 while will-bot69 knew
+    its p5 and will-bot67 its r5. The discard spoke to nobody, but will-bot69
+    read it as naming its slot 5 and played a dead g3 instead of the p5; it now
+    plays the p5 (test `test_replay_2024746_known_play_outranks_positional_discard.cpp`).
+    Until v23.7.0 a Bob who knew his play was skipped card by card, and the
+    guard's first fallback named his known play (self-play seed 117 T61).
     A certain play is the one thing above it: Rule 0's sure point is still
     taken first. Replay [2024288](https://hanab.live/shared-replay/2024288#61)
     T61: the deck was empty, will-bot69 held the u5 in slot 5 and acted last,
     and will-bot67 had nothing certain. Rule 0b's gamble on its slot 1 struck;
     discarding its slot 5 names will-bot69's u5. Since v23.4.0 will-bot69 knows
     the u5 itself (TIIAH CONVENTION.md §1e, a card below a landing we saw is
-    spent), so by the exception will-bot67 stalls and will-bot69 plays it.
+    spent); with the play certain it reads no discard, so will-bot67 stalls and
+    will-bot69 plays it.
     Replay 1973410 T66 (Color Blind) now discards slot 5 for Noah's p5 where it
     gave the Purple clue that names the same card.
 
