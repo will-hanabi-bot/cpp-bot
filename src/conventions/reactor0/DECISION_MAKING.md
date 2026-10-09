@@ -44,6 +44,17 @@ A clue tier (`clue_tier`, `state_eval.cpp:575-690`) is VERY HIGH iff:
 VERY HIGH is the tier that out-ranks a **pending reaction** (Precedence step 1),
 and VH1 is deliberately its only member.
 
+**Not a finesse that dupes a call** (v23.6.0, the user's ruling). Step 1 skips a
+reactive finesse whose connector -- the reacter's card, by sight -- is the identity
+of a card already called to play elsewhere (visibly, or on our own hand when our
+reading is that one card): the reacter would spend its play on a duplicate
+(`finesse_dupes_a_call`, `decision.cpp:2224-2254`, asked at `:2261`). Such a clue
+can still be chosen at its ordinary tier; it just no longer outranks a reaction.
+Replay [2024676](https://hanab.live/shared-replay/2024676#5) T5 (TIIAH & Dark Null):
+will-bot69 owed its called r2 and instead gave a VERY HIGH 4 to yagami, a finesse
+through will-bot67's g1 while yagami's own g1 was already called; yagami played it
+at T7 and will-bot67's g1 struck at T9. It now plays the r2.
+
 **And the reaction survives being out-ranked** (v12.0.0). Deferring used to cost
 the RECEIVER the clue outright: `Game::waiting` is cleared the moment the reacter
 clues instead of reacting, so by the time they came back to it there was nobody
