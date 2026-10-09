@@ -2,7 +2,7 @@
 // Throw It in a Hole & Brown (6 Suits). Seats: 0 yagami_green, 1 yagami_blue (us),
 // 2 yagami_black (human).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014561.md T56: our unknown 4 went
+// Human diagnostic human_vs_bot_diagnostics/2014561.md T56: our unknown 4 went
 // into the hole at T53, so the own-dupe veto (`calls_a_card_we_may_have_played`)
 // dropped Yellow (black's y4) and Purple (the clued p4) -- either might be the 4 we
 // played -- and we revealed a trash p1 instead. Both calls NAME their card, so

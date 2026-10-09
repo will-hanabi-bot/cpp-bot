@@ -1,7 +1,7 @@
 // Rung 3.7 under Throw It in a Hole: no lock over a chop worse than one away from
 // playable (reactor0/DECISION_MAKING.md priority 3, item 7, v20.2.0).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2018365.md T7: green, holding a
+// Human diagnostic human_vs_bot_diagnostics/2018365.md T7: green, holding a
 // called y1, locked black with a 2 over a y4 chop on empty yellow. The user's
 // ruling: the variant is hard enough that a whole hand is committed only for a chop
 // that is critical, playable or one away. 3.6b, which only ever replaces 3.7's

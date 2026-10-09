@@ -29,6 +29,7 @@ elsewhere.
 | [2018365](2018365.md) | Throw It in a Hole & Null (6 Suits), tiiah | yagami_black | T7 (no lock over a chop worse than one away), T10 (no forced clue at 8 tokens while Alice can play) | T7 fixed (v20.2.0), T10 (v20.2.0) |
 | [2018541](2018541.md) | Throw It in a Hole & Rainbow (5 Suits), tiiah | yagami_black | T26 (a reacter card playable in a hole world: the Actionable Superposition Collapse Rule) | fixed (v20.6.0) |
 | [2018759](2018759.md) | Throw It in a Hole & Rainbow (5 Suits), tiiah | yagami_black | T34 (a spent reaction stays urgent and blocks a save of Bob's playable chop) | fixed (v20.7.0) |
+| [2025310](2025310.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah | yagami_black | T3 (Alice plays her known card; Bob sees to Cathy's playable chop) | fixed (v23.11.0) |
 
 ## Template
 

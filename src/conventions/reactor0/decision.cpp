@@ -721,7 +721,7 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
 // a reactive's receiver target, except `spared` (v18.7.0): Bob's chop when he is
 // stuck with it (§3's precondition), where the choice is between a possible dupe
 // and a certain loss. Human diagnostic 2013726 T17
-// (v18_human_vs_bot_diagnostics/2013726.md): green's own `{r3,g1}` hole card
+// (human_vs_bot_diagnostics/2013726.md): green's own `{r3,g1}` hole card
 // vetoed every clue calling blue's playable g1 on chop, and blue threw it; v16.29.0,
 // before this filter, gave the 1.
 //
@@ -731,7 +731,7 @@ bool calls_two_copies_to_play(const Game& game, const Game& hypo) {
 // that identity, they see the dupe and throw it. A call left with several
 // identities keeps the veto -- the holder cannot tell which of them we meant, nor
 // that one of them is dead. Human diagnostic 2014561 T56
-// (v18_human_vs_bot_diagnostics/2014561.md): blue's unknown 4 had just gone into
+// (human_vs_bot_diagnostics/2014561.md): blue's unknown 4 had just gone into
 // the hole, so Yellow (black's y4) and Purple (the clued p4) were both vetoed, and
 // blue revealed a trash p1 instead. "yagami_black will toss it if yagami_blue
 // already played the other copy."
@@ -1695,6 +1695,46 @@ const ClueCandidate* best_stable_play(const Game& g,
 }
 
 // --- priority 3 ----------------------------------------------------------
+// Bob has something to do after all (v23.11.0, the user's ruling): Alice holds a
+// known play, and CATHY's chop -- Bob's Bob -- is a good card that plays once
+// Alice's known plays have landed. Bob is expected to deal with it rather than
+// throw his own chop, and Alice plays. Human diagnostic
+// human_vs_bot_diagnostics/2025310.md T3: green held its called y1, blue's chop was
+// the y2, and green stopped to give black a play clue instead of playing.
+bool bob_handles_cathys_playable_chop(const Game& g) {
+  const State& s = g.state;
+  if (!has_cathy(g)) return false;
+  const int alice = alice_of(g);
+  const int cathy = cathy_of(g);
+  if (g.common.obvious_playables(g, alice).empty()) return false;  // Alice must play
+  // ...and only a chop in danger asks anything of Bob: a Cathy with a safe action
+  // of her own does not throw it, and Bob, with nothing to do for her, throws HIS.
+  // Self-play Dark Null seed 96 T21-T22: Cathy held a call to discard, Alice played
+  // instead of saving Bob's playable r1, and Bob threw it.
+  if (!has_no_safe_action(g, cathy)) return false;
+  const auto chop = g.chop(cathy);
+  if (!chop) return false;
+  const auto id = s.deck[*chop].id();
+  if (!id || s.is_basic_trash(*id) || variants::is_inverted_id(s, *id) ||
+      has_same_hand_dupe(s, cathy, *chop, *id)) {
+    return false;
+  }
+  // Alice's known plays land first -- named as the team reads them, else as she
+  // does. A chop that only duplicates one of them is then trash, not good.
+  State after = s;
+  for (bool moved = true; moved;) {
+    moved = false;
+    for (int o : s.hands[alice]) {
+      IdentitySet live = g.common.thoughts[o].possibilities();
+      if (live.length() != 1) live = g.me().thoughts[o].possibilities();
+      if (live.length() != 1 || !after.is_playable(live.head())) continue;
+      after = after.with_play(live.head());
+      moved = true;
+    }
+  }
+  return after.is_playable(*id);
+}
+
 // Precondition: Bob is not locked, he has no safe play or discard, and his
 // chop is worth a clue -- endangered or playable. See the body; this used to
 // be the weaker "non-trash", which spent clues on chops nothing was at stake for.
@@ -1730,6 +1770,7 @@ bool priority_3_applies(const Game& g) {
   // aggression it was reaching for now lives in §4, which fires when ALICE is
   // stuck -- a narrower and better-aimed trigger. See the General Clue
   // Evaluation List, §3 and §4.
+  if (bob_handles_cathys_playable_chop(g)) return false;
   return has_no_safe_action(g, bob);
 }
 
@@ -1790,6 +1831,10 @@ const ClueCandidate* rung_unlock_bob(const Game& g, const std::vector<ClueCandid
 constexpr int kPriority3ClueCount = 6;
 
 const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs) {
+  // Bob has Cathy's playable chop to see to and Alice a play of her own: neither
+  // arm below (v23.11.0, 2025310 T3 -- there the high-clue-count arm fired at 7
+  // tokens).
+  if (bob_handles_cathys_playable_chop(g)) return nullptr;
   const bool bob_stuck = priority_3_applies(g);
   if (!bob_stuck && g.state.clue_tokens < kPriority3ClueCount) return nullptr;
   // 3.1 -- a stable play clue to Bob.
@@ -1868,7 +1913,7 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
     // user's ruling). The variant is hard enough that committing Bob's whole hand
     // is only worth it for a chop that is critical, playable or one away; anything
     // further and Alice does something else -- most often her own standing play.
-    // Human diagnostic 2018365 T7 (v18_human_vs_bot_diagnostics/2018365.md): green,
+    // Human diagnostic 2018365 T7 (human_vs_bot_diagnostics/2018365.md): green,
     // holding a called y1, locked black with a 2 over a y4 chop on empty yellow.
     // 3.6b goes with it, since it only ever replaces this lock.
     const bool far_chop = g.state.variant->throw_it_in_a_hole &&
@@ -2085,7 +2130,7 @@ bool priority_4_applies(const Game& g, const std::vector<ClueCandidate>& cs) {
   // illegal there, but a PLAY is not: an Alice holding a known play is not
   // forced to clue, and §4's floor would otherwise hand her a clue that does
   // nothing in place of it. Human diagnostic 2018365 T10
-  // (v18_human_vs_bot_diagnostics/2018365.md): green, holding a called y1 at 8
+  // (human_vs_bot_diagnostics/2018365.md): green, holding a called y1 at 8
   // tokens, gave Blue on black's already-clued b3 -- a clue that saved nothing,
   // with black's chop a same-hand dupe. §1-§3 are untouched: a clue they find
   // (a save, a reactive play) is still given at 8 tokens.

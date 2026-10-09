@@ -4,7 +4,7 @@
 // The giver may now call a card it cannot rule out having played itself, provided
 // the receiver can name the call exactly: the receiver watched the giver's hole card
 // go in, so it can see a dupe for itself and throw it. Human diagnostic
-// v18_human_vs_bot_diagnostics/2014561.md T56: "yagami_black will toss it if
+// human_vs_bot_diagnostics/2014561.md T56: "yagami_black will toss it if
 // yagami_blue already played the other copy." This is the receiver's half.
 #include <gtest/gtest.h>
 

@@ -1,4 +1,4 @@
-// Human diagnostic 2018365 T10 (v18_human_vs_bot_diagnostics/2018365.md). At 8
+// Human diagnostic 2018365 T10 (human_vs_bot_diagnostics/2018365.md). At 8
 // tokens green, still holding the called y1, gave Blue on black's already-clued b3
 // (rung 4), a clue that saved nothing while black's chop was a same-hand dupe. At 8
 // tokens section 4 opens only when Alice has no known play, so green plays the y1.

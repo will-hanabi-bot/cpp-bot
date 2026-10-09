@@ -1,11 +1,11 @@
-// Human diagnostic 2018365 T7 (human_vs_bot_diagnostics/2018365.md). Green,
-// holding a called y1 at 7 tokens, gave 2 to black: a lock (rung 3.7) over a chop
-// that was a y4 on empty yellow. Under Throw It in a Hole, 3.7 does not lock over a
-// chop worse than one away from playable, so green plays its y1.
+// Human diagnostic human_vs_bot_diagnostics/2025310.md T3 (v23.11.0, the user's
+// ruling), yagami_green's seat. Green holds its called y1 (o12); blue's chop is the
+// y2, a good card that plays once green's y1 lands. Black, green's Bob, is expected
+// to deal with it rather than throw his own chop, so green does not stop to give
+// black a play clue (rung 3, whose high-clue-count arm fired at 7 tokens): it plays
+// the y1.
 
 #include <gtest/gtest.h>
-
-#include <variant>
 
 #include "hanabi/basics/action.h"
 #include "hanabi/basics/game.h"
@@ -14,41 +14,30 @@
 #include "replay_helpers.h"
 #include "test_harness.h"
 
-// Variant: Throw It in a Hole & Null (6 Suits). 3 players, our_player_index=0.
+// Variant: Throw It in a Hole & Dark Null (6 Suits). 3 players, our_player_index=2.
 
-TEST(TiiahReplay2018365, NoLockOverFarChop) {
-  // Reconstruct exactly the Game the live bot saw at turn 7.
+TEST(TiiahReplay2025310, BobHandlesCathysPlayableChop) {
+  // Reconstruct exactly the Game the live bot saw at turn 3.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
 {
   "bot": "yagami_green",
   "ch": "STATE",
-  "current_player_index": 0,
-  "database_id": 2018365,
+  "current_player_index": 2,
+  "database_id": 2025310,
   "debug": {
-    "cards_left": 42,
+    "cards_left": 39,
     "clue_tokens": 7,
     "common_play_stacks": [
       0,
       0,
-      0,
-      0,
       1,
+      0,
+      0,
       0
     ],
-    "current_player_index": 0,
-    "discards": [
-      {
-        "order": 4,
-        "rank": 3,
-        "suit": 4
-      },
-      {
-        "order": 5,
-        "rank": 1,
-        "suit": 5
-      }
-    ],
+    "current_player_index": 2,
+    "discards": [],
     "endgame_turns": null,
     "hands": [
       {
@@ -56,84 +45,13 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
           {
             "clued": false,
             "focused": false,
-            "id": null,
-            "inferred": 1073740831,
-            "info_lock": null,
-            "order": 16,
-            "possible": 1073740831,
-            "slot": 1,
-            "status": "NONE",
-            "trash": false,
-            "urgent": false
-          },
-          {
-            "clued": false,
-            "focused": false,
-            "id": null,
-            "inferred": 1073740831,
-            "info_lock": null,
-            "order": 3,
-            "possible": 1073740831,
-            "slot": 2,
-            "status": "NONE",
-            "trash": false,
-            "urgent": false
-          },
-          {
-            "clued": false,
-            "focused": false,
-            "id": null,
-            "inferred": 1073740831,
-            "info_lock": null,
-            "order": 2,
-            "possible": 1073740831,
-            "slot": 3,
-            "status": "NONE",
-            "trash": false,
-            "urgent": false
-          },
-          {
-            "clued": false,
-            "focused": false,
-            "id": null,
-            "inferred": 1073740831,
-            "info_lock": null,
-            "order": 1,
-            "possible": 1073740831,
-            "slot": 4,
-            "status": "NONE",
-            "trash": false,
-            "urgent": false
-          },
-          {
-            "clued": true,
-            "focused": true,
-            "id": null,
-            "inferred": 32,
-            "info_lock": 32,
-            "order": 0,
-            "possible": 992,
-            "slot": 5,
-            "status": "CALLED_TO_PLAY",
-            "trash": false,
-            "urgent": false
-          }
-        ],
-        "name": "yagami_green",
-        "player": 0
-      },
-      {
-        "cards": [
-          {
-            "clued": false,
-            "focused": false,
             "id": [
-              1,
-              4
+              4,
+              2
             ],
             "inferred": 1073741823,
             "info_lock": null,
-            "order": 17,
+            "order": 4,
             "possible": 1073741823,
             "slot": 1,
             "status": "NONE",
@@ -144,13 +62,13 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
             "clued": false,
             "focused": false,
             "id": [
-              0,
+              2,
               4
             ],
-            "inferred": 1069412219,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 9,
-            "possible": 1069412219,
+            "order": 3,
+            "possible": 1073741823,
             "slot": 2,
             "status": "NONE",
             "trash": false,
@@ -160,45 +78,45 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
             "clued": false,
             "focused": false,
             "id": [
-              0,
-              2
+              4,
+              5
             ],
-            "inferred": 1069412219,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 8,
-            "possible": 1069412219,
+            "order": 2,
+            "possible": 1073741823,
             "slot": 3,
             "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
-            "clued": true,
-            "focused": true,
+            "clued": false,
+            "focused": false,
             "id": [
               0,
-              3
+              1
             ],
-            "inferred": 4329604,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 7,
-            "possible": 4329604,
+            "order": 1,
+            "possible": 1073741823,
             "slot": 4,
             "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
-            "clued": true,
+            "clued": false,
             "focused": false,
             "id": [
-              3,
-              3
+              2,
+              2
             ],
-            "inferred": 4329604,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 6,
-            "possible": 4329604,
+            "order": 0,
+            "possible": 1073741823,
             "slot": 5,
             "status": "NONE",
             "trash": false,
@@ -206,7 +124,7 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
           }
         ],
         "name": "yagami_black",
-        "player": 1
+        "player": 0
       },
       {
         "cards": [
@@ -214,8 +132,8 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
             "clued": false,
             "focused": false,
             "id": [
-              5,
-              4
+              1,
+              2
             ],
             "inferred": 1073741823,
             "info_lock": null,
@@ -230,13 +148,13 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
             "clued": false,
             "focused": false,
             "id": [
-              2,
+              3,
               4
             ],
-            "inferred": 1041235967,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 14,
-            "possible": 1041235967,
+            "order": 9,
+            "possible": 1073741823,
             "slot": 2,
             "status": "NONE",
             "trash": false,
@@ -246,13 +164,13 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
             "clued": false,
             "focused": false,
             "id": [
-              2,
-              2
+              4,
+              3
             ],
-            "inferred": 1041235967,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 13,
-            "possible": 1041235967,
+            "order": 8,
+            "possible": 1073741823,
             "slot": 3,
             "status": "NONE",
             "trash": false,
@@ -262,13 +180,13 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
             "clued": false,
             "focused": false,
             "id": [
-              2,
-              5
+              1,
+              3
             ],
-            "inferred": 1041235967,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 11,
-            "possible": 1041235967,
+            "order": 7,
+            "possible": 1073741823,
             "slot": 4,
             "status": "NONE",
             "trash": false,
@@ -278,13 +196,13 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
             "clued": false,
             "focused": false,
             "id": [
-              0,
-              5
+              4,
+              1
             ],
-            "inferred": 1041235967,
+            "inferred": 1073741823,
             "info_lock": null,
-            "order": 10,
-            "possible": 1041235967,
+            "order": 5,
+            "possible": 1073741823,
             "slot": 5,
             "status": "NONE",
             "trash": false,
@@ -292,6 +210,77 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
           }
         ],
         "name": "yagami_blue",
+        "player": 1
+      },
+      {
+        "cards": [
+          {
+            "clued": false,
+            "focused": false,
+            "id": null,
+            "inferred": 1073740831,
+            "info_lock": null,
+            "order": 14,
+            "possible": 1073740831,
+            "slot": 1,
+            "status": "NONE",
+            "trash": false,
+            "urgent": false
+          },
+          {
+            "clued": false,
+            "focused": false,
+            "id": null,
+            "inferred": 1073740831,
+            "info_lock": null,
+            "order": 13,
+            "possible": 1073740831,
+            "slot": 2,
+            "status": "NONE",
+            "trash": false,
+            "urgent": false
+          },
+          {
+            "clued": true,
+            "focused": true,
+            "id": null,
+            "inferred": 32,
+            "info_lock": null,
+            "order": 12,
+            "possible": 992,
+            "slot": 3,
+            "status": "CALLED_TO_PLAY",
+            "trash": false,
+            "urgent": false
+          },
+          {
+            "clued": false,
+            "focused": false,
+            "id": null,
+            "inferred": 1073740831,
+            "info_lock": null,
+            "order": 11,
+            "possible": 1073740831,
+            "slot": 4,
+            "status": "NONE",
+            "trash": false,
+            "urgent": false
+          },
+          {
+            "clued": true,
+            "focused": false,
+            "id": null,
+            "inferred": 992,
+            "info_lock": null,
+            "order": 10,
+            "possible": 992,
+            "slot": 5,
+            "status": "NONE",
+            "trash": false,
+            "urgent": false
+          }
+        ],
+        "name": "yagami_green",
         "player": 2
       }
     ],
@@ -307,34 +296,18 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
     "move_history": [
       {
         "k": "clue",
-        "v": "Discard"
-      },
-      {
-        "k": "clue",
-        "v": "Play"
+        "v": "Reactive"
       },
       {
         "k": "play",
         "v": "None"
-      },
-      {
-        "k": "discard",
-        "v": "None"
-      },
-      {
-        "k": "discard",
-        "v": "None"
-      },
-      {
-        "k": "clue",
-        "v": "Play"
       }
     ],
     "pairwise_play_stacks": [
       [
         0,
         0,
-        0,
+        1,
         0,
         0,
         0
@@ -342,17 +315,17 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
       [
         0,
         0,
-        0,
-        0,
         1,
+        0,
+        0,
         0
       ],
       [
         0,
         0,
-        0,
-        0,
         1,
+        0,
+        0,
         0
       ]
     ],
@@ -360,133 +333,133 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
     "play_stacks": [
       0,
       0,
-      0,
-      0,
       1,
+      0,
+      0,
       0
     ],
     "strikes": 0,
-    "turn_count": 7,
+    "turn_count": 3,
     "waiting": []
   },
-  "game_id": 10601,
+  "game_id": 3649,
   "replay": {
     "actions": [
       {
         "order": 0,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 2,
         "t": "draw"
       },
       {
         "order": 1,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 1,
+        "suit": 0,
         "t": "draw"
       },
       {
         "order": 2,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 5,
+        "suit": 4,
         "t": "draw"
       },
       {
         "order": 3,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 4,
+        "suit": 2,
         "t": "draw"
       },
       {
         "order": 4,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 4,
         "t": "draw"
       },
       {
         "order": 5,
         "p": 1,
         "rank": 1,
-        "suit": 5,
+        "suit": 4,
         "t": "draw"
       },
       {
         "order": 6,
         "p": 1,
-        "rank": 3,
-        "suit": 3,
+        "rank": 1,
+        "suit": 2,
         "t": "draw"
       },
       {
         "order": 7,
         "p": 1,
         "rank": 3,
-        "suit": 0,
+        "suit": 1,
         "t": "draw"
       },
       {
         "order": 8,
         "p": 1,
-        "rank": 2,
-        "suit": 0,
+        "rank": 3,
+        "suit": 4,
         "t": "draw"
       },
       {
         "order": 9,
         "p": 1,
         "rank": 4,
-        "suit": 0,
+        "suit": 3,
         "t": "draw"
       },
       {
         "order": 10,
         "p": 2,
-        "rank": 5,
-        "suit": 0,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 11,
         "p": 2,
-        "rank": 5,
-        "suit": 2,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 12,
         "p": 2,
-        "rank": 1,
-        "suit": 4,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 13,
         "p": 2,
-        "rank": 2,
-        "suit": 2,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 14,
         "p": 2,
-        "rank": 4,
-        "suit": 2,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "giver": 0,
-        "kind": "R",
+        "kind": "C",
         "list": [
-          6,
-          7
+          10,
+          12
         ],
         "t": "clue",
-        "target": 1,
-        "value": 3
+        "target": 2,
+        "value": 1
       },
       {
         "clues": 7,
@@ -500,190 +473,88 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
         "t": "turn"
       },
       {
-        "giver": 1,
-        "kind": "C",
-        "list": [
-          12
-        ],
-        "t": "clue",
-        "target": 2,
-        "value": 4
-      },
-      {
-        "clues": 6,
-        "max": 30,
-        "score": 0,
-        "t": "status"
-      },
-      {
-        "cpi": 2,
-        "num": 2,
-        "t": "turn"
-      },
-      {
-        "order": 12,
-        "p": 2,
+        "order": 6,
+        "p": 1,
         "rank": -1,
         "suit": -1,
         "t": "play"
       },
       {
         "order": 15,
-        "p": 2,
-        "rank": 4,
-        "suit": 5,
-        "t": "draw"
-      },
-      {
-        "clues": 6,
-        "max": 30,
-        "score": 1,
-        "t": "status"
-      },
-      {
-        "cpi": 0,
-        "num": 3,
-        "t": "turn"
-      },
-      {
-        "failed": false,
-        "order": 4,
-        "p": 0,
-        "rank": 3,
-        "suit": 4,
-        "t": "discard"
-      },
-      {
-        "order": 16,
-        "p": 0,
-        "rank": -1,
-        "suit": -1,
-        "t": "draw"
-      },
-      {
-        "clues": 7,
-        "max": 30,
-        "score": 1,
-        "t": "status"
-      },
-      {
-        "cpi": 1,
-        "num": 4,
-        "t": "turn"
-      },
-      {
-        "failed": false,
-        "order": 5,
         "p": 1,
-        "rank": 1,
-        "suit": 5,
-        "t": "discard"
-      },
-      {
-        "order": 17,
-        "p": 1,
-        "rank": 4,
+        "rank": 2,
         "suit": 1,
         "t": "draw"
       },
       {
-        "clues": 8,
+        "clues": 7,
         "max": 30,
         "score": 1,
         "t": "status"
       },
       {
         "cpi": 2,
-        "num": 5,
-        "t": "turn"
-      },
-      {
-        "giver": 2,
-        "kind": "C",
-        "list": [
-          0
-        ],
-        "t": "clue",
-        "target": 0,
-        "value": 1
-      },
-      {
-        "clues": 7,
-        "max": 30,
-        "score": 1,
-        "t": "status"
-      },
-      {
-        "cpi": 0,
-        "num": 6,
+        "num": 2,
         "t": "turn"
       }
     ],
     "all_plays": false,
     "convention": "tiiah",
     "deck": [
-      null,
-      null,
-      null,
-      null,
+      [
+        2,
+        2
+      ],
+      [
+        0,
+        1
+      ],
       [
         4,
+        5
+      ],
+      [
+        2,
+        4
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        4,
+        1
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        1,
         3
       ],
       [
-        5,
-        1
+        4,
+        3
       ],
       [
         3,
-        3
-      ],
-      [
-        0,
-        3
-      ],
-      [
-        0,
-        2
-      ],
-      [
-        0,
-        4
-      ],
-      [
-        0,
-        5
-      ],
-      [
-        2,
-        5
-      ],
-      [
-        4,
-        1
-      ],
-      [
-        2,
-        2
-      ],
-      [
-        2,
-        4
-      ],
-      [
-        5,
         4
       ],
       null,
+      null,
+      null,
+      null,
+      null,
       [
         1,
-        4
+        2
       ]
     ],
     "names": [
-      "yagami_green",
       "yagami_black",
-      "yagami_blue"
+      "yagami_blue",
+      "yagami_green"
     ],
     "num_players": 3,
     "options": {
@@ -695,21 +566,20 @@ TEST(TiiahReplay2018365, NoLockOverFarChop) {
       "one_less_card": false,
       "speedrun": false,
       "starting_player": 0,
-      "variant_name": "Throw It in a Hole & Null (6 Suits)"
+      "variant_name": "Throw It in a Hole & Dark Null (6 Suits)"
     },
-    "our_player_index": 0,
+    "our_player_index": 2,
     "rlocks": true,
-    "variant": "Throw It in a Hole & Null (6 Suits)",
+    "variant": "Throw It in a Hole & Dark Null (6 Suits)",
     "zcs_turn": -1
   },
-  "ts": "2026-10-03T18:55:58.019",
-  "turn": 7
+  "ts": "2026-10-09T19:19:12.168",
+  "turn": 3
 }
   )json";
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   hanabi::PerformAction action = game.take_action();
-  auto* play = std::get_if<hanabi::PerformPlay>(&action);
-  ASSERT_TRUE(play) << "the standing y1, not a lock over a far chop";
-  EXPECT_EQ(play->target, 0) << "o0, the called y1";
+  ASSERT_TRUE(std::holds_alternative<hanabi::PerformPlay>(action)) << "not the Red to black";
+  EXPECT_EQ(std::get<hanabi::PerformPlay>(action).target, 12) << "the known y1";
 }

@@ -324,7 +324,7 @@ name so exactly keeps every reading, as above.
 
 This is the receiver's half of §2c's named-call exception, which lets the giver call
 a card its own hole card may already have played. Human diagnostic 2014561 T56
-(`v18_human_vs_bot_diagnostics/2014561.md`): "yagami_black will toss it if
+(`human_vs_bot_diagnostics/2014561.md`): "yagami_black will toss it if
 yagami_blue already played the other copy."
 `tests/test_tiiah/test_named_call_on_a_watched_dupe.cpp`:
 - Cathy's Yellow on our card after we watched her y4 go in reads `{y4}`, not
@@ -752,7 +752,7 @@ How the position has been read:
   role inversion alone.
 - **v18.3.0 (now):** every clued standing call, for both halves. Two cases
   motivated this:
-  - *Human diagnostic 2013726 T30* (`v18_human_vs_bot_diagnostics/2013726.md`).
+  - *Human diagnostic 2013726 T30* (`human_vs_bot_diagnostics/2013726.md`).
     Black held the r4 that blue's T27 Red had called, touched as r1–r5. A human
     gives Brown to black: a reverse-reactive finesse of green's n3 into black's n4.
     Under the touch-only test the position never held, and blue gave a stable 3.
@@ -774,7 +774,7 @@ How the position has been read:
 - **v18.10.0 (now):** clued calls and **settled** calls, i.e. any call no longer
   urgent. A receiver's call whose reaction has been played is settled.
   - *Replay [2013963](https://hanab.live/shared-replay/2013963#10) T10*
-    (`v18_human_vs_bot_diagnostics/2013963.md`). will-bot67's only call was an
+    (`human_vs_bot_diagnostics/2013963.md`). will-bot67's only call was an
     unclued, settled receiver's call on o17. yagami's 1 to will-bot67, a
     reverse-reactive finesse of will-bot69's b2 into will-bot67's b3 on the
     `10011` the giver and the reacter share, read as a MISTAKE.
@@ -921,7 +921,7 @@ Two more things make it actually get given (v16.27.0):
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2309-2319`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2349-2359`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, ranked by §2a's stable play hierarchy (`settle_stable_play`, the
   same tiebreak every stable-play rung uses; before v18.17.0 its single term, "names
@@ -962,7 +962,7 @@ On the reverse arm's frame the receiver's own called plays are already
 simulated, so those cards read as played and never qualify.
 
 The motivating case is human diagnostic 2013726 T38
-(`v18_human_vs_bot_diagnostics/2013726.md`). Black's only target is a g4 an
+(`human_vs_bot_diagnostics/2013726.md`). Black's only target is a g4 an
 earlier reactive already called, and a human gives Brown to black to get blue's n5
 against it (`tests/test_tiiah/test_all_targets_gotten.cpp`).
 
@@ -1369,7 +1369,7 @@ may not share the dispatch, and a seat that finds no pairing there reads the clu
 as stable, as the others may (self-play 6 Suits seed 242 T7: Cathy alone read a
 reverse reactive and found a world target). `tests/test_tiiah/test_decision_making/test_replay_2023126_world_target_beyond_the_frame.cpp`.
 
-Human diagnostic [2018541](../../../v18_human_vs_bot_diagnostics/2018541.md) T26:
+Human diagnostic [2018541](../../../human_vs_bot_diagnostics/2018541.md) T26:
 - will-bot67 had thrown o16 `{y3,r3}`, the r3, into the hole at T23. On the frame it
   shares with yagami, red was 2 and blue 3.
 - Yagami's 1 to will-bot69 walked the b4 first, paired with will-bot67's o6
@@ -1897,7 +1897,7 @@ finesse if they leave anything, else any playable. The exception is a legality
 change only, so every seat still walks to the same pairing.
 
 The motivating case is human diagnostic 2013726 T27
-(`v18_human_vs_bot_diagnostics/2013726.md`). At pace 1, 4 to green is a reactive
+(`human_vs_bot_diagnostics/2013726.md`). At pace 1, 4 to green is a reactive
 that gets black's r4 (o30) and green's g1 (o23), but the pairing breaks the bucket
 relation. Blue gave a stable Red to black instead. It now gives the 4
 (`tests/test_tiiah/test_replay_2013726_endgame_pairing_may_break_the_bucket.cpp`).
@@ -2279,7 +2279,7 @@ cascade that happened to run in increasing order.
 #### The Actionable Superposition Collapse Rule (ASCR, v20.6.0)
 
 The user's ruling, a broad rule for reactor0 in this variant (human diagnostic
-[2018541](../../../v18_human_vs_bot_diagnostics/2018541.md)). Whenever a player seems
+[2018541](../../../human_vs_bot_diagnostics/2018541.md)). Whenever a player seems
 to be actioned to play an unplayable card, it must first check whether some world
 of the hole cards makes that card playable, before dismissing the action. This
 applies to the reacter or the receiver of a clue, and not only after a clue has
@@ -2478,7 +2478,7 @@ rule 7's shared form: the card was already played, so only the worlds in which i
 is trash survive, at every seat. Cluedness is the condition: the same Red on a card
 **not** clued before can only be a play call, and it collapses at once.
 
-Human diagnostic [2014076](../../../v18_human_vs_bot_diagnostics/2014076.md) T14:
+Human diagnostic [2014076](../../../human_vs_bot_diagnostics/2014076.md) T14:
 green's hole cards were `{r1,r2}` and `{r1,y1}`. Light's Red re-touched blue's r2,
 clued by the T12 2. That r2 was playable only where green had played the y1 and
 then the r1. Green narrowed to those worlds at once, and at T16 blue threw the r2.
@@ -3058,7 +3058,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 2c (the unlock, v20.19.0) — `rung_2b` (`reactor0/decision.cpp:1749-1753`), logged as `2b.fix`. Step 1
+and rung 2c (the unlock, v20.19.0) — `rung_2b` (`reactor0/decision.cpp:1785-1789`), logged as `2b.fix`. Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
 (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm of `clue_tier`,
@@ -3172,6 +3172,11 @@ Each side of a reading also carries the seat that holds it
 or "how good a ditch is this" ask it of the hand that will actually act. That is
 v16.5.0's change, and reactor0's own behaviour is unchanged by it.
 
+**Alice plays rather than clue a Bob who has Cathy's playable chop to see to** (v23.11.0, the
+user's ruling): reactor0's priority 3 stands down when Alice holds a known play and
+Cathy's chop is a good card that plays once Alice's plays land. reactor0's
+DECISION_MAKING.md, priority 3; human diagnostic 2025310 T3.
+
 **A 5 is never played ahead of a lower playable** (v23.8.0, the user's ruling): it
 pays no clue back into the hole and leads into no other card, so reactor0's rung 7
 (a critical clue-regain card) stands down here, and endgame rule 0 sets a certain
@@ -3257,7 +3262,7 @@ stall list's rung 2. Outside this variant it is the default tiebreak alone, so n
 other convention moves. `names_its_card` stays on the candidate as a record and is
 no longer ranked; criterion 1 subsumes it.
 
-Human diagnostic 2014561 (`v18_human_vs_bot_diagnostics/2014561.md`):
+Human diagnostic 2014561 (`human_vs_bot_diagnostics/2014561.md`):
 - **T50:** blue had three stable plays to black: Yellow (the y4), 3 and Purple
   (both the p3).
   - All three name their card, and none touches anything else of use. Purple's p1
@@ -3297,7 +3302,7 @@ the pair's worlds, through the same `receiver_reading` helper (`:1174-1236`) tha
 call says. A predicted reading that leaves out what the target IS -- we can see it -- is a
 misread however narrow, and ranks after every reading that holds it
 (`kMisreadReadingSize`, v23.5.0; `:1728`, `:1778-1780`). Human diagnostic
-[2013726](../../../v18_human_vs_bot_diagnostics/2013726.md) T27: once an empty named
+[2013726](../../../human_vs_bot_diagnostics/2013726.md) T27: once an empty named
 bucket read any playable, the 4 to green left `{g1,...}` for green's g1, and a Blue
 to green the narrower `{n3}`, so the tiebreak took the Blue; the 4 stands again.
 It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
@@ -3349,7 +3354,7 @@ The choice there is between a possible duplicate and a certain loss, and a human
 saves the card.
 
 The motivating case is human diagnostic 2013726 T17
-(`v18_human_vs_bot_diagnostics/2013726.md`). Blue's chop was a playable g1, and
+(`human_vs_bot_diagnostics/2013726.md`). Blue's chop was a playable g1, and
 blue had nothing to clue. Green's own `{r3,g1}` hole card vetoed every clue
 calling it, so green played its b3 and blue threw the g1. v16.29.0, before the
 filter, gave the 1. Tests:
@@ -3418,7 +3423,7 @@ So a clue to Bob that touches his chop, without calling it to discard, is flagge
 
 Rung 3 then chooses among the admitted saves as usual.
 
-Human diagnostic 2014076 T18 (`v18_human_vs_bot_diagnostics/2014076.md`): light's
+Human diagnostic 2014076 T18 (`human_vs_bot_diagnostics/2014076.md`): light's
 Blue had called green's b2. Blue's chop was a playable g1, and light's chop an n3
 with brown on 1. Green played the b2 (`tier_gate_rejected_all`), and blue threw the
 g1. It now gives Green to blue. Tests:
@@ -3448,7 +3453,7 @@ played exactly as one to Bob does. So 4.1's pool takes a stable play clue to eit
 partner (`pool_stable_play_any_partner`, `reactor0/decision.cpp`). Rung 3.1 keeps
 the Bob-only pool, since it exists for Bob's chop.
 
-Human diagnostic 2014538 T23 (`v18_human_vs_bot_diagnostics/2014538.md`):
+Human diagnostic 2014538 T23 (`human_vs_bot_diagnostics/2014538.md`):
 - blue was locked with 2 tokens, and green, blue's Bob, held a called n2;
 - Green to black was a stable play on black's g3, which blue could see was playable;
 - 4.1 never saw it, and 4.5 gave a stalling 3.
@@ -3481,13 +3486,13 @@ It now gives the Green.
 The user's ruling: the variant is hard, so rung 3.7 locks a stuck Bob only when his
 chop is **critical, playable or one away from playable**, judged on Alice's own
 stacks (`chop_worth_a_lock`, `src/conventions/reactor0/state_eval.cpp:167-179`, read
-at `src/conventions/reactor0/decision.cpp:1867-1880`). Anything further away is not
+at `src/conventions/reactor0/decision.cpp:1907-1920`). Anything further away is not
 worth committing his whole hand for, and Alice does something else instead, most
 often her own standing play. 3.6b (§2g) goes with the lock it replaces. 3.6 and 3.10
 already need a critical chop, and §4's lock, the forced branch, is unchanged. This
 holds only under this variant; reactor0 keeps the lock.
 
-Human diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T7:
+Human diagnostic [2018365](../../../human_vs_bot_diagnostics/2018365.md) T7:
 - green, holding a called y1 at 7 tokens, gave black a 2 that touched the r2 on his
   lock slot, a lock;
 - black's chop, the newest unclued card, was a y4 on empty yellow, three away.
@@ -3502,10 +3507,10 @@ A change to reactor0's shared ladder, for every convention that delegates to it.
 tokens reactor0 §4, the forced-clue list whose floor always returns a clue, now opens
 only when Alice has no known play, or Bob is stuck on a hidden playable that a clue
 moves now, or a clue gets two plays (4a-4c, the pace arm's own qualifiers;
-`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2084-2095`). A discard
+`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2124-2135`). A discard
 is illegal at 8 tokens, but a play is not.
 
-Human diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T10: at 8
+Human diagnostic [2018365](../../../human_vs_bot_diagnostics/2018365.md) T10: at 8
 tokens green, still holding the called y1, gave Blue on black's already-clued b3. The
 clue saved nothing, and black's chop was a same-hand dupe. Green now plays the y1.
 `tests/test_tiiah/test_decision_making/test_replay_2018365_play_over_forced_clue_at_eight.cpp`.
@@ -3519,7 +3524,7 @@ call is relegated to a receiver-CTP and no longer outranks every clue. The rule 
 now writes it too, wherever the reacter's call is made: the walk and the §1k discharge
 (`src/conventions/tiiah/interpret_reactive.cpp:982-993`), and the ASCR pairing (`:492-496`).
 
-Human diagnostic [2018759](../../../v18_human_vs_bot_diagnostics/2018759.md) T34:
+Human diagnostic [2018759](../../../human_vs_bot_diagnostics/2018759.md) T34:
 - black's T30 3 made will-bot67 the reacter on its m3, and it deferred;
 - will-bot69 played the paired target at T32;
 - at T34 the m3 was still urgent and played ahead of the §2e save of will-bot69's
@@ -3761,6 +3766,7 @@ left:
 | `tests/test_tiiah/test_decision_making/test_replay_2025193_no_five_ahead_of_a_lower_playable.cpp` | §2 (reactor0 Actionable card priority rung 7) — replay 2025193 T49, will-bot69: its called p2 is played before its known b5 (v23.8.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2025193_stuck_bobs_critical_chop_is_saved.cpp` | §2e — replay 2025193 T50, will-bot67: will-bot69 holds a called p2 and yagami's chop is the critical p4; the 4 to yagami is exempt from the tier gate and given (v23.9.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2025289_owed_reaction_loads_bob.cpp` | §1c — replay 2025289 T6, yagami_green: blue still owes its deferred T1 reaction, so it is loaded and black's T4 Purple to green is stable; green plays o15 (v23.10.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2025310_bob_handles_cathys_playable_chop.cpp` | §2 (reactor0 priority 3) — human diagnostic 2025310 T3, yagami_green: blue's chop y2 plays once its known y1 lands, so it plays the y1 rather than clue black (v23.11.0) |
 | `tests/test_tiiah/test_known_bucket_violation.cpp` | §1d — the legality layer: a known purple 2 answers a t1 under a 1 when r1/y1/p1 are down (a globally known violation); with yellow not down the receiver would read the y1, and it is no pairing (v22.4.0) |
 | `tests/test_tiiah/test_retouch_rank_call.cpp` | §1b — a 5 to Bob re-touching his `{b5,p5}` and `{r5,b5}` calls the rightmost possible play as `{p5}`; not at 8 clues, nor with nothing playable (v22.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2021455_retouch_five_calls_the_p5.cpp` | §1b — replay 2021455 T61-T62: yagami's 5 re-touching will-bot69's o8 `{p5,pr5}` calls the p5, and will-bot69 plays it (v22.2.0) |

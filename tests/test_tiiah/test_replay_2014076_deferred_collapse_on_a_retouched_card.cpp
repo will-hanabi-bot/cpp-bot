@@ -1,7 +1,7 @@
 // TIIAH replay 2014076 (tiiah/CONVENTION.md §1e, v18.12.0). Throw It in a Hole &
 // Brown (6 Suits). Seats: 0 yagami_blue, 1 yagami_light (human), 2 yagami_green (us).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014076.md T14: light's Red
+// Human diagnostic human_vs_bot_diagnostics/2014076.md T14: light's Red
 // re-touched blue's r2, clued at T12 by a 2 -- playable in the worlds where our hole
 // cards were y1 then r1, trash where they were r1 then r2. Read as a call that said
 // the team still needed the r2, it struck r2 from our `{r1,r2}` at every seat; at

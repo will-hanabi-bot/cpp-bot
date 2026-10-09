@@ -1,4 +1,4 @@
-// Human diagnostic 2018541 T26 (v18_human_vs_bot_diagnostics/2018541.md;
+// Human diagnostic 2018541 T26 (human_vs_bot_diagnostics/2018541.md;
 // tiiah/CONVENTION.md §1e, the Actionable Superposition Collapse Rule, v20.6.0).
 // will-bot67 had thrown o16 `{y3,r3}` into the hole unnamed at T23 (the r3). At T25
 // yagami's 1 to will-bot69 was a reactive with will-bot67 reacting. On the frame they

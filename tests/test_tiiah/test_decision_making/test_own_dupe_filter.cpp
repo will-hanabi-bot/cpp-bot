@@ -7,7 +7,7 @@
 // stacks): the partner watched the hole card and throws a dupe. Except Bob's
 // chop, when Bob is stuck with it (§3's precondition): the choice there is between
 // a possible dupe and a certain loss, and a human saves it. Human diagnostic
-// 2013726 T17 (v18_human_vs_bot_diagnostics/2013726.md).
+// 2013726 T17 (human_vs_bot_diagnostics/2013726.md).
 #include <gtest/gtest.h>
 
 #include <algorithm>

@@ -4,7 +4,7 @@
 // reactive has to get something new. But when every playable and finesse target
 // in the receiver's hand is already gotten, the walk runs again as if nothing
 // were, and takes the leftmost one -- as outside TIIAH. Human diagnostic 2013726
-// T38 (v18_human_vs_bot_diagnostics/2013726.md): a Brown to black gets blue's n5
+// T38 (human_vs_bot_diagnostics/2013726.md): a Brown to black gets blue's n5
 // against the g4 black was already called to play.
 #include <gtest/gtest.h>
 

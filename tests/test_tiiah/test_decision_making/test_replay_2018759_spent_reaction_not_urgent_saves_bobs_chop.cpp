@@ -1,4 +1,4 @@
-// Human diagnostic 2018759 T34 (v18_human_vs_bot_diagnostics/2018759.md; reactor0
+// Human diagnostic 2018759 T34 (human_vs_bot_diagnostics/2018759.md; reactor0
 // DECISION_MAKING.md Precedence step 2, v9.3.0, restored for Throw It in a Hole in
 // v20.7.0). At T30 black's 3 made will-bot67 the reacter on o4 `{ra3}`; it deferred
 // at T31, and at T32 will-bot69 played o33, the paired target. A reaction whose

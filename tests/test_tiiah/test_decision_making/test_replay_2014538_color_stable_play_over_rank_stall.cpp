@@ -2,7 +2,7 @@
 // §2; v18.15.0). Throw It in a Hole & Brown (6 Suits). Seats: 0 yagami_black
 // (human), 1 yagami_blue (us), 2 yagami_green.
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014538.md T23: we are locked with
+// Human diagnostic human_vs_bot_diagnostics/2014538.md T23: we are locked with
 // two tokens. Green, our Bob, holds a called n2 and black holds no standing play, so
 // by role inversion a clue to black is stable, and Green names black's o26, a g3 we
 // can see is playable. Section 4.1 took stable clues to Bob only, so the Green never

@@ -1,7 +1,7 @@
 // TIIAH replay 2013726 (tiiah/CONVENTION.md §1c, v18.3.0). Throw It in a Hole &
 // Brown (4 Suits). Seats: 0 yagami_black (human), 1 yagami_green, 2 yagami_blue (us).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2013726.md T30: black holds the r4
+// Human diagnostic human_vs_bot_diagnostics/2013726.md T30: black holds the r4
 // our T27 Red called, and a human gives Brown to black -- a reverse-reactive
 // finesse of green's n3 into black's n4. v18.0.0-v18.2.0 counted only a
 // touch-known play for the reverse position, so black's called r4 did not count,

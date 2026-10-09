@@ -1,6 +1,6 @@
 // The STABLE PLAY HIERARCHY (tiiah/CONVENTION.md §2a, v18.17.0).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014561.md T49/T50: when several
+// Human diagnostic human_vs_bot_diagnostics/2014561.md T49/T50: when several
 // stable play clues exist, tiebreak them in this order, each judged over what the
 // one above left, all from the giver's model of the receiver after the clue:
 //   1. fewest identities left on the called card;

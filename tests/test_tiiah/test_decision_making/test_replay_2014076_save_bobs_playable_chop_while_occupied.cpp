@@ -2,7 +2,7 @@
 // Throw It in a Hole & Brown (6 Suits). Seats: 0 yagami_blue, 1 yagami_light
 // (human), 2 yagami_green (us).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014076.md T18: light's T17 Blue
+// Human diagnostic human_vs_bot_diagnostics/2014076.md T18: light's T17 Blue
 // called our o21 as the b2, so we are occupied, and blue's chop o22 is a playable g1
 // with nothing else for blue to do. Light's chop, o9, is an n3 with brown on 1: not
 // critical, not playable. "yagami_green is expected to save the green 1 by giving a

@@ -1,7 +1,7 @@
 // TIIAH replay 2013726 (tiiah/CONVENTION.md §1d, v18.4.0). Throw It in a Hole &
 // Brown (4 Suits). Seats: 0 yagami_black (human), 1 yagami_green, 2 yagami_blue (us).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2013726.md T27: at pace 1 a human
+// Human diagnostic human_vs_bot_diagnostics/2013726.md T27: at pace 1 a human
 // gives 4 to green, a reactive that gets black's r4 and green's g1 although the
 // pairing breaks the bucket relation. Such a pairing was legal only when both
 // players could name their own card, so we gave a stable Red to black. In the

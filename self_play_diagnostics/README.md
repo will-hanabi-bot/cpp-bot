@@ -5,7 +5,7 @@ A local harness that has three copies of the current bot play **Throw It in a Ho
 bots' readings go wrong. It is used to check that a change does not damage play
 elsewhere: run the previous version and the candidate on the same seeds and compare.
 What good play *is* comes from the human diagnostics in
-`v18_human_vs_bot_diagnostics/`, not from these numbers.
+`human_vs_bot_diagnostics/`, not from these numbers.
 
 ## Running it
 

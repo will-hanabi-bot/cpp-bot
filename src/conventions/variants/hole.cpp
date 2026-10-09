@@ -180,7 +180,7 @@ bool reverse_reactive_position(const Game& prev, int giver) {
   // only a touch-known play counted, which turned the reverse reactive off in
   // practice: a stable colour clue calls a card whose touches still allow
   // unplayable identities. Human diagnostic 2013726 T30
-  // (v18_human_vs_bot_diagnostics/2013726.md): black held a called r4 touched as
+  // (human_vs_bot_diagnostics/2013726.md): black held a called r4 touched as
   // r1-r5, so blue's Brown to black -- a reverse-reactive finesse of green's n3
   // into black's n4, which v16.29.0 gave -- was not available. An uncalled card
   // counts only as a SURE play, one nothing in the hole could have made trash

@@ -268,7 +268,7 @@ TEST(Reactor0SectionFourGate, LockedOpensWithoutFourAToFourC) {
 // v20.2.0: the 8-token arm takes the pace arm's qualifiers. With nothing Alice
 // knows she can play (4a), 8 tokens still opens section 4: a discard is illegal,
 // so cluing is all that is left. Human diagnostic 2018365 T10
-// (v18_human_vs_bot_diagnostics/2018365.md).
+// (human_vs_bot_diagnostics/2018365.md).
 TEST(Reactor0SectionFourGate, EightCluesOpensWhenFourAHolds) {
   Game g = alice_blind(5);
   ASSERT_TRUE(g.me().thinks_playables(g, (int)TestPlayer::ALICE).empty())

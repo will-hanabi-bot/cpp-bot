@@ -48,7 +48,7 @@ and VH1 is deliberately its only member.
 reactive finesse whose connector -- the reacter's card, by sight -- is the identity
 of a card already called to play elsewhere (visibly, or on our own hand when our
 reading is that one card): the reacter would spend its play on a duplicate
-(`finesse_dupes_a_call`, `decision.cpp:2235-2265`, asked at `:2261`). Such a clue
+(`finesse_dupes_a_call`, `decision.cpp:2275-2305`, asked at `:2261`). Such a clue
 can still be chosen at its ordinary tier; it just no longer outranks a reaction.
 Replay [2024676](https://hanab.live/shared-replay/2024676#5) T5 (TIIAH & Dark Null):
 will-bot69 owed its called r2 and instead gave a VERY HIGH 4 to yagami, a finesse
@@ -457,7 +457,7 @@ Two things outrank the phases below, and one thing sits between them:
     (`tiiah::interpret_reactive`, since v16) never wrote it, so the field stayed -1
     and every TIIAH reaction stayed urgent for good. It now writes it wherever the
     reacter's call is made (the walk, the §1k discharge, and the ASCR pairing).
-    Human diagnostic [2018759](../../../v18_human_vs_bot_diagnostics/2018759.md)
+    Human diagnostic [2018759](../../../human_vs_bot_diagnostics/2018759.md)
     T34:
     - will-bot67 had deferred its m3 reaction, and will-bot69 had played the paired
       target.
@@ -832,7 +832,7 @@ is judged from Alice's own inference, not common knowledge.
    standing call on a card Alice can see is dead, their own reading still admits a
    good identity beside it, and this clue narrows that card to exactly the dead one.
    Tiebreak: the default. Human diagnostic 2013726 T5
-   (`v18_human_vs_bot_diagnostics/2013726.md`) is a fix given this way and judged
+   (`human_vs_bot_diagnostics/2013726.md`) is a fix given this way and judged
    correct by the reviewer. Green's 2 fixes blue's dead `{r1,b2}` (the r1, already
    down). v18.6.0 briefly preferred a colour fix instead and was reverted in
    v18.8.0. Since v22.0.0 the replay no longer reaches the fix (its T3 clue is a TIIAH
@@ -882,7 +882,7 @@ is judged from Alice's own inference, not common knowledge.
    - The team has 6 or more clues available.
 
    **The clue-count arm opens 3.1 only** (v20.22.0, the user's amendment and
-   ruling; `kPriority3ClueCount`, `rung_3`, `reactor0/decision.cpp:1790-1801`).
+   ruling; `kPriority3ClueCount`, `rung_3`, `reactor0/decision.cpp:1826-1841`).
    With 6 or more tokens a stable play clue to Bob is worth giving whatever his
    chop. The locks, double discards and discard calls of 3.2-3.10 still need the
    first arm, a stuck Bob: opened to every Bob, a lock outranked §4's fill-in at 8
@@ -894,6 +894,22 @@ is judged from Alice's own inference, not common knowledge.
    discarded at 7 tokens; it gives the Red now
    (`tests/test_tiiah/test_decision_making/test_replay_2019598_stable_red_at_high_clue_count.cpp`,
    `tests/test_reactor0/test_decision_making/test_high_clue_count_stable_play.cpp`).
+
+   **Neither arm while Bob has Cathy's playable chop to see to** (v23.11.0, the
+   user's ruling; reactor0 and TIIAH): Alice holds a known play, Cathy -- Bob's
+   Bob -- has no safe action, and her chop is a good card (not trash, not a
+   same-hand dupe, not inverted) that plays once Alice's known plays land. Bob is
+   expected to deal with it rather than throw his own chop, so Alice plays;
+   `rung_3` returns nothing and `priority_3_applies` is false
+   (`bob_handles_cathys_playable_chop`, `reactor0/decision.cpp:1697-1736`, asked at
+   `:1773` and `:1837`). The safe-action condition is what makes Cathy's chop Bob's
+   business at all: a Cathy who will not throw it leaves Bob nothing to do for her,
+   and he throws his own (self-play Dark Null seed 96, which lost a 30/30 without
+   it). Human
+   diagnostic [2025310](../../../human_vs_bot_diagnostics/2025310.md) T3: green
+   held its called y1, blue's chop was the y2, and green gave black a play clue at
+   7 tokens instead of playing; it plays the y1 now
+   (`tests/test_tiiah/test_decision_making/test_replay_2025310_bob_handles_cathys_playable_chop.cpp`).
 
    The first arm is the same at every pace: `priority_3_applies`
    (`reactor0/decision.cpp`). Through v13.1.0 a `pace() <= 2` arm waived the
@@ -937,7 +953,7 @@ is judged from Alice's own inference, not common knowledge.
    whenever Bob could give Cathy a colour play clue himself. The reviewer's reason
    is that Bob "almost never stops to get or save a playable card at risk on Cathy's
    chop", so Alice's own call waits a round and the chop does not. Human diagnostic
-   [2014076](../../../v18_human_vs_bot_diagnostics/2014076.md) T18: green, occupied
+   [2014076](../../../human_vs_bot_diagnostics/2014076.md) T18: green, occupied
    by light's Blue, played its b2, and blue threw a playable g1. Rung 3.1 now gives
    Green to blue. The flag is computed only in a hole variant, so no reactor0 game
    reaches it.
@@ -963,7 +979,7 @@ is judged from Alice's own inference, not common knowledge.
 
        A play whose own player cannot name it goes into the hole unnamed. The
        rule and the replays (2008145 T1; human diagnostic
-       [2014561](../../../v18_human_vs_bot_diagnostics/2014561.md) T50) are in
+       [2014561](../../../human_vs_bot_diagnostics/2014561.md) T50) are in
        tiiah/CONVENTION.md §2a. Under every other variant it is the default
        tiebreak alone, as it always has been.
 
@@ -1021,7 +1037,7 @@ is judged from Alice's own inference, not common knowledge.
        ahead of 3.7, also clued where no lock was coming, and cost self-play 7
        points net.
 
-       Human diagnostic [2014538](../../../v18_human_vs_bot_diagnostics/2014538.md)
+       Human diagnostic [2014538](../../../human_vs_bot_diagnostics/2014538.md)
        T24: green, on one token, locked black with a 4 on a non-critical y4 at 3.7,
        when Green would have had him play the g3.
        `tests/test_reactor0/test_decision_making/test_stable_play_before_lock.cpp`.
@@ -1040,12 +1056,12 @@ is judged from Alice's own inference, not common knowledge.
        **In Throw It in a Hole, 3.7 also needs Bob's chop to be critical, playable
        or one away from playable** (v20.2.0, the user's ruling;
        `chop_worth_a_lock`, `state_eval.cpp:167-179`, read at
-       `decision.cpp:1867-1880`). The variant is hard enough that committing Bob's
+       `decision.cpp:1907-1920`). The variant is hard enough that committing Bob's
        whole hand is not worth it for anything further away, so Alice does
        something else, most often her own standing play. 3.6b goes with it, since
        it only ever replaces this lock; 3.6 and 3.10 need a critical chop anyway,
        and §4's lock (4.6) is the forced branch and keeps none of this. Human
-       diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T7:
+       diagnostic [2018365](../../../human_vs_bot_diagnostics/2018365.md) T7:
        green, holding a called y1, locked black with a 2 over a y4 chop on empty
        yellow; it now plays the y1. Logs `reactor0.rung_3_7_far_chop_no_lock`.
        `tests/test_tiiah/test_decision_making/test_no_lock_over_far_chop.cpp`.
@@ -1111,11 +1127,11 @@ is judged from Alice's own inference, not common knowledge.
    the pace arm and, since v20.2.0, the 8-clue arm as well: a discard is illegal at
    8 tokens, but a play is not, so an Alice who can see a play of her own is not
    forced to clue. Human diagnostic
-   [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T10: green, holding
+   [2018365](../../../human_vs_bot_diagnostics/2018365.md) T10: green, holding
    a called y1 at 8 tokens, gave Blue on black's already-clued b3, a clue that
    saved nothing while black's chop was a same-hand dupe; it now plays the y1.
    §1-§3 are untouched, so a clue they find is still given at 8 tokens
-   (`decision.cpp:2084-2095`). `priority_4_applies`
+   (`decision.cpp:2124-2135`). `priority_4_applies`
    (`reactor0/decision.h`, `decision.cpp`), exported so each alternative can be
    asserted apart from the rung's ordering, the way `priority_3_applies` is.
    4a. Alice does not have a known playable card.
@@ -1135,7 +1151,7 @@ is judged from Alice's own inference, not common knowledge.
        inversion (Bob holds a standing play, Cathy does not) a clue to Cathy is
        stable, and it gets a card played just as one to Bob does. Rung 3.1 stays
        Bob-only, since it is about Bob's chop. Human diagnostic
-       [2014538](../../../v18_human_vs_bot_diagnostics/2014538.md) T23: locked blue
+       [2014538](../../../human_vs_bot_diagnostics/2014538.md) T23: locked blue
        gave a stalling 3 to black over Green on black's playable g3.
     2. Same as 3.3
     3. Same as 3.5

@@ -361,7 +361,7 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
   // EVERY TARGET GOTTEN (v18.5.0): when nothing uncalled is left to get, the walk
   // runs again as if nothing had been gotten -- as outside TIIAH -- and takes the
   // leftmost called playable, then the leftmost called finesse target. Human
-  // diagnostic 2013726 T38 (v18_human_vs_bot_diagnostics/2013726.md): black's only
+  // diagnostic 2013726 T38 (human_vs_bot_diagnostics/2013726.md): black's only
   // target is a g4 an earlier reactive already called, and a human gives Brown to
   // black to get blue's n5 against it. On a frame that has simulated the
   // receiver's own called plays (the reverse arm), those cards read as played and
@@ -549,7 +549,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // pairing, read in those worlds, and the worlds collapse to them. Only when no
   // world works does the walk go on.
   //
-  // Human diagnostic 2018541 T26 (v18_human_vs_bot_diagnostics/2018541.md): the
+  // Human diagnostic 2018541 T26 (human_vs_bot_diagnostics/2018541.md): the
   // first target was will-bot69's b4, paired with will-bot67's o6 `{r4,ra4}`. On the
   // frame red was 2 -- will-bot67 could not name its own T23 r3 -- so the walk went
   // on to the g2 and called o26 into a strike. In the world where o16 was the r3,
@@ -807,7 +807,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       // bucket relation whatever the players can name, and each reads it by §1d's
       // core rule -- the bucket (or the finesse, when provable) if it leaves
       // anything, else any playable. Human diagnostic 2013726 T27
-      // (v18_human_vs_bot_diagnostics/2013726.md): 4 to green gets black's r4 and
+      // (human_vs_bot_diagnostics/2013726.md): 4 to green gets black's r4 and
       // green's `{g1,n3}`, and was illegal here, so blue gave a Red instead.
       const bool endgame = state.pace() <= 1;
       if (action.giver == state.our_player_index && !connector && !double_chuck &&
@@ -991,7 +991,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     // outranking every clue (reactor0 DECISION_MAKING.md, Precedence step 2,
     // v9.3.0). reactor0's walk records it in `record_react_target`; this walk never
     // did, so every TIIAH reaction stayed urgent. Human diagnostic 2018759 T34
-    // (v18_human_vs_bot_diagnostics/2018759.md): will-bot67 played its spent m3
+    // (human_vs_bot_diagnostics/2018759.md): will-bot67 played its spent m3
     // reaction instead of saving will-bot69's playable b2 chop.
     {
       const int paired = target.order;
@@ -1772,7 +1772,7 @@ void annotate_candidate(const Game& game, const Game& hypo,
       rr.allowed.intersect(hypo.common.thoughts[target].possible).length();
   // A reading that leaves out what the card IS is a misread, however narrow
   // (v23.5.0): we can see the target, so it ranks after every reading that holds
-  // it. Replay 2013726 T27 (v18_human_vs_bot_diagnostics/2013726.md): once an
+  // it. Replay 2013726 T27 (human_vs_bot_diagnostics/2013726.md): once an
   // empty named bucket read any playable, the 4 to green left `{g1,...}` and a Blue
   // to green the narrower `{n3}` -- for a card that was the g1.
   if (const auto truth = s.deck[target].id(); truth && !rr.allowed.contains(*truth)) {

@@ -2,7 +2,7 @@
 // Throw It in a Hole & Brown (6 Suits). Seats: 0 yagami_black (human),
 // 1 yagami_blue, 2 yagami_green (us).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014538.md T24: one token, and we
+// Human diagnostic human_vs_bot_diagnostics/2014538.md T24: one token, and we
 // hold a called n2. Black, our Bob, is stuck with a non-critical y4 on chop; blue is
 // locked. Rung 3.1's stable play needs two tokens, so 3.7 locked black with a 4 --
 // "does not provide yagami_black a safe action at all". Green names black's o26, the

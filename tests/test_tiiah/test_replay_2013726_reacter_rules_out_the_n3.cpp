@@ -2,7 +2,7 @@
 // in a Hole & Brown (4 Suits). Seats: 0 yagami_black (us, simulated), 1 yagami_green,
 // 2 yagami_blue.
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2013726.md T27: instead of the Red
+// Human diagnostic human_vs_bot_diagnostics/2013726.md T27: instead of the Red
 // to black, the reviewer's 4 to green -- a reactive pairing black's o30 (the r4)
 // with green's o23 (the g1), which v18.4.0 made legal in the endgame. The reviewer:
 // black "knows that they hold the r4 exactly because they see all copies of n3 (one

@@ -2,7 +2,7 @@
 // v18.17.0). Throw It in a Hole & Brown (6 Suits). Seats: 0 yagami_green,
 // 1 yagami_blue (us), 2 yagami_black (human).
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014561.md T50: three stable plays
+// Human diagnostic human_vs_bot_diagnostics/2014561.md T50: three stable plays
 // to black -- Yellow (o47, the y4), 3 and Purple (both on o30, the p3). All three
 // name their card (criterion 1) and touch nothing else of use (criterion 2: Purple's
 // p1 is trash black can see, since o10 can only be the p1 or the p3 being called).

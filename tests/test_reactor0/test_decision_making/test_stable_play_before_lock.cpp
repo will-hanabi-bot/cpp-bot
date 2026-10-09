@@ -6,7 +6,7 @@
 // leaves him nothing to do; the play gives him his turn, and what he may then
 // throw is not critical. A critical chop keeps 3.8-3.10, which save it for good.
 //
-// Human diagnostic v18_human_vs_bot_diagnostics/2014538.md T24 (TIIAH): green, on
+// Human diagnostic human_vs_bot_diagnostics/2014538.md T24 (TIIAH): green, on
 // one token, locked black with a 4 on a non-critical y4 when Green would have had
 // him play the g3. The rung is reactor0's, so the fixture is too.
 #include <gtest/gtest.h>

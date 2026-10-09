@@ -96,7 +96,7 @@ cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         358 tests,  7 s
 build/hanabi_tests.exe            # convention-neutral    400 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
-build/hanabi_decision_tests.exe   # decision quality      232 tests,  0.7 s
+build/hanabi_decision_tests.exe   # decision quality      233 tests,  0.7 s
 build/hanabi_tiiah_tests.exe      # Throw It in a Hole    261 tests,  0.3 s
 ```
 
@@ -186,7 +186,7 @@ readings is not a result.
 
 ## Human-vs-bot diagnostics
 
-`v18_human_vs_bot_diagnostics/` holds games that an expert human played with the
+`human_vs_bot_diagnostics/` holds games that an expert human played with the
 bot and then annotated turn by turn: what a strong player does, and why the bot's
 move fell short. One file per game (`<database_id>.md`), indexed in its
 `README.md`, with the human's words verbatim.
@@ -197,7 +197,7 @@ move fell short. One file per game (`<database_id>.md`), indexed in its
 - A change that makes the bot play against a diagnostic there is a regression,
   whatever else it improves.
 - When a change answers an item, cite the document and turn
-  (`v18_human_vs_bot_diagnostics/<id>.md` T<N>) in the commit message and next to
+  (`human_vs_bot_diagnostics/<id>.md` T<N>) in the commit message and next to
   the rule in `CONVENTION.md` / `DECISION_MAKING.md`, and set the item's
   **Status** in the document to the version that fixed it.
 - When the user sends a new annotated game, add a document for it in the same
