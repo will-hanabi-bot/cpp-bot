@@ -740,6 +740,10 @@ void Game::handle_action(const Action& action) {
 // --- Empathy elim (port of game.py:613-710) -------------------------------
 
 void Game::elim(std::optional<int> except_) {
+  // Throw It in a Hole: the frame a new call was given in, for core rule 2 for the
+  // team below (v23.12.0).
+  hanabi::tiiah::record_called_playables(*this);
+
   // Step 1: pre-elim cleanup.
   for (const auto& hand : state.hands) {
     for (int order : hand) {
@@ -787,6 +791,19 @@ void Game::elim(std::optional<int> except_) {
       // verdict reflects the dupe-strike, not a real chain break.
       auto did = state.deck[order].id();
       if (did && state.is_basic_trash(*did)) continue;
+      // Throw It in a Hole: every seat has now ruled out what the call named, so
+      // the call stands as any playable (core rule 2 for the team, v23.12.0;
+      // replay 2025422 T32).
+      const IdentitySet fallback =
+          hanabi::tiiah::team_called_fallback(*this, order, common.thoughts[order].possible);
+      if (fallback.non_empty()) {
+        common = common.with_thought(order, [&fallback](const Thought& t) {
+          Thought out = t;
+          out.inferred = fallback;
+          return out;
+        });
+        continue;
+      }
       with_meta(order, [](ConvData& m) {
         m.status = CardStatus::NONE;
         m.by = std::nullopt;

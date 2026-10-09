@@ -241,7 +241,7 @@ receiver-CTD) have **no analogue** in the tree:
 - **Dependence does not exist.** Nothing computes whether two queued CTP cards
   could share a suit under their non-global inferences.
 - **Ordering is inconsistent.** `signal_turn` is the only timestamp, it is
-  *set-once* (`card.cpp:113-118`), it is **absent** on three stamping paths
+  *set-once* (`card.cpp:117-121`), it is **absent** on three stamping paths
   (`reactor0/interpret_clue.cpp:556-559`, `reactor0/interpret_reaction.cpp:58-62`,
   `reactor/interpret_clue.cpp:388-398`), and its missing-value convention differs
   across call sites (`99` / `99` / `0` / `-1` / `-1`).

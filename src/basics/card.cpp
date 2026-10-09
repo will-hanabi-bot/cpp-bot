@@ -98,6 +98,8 @@ ConvData ConvData::cleared() const {
   // Paired with `urgent`, cleared above: it describes a live call, not history.
   out.react_target_order = -1;
   out.fixed_reaction = false;
+  out.called_playables = IdentitySet::empty();
+  out.called_at = -1;
   return out;
 }
 

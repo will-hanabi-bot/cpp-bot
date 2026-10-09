@@ -199,6 +199,14 @@ struct ConvData {
   // that a partner's row and ours agree. It must skip the card once the row already
   // counts this identity, or the card is counted twice.
   IdentitySet private_named = IdentitySet::empty();
+  // Throw It in a Hole: what this card could be that was playable on the SHARED view
+  // when it was called to play (v23.12.0), taken at the first `Game::elim` after the
+  // call; `called_at` is the call's `signal_turn` it was taken for (-2 for a call
+  // without one). Core rule 2 for the team reads a call whose team reading has been
+  // ruled out as any of these still playable -- not a card that only became
+  // playable later (`tiiah::team_called_fallback`). Cleared with the call.
+  IdentitySet called_playables = IdentitySet::empty();
+  int called_at = -1;
 
   bool superposed() const { return superposition.non_empty(); }
 

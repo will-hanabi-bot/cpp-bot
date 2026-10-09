@@ -1167,6 +1167,9 @@ struct ReceiverReading {
   // read, and empty everywhere), and what then stands: every playable of each
   // world but the reacter's own card, with its worlds (v23.5.0).
   bool named_bucket_empty = false;
+  // The reacter's card names one bucket (its identities all sit in one), so the
+  // bucket half is a real reading and can be judged against the receiver's card.
+  bool one_bucket_read = false;
   IdentitySet any = IdentitySet::empty();
   std::vector<std::pair<Identity, std::uint64_t>> any_support;
 };
@@ -1231,7 +1234,8 @@ ReceiverReading receiver_reading(const Variant& variant,
       }
     }
   }
-  out.named_bucket_empty = one_bucket && from && !worlds.empty() && out.bucket.is_empty();
+  out.one_bucket_read = one_bucket && from && !worlds.empty();
+  out.named_bucket_empty = out.one_bucket_read && out.bucket.is_empty();
   return out;
 }
 
@@ -1240,13 +1244,23 @@ ReceiverReading receiver_reading(const Variant& variant,
 // else the bucket half alone. Until v22.0.0 the receiver read the union of the two.
 // E.g. 5 to Cathy answered by Bob's g1 reads her target `{p1,t1}`, not
 // `{p1,t1,g2}`; the giver may not give a finesse the receiver cannot prove (the walk).
-void keep_convention_half(ReceiverReading& rr, bool proven) {
+void keep_convention_half(ReceiverReading& rr, bool proven, const IdentitySet& could) {
   // THE EMPTY BUCKET (v23.5.0, the user's ruling): when the bucket the reacter's
   // card names has no playable in any world, the receiver reads ANY playable, the
   // finesse included -- not the finesse alone. Replay 2024288 T45-T47: the u2
   // answering yagami's Blue names purple, which was complete; the finesse is the
   // u3, but the y2 the Blue meant plays too, so will-bot69's o46 reads `{y2,u3}`.
-  if (rr.named_bucket_empty) {
+  //
+  // ...and so does a bucket that offers nothing the receiver's card COULD be, when
+  // no finesse is proven (v23.12.0, the user's ruling: "the bucket, then any playable
+  // if the bucket interpretation is impossible"). Replay 2025452 T18-T20: black's
+  // Yellow to green, answered by blue's g4, names red; green's o19 is yellow, so the
+  // card is any playable yellow over the worlds of its hole card o8 `{r1,y1}`: the
+  // y1 where o8 was the r1, the y2 where o8 was the y1. It read the stamp's `{y1}`,
+  // played it, and booked o8 as the r1 -- red on 1 for the rest of the game.
+  const bool impossible = !proven && rr.one_bucket_read && could.non_empty() &&
+                          rr.bucket.intersect(could).is_empty();
+  if (rr.named_bucket_empty || impossible) {
     for (const auto& [i, bits] : rr.any_support) {
       rr.allowed = rr.allowed.add(i);
       auto it = std::find_if(rr.support.begin(), rr.support.end(),
@@ -1444,9 +1458,10 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
       receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live);
   {  // the bucket first (v22.0.0, `keep_convention_half`)
     keep_convention_half(
-        rr, !bucket_only &&
-                finesse_from_the_card(game, wc.clue.kind, wc.turn, could, react_live,
-                                      react_order));
+        rr,
+        !bucket_only && finesse_from_the_card(game, wc.clue.kind, wc.turn, could,
+                                              react_live, react_order),
+        could);
   }
   std::vector<IdentitySet> tiers{could.intersect(rr.allowed)};
   if (!bucket_only) {
@@ -1612,7 +1627,8 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
         before.non_empty() ? before.intersect(possible) : possible;
     keep_convention_half(
         rr, finesse_from_the_card(game, wc.clue.kind, wc.turn, could, react_live,
-                                  react_order));
+                                  react_order),
+        could);
   }
   const IdentitySet& allowed = rr.allowed;
   const auto& support = rr.support;
@@ -1765,8 +1781,16 @@ void annotate_candidate(const Game& game, const Game& hypo,
                                 : IdentitySet::empty();
     const IdentitySet could =
         pre.intersect(possible).non_empty() ? pre.intersect(possible) : possible;
-    keep_convention_half(rr, finesse_from_the_card(hypo, c.action.clue.kind, clue_turn,
-                                                   could, react_live, react_order));
+    // Not `could`: the giver ranks a reading the bucket leaves impossible as before,
+    // a misread (v23.12.0). Predicting the receiver's any-playable reading there made
+    // such pairings rank well while the REACTER, who cannot see its card, still read
+    // it through the bucket and booked the wrong card: self-play Black seed 191 T47,
+    // Cathy's r3 paired with Alice's g5 read as the p4. Measured: Black 30/30 7 -> 6,
+    // 588 cards read wrongly against 560, where this leaves 573 and fewer movers.
+    keep_convention_half(rr,
+                         finesse_from_the_card(hypo, c.action.clue.kind, clue_turn,
+                                               could, react_live, react_order),
+                         IdentitySet::empty());
   }
   c.receiver_reading_size =
       rr.allowed.intersect(hypo.common.thoughts[target].possible).length();

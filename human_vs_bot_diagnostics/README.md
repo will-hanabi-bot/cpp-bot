@@ -30,6 +30,8 @@ elsewhere.
 | [2018541](2018541.md) | Throw It in a Hole & Rainbow (5 Suits), tiiah | yagami_black | T26 (a reacter card playable in a hole world: the Actionable Superposition Collapse Rule) | fixed (v20.6.0) |
 | [2018759](2018759.md) | Throw It in a Hole & Rainbow (5 Suits), tiiah | yagami_black | T34 (a spent reaction stays urgent and blocks a save of Bob's playable chop) | fixed (v20.7.0) |
 | [2025310](2025310.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah | yagami_black | T3 (Alice plays her known card; Bob sees to Cathy's playable chop) | fixed (v23.11.0) |
+| [2025422](2025422.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah | yagami_black | T28-T33 (a call whose team reading lands elsewhere stays called as any playable) | fixed (v23.12.0) |
+| [2025452](2025452.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah | yagami_black | T38 (black's playable r1; T18-T20 a bucket impossible for the card reads any playable over the worlds) | fixed (v23.12.0) |
 
 ## Template
 

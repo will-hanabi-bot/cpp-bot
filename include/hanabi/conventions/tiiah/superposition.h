@@ -275,6 +275,25 @@ bool advance_rows_from_own_worlds(Game& game);
 // read `{n3}` by the bucket, black sees both n3s, and so knows it holds the r4.
 IdentitySet own_called_fallback(const Game& game, int order, const IdentitySet& possible);
 
+// CORE RULE 2 FOR THE TEAM (v23.12.0): the same reading once EVERY seat can rule the
+// team's reading of a called card out -- elimination has emptied it, so every copy
+// of what it named is accounted for elsewhere. The call stands and the card is any
+// playable: the identities `possible` still allows that are playable on the common
+// stacks. Empty when that leaves nothing, for an uncalled card, or outside the
+// variant, and then the call is void as before. `Game::elim` asks it before it
+// clears a call whose reading elimination emptied. Replay 2025422 T28-T33: black's
+// 5 to green, answered by blue's b3, named the d2 -- in blue's hand, where black and
+// green could see it but blue could not. Green read its o13 as the g4 or the b4;
+// when blue's d2 landed at T32 the team's `{d2}` emptied, the call was cleared, and
+// at T33 green discarded instead of playing the b4.
+IdentitySet team_called_fallback(const Game& game, int order, const IdentitySet& possible);
+
+// Take `ConvData::called_playables` for every call to play not yet recorded for its
+// signal turn: what the card could be that is playable on the shared view now. Run
+// by `Game::elim` before its eliminations, so a call stamped by this action is
+// recorded on the frame it was given in. No-op outside the variant.
+void record_called_playables(Game& game);
+
 // Narrow one superposition to `allowed`, and settle it when that leaves a single
 // identity (v16.19.0).
 //

@@ -1485,6 +1485,38 @@ IdentitySet own_called_fallback(const Game& game, int order, const IdentitySet& 
   return out.non_empty() ? out : possible;
 }
 
+IdentitySet team_called_fallback(const Game& game, int order, const IdentitySet& possible) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return IdentitySet::empty();
+  if (order < 0 || order >= static_cast<int>(game.meta.size())) return IdentitySet::empty();
+  if (game.meta[order].status != CardStatus::CALLED_TO_PLAY) return IdentitySet::empty();
+  const State common = s.shared_view();
+  IdentitySet out = possible.filter([&common](Identity i) { return common.is_playable(i); });
+  const IdentitySet& then = game.meta[order].called_playables;
+  return then.non_empty() ? out.intersect(then) : out;
+}
+
+void record_called_playables(Game& game) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return;
+  std::optional<State> common;
+  for (const auto& hand : s.hands) {
+    for (int o : hand) {
+      const ConvData& m = game.meta[o];
+      if (m.status != CardStatus::CALLED_TO_PLAY) continue;
+      const int at = m.signal_turn ? *m.signal_turn : -2;
+      if (m.called_at == at) continue;
+      if (!common) common = s.shared_view();
+      const IdentitySet then = game.common.thoughts[o].possible.filter(
+          [&common](Identity i) { return common->is_playable(i); });
+      game.with_meta(o, [&then, at](ConvData& d) {
+        d.called_playables = then;
+        d.called_at = at;
+      });
+    }
+  }
+}
+
 bool advance_rows_from_own_worlds(Game& game) {
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return false;
