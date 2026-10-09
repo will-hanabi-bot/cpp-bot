@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1655-1702`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1686-1736`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -292,12 +292,12 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:1270-1305`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:1301-1336`. CONVENTION.md §1d.
 
 Since v22.0.0 it is also the **only finesse that may be given**, and it decides the
 receiver's own reading. A proven finesse reads as the card after the reacter's. Any
 other pairing reads as the bucket half alone (`keep_convention_half`,
-`interpret_reactive.cpp:1222-1233`), never the union of the two halves.
+`interpret_reactive.cpp:1238-1264`), never the union of the two halves.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -658,3 +658,14 @@ identity at or below a landing we saw, with every copy spent or known elsewhere,
 leaves our other hand cards' readings -- so a dark card there is in no hand. Not
 the shared stacks or our presumed plays, which a hidden misplay pushes above the
 truth. CONVENTION.md §1e (replay 2024288 T58-T62).
+
+### empty named bucket
+The bucket the reacter's card names has no playable in any world. The receiver then
+reads any playable, the finesse included (v23.5.0, the user's ruling) -- unlike a
+known violation, where the bucket has playables but none the target could be, and
+the finesse is read first (2022852). CONVENTION.md §1d (replay 2024288 T45-T47).
+
+### misread (of a reactive's target)
+A predicted receiver reading that leaves out the target's true identity, which the
+giver can see. Ranks after every reading that holds it in priority 1's
+fewest-candidates tiebreak (v23.5.0). CONVENTION.md §2b (diagnostic 2013726 T27).

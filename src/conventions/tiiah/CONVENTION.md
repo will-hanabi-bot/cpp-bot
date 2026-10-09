@@ -1100,12 +1100,26 @@ is **no pairing**, and every walking seat goes past it.
   With r1, y1 and p1 down, Bob's known purple 2 answers Cathy's t1 under a 1. A rank
   clue names bucket 0 from a purple, a 1 can be no r2 or y2, and Bob knows his card.
   A finesse is not affected, nor is anything at pace <= 1 (v18.4.0).
+- **An EMPTY named bucket: any playable, the finesse included (v23.5.0, the user's
+  ruling).** When the bucket the reacter's card names has no playable in any world
+  -- not "none the target could be", but none at all -- the receiver reads any
+  playable of each world but the reacter's own card, the finesse among them
+  (`keep_convention_half`, `interpret_reactive.cpp:1243-1264`, on
+  `ReceiverReading::named_bucket_empty` and `any`, built in `receiver_reading`,
+  `:1174-1236`). The giver's prediction (`annotate_candidate`) and every reader
+  share it. Replay [2024288](https://hanab.live/shared-replay/2024288#45) T45-T47
+  (Dark Null), on the line the user called right: will-bot67's u2 answers
+  yagami's Blue, and under the T45 shift a u2 names purple, which is complete. The
+  finesse is the u3, but the y2 the Blue meant plays too, so will-bot69's o46 reads
+  `{y2,u3}`; it plays the y2 and the team books no u3 (test
+  `test_replay_2024288_empty_named_bucket_reads_any_playable.cpp`, on a history
+  with T46 edited to that play).
 - **After the bucket, the finesse; then any playable (the user's ruling, replay
   2022852 T33).** When the violation is known, the receiver's next reading is the
   finesse from the reacter's card, and only if its target cannot be that card does it
   fall back to any other stack playable. That is `keep_convention_half`
-  (`interpret_reactive.cpp:1222-1233`) over `finesse_from_the_card` (`:1288-1302`):
-  with the bucket half empty, the finesse is proven whenever the target could be it.
+  (`interpret_reactive.cpp:1238-1264`) over `finesse_from_the_card` (`:1288-1302`):
+  with no playable of the bucket that the target could be, the finesse is proven whenever the target could be it.
   Replay [2022852](https://hanab.live/shared-replay/2022852) (TIIAH & Omni): with
   omni on 3 and no o4 among will-bot67's o34's possibilities, a 4 from will-bot69
   answered by yagami_black's b2 reads o34 as the b3, not the r2 it was. Blue is the
@@ -1426,7 +1440,7 @@ worlds **collapse** to those that make it (`collapse_to_worlds`, shared), settli
 the hole cards. The REACTER keeps the stamp's reading: it cannot name what it
 played, and a fallback read off its inference would collapse on a guess (replay
 2015109 T9). `receiver_world_fallback`,
-`src/conventions/tiiah/interpret_reactive.cpp:1327-1453`, called from
+`src/conventions/tiiah/interpret_reactive.cpp:1358-1484`, called from
 `narrow_receiver_call` when no call was stamped (`:1419`); branch
 `tiiah.receiver_world_fallback`.
 
@@ -1574,12 +1588,12 @@ resolves — not at clue time, because until the reacter acts they do not know
 which of their cards the sum rule names. Their card is **one** of the two readings
 below, intersected with what it could already be: the continuation when the finesse
 is provable, and otherwise the bucket alone (v22.0.0, `keep_convention_half`,
-`interpret_reactive.cpp:1215-1226`; until v22.0.0 it was the union of the two). The
+`interpret_reactive.cpp:1230-1242`; until v22.0.0 it was the union of the two). The
 proof is `finesse_from_the_card`, the same test the reacter's naming uses (below), on
 the frame every seat computes alike. It applies in `narrow_receiver_call`, in the
 receiver world fallback's first tier, and in the giver's prediction of the receiver's
 reading (`annotate_candidate`, §2):
-(`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:1483-1600`,
+(`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:1514-1631`,
 called from the engine seam at `src/basics/decide.cpp:738-772`):
 
 - **the bucket** the reacter's sits one step from — one *lower* for a rank clue,
@@ -1698,7 +1712,7 @@ carries the clue's public touch information, and that is often enough:
 > then the pairing was a finesse. The reacter's card is then exactly the card we
 > watched, for the whole team.
 
-The test is `proven_finesse` (`tiiah/interpret_reactive.cpp:1270-1283`), over
+The test is `proven_finesse` (`tiiah/interpret_reactive.cpp:1301-1314`), over
 `finesse_from_the_card` (`:742-755`). It runs over the same two halves `receiver_reading`
 builds, on the shared view over every seat's hole cards. That is a frame the giver and the
 reacter compute alike, so they can predict the answer (v17.2.0). It is applied first in
@@ -1713,7 +1727,7 @@ a finesse the receiver cannot prove may not be given, so such a pairing is a buc
 (v17.2.0). Those two know the reacter's card exactly, because they saw the target the
 walk paired it with. The receiver did not. When the card is played,
 `note_hidden_action` asks `reaction_team_reading` what the receiver will be able to
-name (`tiiah/interpret_reactive.cpp:1655-1702`). That is the proven finesse's connector,
+name (`tiiah/interpret_reactive.cpp:1686-1736`). That is the proven finesse's connector,
 or else the reacter's bucket on the shared frame, intersected with what the card was
 read as before the clue (`ReactorWC::react_before`). When that is a single identity,
 the card is named for the team as before. Otherwise the giver and the reacter keep it
@@ -2079,7 +2093,7 @@ Replay [2019408](https://hanab.live/shared-replay/2019408):
 **A reactive's promise is read on what the RECEIVER knows** (v16.25.0). At the
 receiver's own seat that is its belief; at every other seat it is the frame the giver
 and the receiver share — `narrow_receiver_call`
-(`src/conventions/tiiah/interpret_reactive.cpp:1483-1600`), holders {receiver, giver}.
+(`src/conventions/tiiah/interpret_reactive.cpp:1514-1631`), holders {receiver, giver}.
 Replaying the receiver's hole cards on OUR belief strikes the world in which they are
 what we watched them be: at 2011475 T18 will-bot67 read yagami's called o21 as
 `{r4,b1}`, the g1 world gone because it had seen her o4 land as the g1. It is
@@ -3259,11 +3273,17 @@ not touch the n3, which rules the r5 out, and it reads `{n3}`. Every other term 
 and the default tiebreak had taken the Rank 1.
 
 The prediction is `tiiah::annotate_candidate`
-(`src/conventions/tiiah/interpret_reactive.cpp:1613-1653`), which reads the reacter's
+(`src/conventions/tiiah/interpret_reactive.cpp:1730-1781`), which reads the reacter's
 card by sight, the frame the giver shares with the receiver advanced by that card, and
-the pair's worlds, through the same `receiver_reading` helper (`:588-634`) that
+the pair's worlds, through the same `receiver_reading` helper (`:1174-1236`) that
 `narrow_receiver_call` uses — so the giver and the reader cannot disagree about what a
-call says. It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
+call says. A predicted reading that leaves out what the target IS -- we can see it -- is a
+misread however narrow, and ranks after every reading that holds it
+(`kMisreadReadingSize`, v23.5.0; `:1728`, `:1778-1780`). Human diagnostic
+[2013726](../../../v18_human_vs_bot_diagnostics/2013726.md) T27: once an empty named
+bucket read any playable, the 4 to green left `{g1,...}` for green's g1, and a Blue
+to green the narrower `{n3}`, so the tiebreak took the Blue; the 4 stands again.
+It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
 (`src/conventions/reactor0/decision.cpp:1381-1403`) reads first. reactor0 cannot call
 into this convention, so `reactor0::analyse_clues` takes an optional
 `CandidateAnnotator` and the engine passes this one under TIIAH
@@ -3573,7 +3593,7 @@ least everything on ours. So before the giver asks whether a clue leaves the par
 knowing a card is worth keeping (reactor0's `newly_useful`, the endgame stall list's
 rung 3), every identity on our stacks that no named card accounts for is booked as a
 spent copy in the partner's model, and the count is re-run (`with_stacks_spent` and
-`credit_partner_with_our_hole`, `src/conventions/tiiah/interpret_reactive.cpp:1626-1680`,
+`credit_partner_with_our_hole`, `src/conventions/tiiah/interpret_reactive.cpp:1657-1711`,
 from the candidate annotator at `:1598`).
 
 Replay [2023552](https://hanab.live/shared-replay/2023552) T53 (TIIAH & Omni), one card
@@ -3712,6 +3732,7 @@ left:
 | `tests/test_tiiah/test_decision_making/test_replay_2024288_positional_discard_given.cpp` | §2 (reactor0 Precedence step -1) — replay 2024288 T61, will-bot67: the deck empty, no certain play, will-bot69's u5 in slot 5; no gamble on slot 1, and any discard is its slot 5 (v23.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024288_positional_discard_names_bobs_play.cpp` | §2 (reactor0 §1j) — replay 2024288 T62, will-bot69, with T61 replaced by will-bot67's discard of its slot 5: will-bot69 plays its slot 5, the u5 (v23.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024288_dark_card_below_its_stack.cpp` | §1e — replay 2024288 T62, will-bot69: it watched the u2-u4 land, so the dark u1 it threw into the hole unnamed is on the stack; o9 is the u5 and it plays it (v23.4.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2024288_empty_named_bucket_reads_any_playable.cpp` | §1d — replay 2024288 T47 with T46 edited to will-bot67's u2: the named purple bucket is empty, so will-bot69's o46 reads `{y2,u3}`, not the u3 finesse alone, and it plays it (v23.5.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024655_reverse_reaction_is_not_deferred.cpp` | §1d — replay 2024655 T14, will-bot67: the reverse reactive's frame includes yagami's standing r1, so the call on yagami's r3 (o11) stands after will-bot69's r2, and the 3 to yagami is not given (v23.3.0) |
 | `tests/test_tiiah/test_known_bucket_violation.cpp` | §1d — the legality layer: a known purple 2 answers a t1 under a 1 when r1/y1/p1 are down (a globally known violation); with yellow not down the receiver would read the y1, and it is no pairing (v22.4.0) |
 | `tests/test_tiiah/test_retouch_rank_call.cpp` | §1b — a 5 to Bob re-touching his `{b5,p5}` and `{r5,b5}` calls the rightmost possible play as `{p5}`; not at 8 clues, nor with nothing playable (v22.2.0) |

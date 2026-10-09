@@ -1163,6 +1163,12 @@ struct ReceiverReading {
   // The two halves apart, for telling a finesse from a direct pairing.
   IdentitySet bucket = IdentitySet::empty();
   IdentitySet finesse = IdentitySet::empty();
+  // The bucket the reacter's card names offers nothing in any world (one bucket
+  // read, and empty everywhere), and what then stands: every playable of each
+  // world but the reacter's own card, with its worlds (v23.5.0).
+  bool named_bucket_empty = false;
+  IdentitySet any = IdentitySet::empty();
+  std::vector<std::pair<Identity, std::uint64_t>> any_support;
 };
 
 ReceiverReading receiver_reading(const Variant& variant,
@@ -1204,6 +1210,15 @@ ReceiverReading receiver_reading(const Variant& variant,
         out.bucket = out.bucket.add(i);
       }
     }
+    // Any playable of the world, for an empty named bucket (v23.5.0).
+    for (Identity i : worlds[w].state.playable_set) {
+      if (variant.suits[i.suit_index].suit_type.inverted || react_live.contains(i)) continue;
+      out.any = out.any.add(i);
+      auto it = std::find_if(out.any_support.begin(), out.any_support.end(),
+                             [i](const auto& pr) { return pr.first == i; });
+      if (it == out.any_support.end()) out.any_support.emplace_back(i, 1ULL << w);
+      else it->second |= (1ULL << w);
+    }
     // The finesse half: the card that follows what the reacter played. Reversed
     // suits run 5 -> 1, so the successor is `prev()` there -- `Identity::next()`
     // raw would name a card that does not exist.
@@ -1216,6 +1231,7 @@ ReceiverReading receiver_reading(const Variant& variant,
       }
     }
   }
+  out.named_bucket_empty = one_bucket && from && !worlds.empty() && out.bucket.is_empty();
   return out;
 }
 
@@ -1225,6 +1241,21 @@ ReceiverReading receiver_reading(const Variant& variant,
 // E.g. 5 to Cathy answered by Bob's g1 reads her target `{p1,t1}`, not
 // `{p1,t1,g2}`; the giver may not give a finesse the receiver cannot prove (the walk).
 void keep_convention_half(ReceiverReading& rr, bool proven) {
+  // THE EMPTY BUCKET (v23.5.0, the user's ruling): when the bucket the reacter's
+  // card names has no playable in any world, the receiver reads ANY playable, the
+  // finesse included -- not the finesse alone. Replay 2024288 T45-T47: the u2
+  // answering yagami's Blue names purple, which was complete; the finesse is the
+  // u3, but the y2 the Blue meant plays too, so will-bot69's o46 reads `{y2,u3}`.
+  if (rr.named_bucket_empty) {
+    for (const auto& [i, bits] : rr.any_support) {
+      rr.allowed = rr.allowed.add(i);
+      auto it = std::find_if(rr.support.begin(), rr.support.end(),
+                             [i = i](const auto& pr) { return pr.first == i; });
+      if (it == rr.support.end()) rr.support.emplace_back(i, bits);
+      else it->second |= bits;
+    }
+    return;
+  }
   const IdentitySet keep = proven ? rr.finesse : rr.bucket;
   rr.allowed = rr.allowed.intersect(keep);
   rr.support.erase(std::remove_if(rr.support.begin(), rr.support.end(),
@@ -1693,6 +1724,9 @@ void credit_partner_with_our_hole(const Game& game, const Game& hypo,
 
 }  // namespace
 
+// Ranks after every real reading in priority 1's tiebreak (reactor0/decision.cpp).
+constexpr int kMisreadReadingSize = 1000;
+
 void annotate_candidate(const Game& game, const Game& hypo,
                         reactor0::ClueCandidate& c) {
   const State& s = game.state;
@@ -1736,6 +1770,14 @@ void annotate_candidate(const Game& game, const Game& hypo,
   }
   c.receiver_reading_size =
       rr.allowed.intersect(hypo.common.thoughts[target].possible).length();
+  // A reading that leaves out what the card IS is a misread, however narrow
+  // (v23.5.0): we can see the target, so it ranks after every reading that holds
+  // it. Replay 2013726 T27 (v18_human_vs_bot_diagnostics/2013726.md): once an
+  // empty named bucket read any playable, the 4 to green left `{g1,...}` and a Blue
+  // to green the narrower `{n3}` -- for a card that was the g1.
+  if (const auto truth = s.deck[target].id(); truth && !rr.allowed.contains(*truth)) {
+    c.receiver_reading_size = kMisreadReadingSize;
+  }
 }
 
 std::optional<std::pair<IdentitySet, int>> reaction_team_reading(const Game& game,
