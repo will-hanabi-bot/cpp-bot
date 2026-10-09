@@ -3162,6 +3162,12 @@ Each side of a reading also carries the seat that holds it
 or "how good a ditch is this" ask it of the hand that will actually act. That is
 v16.5.0's change, and reactor0's own behaviour is unchanged by it.
 
+**A 5 is never played ahead of a lower playable** (v23.8.0, the user's ruling): it
+pays no clue back into the hole and leads into no other card, so reactor0's rung 7
+(a critical clue-regain card) stands down here, and endgame rule 0 sets a certain
+5 aside while another certain play exists. reactor0's DECISION_MAKING.md,
+Actionable card priority rung 7; replay 2025193 T49.
+
 **The positional discard is reactor0's too** (v23.2.0, the user's ruling):
 reactor0's CONVENTION.md §1j and DECISION_MAKING.md Precedence step -1, unchanged.
 Here "certain" is judged on the shared stacks, where every seat can judge it, and
@@ -3736,6 +3742,7 @@ left:
 | `tests/test_tiiah/test_decision_making/test_replay_2024288_empty_named_bucket_reads_any_playable.cpp` | §1d — replay 2024288 T47 with T46 edited to will-bot67's u2: the named purple bucket is empty, so will-bot69's o46 reads `{y2,u3}`, not the u3 finesse alone, and it plays it (v23.5.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024655_reverse_reaction_is_not_deferred.cpp` | §1d — replay 2024655 T14, will-bot67: the reverse reactive's frame includes yagami's standing r1, so the call on yagami's r3 (o11) stands after will-bot69's r2, and the 3 to yagami is not given (v23.3.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024676_finesse_duping_a_call_is_not_very_high.cpp` | §2 (reactor0 Precedence step 1) — replay 2024676 T5, will-bot69: a VERY HIGH finesse whose connector dupes yagami's called g1 does not outrank its owed r2 reaction; it plays the r2 (v23.6.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2025193_no_five_ahead_of_a_lower_playable.cpp` | §2 (reactor0 Actionable card priority rung 7) — replay 2025193 T49, will-bot69: its called p2 is played before its known b5 (v23.8.0) |
 | `tests/test_tiiah/test_known_bucket_violation.cpp` | §1d — the legality layer: a known purple 2 answers a t1 under a 1 when r1/y1/p1 are down (a globally known violation); with yellow not down the receiver would read the y1, and it is no pairing (v22.4.0) |
 | `tests/test_tiiah/test_retouch_rank_call.cpp` | §1b — a 5 to Bob re-touching his `{b5,p5}` and `{r5,b5}` calls the rightmost possible play as `{p5}`; not at 8 clues, nor with nothing playable (v22.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2021455_retouch_five_calls_the_p5.cpp` | §1b — replay 2021455 T61-T62: yagami's 5 re-touching will-bot69's o8 `{p5,pr5}` calls the p5, and will-bot69 plays it (v22.2.0) |

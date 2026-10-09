@@ -644,6 +644,26 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
   // its position above that gate.
   if (s.cards_left == 0) {
     auto certain = certain_plays(game);
+    // Throw It in a Hole (v23.8.0, the user's ruling): a 5 pays no clue back and
+    // leads into no other card, so it never goes ahead of a lower certain play.
+    if (s.variant->throw_it_in_a_hole && certain.size() > 1) {
+      auto order_of = [](const PerformAction& c) {
+        return std::holds_alternative<PerformPlay>(c) ? std::get<PerformPlay>(c).target
+                                                      : std::get<PerformDiscard>(c).target;
+      };
+      auto final_rank = [&](const PerformAction& c) {
+        const IdentitySet live = game.me().thoughts[order_of(c)].possibilities();
+        return live.non_empty() && live.forall([&](Identity i) {
+          const bool rev = s.variant->suits[i.suit_index].suit_type.reversed;
+          return rev ? i.rank == 1 : i.rank == 5;
+        });
+      };
+      std::vector<PerformAction> lower;
+      for (const auto& c : certain) {
+        if (!final_rank(c)) lower.push_back(c);
+      }
+      if (!lower.empty()) certain = std::move(lower);
+    }
     if (!certain.empty()) {
       // Prefer one carrying a standing call, then hand order -- the same
       // tie-break `prefer_certain_play` applies in `decide.cpp`.

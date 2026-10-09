@@ -1516,7 +1516,13 @@ list by priority:
 5. Alice pitches a critical 1 (or 5 in a reversed suit)
 6. Alice pitches a critical 2 (or 4 in a reversed suit)
 7. Alice pitches a critical clue-regain card (5 in a normal suit, 1 in a reversed
-   suit)
+   suit) -- **not in Throw It in a Hole** (v23.8.0, the user's ruling;
+   `calls.cpp:496-506`): a 5 into the hole pays no clue back and leads into no
+   other card, so it is never played ahead of a lower playable, and rung 8 takes
+   the lowest rank. Replay [2025193](https://hanab.live/shared-replay/2025193#49)
+   T49: will-bot69 played its known b5 here ahead of its called p2. Endgame rule 0
+   holds the same line with the deck empty: in TIIAH a certain 5 is set aside while
+   another certain play exists (`forced_endgame.cpp:645-666`).
 8. Alice pitches the leftmost card of the lowest stack rank (1 = reversed 5,
    2 = reversed 4, etc.)
 9. Alice chucks a known inverted suit in the chuck list.
@@ -1554,7 +1560,7 @@ list by priority:
     safety promise), so a hand whose other cards are all clued has no chop at all.
     Such a hand is not locked: Alice **discards the first card drawn during the
     stall** (the lowest `turn_drawn` among the unclued status-`NONE` cards drawn
-    after `zcs_turn`) — `12.discard_stall_drawn` (`reactor0/calls.cpp:580-609`). It
+    after `zcs_turn`) — `12.discard_stall_drawn` (`reactor0/calls.cpp:586-615`). It
     keys on the card having been drawn during the stall, not on the current token
     count, and it is skipped at 8 clues (a discard is illegal) and when the discard
     would certainly strike. Replay 2011327 T32: will-bot67's
@@ -1564,7 +1570,7 @@ list by priority:
 
     **A hand with no such card is really locked, and below 8 tokens it throws the
     card least likely to be critical** (v17.6.0, `12.locked_throw_least_critical`,
-    `reactor0/calls.cpp:610-617`, choosing through `locked_hand_throw`,
+    `reactor0/calls.cpp:616-623`, choosing through `locked_hand_throw`,
     `:355-400`). Each card's reading, narrowed by sight as the chuck list narrows
     it, is weighed by the copies Alice cannot place. The card thrown has the
     smallest share of critical identities; ties go to the largest share of trash,

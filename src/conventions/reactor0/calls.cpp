@@ -493,10 +493,16 @@ std::optional<PerformAction> choose_action(const Game& game) {
           [&](Identity i) { return variants::direction_rank(s, i) == 2; })) {
     return a;
   }
-  if (auto a = pitch_critical(
-          "7.critical_clue_regain",
-          [&](Identity i) { return variants::is_clue_regain_rank(s, i); })) {
-    return a;
+  // ...not in Throw It in a Hole (v23.8.0, the user's ruling): a 5 into the hole
+  // pays no clue back and leads into no other card, so it is never played ahead of
+  // a lower playable -- rung 8 below takes the lowest rank. Replay 2025193 T49:
+  // will-bot69 played its known b5 here ahead of its called p2.
+  if (!s.variant->throw_it_in_a_hole) {
+    if (auto a = pitch_critical(
+            "7.critical_clue_regain",
+            [&](Identity i) { return variants::is_clue_regain_rank(s, i); })) {
+      return a;
+    }
   }
 
   // 8 -- the leftmost card of the lowest stack rank. `lists.pitch` is already
