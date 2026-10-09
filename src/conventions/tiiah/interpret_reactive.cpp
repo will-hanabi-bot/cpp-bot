@@ -447,9 +447,21 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // reacter, could not name the b1 it had played into the hole; on green's and
   // black's frame the b1 was down and the bots wrote `{b2}`. Read as the b1, the call
   // is stale once every 1 is down (Rule 5), and black has no standing play at T11.
-  wc.clue_play_stacks = receiver == state.next_player_index(action.giver)
-                            ? reacter_frame(game, action.giver, reacter)
-                            : state.stacks_known_to_both(action.giver, receiver);
+  //
+  // ...and with the receiver's queued plays in (v23.3.0): he acts first, and the
+  // reacter answers on the stacks he leaves -- the frame the walk judged the
+  // pairing on (`reacter_faces`). Frozen before them, the reacter's card was read
+  // one short. Replay 2024655 T11-T13: will-bot67's Yellow got yagami's standing r1
+  // and then will-bot69's r2 into yagami's r3; on red 0 plus the r2 the call read
+  // `{r2}`, Rule 5 found the live stacks wanting the r3, and the call was dropped
+  // at every seat -- at T14 nobody had yagami loaded.
+  if (receiver == state.next_player_index(action.giver)) {
+    const std::vector<int> pair = reacter_frame(game, action.giver, reacter);
+    wc.clue_play_stacks =
+        reacter_faces(game, receiver, /*receiver_acts_first=*/true, &pair).play_stacks;
+  } else {
+    wc.clue_play_stacks = state.stacks_known_to_both(action.giver, receiver);
+  }
   // Which seat moves first, and so which stacks everything below is judged
   // against. The receiver goes first only on the REVERSE reactive, where he
   // is the giver's Bob and the known play in his hand is what made the clue

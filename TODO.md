@@ -1518,10 +1518,6 @@ view splits wherever the reconciliation fails. Known failures:
   `{r1,y1}` for the receiver, `{r1}` predicted). Widening the prediction by itself
   made things worse, because elsewhere the receiver names the card more narrowly. The
   fix is ONE routine for the receiver's naming, used by both sides.
-- **Open: the reverse arm's frozen clue frame misses the receiver's standing plays.**
-  The receiver plays first, so at the reacter's seat the stamp can read the target on
-  a frame below the walk's, and the call drops there alone (seed 2 T6). Freezing the
-  walk's frame instead cut wrong cards (881 -> 869) but cost strikeouts (58 -> 61).
 
 The sync clue (branch `exp/sync-clue`) waits on these: it needs the seats to agree on
 the shared view.
