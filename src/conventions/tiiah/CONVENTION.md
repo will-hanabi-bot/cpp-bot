@@ -1575,7 +1575,7 @@ describe stand on their own.)
 TIIAH reading (`record_reaction`, `narrow_reacter_play`, `narrow_receiver_call`) now
 runs straight after `reactor0::react_play` and **before**
 `reactor0::enforce_call_invariants`, as it already did on the deferred path. The
-code is in `src/basics/decide.cpp:723-772`. The shared stamp reads the call on the
+code is in `src/basics/decide.cpp:726-775`. The shared stamp reads the call on the
 pair's frame plus the reacter's card. That frame can lag the reacter's card, so the
 stamp can name the very card the reacter just played. Rule 3 then erased it as dead
 before the finesse half could read the card after it.
@@ -1621,7 +1621,7 @@ the frame every seat computes alike. It applies in `narrow_receiver_call`, in th
 receiver world fallback's first tier, and in the giver's prediction of the receiver's
 reading (`annotate_candidate`, §2):
 (`narrow_receiver_call`, `src/conventions/tiiah/interpret_reactive.cpp:1529-1647`,
-called from the engine seam at `src/basics/decide.cpp:738-772`):
+called from the engine seam at `src/basics/decide.cpp:741-775`):
 
 - **the bucket** the reacter's sits one step from — one *lower* for a rank clue,
   one *higher* for a colour one, the relation above read backwards;
@@ -1702,7 +1702,7 @@ receiver learns which slot answered:
 > ever knowing its own target.
 
 `narrow_reacter_play` (`tiiah/interpret_reactive.cpp:1080-1143`), called from the
-engine seam just before `narrow_receiver_call` (`src/basics/decide.cpp:752-767`)
+engine seam just before `narrow_receiver_call` (`src/basics/decide.cpp:755-770`)
 since it can move the shared stacks the receiver's own reading then rests on. Both
 readers share `bucket_over_worlds` (`:125-147`); the narrowing and its settle are
 `tiiah::narrow_superposition` (`tiiah/superposition.cpp:576-588`), shared like §1e
@@ -1726,7 +1726,7 @@ shared stacks read purple 0 instead of 2 and its row for yagami never moved off
 yellow is on 1: against that row it read one away, the pairing came out a FINESSE
 demanding a `y1` the reacter could not hold, the walk found no pairing at all and
 the clue was recorded a **MISTAKE**. will-bot67 then gave a stable clue while
-will-bot69 went on waiting for its reaction — the asymmetry `decide.cpp:1124-1132`
+will-bot69 went on waiting for its reaction — the asymmetry `decide.cpp:1131-1139`
 warns about, arrived at from the one direction nobody had closed.
 
 **A finesse the receiver can PROVE is read as one (v17.1.0).** In a finesse the
@@ -1805,7 +1805,7 @@ Many separate causes still split the shared views (TODO 61).
 answers later, through `pending_reactions`, when no live connection is left. Until
 v17.4.0 that path skipped `record_reaction`, `narrow_reacter_play` and
 `narrow_receiver_call`. The fix runs them for a deferred play too
-(`src/basics/decide.cpp:707-719`). The reacter's card is read even when the receiver's
+(`src/basics/decide.cpp:710-722`). The reacter's card is read even when the receiver's
 target has already left its hand, since the relation reads the reacter's side from
 the card alone (`reactor0::resolve_deferred_reaction`, `no_target`). Without that, a
 receiver of a deferred reaction whose target had already been played held the
@@ -2208,7 +2208,7 @@ receiver's hand at clue time, the cards the walk passed over as already called, 
 frame the receiver could reconstruct (the shared view then, the same at every seat)
 and the card the reacter's answer named by the sum rule. `record_reaction`
 (`interpret_reactive.cpp:242-257`), from the reaction seam in `Game::interpret_play`
-(`src/basics/decide.cpp:757-763`), only on the ordinary arm — on the reverse arm the
+(`src/basics/decide.cpp:760-766`), only on the ordinary arm — on the reverse arm the
 receiver moves first and the frame rests on plays it cannot name.
 
 `world_feasible` (`superposition.cpp:814-914`) then asks, of every record whose
@@ -3133,7 +3133,7 @@ but is wider → that card is exactly X, for every seat, and rule 7 stays silent
 discard explained itself.
 
 `dupe_passback` / `read_passback` (`src/conventions/tiiah/dupes.cpp:57-110`), the first
-from `Game::take_action` ahead of the pending reaction (`src/basics/decide.cpp:1709-1718`),
+from `Game::take_action` ahead of the pending reaction (`src/basics/decide.cpp:1716-1725`),
 the second from `Game::handle_action` ahead of rule 7 (`src/basics/game.cpp:633-637`).
 
 Replay [2011475](https://hanab.live/shared-replay/2011475#20): at T18 will-bot69's
@@ -3673,6 +3673,71 @@ left:
 - Now a clue touching o42 but not o48 is newly useful, and green gives the rank 1.
 `tests/test_tiiah/test_decision_making/test_replay_2023552_stall_reveals_blues_g5.cpp`.
 
+### §2m The called play in a thin endgame (v23.13.0, the user's ruling)
+
+TIIAH only for now (TODO.md: reactor0 and every variant). At **pace <= 1** with **at
+least three cards in the deck**, Alice holding a call to play ALWAYS plays it when
+Bob holds **fewer than two critical good cards**. A critical good card is a
+still-needed identity of which every copy not yet discarded is in Bob's hand, so
+both copies of one count once (`called_play_in_thin_endgame`,
+`src/conventions/reactor0/positional_discard.cpp:344-374`). The card is her reacter
+call, else the front of her receiver calls (`calls_of`), and it must still be
+actionable. It runs ahead of the ladder and the endgame search, after a positional
+play (`Game::take_action`, `src/basics/decide.cpp:1112-1125`).
+
+Human diagnostic 2025488 T50 (`human_vs_bot_diagnostics/2025488.md`): pace 0, six
+cards left; green held o47 called as the u2, and blue's only good cards were its two
+y4s. Green gave a 5 to black; it now plays o47
+(`tests/test_tiiah/test_decision_making/test_replay_2025488_thin_endgame_called_play.cpp`).
+
+### §2n The positional double discard (v23.13.0, the user's ruling)
+
+TIIAH only for now (TODO.md: reactor0 and every variant). Beside reactor0's positional
+discard (§1j there), and ahead of it, Alice gives a **double** one when:
+1. she has no required play left -- none certain, and every still-needed identity is
+   in Bob's or Cathy's hand;
+2. the deck holds 0 or 1 cards, and Bob and Cathy both still act after her;
+3. Bob and Cathy each hold exactly one card left to play (one still-needed identity,
+   copies counting once), Bob's playable now and Cathy's once his has landed.
+
+She discards the slot equal to the **sum of their two cards' slots, mod 5** (0 is
+slot 5; the leftmost copy of each). She need not: a clue to Bob or Cathy that reveals
+the last good card is as good (the user's ruling; self-play Black seed 83 T60: a 5 to
+sim-bob, or the discard of slot 4). The bot gives the discard,
+`positional_double_discard_signal`
+(`positional_discard.cpp:403-432`). **Reading** (`read_positional_double_discard`,
+`:434-470`, from `Game::interpret_discard`, `decide.cpp:680-687`): in the position
+(`double_position`, `:388-401`), a discard that is no misplay and no called discard is
+a double one to a reader who can see it through from its own seat
+(`reader_reads_double`, `:337-340`): Alice holds no card left to play, the other reader
+holds exactly one, and exactly one still-needed identity is unaccounted for -- its own
+(`unaccounted_useful`, `:317-332`). Bob and Cathy each read their own slot as Alice's
+minus the other's, which they can see, wrapped the same way, and play it
+(`positional_play`). Bob knows it is a double one because the deck is empty and Cathy
+still has a good card to play; Cathy, because the game has not ended after Bob's play.
+The single positional reading then does not apply. **As Alice**, wherever Bob and
+Cathy would read a double one (`double_reads`, `:376-386`: each holding exactly one
+card left and every still-needed identity in their hands), we give no single
+positional discard (`positional_discard_signal`, `:151-178`) and no discard but the
+double one (`positional_guard`, `:205-240`, which stalls with a clue instead).
+
+**A good card in Alice's hand means no double discard** (the user's ruling). The first
+build read a double one wherever a reader saw the other holding exactly one card left,
+and in self-play the readers struck: TIIAH & Black seed 83 T59, sim-bob discarded with
+one card in the deck, and sim-cathy -- who could see a good card in sim-bob's hand --
+read it as a double one and played a dead p1 (Black 30/30 6 → 8 but 19 → 23
+strikeouts; Dark Null 35 → 42). Now sim-cathy reads nothing at T59 and at T60 gives
+the real double discard herself: sim-alice's slot 5 plus sim-bob's slot 4 is slot 4,
+and sim-bob plays his slot 4 at T62, 30/30
+(`tests/test_tiiah/test_decision_making/test_selfplay_9000083_double_discard_not_read_past_alices_good_card.cpp`).
+
+Human diagnostic 2025488 T60, on the line where green plays its g5 at T59: every card
+left is accounted for -- black's u4 and green's u5, both in slot 5 -- so blue
+discards its slot 5, black plays its slot 5 and green its slot 5. In the game green
+clued at T59, black played the u4 at T61 on blue's discard, and green's u5 was lost:
+29/30 (`tests/test_tiiah/test_decision_making/test_replay_2025488_positional_double_discard.cpp`,
+both seats, on the edited history).
+
 ## Test coverage
 
 | File | What it pins |
@@ -3806,6 +3871,10 @@ left:
 | `tests/test_tiiah/test_decision_making/test_replay_2025193_stuck_bobs_critical_chop_is_saved.cpp` | §2e — replay 2025193 T50, will-bot67: will-bot69 holds a called p2 and yagami's chop is the critical p4; the 4 to yagami is exempt from the tier gate and given (v23.9.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2025289_owed_reaction_loads_bob.cpp` | §1c — replay 2025289 T6, yagami_green: blue still owes its deferred T1 reaction, so it is loaded and black's T4 Purple to green is stable; green plays o15 (v23.10.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2025310_bob_handles_cathys_playable_chop.cpp` | §2 (reactor0 priority 3) — human diagnostic 2025310 T3, yagami_green: blue's chop y2 plays once its known y1 lands, so it plays the y1 rather than clue black (v23.11.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2025488_thin_endgame_called_play.cpp` | §2m — human diagnostic 2025488 T50, yagami_green: pace 0, six cards left, o47 called, blue's only critical good card the two y4s; green plays o47 (v23.13.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2025488_known_bucket_violation_keeps_g5.cpp` | §1d — human diagnostic 2025488 T59, yagami_green: o42 read `{y5,g5}` after black's u3, settled as the y5 by the T58 Green; green plays o9, the g5 (passes on v23.11.0 replayed; the live game diverged) |
+| `tests/test_tiiah/test_decision_making/test_replay_2025488_positional_double_discard.cpp` | §2n — human diagnostic 2025488 T60-T62 on the edited line (green plays its g5 at T59): blue discards its slot 5; green reads it and plays its slot 5, the u5 (v23.13.0) |
+| `tests/test_tiiah/test_decision_making/test_selfplay_9000083_double_discard_not_read_past_alices_good_card.cpp` | §2n — self-play Black seed 83 T60-T62: a good card in Alice's hand means no double discard at T59; sim-cathy gives the real one at T60 (slot 5 + 4 -> slot 4) and sim-bob plays his slot 4 (v23.13.0) |
 | `tests/test_tiiah/test_known_bucket_violation.cpp` | §1d — the legality layer: a known purple 2 answers a t1 under a 1 when r1/y1/p1 are down (a globally known violation); with yellow not down the receiver would read the y1, and it is no pairing (v22.4.0) |
 | `tests/test_tiiah/test_retouch_rank_call.cpp` | §1b — a 5 to Bob re-touching his `{b5,p5}` and `{r5,b5}` calls the rightmost possible play as `{p5}`; not at 8 clues, nor with nothing playable (v22.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2021455_retouch_five_calls_the_p5.cpp` | §1b — replay 2021455 T61-T62: yagami's 5 re-touching will-bot69's o8 `{p5,pr5}` calls the p5, and will-bot69 plays it (v22.2.0) |

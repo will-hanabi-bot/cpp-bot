@@ -408,7 +408,7 @@ double advance(const Game& orig, const Game& game, int offset) {
       } else if (state.is_playable(*id)) {
         // A playable INVERTED (orange) card reaches its stack only through the
         // Discard button — the same routing `take_action` uses for the real
-        // action (src/basics/decide.cpp:967-986). Simulating it as PerformPlay
+        // action (src/basics/decide.cpp:970-989). Simulating it as PerformPlay
         // runs the game-rule inversion instead and sends the card to the
         // discard pile, so every good chuck scored as a thrown-away card.
         act = variants::is_inverted_id(state, *id)

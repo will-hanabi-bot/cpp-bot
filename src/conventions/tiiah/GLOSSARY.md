@@ -653,6 +653,22 @@ can see is certain, then Cathy if she still acts and holds none, else nobody
 (v23.7.0). reactor0's GLOSSARY.md and CONVENTION.md §1j (v23.2.0; replay 2024288
 T61, where will-bot69's u5 sat in slot 5).
 
+### positional double discard
+With 0 or 1 cards in the deck and Bob and Cathy both still to act, each holding exactly
+one card left to play, an Alice with no required play discards the slot equal to the
+sum of their two cards' slots, mod 5 (0 is slot 5; leftmost copies). Each reads its own
+slot as hers minus the other's and plays it. A reader reads one only where it can see
+it through: Alice holds no card left to play, the other reader exactly one, and only
+its own is unaccounted for; it then outranks the single positional discard. A clue
+revealing the last good card is an equal alternative (v23.13.0, TIIAH only for now).
+CONVENTION.md §2n (human diagnostic 2025488 T60; self-play Black seed 83).
+
+### thin endgame called play
+At pace <= 1 with at least three cards in the deck, Alice's called card is played
+whenever Bob holds fewer than two critical good cards -- still-needed identities with
+every remaining copy in his hand, both copies of one counting once (v23.13.0, TIIAH
+only for now). CONVENTION.md §2m (human diagnostic 2025488 T50).
+
 ### spent below a seen landing
 A partner's card we watched land puts every card of its suit below it on the
 stack, named or not. Our own model counts it (`stack_spent_elim`, v23.4.0): an

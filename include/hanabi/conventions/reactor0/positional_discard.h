@@ -67,4 +67,38 @@ std::optional<PerformAction> positional_play(const Game& game);
 // matching slot `positional_play`, CALLED_TO_PLAY and urgent.
 void read_positional_discard(const Game& prev, Game& game, const DiscardAction& action);
 
+// THE CALLED PLAY IN A THIN ENDGAME (Throw It in a Hole, v23.13.0, the user's ruling;
+// TODO: reactor0 and every variant). At pace <= 1 with at least three cards in the
+// deck, Alice holding a call to play ALWAYS plays it when Bob holds fewer than two
+// critical good cards -- distinct still-needed identities of which every remaining
+// copy is in his hand, so both copies of one count once. Human diagnostic 2025488
+// T50: green held its called u2 and Bob only the two y4s, and it clued instead.
+std::optional<PerformAction> called_play_in_thin_endgame(const Game& game);
+
+// THE POSITIONAL DOUBLE DISCARD (Throw It in a Hole, v23.13.0, the user's ruling;
+// TODO: reactor0 and every variant). With 0 or 1 cards in the deck, Bob and Cathy
+// both still to act, and each of them holding exactly one card left to play, Alice --
+// with no required play of her own -- discards the slot equal to the SUM of their two
+// cards' slots, wrapped mod 5 (leftmost copy of each). Each reads its own slot as
+// Alice's minus the other's, which it can see. Human diagnostic 2025488 T60: the u4
+// and the u5 on slot 5 each, so blue throws its slot 5.
+//
+// The position as every seat sees it (`alice` about to act): the deck holds 0 or 1
+// cards, Bob and Cathy both still act after her, and she owes no reaction.
+bool double_position(const Game& game, int alice);
+
+// The position, and both Bob and Cathy hold exactly one card left to play as we see
+// them: where they read a discard by `alice` as a double one. As Alice we then give no
+// single positional discard, and no discard but the double one.
+bool double_reads(const Game& game, int alice);
+
+// Our discard, as Alice, when the double discard applies in full.
+std::optional<PerformAction> positional_double_discard_signal(const Game& game);
+
+// Reading Alice's discard as a double one: at Bob's or Cathy's seat, marks our card
+// in the decoded slot `positional_play`. Returns whether the discard reads as a double
+// one at this seat, in which case the single positional reading does not apply.
+bool read_positional_double_discard(const Game& prev, Game& game,
+                                    const DiscardAction& action);
+
 }  // namespace hanabi::reactor0

@@ -680,7 +680,10 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   // The positional discard (v23.2.0): with the deck empty, the slot Alice threw
   // names Bob's play for his final turn. After the call invariants, which must not
   // take the instruction back.
-  hanabi::reactor0::read_positional_discard(prev, *this, action);
+  // ...or, in Throw It in a Hole, both Bob's and Cathy's (v23.13.0): a double one.
+  if (!hanabi::reactor0::read_positional_double_discard(prev, *this, action)) {
+    hanabi::reactor0::read_positional_discard(prev, *this, action);
+  }
   if (prev.state.can_clue()) reset_zcs();
 }
 
@@ -1112,6 +1115,10 @@ PerformAction Game::take_action() const {
   // the gamble that is ours when Bob holds no play, and otherwise never let a
   // discard go out that Bob would read as one.
   if (auto p = hanabi::reactor0::positional_play(*this)) return *p;
+  // Throw It in a Hole (v23.13.0): the called play in a thin endgame, and the
+  // positional double discard.
+  if (auto p = hanabi::reactor0::called_play_in_thin_endgame(*this)) return *p;
+  if (auto d = hanabi::reactor0::positional_double_discard_signal(*this)) return *d;
   if (auto d = hanabi::reactor0::positional_discard_signal(*this)) return *d;
   if (auto g = hanabi::reactor0::positional_gamble(*this)) return *g;
   return hanabi::reactor0::positional_guard(*this, take_action_ladder());
