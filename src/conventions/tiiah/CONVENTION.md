@@ -904,14 +904,14 @@ urgent return, which is the very thing being declined. The tier itself
 Two more things make it actually get given (v16.27.0):
 
 - **The tier gate does not apply to it** (`clue_is_admissible`,
-  `reactor0/decision.cpp:1230`), as it does not to the fix (§1h). A refusal stamps
+  `reactor0/decision.cpp:1241`), as it does not to the fix (§1h). A refusal stamps
   nothing, so it is always LOW, and an OCCUPIED reacter — which a reacter holding
   the urgent call always is — had every refusal rejected before its priority was
   consulted. Replay [2011854](https://hanab.live/shared-replay/2011854#27) T27:
   yagami's Rank 3 named will-bot69's o29, a p1, while his own o24 p1 was already in
   the hole; will-bot67 had five refusals on offer, the gate dropped them all, it
   answered the reaction, and will-bot69 struck at T28.
-- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2298-2308`). Any
+- **Which refusal** (`refusal.stable_play`, `reactor0/decision.cpp:2309-2319`). Any
   stable clue to the receiver will do, so the one chosen should also be worth giving:
   a stable PLAY clue, ranked by §2a's stable play hierarchy (`settle_stable_play`, the
   same tiebreak every stable-play rung uses; before v18.17.0 its single term, "names
@@ -3048,7 +3048,7 @@ ladder would have read into the cards it *did* touch, so a colour yellow that fi
 one card cannot also call the yellow it touched. TODO.md 53 records the envelope form.
 
 **Priority: Precedence step 1**, with the refusal, and within step 1 between rung 2
-and rung 2c (the unlock, v20.19.0) — `rung_2b` (`reactor0/decision.cpp:1738-1742`), logged as `2b.fix`. Step 1
+and rung 2c (the unlock, v20.19.0) — `rung_2b` (`reactor0/decision.cpp:1749-1753`), logged as `2b.fix`. Step 1
 is above the pending reaction because a fix is not an alternative to anything: left
 ungiven it is a strike. It also carries an exemption from the tier gate
 (`clue_is_admissible`), because a fix stamps nothing, satisfies no arm of `clue_tier`,
@@ -3291,7 +3291,7 @@ misread however narrow, and ranks after every reading that holds it
 bucket read any playable, the 4 to green left `{g1,...}` for green's g1, and a Blue
 to green the narrower `{n3}`, so the tiebreak took the Blue; the 4 stands again.
 It writes `ClueCandidate::receiver_reading_size`, which `rung_1`
-(`src/conventions/reactor0/decision.cpp:1381-1403`) reads first. reactor0 cannot call
+(`src/conventions/reactor0/decision.cpp:1392-1414`) reads first. reactor0 cannot call
 into this convention, so `reactor0::analyse_clues` takes an optional
 `CandidateAnnotator` and the engine passes this one under TIIAH
 (`candidate_annotator`, `src/basics/decide.cpp:50-53`); outside TIIAH the field stays
@@ -3358,7 +3358,7 @@ Discard button plays it. For example, a Rank 3 to Bob could read as a discard ca
 the only y5. Across seeds 1–100, 13 of the 70 critical cards
 thrown away had been called to discard. After the filter there were none.
 
-### §2e An occupied Alice saves a stuck Bob's playable chop when Cathy's is safe (v18.13.0)
+### §2e An occupied Alice saves a stuck Bob's playable chop when Cathy's is safe (v18.13.0), and any Alice his critical one (v23.9.0)
 
 An OCCUPIED Alice, one holding a call she can action, gives only HIGH clues
 (reactor0's tier gate, `clue_is_admissible`). A save of Bob's chop reaches HIGH only
@@ -3368,12 +3368,18 @@ played her call and Bob threw his chop. The reviewer: "Bob almost never stops to
 or save a playable card at risk on Cathy's chop."
 
 So a clue to Bob that touches his chop, without calling it to discard, is flagged
-`saves_stuck_bob_chop` (`reactor0/decision.cpp:1145-1148`) and exempt from the gate
-(`:1237`) when all of the following hold (`:978-986`):
+`saves_stuck_bob_chop` (`reactor0/decision.cpp:1156-1159`) and exempt from the gate
+(`:1248`) when all of the following hold (`:972-997`):
 
 - §3's precondition holds (`priority_3_applies`): Bob has no safe action.
-- Bob's chop is a **playable card at risk**:
-  - it is playable (`has_playable_chop`);
+- Bob's chop is a **playable or critical card at risk**:
+  - it is playable (`has_playable_chop`), or **critical** (v23.9.0, the user's
+    ruling): lost for good if Bob throws it. The exemption holds for an unoccupied
+    Alice too, who is otherwise held to MEDIUM at low clue counts. Replay
+    [2025193](https://hanab.live/shared-replay/2025193#50) T50: will-bot69 held its
+    called p2 while yagami's chop was the critical p4; with one token every clue was
+    gated out and will-bot67 chucked. It now gives the 4 to yagami
+    (`test_replay_2025193_stuck_bobs_critical_chop_is_saved.cpp`);
   - it is at risk (`at_risk_chop`): no copy in a hand Alice can see, and none she
     can prove she holds;
   - it is not duplicated (`chop_is_duplicated`, `:916-928`): no copy in his own
@@ -3465,7 +3471,7 @@ It now gives the Green.
 The user's ruling: the variant is hard, so rung 3.7 locks a stuck Bob only when his
 chop is **critical, playable or one away from playable**, judged on Alice's own
 stacks (`chop_worth_a_lock`, `src/conventions/reactor0/state_eval.cpp:167-179`, read
-at `src/conventions/reactor0/decision.cpp:1856-1869`). Anything further away is not
+at `src/conventions/reactor0/decision.cpp:1867-1880`). Anything further away is not
 worth committing his whole hand for, and Alice does something else instead, most
 often her own standing play. 3.6b (§2g) goes with the lock it replaces. 3.6 and 3.10
 already need a critical chop, and §4's lock, the forced branch, is unchanged. This
@@ -3486,7 +3492,7 @@ A change to reactor0's shared ladder, for every convention that delegates to it.
 tokens reactor0 §4, the forced-clue list whose floor always returns a clue, now opens
 only when Alice has no known play, or Bob is stuck on a hidden playable that a clue
 moves now, or a clue gets two plays (4a-4c, the pace arm's own qualifiers;
-`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2073-2084`). A discard
+`priority_4_applies`, `src/conventions/reactor0/decision.cpp:2084-2095`). A discard
 is illegal at 8 tokens, but a play is not.
 
 Human diagnostic [2018365](../../../v18_human_vs_bot_diagnostics/2018365.md) T10: at 8
@@ -3743,6 +3749,7 @@ left:
 | `tests/test_tiiah/test_decision_making/test_replay_2024655_reverse_reaction_is_not_deferred.cpp` | §1d — replay 2024655 T14, will-bot67: the reverse reactive's frame includes yagami's standing r1, so the call on yagami's r3 (o11) stands after will-bot69's r2, and the 3 to yagami is not given (v23.3.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024676_finesse_duping_a_call_is_not_very_high.cpp` | §2 (reactor0 Precedence step 1) — replay 2024676 T5, will-bot69: a VERY HIGH finesse whose connector dupes yagami's called g1 does not outrank its owed r2 reaction; it plays the r2 (v23.6.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2025193_no_five_ahead_of_a_lower_playable.cpp` | §2 (reactor0 Actionable card priority rung 7) — replay 2025193 T49, will-bot69: its called p2 is played before its known b5 (v23.8.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2025193_stuck_bobs_critical_chop_is_saved.cpp` | §2e — replay 2025193 T50, will-bot67: will-bot69 holds a called p2 and yagami's chop is the critical p4; the 4 to yagami is exempt from the tier gate and given (v23.9.0) |
 | `tests/test_tiiah/test_known_bucket_violation.cpp` | §1d — the legality layer: a known purple 2 answers a t1 under a 1 when r1/y1/p1 are down (a globally known violation); with yellow not down the receiver would read the y1, and it is no pairing (v22.4.0) |
 | `tests/test_tiiah/test_retouch_rank_call.cpp` | §1b — a 5 to Bob re-touching his `{b5,p5}` and `{r5,b5}` calls the rightmost possible play as `{p5}`; not at 8 clues, nor with nothing playable (v22.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2021455_retouch_five_calls_the_p5.cpp` | §1b — replay 2021455 T61-T62: yagami's 5 re-touching will-bot69's o8 `{p5,pr5}` calls the p5, and will-bot69 plays it (v22.2.0) |

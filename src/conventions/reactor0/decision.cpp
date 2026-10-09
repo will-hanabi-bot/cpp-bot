@@ -975,9 +975,20 @@ std::vector<ClueCandidate> analyse_clues(
   // already names (a clue on a card we hold a call on calls a second copy to
   // play, it saves nothing) -- and only while Cathy's chop is safe to lose, since
   // Bob will not stop for Cathy's.
+  //
+  // ...or a CRITICAL chop (v23.9.0, the user's ruling): it is lost for good if Bob
+  // throws it, and a Cathy with a safe action leaves Alice free to save it.
+  // Replay 2025193 T50: will-bot69 held its called p2 while yagami's chop was the
+  // critical p4, and will-bot67, held to the MEDIUM bar with one token, chucked
+  // instead of the 4 that saves it.
+  const bool bob_chop_critical = [&] {
+    if (spared < 0) return false;
+    const auto id = s.deck[spared].id();
+    return id && s.is_critical(*id);
+  }();
   bool may_save_spared = spared >= 0 && has_cathy(game) &&
                          at_risk_chop(game, alice_of(game), bob_of(game)) &&
-                         has_playable_chop(game, bob_of(game)) &&
+                         (has_playable_chop(game, bob_of(game)) || bob_chop_critical) &&
                          cathy_chop_is_safe_to_lose(game);
   if (may_save_spared) {
     auto id = s.deck[spared].id();
