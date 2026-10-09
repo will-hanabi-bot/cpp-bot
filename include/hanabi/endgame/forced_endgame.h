@@ -44,6 +44,7 @@
 #include <optional>
 
 #include "hanabi/basics/action.h"
+#include "hanabi/basics/identity_set.h"
 
 namespace hanabi {
 class Game;
@@ -52,5 +53,16 @@ class Game;
 namespace hanabi::endgame {
 
 std::optional<PerformAction> forced_endgame_action(const Game& game);
+
+// Rule 0b on its own: the required play when nothing in hand is certain, or
+// nullopt. `narrow` is Rule 0c's stronger candidate test.
+std::optional<PerformAction> required_play_action(const Game& game, bool narrow);
+
+// Rule 0b's SELECTION, for a given set of identities to bet on: among our cards
+// that could be one of `required`, the leftmost CLUED one, else the leftmost of
+// any, on the button that advances it. The positional discard's gamble uses it
+// with every playable identity (reactor0/positional_discard.h).
+std::optional<PerformAction> gamble_on(const Game& game, IdentitySet required,
+                                       bool narrow = false);
 
 }  // namespace hanabi::endgame

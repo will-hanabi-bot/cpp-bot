@@ -204,7 +204,7 @@ void repin_own_call(const Game& prev, Game& game, int giver) {
 // an ordinary deferral. A deferral carries the reactive intent forward and is
 // itself reactive; a refusal is stable. Without that test the two are the same
 // event, since `Game::interpret_clue` already treats ANY clue by the reacter as
-// clearing the waiting connection (`basics/decide.cpp:210-213`) — which is also
+// clearing the waiting connection (`basics/decide.cpp:211-214`) — which is also
 // why this reads `prev`, the connection having been cleared before we are called.
 bool read_refusal(const Game& prev, Game& game, const ClueAction& action) {
   const State& state = game.state;

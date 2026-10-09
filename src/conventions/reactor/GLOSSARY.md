@@ -17,7 +17,7 @@ Two orientation facts that most entries depend on:
   newer, "right" = older.
 - **Alice / Bob / Cathy / Zelda** are positional, not identities: Alice is the
   player to move, Bob the next player, Cathy the one after, Zelda the previous
-  (`src/basics/decide.cpp:125-127`, `:419-421`).
+  (`src/basics/decide.cpp:126-128`, `:419-421`).
 
 ---
 
@@ -80,7 +80,7 @@ Python/Scala port and are never set.
 
 ### Bob
 The player after the current one. In a reactive clue Bob is normally the
-**reacter**. `src/basics/decide.cpp:125-127`.
+**reacter**. `src/basics/decide.cpp:126-128`.
 
 ### brownish
 Suit family matched by the substrings Brown, Muddy, Cocoa, Null. Rank clues
@@ -97,7 +97,7 @@ accounted for, including cross-elimination over sets of cards.
 `src/basics/player_elim.cpp:242-315`.
 
 ### Cathy
-The player two seats after the current one. `decide.cpp:111-113`.
+The player two seats after the current one. `decide.cpp:112-114`.
 
 ### chuck
 See *pitch / chuck*. Pressing the **Discard** button.
@@ -113,7 +113,7 @@ The card the hand is expected to get rid of next: the card stamped
 if the hand holds none — the **newest** unclued card whose status is `NONE`,
 gated by `zcs_turn`. Any non-`NONE` status (`CALLED_TO_PLAY`, `CHOP_MOVED`,
 `PERMISSION_TO_DISCARD`) disqualifies a card, so a locked hand has no chop at
-all. `Game::chop`, `decide.cpp:459-486`.
+all. `Game::chop`, `decide.cpp:460-487`.
 
 A player always *chucks* their chop, except when its inference is a known orange
 card, which is *pitched* instead — see *pitch / chuck*.
@@ -175,12 +175,12 @@ Variant flag making every card of a given rank single-copy, hence critical.
 `CardStatus::CALLED_TO_DISCARD`. The convention has designated this card as
 the one to discard. **⚠ A physical action label**: it means "press the discard
 button", which on an inverted (Orange) suit is a *play* attempt.
-`card.h:25`; `decide.cpp:757-759`.
+`card.h:25`; `decide.cpp:762-764`.
 
 ### CTP — called to play
 `CardStatus::CALLED_TO_PLAY`. Queued to be played. Same physical-label caveat
 as CTD: on an inverted suit, pressing play sends the card to the discard pile.
-`card.h:24`; `decide.cpp:754-756`.
+`card.h:24`; `decide.cpp:759-761`.
 
 ### dark suits
 Black, Dark, Gray, Cocoa — one copy each, so always critical.
@@ -198,7 +198,7 @@ Variant flag where the special rank's touch rule is
 ### deferral / deferred reactive
 The reacter of a pending reactive gave a clue instead of reacting. The old
 waiting connection is cancelled and the new clue is forced reactive.
-`decide.cpp:40-50`, `:65-70`.
+`decide.cpp:41-51`, `:65-70`.
 
 ### delayed play
 A card that only becomes playable after intervening players make their known
@@ -328,7 +328,7 @@ empty. `include/hanabi/basics/card.h:80`, `:96-98`.
 ### info_lock
 A sticky promise the convention made about a card's identity, surviving later
 narrowing. Enforced in arrangement validity and playability checks.
-`card.h:83`; `decide.cpp:440-445`.
+`card.h:83`; `decide.cpp:441-446`.
 
 ### inverted suits (Orange, Dark Orange)
 Suits where the game rule **swaps what the two buttons do**: a *chuck* is the
@@ -531,7 +531,7 @@ a table instead of from what they touched. `predicates.cpp:8-10`.
 ### reacter
 The player whose next play or discard **decodes** a reactive clue for the
 receiver. Normally Bob. `include/hanabi/basics/game.h:44`;
-`decide.cpp:134-154`.
+`decide.cpp:135-155`.
 
 ### reactive clue
 A clue whose meaning depends on another player's response, resolved by the
@@ -576,7 +576,7 @@ next player, the bot rewinds and re-reads that clue as reactive.
 ### re-tasking
 A clue given while a reactive is pending on X, where X is the new clue's Bob,
 **supersedes** the old one — a player's next action always answers the newest
-clue. `decide.cpp:92-108`.
+clue. `decide.cpp:93-109`.
 
 ### reversed suits
 Suits that play 5→4→3→2→1. Copy counts flip to `{1,2,2,2,3}`. Orthogonal to
@@ -622,7 +622,7 @@ won't be discarded. `src/basics/player_game.cpp:286-314`.
 ### signal_turn
 The turn a CTP/CTD was first stamped. The queue-order tiebreaker throughout —
 plays go in signal order, and only the newest CTD is discardable.
-`card.h:121`; `decide.cpp:866-878`, `:932-956`.
+`card.h:121`; `decide.cpp:871-883`, `:932-956`.
 
 ### special rank
 A rank with variant-specific clue-touch behaviour, combined with `rainbow_s` /
@@ -691,7 +691,7 @@ interpretations on the reacter's called slot; reverted by `check_missed` if
 the player doesn't act. `card.h:115`; `game.h:189-191`.
 
 ### USELESS
-An empty clue in a variant that permits them. `decide.cpp:84-85`.
+An empty clue in a variant that permits them. `decide.cpp:85-86`.
 
 ### waiting connection (WC)
 `ReactorWC` — the pending record of a reactive expectation: giver, reacter,
@@ -706,8 +706,8 @@ Suit family matched by White, Gray, Light, Null. No colour clue touches them.
 ### zcs_turn (zero-clue-stall turn)
 The turn the team ran out of clue tokens. Cards drawn after it are excluded
 from the chop, so a player who drew during the stall isn't expected to discard
-them. `include/hanabi/basics/game.h:292`; set at `decide.cpp:451`, read by
-`Game::chop` at `decide.cpp:870-876`. Under reactor0 (and TIIAH), a hand left
+them. `include/hanabi/basics/game.h:292`; set at `decide.cpp:452`, read by
+`Game::chop` at `decide.cpp:875-881`. Under reactor0 (and TIIAH), a hand left
 with no chop at all because of it discards the FIRST card drawn during the stall
 rather than pitching blind — floor rung `12.discard_stall_drawn`, reactor0
 DECISION_MAKING.md (v16.23.0).

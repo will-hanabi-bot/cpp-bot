@@ -44,6 +44,7 @@ add_library(hanabi_core STATIC
   src/conventions/reactor0/reactive_assignment.cpp
   src/conventions/reactor0/call_invariants.cpp
   src/conventions/reactor0/efficiency.cpp
+  src/conventions/reactor0/positional_discard.cpp
   src/conventions/reactor0/interpret_clue.cpp
   src/conventions/reactor0/blind_stable.cpp
   src/conventions/reactor0/synesthesia_stable.cpp
@@ -411,6 +412,8 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2023552_stall_reveals_blues_g5.cpp
   tests/test_tiiah/test_decision_making/test_replay_9000002_displaced_reaction_keeps_shared_view.cpp
   tests/test_tiiah/test_decision_making/test_replay_2024288_direct_target_reads_worlds_where_it_plays.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2024288_positional_discard_given.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2024288_positional_discard_names_bobs_play.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp
   tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp

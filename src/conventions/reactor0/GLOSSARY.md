@@ -886,3 +886,17 @@ The weaker sibling is **could advance**: the same suit/button pairing asked with
 (`endgame::possible_call_actions`). It is tier 2 of the timeout pre-check —
 when the solver has run out of time, actioning a call that might score beats
 taking a truncated search's preference.
+
+### positional discard
+In the final round (the deck empty), with Bob still to act: a discard by Alice,
+who owes no reaction and holds no card the team can see is a *certain play*,
+names Bob's card **in the same slot**, which he plays on his final turn whatever
+it could be. Alice gives it for a card of Bob's she can see is playable -- unless
+he already knows that card by global empathy, when she may use the turn otherwise,
+though any discard she makes then names it; when Bob holds no play the remaining
+play is hers, and she gambles on rule 0b's selection instead (a *required play*,
+else any playable identity, Play button only); with neither, she does not
+discard. `ConvData::positional_play` marks the named card.
+`src/conventions/reactor0/positional_discard.cpp`; CONVENTION.md §1j,
+DECISION_MAKING.md Precedence step -1 (v23.2.0, the user's ruling; replay 2024288
+T61).

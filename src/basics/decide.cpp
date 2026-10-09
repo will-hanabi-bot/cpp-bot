@@ -32,6 +32,7 @@
 #include "hanabi/endgame/helper.h"
 #include "hanabi/logging/decide_trace.h"
 #include "hanabi/conventions/reactor0/decision.h"
+#include "hanabi/conventions/reactor0/positional_discard.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/endgame/fraction.h"
@@ -676,6 +677,10 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
   elim();
   resolve_deferred_elims();
   enforce_calls_after_action(*this);
+  // The positional discard (v23.2.0): with the deck empty, the slot Alice threw
+  // names Bob's play for his final turn. After the call invariants, which must not
+  // take the instruction back.
+  hanabi::reactor0::read_positional_discard(prev, *this, action);
   if (prev.state.can_clue()) reset_zcs();
 }
 
@@ -1102,6 +1107,17 @@ bool contains_v(const std::vector<int>& v, int x) {
 }  // namespace
 
 PerformAction Game::take_action() const {
+  // THE POSITIONAL DISCARD (v23.2.0, the user's ruling). As Bob we play the card
+  // a positional discard named, ahead of everything; as Alice we give one, or take
+  // the gamble that is ours when Bob holds no play, and otherwise never let a
+  // discard go out that Bob would read as one.
+  if (auto p = hanabi::reactor0::positional_play(*this)) return *p;
+  if (auto d = hanabi::reactor0::positional_discard_signal(*this)) return *d;
+  if (auto g = hanabi::reactor0::positional_gamble(*this)) return *g;
+  return hanabi::reactor0::positional_guard(*this, take_action_ladder());
+}
+
+PerformAction Game::take_action_ladder() const {
   // Throw It in a Hole is a THREE-player convention, like reactor0. The variant
   // resolves to it at any seat count (`net/commands.cpp` keys on the flag, so
   // the stacks are right for a spectator or a bigger table), but the rules name

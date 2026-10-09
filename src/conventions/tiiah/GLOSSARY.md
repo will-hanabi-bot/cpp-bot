@@ -19,7 +19,7 @@ The shared engine reads a named playable thrown away as "you hold the other copy
 the card **was already played** — by us, since our stacks can only be short by
 what we threw in the hole — and it collapses our superpositions instead
 (`presume_discard_was_played`, CONVENTION.md §1e rule 7). `useful_dc` excludes a
-playable card in a hole variant (`src/basics/decide.cpp:571-580`). Replay 2011319.
+playable card in a hole variant (`src/basics/decide.cpp:572-581`). Replay 2011319.
 
 ### believed stacks
 `State::play_stacks` under TIIAH. We resolve each hidden action against the card
@@ -643,3 +643,10 @@ only if the giver's hole card was the card below tells the giver what it was, th
 the receiver cannot know. A stable call is read on it in each world
 (`read_stable_over_worlds`), and the named dupe stands down when the reading names
 more than the dupe. CONVENTION.md §1e, replay 2020406 T28.
+
+### positional discard
+reactor0's final-round convention, used here unchanged: with the deck empty and
+Bob still to act, Alice's discard -- when she owes no reaction and the team sees
+no certain play in her hand on the shared stacks -- names Bob's card in the same
+slot, which he plays. reactor0's GLOSSARY.md and CONVENTION.md §1j (v23.2.0;
+replay 2024288 T61, where will-bot69's u5 sat in slot 5).

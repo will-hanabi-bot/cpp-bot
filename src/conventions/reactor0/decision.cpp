@@ -132,7 +132,7 @@ ClueReading read_stable(const Game& game, const Game& hypo,
 
   // A newly stamped CTP/CTD in the target's hand is the designation. Only
   // ADDITIONS count: enforce_call_invariants runs straight after interpretation
-  // (decide.cpp:65) and erases older calls, so a raw before/after diff would
+  // (decide.cpp:66) and erases older calls, so a raw before/after diff would
   // also report cards this clue un-designated.
   for (int o : hypo.state.hands[target]) {
     const CardStatus before = game.meta[o].status;
@@ -212,7 +212,7 @@ ClueReading read_clue(const Game& game, const Game& hypo,
   if (!move || !std::holds_alternative<ClueInterp>(*move)) return r;
   const ClueInterp interp = std::get<ClueInterp>(*move);
   // A MISTAKE has no shape. Drop it before anything reads a stamp: the post-elim
-  // demotion (decide.cpp:242-244) leaves real-looking CTP stamps on a hypo whose
+  // demotion (decide.cpp:243-245) leaves real-looking CTP stamps on a hypo whose
   // interp is MISTAKE, so classifying stamps first would call it a play clue.
   if (interp == ClueInterp::MISTAKE) return r;
 

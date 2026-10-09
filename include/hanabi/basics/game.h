@@ -517,7 +517,13 @@ class Game {
 
   // Pick the bot's action. The main decision function - port of reactor.scala
   // take_action. Invokes the endgame solver in the endgame.
+  //
+  // The positional discard (reactor0 and Throw It in a Hole, v23.2.0) wraps it:
+  // our positional play, then our signal or gamble, then the ladder below with
+  // the no-message guard over its answer (`reactor0/positional_discard.h`).
   PerformAction take_action() const;
+  // Everything `take_action` decides apart from the positional discard.
+  PerformAction take_action_ladder() const;
 };
 
 }  // namespace hanabi

@@ -158,6 +158,11 @@ struct ConvData {
   // now a discard to press at once. If its reacter clues instead, the reaction is
   // off for good (`Game::interpret_clue`). Cleared with the call.
   bool fixed_reaction = false;
+  // reactor0 and THROW IT IN A HOLE: a positional discard named this card for its
+  // holder's final turn (v23.2.0, `reactor0/positional_discard.h`). The holder
+  // plays it whatever it could be, so `cleared()` leaves it: a call invariant that
+  // finds the card dead does not take the instruction back.
+  bool positional_play = false;
   // THROW IT IN A HOLE: the identities this card could have been, for a card
   // that went into the hole without its player learning what it was. Empty for
   // every other card, and in every other variant.

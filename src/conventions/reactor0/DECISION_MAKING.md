@@ -279,9 +279,60 @@ The priority of evaluation on a given player (Alice)'s turn is:
 
 Two things outrank the phases below, and one thing sits between them:
 
+-1. **The positional discard** (v23.2.0, the user's ruling; reactor0 and Throw It
+    in a Hole). `Game::take_action` (`decide.cpp:1109-1118`) asks it before
+    anything else, and runs everything below as `take_action_ladder`. It applies
+    in the final round: the deck is empty, Bob (the next seat) still acts, Alice
+    owes no reaction, and Alice holds no **certain** play as the team reads her
+    hand on the shared stacks (`positional_position`,
+    `reactor0/positional_discard.cpp:103-117`; the certain-play test is
+    `common_certain_play`, `:27-41`). Then, in order:
+    - **As Bob**, we play the card a positional discard named
+      (`positional_play`, `:202-209`), ahead of everything, our own certain
+      plays included. Every such discard is read, whatever the card could be
+      (CONVENTION.md §1j).
+    - **As Alice**, with no certain play of our own (`endgame::certain_plays`),
+      we discard the slot matching a card in Bob's hand we can see is playable
+      (`positional_discard_signal`, `:119-142`). Among several, one whose
+      successor a later seat of the round holds, else the leftmost; only slots
+      we have can name his.
+    - **The user's exception:** a playable card Bob already knows by GLOBAL
+      EMPATHY -- every reading the team holds of it plays on the shared stacks
+      (`bob_knows_play`, `:93-99`) -- need not be named. Alice is free to use
+      the turn otherwise: her own required play, or a clue.
+    - **As Alice, when Bob holds no play**, the remaining play is ours: Rule
+      0b's required play, else its selection over every playable identity --
+      the leftmost clued card that could be one, else the leftmost -- on the
+      Play button only, since a chuck would read as positional
+      (`positional_gamble`, `:144-165`; `endgame::gamble_on`,
+      `forced_endgame.cpp:552-613`).
+    - Otherwise the ladder decides, and a discard it chooses that is not a
+      signal is replaced (`positional_guard`, `:167-200`), in order: by the
+      discard naming a play Bob already knows (a discard is read all the same --
+      self-play seed 117 T61, Black: at 0 clues our slot-5 discard sent Bob's
+      last turn to a p1 instead of the r5 he knew); by a stall clue (to a seat
+      other than Bob where there is one); by the discard of a slot Bob does not
+      hold.
+    A certain play is the one thing above it: Rule 0's sure point is still
+    taken first. Replay [2024288](https://hanab.live/shared-replay/2024288#61)
+    T61: the deck was empty, will-bot69 held the u5 in slot 5 and acted last,
+    and will-bot67 had nothing certain. Rule 0b's gamble on its slot 1 struck;
+    discarding its slot 5 names will-bot69's u5. (Our copy of the team's reading
+    has o9 as `{u5}`, so the exception applies there and will-bot67 stalls; his
+    own reading still holds the u1 -- TODO.md 62.) Replay 1973410 T66 (Color
+    Blind) now discards slot 5 for Noah's p5 where it gave the Purple clue that
+    names the same card.
+
+    Measured against v23.1.0, seeds 1-200: TIIAH & Black (6 Suits) mean 24.48 ->
+    24.50, strikeouts 31 -> 27, 30/30 9 -> 10, cards read wrongly 678 -> 657;
+    TIIAH & Dark Null (6 Suits) mean 23.89 -> 24.085, strikeouts 47 -> 37,
+    30/30 3 -> 5, 685 -> 658. Without the exception and the guard's first
+    fallback Black lost two 30/30s (seed 170: Alice's turn spent naming a g5 Bob
+    knew, instead of her own required play).
+
 0.  Endgame.  The forced-endgame rules and the exact solver run first
-    (`decide.cpp:1150`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
-    additionally needs `pace() <= num_players` (`:990`); the forced rules do
+    (`decide.cpp:1323`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
+    additionally needs `pace() <= num_players` (`:1544`); the forced rules do
     not.  They are unchanged by this spec, with one guard on top: a CERTAIN
     play outranks a speculative one — see below.  The endgame decides
     WHETHER to clue; when its answer IS a clue, the endgame stall list below
@@ -415,7 +466,7 @@ Two things outrank the phases below, and one thing sits between them:
 num_suits + 1` counts the points still missing, not how close the deck is to
 empty, so on a 6-suit variant it opens around the halfway mark and stays open;
 303 turns in the log corpus sat inside it with 8–16 cards left. The second gate
-is `pace() <= num_players` (`decide.cpp:1299`), which scales with the seat count
+is `pace() <= num_players` (`decide.cpp:1544`), which scales with the seat count
 because pace already does — at 3 seats it is exactly `pace() <= 3`. The
 forced-endgame rules sit ABOVE it and keep running on the points condition
 alone; a closed gate falls through to the phases below.
@@ -1639,8 +1690,8 @@ button the receiver was promised.
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
-| chop | `Game::chop` | `src/basics/decide.cpp:757-789` |
-| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:1025-1045` |
+| chop | `Game::chop` | `src/basics/decide.cpp:762-794` |
+| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:1030-1050` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:116-133` |
 
 ## Not yet implemented

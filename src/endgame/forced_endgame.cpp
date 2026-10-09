@@ -546,6 +546,13 @@ std::optional<PerformAction> required_play_action(const Game& game, bool narrow)
     return 1 + best_reachable_plays(s, stacks, rest) > base;
   });
   if (required.is_empty()) return std::nullopt;
+  return gamble_on(game, required, narrow);
+}
+
+std::optional<PerformAction> gamble_on(const Game& game, IdentitySet required,
+                                       bool narrow) {
+  const State& s = game.state;
+  if (required.is_empty()) return std::nullopt;
 
   // The action that would lay `order`, or nullopt if it is not a candidate.
   auto attempt = [&](int order) -> std::optional<PerformAction> {
