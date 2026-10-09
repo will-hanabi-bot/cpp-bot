@@ -1521,24 +1521,3 @@ view splits wherever the reconciliation fails. Known failures:
 
 The sync clue (branch `exp/sync-clue`) waits on these: it needs the seats to agree on
 the shared view.
-
-## 62. `[tiiah]` A dark card at or below its stack is not eliminated from hands
-
-A seat that believes a stack stands at height h knows every card of that suit up
-to h is on it. For a dark (single-copy) suit that leaves no copy anywhere else, so
-no hand card can be one. Card elimination counts only what it has NAMED as spent
-(`base_count`, `certain_map`, `src/basics/player_elim.cpp`), and a card thrown into
-the hole unnamed is named by nobody at its own seat. So the seat that threw it
-keeps the identity open on its other cards, while the seats that watched it go in
-count it -- and their copy of the team's reading counts it too, from private sight.
-
-Replay 2024288 T61-T62 (Dark Null): will-bot69 had thrown the u1 into the hole
-unnamed at T38. At T61 will-bot67's copy of the team's reading has will-bot69's o9
-as `{u5}`; will-bot69's own is `{u1,u5}` although its stacks put null on 4. By the
-positional discard's global-empathy exception will-bot67 stalls, and will-bot69,
-not knowing its u5, gambles rule 0b's leftmost candidate instead.
-
-The fix is an elimination rule: on a seat's believed stacks, an identity of a dark
-suit at or below the stack has no copy left in any hand (for a suit with more
-copies, at least one is spent: `max(base_count, 1)`). Shared code, so it needs its
-own A/B; Black (6 Suits), the benchmark, is a dark suit.

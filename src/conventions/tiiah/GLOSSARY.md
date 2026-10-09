@@ -650,3 +650,11 @@ Bob still to act, Alice's discard -- when she owes no reaction and the team sees
 no certain play in her hand on the shared stacks -- names Bob's card in the same
 slot, which he plays. reactor0's GLOSSARY.md and CONVENTION.md §1j (v23.2.0;
 replay 2024288 T61, where will-bot69's u5 sat in slot 5).
+
+### spent below a seen landing
+A partner's card we watched land puts every card of its suit below it on the
+stack, named or not. Our own model counts it (`stack_spent_elim`, v23.4.0): an
+identity at or below a landing we saw, with every copy spent or known elsewhere,
+leaves our other hand cards' readings -- so a dark card there is in no hand. Not
+the shared stacks or our presumed plays, which a hidden misplay pushes above the
+truth. CONVENTION.md §1e (replay 2024288 T58-T62).

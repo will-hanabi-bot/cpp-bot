@@ -34,6 +34,18 @@ struct CardElimResult {
 // Returns (orders_reset, new_player). No-op if dirty is empty.
 std::pair<std::unordered_set<int>, Player> card_elim(Player p, const State& state);
 
+// THROW IT IN A HOLE (v23.4.0): a copy of every card at or below a stack is spent,
+// even when nobody named the card that put it there. For OUR OWN model only, and
+// on the stacks implied by the plays we SAW land (a partner's card we could name,
+// in no hand and not in the discard pile): each such card puts every card of its
+// suit below it on the stack. An identity whose copies are then all accounted for
+// -- spent, or known in another hand -- leaves the inferred set of every other
+// hand card, so a dark (single-copy) card at or below a seen landing is in no
+// hand. Narrows the inferred set only, never to empty; a no-op outside TIIAH,
+// where every play is public and already counted. Our own presumed plays and the
+// shared stacks are not trusted: after a hidden misplay they run above the truth.
+Player stack_spent_elim(Player p, const State& state);
+
 // Remove trash identities from clued/finessed/gentleman's-discarded cards
 // (Good Touch Principle). Skips `except_` (typically the giver of the
 // current clue).

@@ -764,6 +764,7 @@ void Game::elim(std::optional<int> except_) {
 
   // Step 2: card_elim + (optional) good_touch_elim on common.
   auto [resets, new_common] = card_elim(std::move(common), state);
+  new_common = stack_spent_elim(std::move(new_common), state);
   if (good_touch) {
     auto [gt_resets, gt_common] = good_touch_elim(std::move(new_common), *this, except_);
     new_common = std::move(gt_common);
@@ -832,7 +833,7 @@ void Game::elim(std::optional<int> except_) {
     p.dirty = common.dirty;
 
     auto [_, after_card] = card_elim(std::move(p), state);
-    p = std::move(after_card);
+    p = stack_spent_elim(std::move(after_card), state);
     if (good_touch) {
       auto [_unused, after_gt] = good_touch_elim(std::move(p), *this, except_);
       p = std::move(after_gt);

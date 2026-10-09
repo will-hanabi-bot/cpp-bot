@@ -314,6 +314,73 @@ std::pair<std::unordered_set<int>, Player> card_elim(Player p, const State& stat
   return {std::move(resets), std::move(new_player)};
 }
 
+// --- stack_spent_elim -----------------------------------------------------
+//
+// Replay 2024288 (Dark Null): will-bot69 threw the dark u1 into the hole at T38
+// without being able to name it, so nothing it held counted that copy as spent,
+// and its o9 kept `{u1,u5}` with null on 4 on its own stacks -- at T62 it did not
+// know its u5, and gambled another card into a strike.
+Player stack_spent_elim(Player p, const State& state) {
+  if (!state.variant->throw_it_in_a_hole) return p;
+  // Our own model only, on the plays we SAW land. A play we made ourselves we
+  // never see, and only presumed to land -- after a hidden misplay that
+  // presumption puts our stacks above the truth, and counting from it deletes
+  // the real card from our hand. A partner's card we watched go in we can name;
+  // if it struck the engine spelled it as a failed discard, so a named card that
+  // is in no hand and not in the discard pile is one we saw LAND, and every card
+  // of its suit below it is on the stack too.
+  if (p.is_common || p.player_index != state.our_player_index) return p;
+  std::vector<int> stacks(state.variant->suits.size(), 0);
+  {
+    std::vector<bool> gone(state.deck.size(), false);  // discarded, or in a hand
+    for (const auto& hand : state.hands) {
+      for (int o : hand) {
+        if (o >= 0 && o < static_cast<int>(gone.size())) gone[o] = true;
+      }
+    }
+    for (const auto& suit : state.discard_stacks) {
+      for (const auto& pile : suit) {
+        for (int o : pile) {
+          if (o >= 0 && o < static_cast<int>(gone.size())) gone[o] = true;
+        }
+      }
+    }
+    for (int o = 0; o < static_cast<int>(state.deck.size()); ++o) {
+      const auto seen = state.deck[o].id();
+      if (!seen || gone[o]) continue;
+      int& h = stacks[seen->suit_index];
+      h = std::max(h, static_cast<int>(seen->rank));
+    }
+  }
+
+  for (Identity id : state.all_ids) {
+    const auto& st = state.variant->suits[id.suit_index].suit_type;
+    if (st.reversed) continue;  // counts down from a sentinel; left to the ordinary count
+    if (id.rank > stacks[id.suit_index]) continue;
+    const int ord = id.to_ord();
+    const int spent = std::max(state.base_count[ord], 1);
+    const int left = state.card_count[ord] - spent;
+    // Copies known in hands: a hand card this model can name as `id`.
+    std::vector<int> holders;
+    for (const auto& hand : state.hands) {
+      for (int o : hand) {
+        if (p.thoughts[o].id() == id) holders.push_back(o);
+      }
+    }
+    for (const auto& hand : state.hands) {
+      for (int o : hand) {
+        Thought& t = p.thoughts[o];
+        if (!t.inferred.contains(id) || t.inferred.length() <= 1) continue;
+        const int elsewhere = static_cast<int>(std::count_if(
+            holders.begin(), holders.end(), [o](int h) { return h != o; }));
+        if (left - elsewhere > 0) continue;
+        t.inferred = t.inferred.difference(id);
+      }
+    }
+  }
+  return p;
+}
+
 // --- good_touch_elim ------------------------------------------------------
 
 std::pair<std::unordered_set<int>, Player> good_touch_elim(Player p, const Game& game,

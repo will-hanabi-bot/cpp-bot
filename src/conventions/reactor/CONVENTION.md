@@ -607,7 +607,7 @@ reaction triggers the response-inversion rewind.
     (`src/basics/player_game.cpp:340-419`) — dead code with **no callers**;
     `find_prompt` only calls `valid_prompt`, and nothing calls `find_prompt`;
   - `ClueInterp::SAVE` and `ClueInterp::DISTRIBUTION` (§1a.1);
-  - `good_touch_elim` (`src/basics/player_elim.cpp:319-352`), unreachable because
+  - `good_touch_elim` (`src/basics/player_elim.cpp:386-419`), unreachable because
     `Game::good_touch` is left `false` (`include/hanabi/basics/game.h:97`) — so
     Good Touch draws no inferences here (v0.39, commit `6219f17`) and survives
     only as the clue-scoring term of §2.4 and via `bad_touch_result`.

@@ -1,12 +1,8 @@
-// Replay 2024288 T61 (v23.2.0, the user's ruling), will-bot67's seat: the
-// POSITIONAL DISCARD. The deck is empty, will-bot69 acts last and holds the u5 (o9)
-// in slot 5, and we hold no certain play. In the game we gambled our slot 1 into a
-// strike.
-//
-// Every discard we make here is read as positional, so the one thing we may not do
-// is throw any slot but our slot 5 (o1). will-bot69 knows o9 is the u5 (a card
-// below a landing it saw is spent, v23.4.0), so by the user's exception we may
-// stall instead; this pins the discard rule rather than the choice.
+// Replay 2024288 T62 (v23.4.0), will-bot69's seat. At T38 will-bot69
+// threw the dark u1 into the hole without being able to name it, so nothing it
+// held counted that copy as spent, and its o9 kept `{u1,u5}` with null on 4 on its
+// own stacks; at T62 it gambled another card into a strike. A dark card at or
+// below its stack is in no hand: o9 is the u5, and it plays it.
 
 #include <gtest/gtest.h>
 
@@ -17,16 +13,16 @@
 #include "replay_helpers.h"
 #include "test_harness.h"
 
-// Variant: Throw It in a Hole & Dark Null (6 Suits). 3 players, our_player_index=0.
+// Variant: Throw It in a Hole & Dark Null (6 Suits). 3 players, our_player_index=1.
 
-TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
-  // Reconstruct exactly the Game the live bot saw at turn 61.
+TEST(TiiahReplay2024288, DarkCardBelowItsStackIsInNoHand) {
+  // Reconstruct exactly the Game the live bot saw at turn 62.
   // The embedded JSON is the STATE record's `replay` section.
   const char* kSnapshotJson = R"json(
 {
-  "bot": "will-bot67",
+  "bot": "will-bot69",
   "ch": "STATE",
-  "current_player_index": 0,
+  "current_player_index": 1,
   "database_id": 2024288,
   "debug": {
     "cards_left": 0,
@@ -37,9 +33,9 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       5,
       5,
       5,
-      3
+      4
     ],
-    "current_player_index": 0,
+    "current_player_index": 1,
     "discards": [
       {
         "order": 17,
@@ -57,11 +53,6 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         "suit": 0
       },
       {
-        "order": 46,
-        "rank": 2,
-        "suit": 1
-      },
-      {
         "order": 41,
         "rank": 3,
         "suit": 1
@@ -70,6 +61,11 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         "order": 36,
         "rank": 4,
         "suit": 1
+      },
+      {
+        "order": 51,
+        "rank": 1,
+        "suit": 2
       },
       {
         "order": 14,
@@ -105,38 +101,39 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         "order": 39,
         "rank": 3,
         "suit": 4
-      },
-      {
-        "order": 37,
-        "rank": 4,
-        "suit": 5
       }
     ],
-    "endgame_turns": 2,
+    "endgame_turns": 1,
     "hands": [
       {
         "cards": [
           {
             "clued": false,
             "focused": false,
-            "id": null,
-            "inferred": 680828005,
+            "id": [
+              1,
+              2
+            ],
+            "inferred": 579862629,
             "info_lock": null,
-            "order": 51,
-            "possible": 680828005,
+            "order": 48,
+            "possible": 579862629,
             "slot": 1,
             "status": "NONE",
             "trash": false,
             "urgent": false
           },
           {
-            "clued": false,
+            "clued": true,
             "focused": false,
-            "id": null,
-            "inferred": 680525925,
+            "id": [
+              3,
+              1
+            ],
+            "inferred": 294912,
             "info_lock": null,
-            "order": 48,
-            "possible": 680525925,
+            "order": 45,
+            "possible": 294912,
             "slot": 2,
             "status": "NONE",
             "trash": false,
@@ -145,11 +142,14 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
           {
             "clued": true,
             "focused": false,
-            "id": null,
-            "inferred": 294912,
+            "id": [
+              2,
+              2
+            ],
+            "inferred": 6144,
             "info_lock": null,
-            "order": 45,
-            "possible": 294912,
+            "order": 42,
+            "possible": 6144,
             "slot": 3,
             "status": "NONE",
             "trash": false,
@@ -158,25 +158,15 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
           {
             "clued": true,
             "focused": false,
-            "id": null,
-            "inferred": 7168,
-            "info_lock": null,
-            "order": 42,
-            "possible": 7168,
-            "slot": 4,
-            "status": "NONE",
-            "trash": false,
-            "urgent": false
-          },
-          {
-            "clued": true,
-            "focused": false,
-            "id": null,
+            "id": [
+              3,
+              4
+            ],
             "inferred": 294912,
             "info_lock": null,
             "order": 1,
             "possible": 294912,
-            "slot": 5,
+            "slot": 4,
             "status": "NONE",
             "trash": false,
             "urgent": false
@@ -190,14 +180,11 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
           {
             "clued": false,
             "focused": false,
-            "id": [
-              4,
-              4
-            ],
-            "inferred": 680828005,
+            "id": null,
+            "inferred": 580163685,
             "info_lock": null,
             "order": 54,
-            "possible": 680828005,
+            "possible": 580163685,
             "slot": 1,
             "status": "NONE",
             "trash": false,
@@ -206,14 +193,11 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
           {
             "clued": false,
             "focused": false,
-            "id": [
-              1,
-              1
-            ],
-            "inferred": 671390821,
+            "id": null,
+            "inferred": 570726501,
             "info_lock": null,
             "order": 52,
-            "possible": 671390821,
+            "possible": 570726501,
             "slot": 2,
             "status": "NONE",
             "trash": false,
@@ -222,10 +206,7 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
           {
             "clued": true,
             "focused": false,
-            "id": [
-              4,
-              1
-            ],
+            "id": null,
             "inferred": 9437184,
             "info_lock": null,
             "order": 43,
@@ -238,14 +219,11 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
           {
             "clued": false,
             "focused": false,
-            "id": [
-              0,
-              1
-            ],
-            "inferred": 671089697,
+            "id": null,
+            "inferred": 570425377,
             "info_lock": null,
             "order": 23,
-            "possible": 671089697,
+            "possible": 570425377,
             "slot": 4,
             "status": "NONE",
             "trash": false,
@@ -254,14 +232,11 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
           {
             "clued": false,
             "focused": false,
-            "id": [
-              5,
-              5
-            ],
-            "inferred": 671088640,
+            "id": null,
+            "inferred": 570425344,
             "info_lock": null,
             "order": 9,
-            "possible": 671088640,
+            "possible": 570425344,
             "slot": 5,
             "status": "NONE",
             "trash": false,
@@ -280,10 +255,10 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
               3,
               1
             ],
-            "inferred": 680828005,
+            "inferred": 580163685,
             "info_lock": null,
             "order": 53,
-            "possible": 680828005,
+            "possible": 580163685,
             "slot": 1,
             "status": "NONE",
             "trash": false,
@@ -296,10 +271,10 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
               1,
               1
             ],
-            "inferred": 680828005,
+            "inferred": 580163685,
             "info_lock": null,
             "order": 50,
-            "possible": 680828005,
+            "possible": 580163685,
             "slot": 2,
             "status": "NONE",
             "trash": false,
@@ -312,10 +287,10 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
               0,
               3
             ],
-            "inferred": 680828005,
+            "inferred": 580163685,
             "info_lock": null,
             "order": 44,
-            "possible": 680828005,
+            "possible": 580163685,
             "slot": 3,
             "status": "NONE",
             "trash": false,
@@ -349,7 +324,7 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       5,
       5,
       5,
-      3
+      5
     ],
     "move_history": [
       {
@@ -542,14 +517,14 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       },
       {
         "k": "clue",
-        "v": "Mistake"
+        "v": "Reactive"
       },
       {
         "k": "play",
         "v": "None"
       },
       {
-        "k": "discard",
+        "k": "play",
         "v": "None"
       },
       {
@@ -589,6 +564,10 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         "v": "None"
       },
       {
+        "k": "play",
+        "v": "None"
+      },
+      {
         "k": "discard",
         "v": "None"
       }
@@ -600,7 +579,7 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         5,
         5,
         5,
-        3
+        4
       ],
       [
         5,
@@ -608,7 +587,7 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         5,
         5,
         5,
-        3
+        4
       ],
       [
         5,
@@ -616,7 +595,7 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         5,
         5,
         5,
-        3
+        4
       ]
     ],
     "pending_reactions": [],
@@ -626,39 +605,10 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       5,
       5,
       5,
-      2
+      4
     ],
-    "strikes": 2,
-    "superpositions": [
-      {
-        "holder": 0,
-        "order": 40,
-        "support": [
-          [
-            2,
-            5,
-            1
-          ]
-        ],
-        "worlds": [
-          [
-            [
-              38,
-              1,
-              2
-            ]
-          ],
-          [
-            [
-              38,
-              2,
-              5
-            ]
-          ]
-        ]
-      }
-    ],
-    "turn_count": 61,
+    "strikes": 1,
+    "turn_count": 62,
     "waiting": []
   },
   "game_id": 2406,
@@ -667,71 +617,71 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 0,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 1,
+        "suit": 0,
         "t": "draw"
       },
       {
         "order": 1,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 4,
+        "suit": 3,
         "t": "draw"
       },
       {
         "order": 2,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 3,
+        "suit": 5,
         "t": "draw"
       },
       {
         "order": 3,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 1,
+        "suit": 3,
         "t": "draw"
       },
       {
         "order": 4,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 5,
+        "suit": 4,
         "t": "draw"
       },
       {
         "order": 5,
         "p": 1,
-        "rank": 1,
-        "suit": 2,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 6,
         "p": 1,
-        "rank": 3,
-        "suit": 3,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 7,
         "p": 1,
-        "rank": 3,
-        "suit": 3,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 8,
         "p": 1,
-        "rank": 2,
-        "suit": 3,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
         "order": 9,
         "p": 1,
-        "rank": 5,
-        "suit": 5,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -800,8 +750,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 15,
         "p": 1,
-        "rank": 1,
-        "suit": 4,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -847,8 +797,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 16,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 4,
+        "suit": 0,
         "t": "draw"
       },
       {
@@ -872,8 +822,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 17,
         "p": 1,
-        "rank": 1,
-        "suit": 0,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -944,8 +894,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 19,
         "p": 1,
-        "rank": 1,
-        "suit": 1,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -991,8 +941,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 20,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 4,
         "t": "draw"
       },
       {
@@ -1016,8 +966,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 21,
         "p": 1,
-        "rank": 3,
-        "suit": 4,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1088,8 +1038,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 23,
         "p": 1,
-        "rank": 1,
-        "suit": 0,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1160,8 +1110,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 25,
         "p": 1,
-        "rank": 4,
-        "suit": 2,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1211,8 +1161,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 27,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 4,
+        "suit": 3,
         "t": "draw"
       },
       {
@@ -1282,8 +1232,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 29,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 5,
+        "suit": 0,
         "t": "draw"
       },
       {
@@ -1308,8 +1258,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 30,
         "p": 1,
-        "rank": 1,
-        "suit": 5,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1380,8 +1330,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 32,
         "p": 1,
-        "rank": 2,
-        "suit": 3,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1426,8 +1376,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 33,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 4,
+        "suit": 2,
         "t": "draw"
       },
       {
@@ -1452,8 +1402,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 34,
         "p": 1,
-        "rank": 3,
-        "suit": 0,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1524,8 +1474,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 36,
         "p": 1,
-        "rank": 4,
-        "suit": 1,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1575,8 +1525,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 38,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 5,
+        "suit": 2,
         "t": "draw"
       },
       {
@@ -1601,8 +1551,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 39,
         "p": 1,
-        "rank": 3,
-        "suit": 4,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1648,8 +1598,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 40,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 5,
         "t": "draw"
       },
       {
@@ -1673,8 +1623,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 41,
         "p": 1,
-        "rank": 3,
-        "suit": 1,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1720,8 +1670,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 42,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 2,
         "t": "draw"
       },
       {
@@ -1746,8 +1696,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 43,
         "p": 1,
-        "rank": 1,
-        "suit": 4,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1798,8 +1748,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 45,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 1,
+        "suit": 3,
         "t": "draw"
       },
       {
@@ -1824,8 +1774,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 46,
         "p": 1,
-        "rank": 2,
-        "suit": 1,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1892,8 +1842,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 47,
         "p": 1,
-        "rank": 5,
-        "suit": 1,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -1938,8 +1888,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 48,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 2,
+        "suit": 1,
         "t": "draw"
       },
       {
@@ -1963,8 +1913,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 49,
         "p": 1,
-        "rank": 2,
-        "suit": 0,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -2077,8 +2027,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 51,
         "p": 0,
-        "rank": -1,
-        "suit": -1,
+        "rank": 1,
+        "suit": 2,
         "t": "draw"
       },
       {
@@ -2103,8 +2053,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 52,
         "p": 1,
-        "rank": 1,
-        "suit": 1,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -2174,8 +2124,8 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       {
         "order": 54,
         "p": 1,
-        "rank": 4,
-        "suit": 4,
+        "rank": -1,
+        "suit": -1,
         "t": "draw"
       },
       {
@@ -2206,6 +2156,31 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         "cpi": 0,
         "num": 60,
         "t": "turn"
+      },
+      {
+        "num": 1,
+        "order": 51,
+        "t": "strike",
+        "turn": 60
+      },
+      {
+        "failed": true,
+        "order": 51,
+        "p": 0,
+        "rank": -1,
+        "suit": -1,
+        "t": "discard"
+      },
+      {
+        "clues": 1,
+        "max": 30,
+        "score": 29,
+        "t": "status"
+      },
+      {
+        "cpi": 1,
+        "num": 61,
+        "t": "turn"
       }
     ],
     "all_plays": false,
@@ -2215,40 +2190,40 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         0,
         1
       ],
+      [
+        3,
+        4
+      ],
+      [
+        5,
+        3
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        2
+      ],
       null,
       [
-        5,
-        2
-      ],
-      [
-        3,
-        1
-      ],
-      [
-        4,
-        5
-      ],
-      [
-        2,
-        1
-      ],
-      [
-        3,
-        3
-      ],
-      [
-        3,
-        3
-      ],
-      [
-        3,
-        2
-      ],
-      [
-        5,
-        5
-      ],
-      [
         4,
         2
       ],
@@ -2300,10 +2275,7 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         0,
         2
       ],
-      [
-        0,
-        1
-      ],
+      null,
       [
         4,
         1
@@ -2328,10 +2300,7 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         0,
         5
       ],
-      [
-        5,
-        1
-      ],
+      null,
       [
         0,
         4
@@ -2360,59 +2329,65 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
         5,
         4
       ],
-      null,
-      [
-        4,
-        3
-      ],
       [
         2,
         5
       ],
       [
-        1,
-        3
-      ],
-      null,
-      [
         4,
-        1
+        3
       ],
+      [
+        5,
+        2
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        2,
+        2
+      ],
+      null,
       [
         0,
         3
-      ],
-      null,
-      [
-        1,
-        2
-      ],
-      [
-        1,
-        5
-      ],
-      null,
-      [
-        0,
-        2
-      ],
-      [
-        1,
-        1
-      ],
-      null,
-      [
-        1,
-        1
       ],
       [
         3,
         1
       ],
       [
-        4,
-        4
-      ]
+        1,
+        2
+      ],
+      [
+        1,
+        5
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        0,
+        2
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        2,
+        1
+      ],
+      null,
+      [
+        3,
+        1
+      ],
+      null
     ],
     "names": [
       "will-bot67",
@@ -2431,22 +2406,20 @@ TEST(TiiahReplay2024288, PositionalDiscardOnlyNamesBobsPlay) {
       "starting_player": 0,
       "variant_name": "Throw It in a Hole & Dark Null (6 Suits)"
     },
-    "our_player_index": 0,
+    "our_player_index": 1,
     "rlocks": true,
     "variant": "Throw It in a Hole & Dark Null (6 Suits)",
     "zcs_turn": -1
   },
-  "ts": "2026-10-08T23:24:01.230",
-  "turn": 61
+  "ts": "2026-10-08T23:24:01.745",
+  "turn": 62
 }
   )json";
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
+  EXPECT_EQ(game.me().thoughts[9].possibilities().length(), 1)
+      << "o9 is the u5: the only u1 is on the null stack";
   hanabi::PerformAction action = game.take_action();
-  if (const auto* d = std::get_if<hanabi::PerformDiscard>(&action)) {
-    EXPECT_EQ(d->target, 1) << "a discard here names will-bot69's slot: only our slot 5";
-  }
-  EXPECT_FALSE(std::holds_alternative<hanabi::PerformPlay>(action) &&
-               std::get<hanabi::PerformPlay>(action).target == 51)
-      << "not the slot-1 gamble that struck";
+  ASSERT_TRUE(std::holds_alternative<hanabi::PerformPlay>(action));
+  EXPECT_EQ(std::get<hanabi::PerformPlay>(action).target, 9);
 }

@@ -317,11 +317,11 @@ Two things outrank the phases below, and one thing sits between them:
     taken first. Replay [2024288](https://hanab.live/shared-replay/2024288#61)
     T61: the deck was empty, will-bot69 held the u5 in slot 5 and acted last,
     and will-bot67 had nothing certain. Rule 0b's gamble on its slot 1 struck;
-    discarding its slot 5 names will-bot69's u5. (Our copy of the team's reading
-    has o9 as `{u5}`, so the exception applies there and will-bot67 stalls; his
-    own reading still holds the u1 -- TODO.md 62.) Replay 1973410 T66 (Color
-    Blind) now discards slot 5 for Noah's p5 where it gave the Purple clue that
-    names the same card.
+    discarding its slot 5 names will-bot69's u5. Since v23.4.0 will-bot69 knows
+    the u5 itself (TIIAH CONVENTION.md §1e, a card below a landing we saw is
+    spent), so by the exception will-bot67 stalls and will-bot69 plays it.
+    Replay 1973410 T66 (Color Blind) now discards slot 5 for Noah's p5 where it
+    gave the Purple clue that names the same card.
 
     Measured against v23.1.0, seeds 1-200: TIIAH & Black (6 Suits) mean 24.48 ->
     24.50, strikeouts 31 -> 27, 30/30 9 -> 10, cards read wrongly 678 -> 657;

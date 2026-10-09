@@ -1888,7 +1888,7 @@ the r4 exactly because they see all copies of n3".
 How the code does it:
 - When the team's reading of our own called card is empty in our own view,
   `Game::elim` sets our view to `tiiah::own_called_fallback`
-  (`src/basics/game.cpp:808-816`; `src/conventions/tiiah/superposition.cpp:1473-1486`).
+  (`src/basics/game.cpp:809-817`; `src/conventions/tiiah/superposition.cpp:1473-1486`).
   That is the card's remaining identities that are playable on our stacks, less
   the receiver target's identity when we are the reacter. It replaces the whole
   empathy.
@@ -2812,6 +2812,37 @@ so it is booked as spent — our accounting has to know, or every count built on
 sees Alice put CTP on a purple 1, drops `p1`, is left with `{t1}`, and knows
 what he played.
 
+#### A card below a landing we saw is spent (v23.4.0)
+
+A partner's card we watched land puts every card of its suit below it on the
+stack, whoever played them and whether or not anybody named them. Card elimination
+counts only the copies it has NAMED as spent (`base_count`, `certain_map`), and a
+card thrown into the hole unnamed is named by nobody at its own seat -- so that seat
+kept the identity open on its other cards.
+
+`stack_spent_elim` (`src/basics/player_elim.cpp:317-382`) runs after each card
+elimination in `Game::elim` (`src/basics/game.cpp:767`, `:836`), for OUR OWN model
+only. It takes, per suit, the highest card we saw land: a card we can name that is
+in no hand and not in the discard pile (a misplay we watched is spelled as a failed
+discard). At or below it an identity has at least one copy spent
+(`max(base_count, 1)`), and once every copy is spent or known in another hand it
+leaves the inferred set of our other hand cards -- so a dark (single-copy) card at
+or below a landing we saw is in no hand. The inferred set only, never to empty; a
+no-op outside TIIAH, where every play is public and already counted.
+
+Not the shared stacks, our partners' models, or our own presumed plays: after a
+hidden misplay those run above the truth, and counting from them deleted the real
+card from a hand. Measured on TIIAH & Black / Dark Null (6 Suits), seeds 1-200:
+on every model and believed stacks, cards read wrongly 657 -> 739 and 658 -> 756;
+on our own model and believed stacks, 702 and 702; on the landings we saw, 660 and
+663 -- the misplayer's own presumed play was the rest.
+
+Replay [2024288](https://hanab.live/shared-replay/2024288#58) (Dark Null):
+will-bot69 threw the dark u1 into the hole unnamed at T38, and later watched the
+u2, u3 and u4 land. Its o9 kept `{u1,u5}`, so at T62 it did not know its u5 and
+gambled another card into a strike. It now reads o9 as `{u5}` from T58 and plays
+it at T62 for 30. Test: `test_replay_2024288_dark_card_below_its_stack.cpp`.
+
 ### §1f Rainbowy variants
 
 In a rainbowy variant a non-orange **colour** stable clue pins the CTP to exactly
@@ -3125,10 +3156,9 @@ Strikes stay hidden: Bob's play goes into the hole like any other. Replay
 [2024288](https://hanab.live/shared-replay/2024288#61) T61-T62: the deck was
 empty, will-bot69 held the u5 in slot 5 and acted last, and will-bot67 gambled
 its slot 1 into a strike. A discard of its slot 5 names the u5, and will-bot69
-plays it (test below). will-bot67 now stalls there instead, by the user's
-exception: its copy of the team's reading has o9 as `{u5}`, since it watched
-will-bot69 throw the dark u1 into the hole, but will-bot69's own reading keeps
-the u1 (TODO.md 62).
+plays it (test below). will-bot67 stalls there instead, by the user's
+exception: will-bot69 already knows o9 is the u5 (§1e, a card below a landing we
+saw is spent, v23.4.0), and plays it at T62.
 
 **Two rungs of this convention's own run ahead of reactor0's** (v16.25.0), both from
 §1: the PASSBACK (§1j) before the pending reaction, since playing a card whose unnamed
@@ -3681,6 +3711,7 @@ left:
 | `tests/test_tiiah/test_decision_making/test_replay_2024288_direct_target_reads_worlds_where_it_plays.cpp` | §1d — replay 2024288 T45-T46, will-bot67: the y2 target plays on the pair's frame, so o40's green-bucket reading ranges over the world where it plays; o38 stays `{y2,g5}` and will-bot67 plays o40 instead of a 3 clue (v23.1.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024288_positional_discard_given.cpp` | §2 (reactor0 Precedence step -1) — replay 2024288 T61, will-bot67: the deck empty, no certain play, will-bot69's u5 in slot 5; no gamble on slot 1, and any discard is its slot 5 (v23.2.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024288_positional_discard_names_bobs_play.cpp` | §2 (reactor0 §1j) — replay 2024288 T62, will-bot69, with T61 replaced by will-bot67's discard of its slot 5: will-bot69 plays its slot 5, the u5 (v23.2.0) |
+| `tests/test_tiiah/test_decision_making/test_replay_2024288_dark_card_below_its_stack.cpp` | §1e — replay 2024288 T62, will-bot69: it watched the u2-u4 land, so the dark u1 it threw into the hole unnamed is on the stack; o9 is the u5 and it plays it (v23.4.0) |
 | `tests/test_tiiah/test_decision_making/test_replay_2024655_reverse_reaction_is_not_deferred.cpp` | §1d — replay 2024655 T14, will-bot67: the reverse reactive's frame includes yagami's standing r1, so the call on yagami's r3 (o11) stands after will-bot69's r2, and the 3 to yagami is not given (v23.3.0) |
 | `tests/test_tiiah/test_known_bucket_violation.cpp` | §1d — the legality layer: a known purple 2 answers a t1 under a 1 when r1/y1/p1 are down (a globally known violation); with yellow not down the receiver would read the y1, and it is no pairing (v22.4.0) |
 | `tests/test_tiiah/test_retouch_rank_call.cpp` | §1b — a 5 to Bob re-touching his `{b5,p5}` and `{r5,b5}` calls the rightmost possible play as `{p5}`; not at 8 clues, nor with nothing playable (v22.2.0) |
