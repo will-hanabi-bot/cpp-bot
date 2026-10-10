@@ -429,7 +429,7 @@ bool chop_is_expendable(const Game& game, int player) {
 // playable (`:390`).
 //
 // The WC freshness guard matters: `Game::interpret_clue` clears `waiting` only
-// when the new clue's giver was the pending reacter (`decide.cpp:52-54`), so a
+// when the new clue's giver was the pending reacter (`decide.cpp:53-55`), so a
 // stale connection from an earlier turn can survive into a candidate's hypo.
 // It is `wc_is_fresh` (reactor0/interpret_reaction.h), shared with the decision
 // layer's classifier — this detector originally inlined the same check with an

@@ -19,7 +19,7 @@ The shared engine reads a named playable thrown away as "you hold the other copy
 the card **was already played** — by us, since our stacks can only be short by
 what we threw in the hole — and it collapses our superpositions instead
 (`presume_discard_was_played`, CONVENTION.md §1e rule 7). `useful_dc` excludes a
-playable card in a hole variant (`src/basics/decide.cpp:572-581`). Replay 2011319.
+playable card in a hole variant (`src/basics/decide.cpp:579-588`). Replay 2011319.
 
 ### believed stacks
 `State::play_stacks` under TIIAH. We resolve each hidden action against the card
@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1883-1934`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1905-1956`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -292,12 +292,12 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:1360-1395`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:1382-1417`. CONVENTION.md §1d.
 
 Since v22.0.0 it is also the **only finesse that may be given**, and it decides the
 receiver's own reading. A proven finesse reads as the card after the reacter's. Any
 other pairing reads as the bucket half alone (`keep_convention_half`,
-`interpret_reactive.cpp:1287-1323`), never the union of the two halves.
+`interpret_reactive.cpp:1309-1345`), never the union of the two halves.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -446,11 +446,13 @@ ordinary reactive (v18.2.0). `inverted_stable`,
 `src/conventions/variants/hole.cpp:155-163`; replay 2013645 T11. CONVENTION.md §1c.
 
 ### gotten
-A card already called to play: a reactive's target walk passes over it, since a
-new reactive has to get something new. When every playable and finesse target in
+A card already called to play, or a sure play before the clue (v23.20.0): a
+reactive's target walk passes over it, since a new reactive has to get something
+new. When every playable and finesse target in
 the receiver's hand is gotten, the walk takes the leftmost gotten one instead
-(v18.5.0; human diagnostic 2013726 T38). `receiver_targets`,
-`src/conventions/tiiah/interpret_reactive.cpp:371-425`. CONVENTION.md §1c.
+(v18.5.0; human diagnostic 2013726 T38). `receiver_targets` and `walked_as_called`,
+`src/conventions/tiiah/interpret_reactive.cpp:373-448`. CONVENTION.md §1c; replay
+2026374 T41 for the sure play.
 
 ### reverse reactive
 The second of TIIAH's two dispatches. When Bob holds a *standing play* and Cathy

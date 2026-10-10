@@ -106,7 +106,7 @@ giver, Bob the next player, Cathy the one after.
   dispatcher, deferral-carries-reactive, re-tasking. Reactor0's dispatcher is
   the whole of §1a.
 - The dispatch fork lives at the single engine seam:
-  `src/basics/decide.cpp:86-94` (clues), `:281-288` (discards), `:342-349`
+  `src/basics/decide.cpp:87-95` (clues), `:281-288` (discards), `:342-349`
   (plays). Each fork also runs `enforce_call_invariants` (§1h) for reactor0
   games only.
 - **`/allplays` is reactor-only.** It promotes reactor's colour reactives to
@@ -317,7 +317,7 @@ load-bearing:
    play reveal of priority 2** (`defer_to_reveal`, `:452-462`). When the clue
    pins a previously-clued orange to a playable one the reveal already says
    everything and empathy carries the chuck
-   (`src/basics/decide.cpp:984-1003` routes an empathy-pinned playable orange
+   (`src/basics/decide.cpp:991-1010` routes an empathy-pinned playable orange
    through PerformDiscard). Claiming it at priority 1 would also trip the
    `unnecessary_focus` test, which counts the focus's **own** pinned identity
    as "visible elsewhere" (`Thought::matches` is `id() == other`,
@@ -793,7 +793,7 @@ trash, read off `common`, so the reacter walks with the giver:
   `target_play` — the latter narrows `inferred` to the playable set and bails
   when that empties, so it cannot stamp a trash card at all.
 
-A fourth gate lives outside the convention: `decide.cpp:796-807` skips an
+A fourth gate lives outside the convention: `decide.cpp:803-814` skips an
 urgent `CALLED_TO_PLAY` whose empathy is all basic trash, which would have
 swallowed the stamp on the reacter's own turn. It carries the same exemption.
 
@@ -1155,7 +1155,7 @@ its own stacks do not advance: its own play would read as row 3 and take the
 whole-hand negative. So a hole game asks the BUTTON instead, which is public,
 and a receiver play takes row 1 in every seat — the suit is not common knowledge
 there, so no seat may read the reaction by what it privately saw
-(`src/basics/decide.cpp:115-140`, tiiah/CONVENTION.md §1d). Everything is read as of the REACTION —
+(`src/basics/decide.cpp:116-141`, tiiah/CONVENTION.md §1d). Everything is read as of the REACTION —
 "playable" and "one away" describe the position the clue was given into, not
 whatever the stacks look like when the receiver gets round to acting. A card
 carrying its own call is left alone; that call speaks for it.
@@ -1164,7 +1164,7 @@ carrying its own call is left alone; that call speaks for it.
 receiver's action on the target as their answer to the reaction. Once the call on
 that card has been withdrawn, whatever they do with it is no such answer, so the
 held capture is dropped (`Game::disarm_reaction_elim`,
-`src/basics/decide.cpp:71-83`). Two withdrawals do this:
+`src/basics/decide.cpp:72-84`). Two withdrawals do this:
 - `erase_call` in the call invariants (rules 1–4, including rule 3's dead call),
   at `reactor0/call_invariants.cpp:53`;
 - Throw It in a Hole's fix, at `tiiah/interpret_clue.cpp:646`.
@@ -2038,7 +2038,7 @@ shape on the stable side, where the veto was missing until v5.0.0.
 (`include/hanabi/conventions/reactor0/call_invariants.h`,
 `src/conventions/reactor0/call_invariants.cpp`), run at the engine seam rather
 than at each stamping site, so no path can forget it: after every clue
-interpretation (`src/basics/decide.cpp:213`) and after **every** play and
+interpretation (`src/basics/decide.cpp:220`) and after **every** play and
 discard (`:523`, `:553`, via `enforce_calls_after_action`), whether or not a
 reaction was being resolved. That last part is v10.12.0 — rules 3 and 4 turn on
 the STACKS rather than on the stamps, so a call can die because somebody else
@@ -2048,7 +2048,7 @@ enforcement from inside their `waiting` block.
 1. **Play calls run in play order.** A hand may carry **several**
    `CALLED_TO_PLAY` cards at once, and the holder actions them
    **most-recently-stamped first**, skipping any it knows from empathy must be
-   trash (`src/basics/decide.cpp:1057-1103`). There is no unwinding: if the
+   trash (`src/basics/decide.cpp:1064-1110`). There is no unwinding: if the
    holder plays an older call, the receiver does not interpret that play.
    To keep stamp order and slot order from disagreeing, a newer call on an
    **older** slot **erases** the earlier call on any newer slot — a newer clue
@@ -2164,7 +2164,7 @@ otherwise nobody reads it. Replay [2024746](https://hanab.live/shared-replay/202
 T56-T57: Noah's slot-5 discard, with will-bot69's p5 and will-bot67's r5 both
 known, spoke to nobody; will-bot69 had played its slot 5 into a dead g3.
 
-- Read in `Game::interpret_discard` (`decide.cpp:680-687`), after the call
+- Read in `Game::interpret_discard` (`decide.cpp:687-694`), after the call
   invariants so they cannot take the instruction back, by
   `read_positional_discard` (`reactor0/positional_discard.cpp:251-283`). The card
   is marked `ConvData::positional_play`, `CALLED_TO_PLAY` and urgent, and its

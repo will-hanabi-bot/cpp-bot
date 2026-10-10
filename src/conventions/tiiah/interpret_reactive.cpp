@@ -370,9 +370,30 @@ bool confirm_reverse_reactive(Game& game, int actor, int order, bool was_play) {
   return true;
 }
 
+// Does the walk pass this card over as already CALLED? A card stamped to play is
+// one of the plays the frame has simulated (§1c). So is a SURE play (v23.20.0, the
+// user's ruling): a card whose clue-touch empathy every seat reads as playable on
+// the shared view, and which the hole could not hold (`is_standing_play`). It will
+// be played without being asked, as a stamp would have it played. Replay 2026374
+// T41: will-bot67's known `{p4}` became playable for every seat when its p3 landed
+// at T40, and yagami_black's Blue walked to the b4 behind it, not to the p4.
+//
+// The sure play is judged BEFORE the clue (`before`): a rank 1 that touches the
+// receiver's 1s makes them sure plays, and they are what the clue is about. Judged
+// after it, self-play Black lost 0.2 a game (30/30 10 -> 8).
+namespace {
+bool walked_as_called(const Game& game, const Game& before, int order) {
+  return game.meta[order].status == CardStatus::CALLED_TO_PLAY ||
+         (order < static_cast<int>(before.meta.size()) &&
+          hanabi::reactor::variants::is_standing_play(before, order));
+}
+}  // namespace
+
 std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
                                              bool receiver_acts_first,
-                                             const std::vector<int>* base) {
+                                             const std::vector<int>* base,
+                                             const Game* before) {
+  const Game& pre = before ? *before : game;
   const State& s = game.state;
   const State after = reacter_faces(game, receiver, receiver_acts_first, base);
   std::vector<ReceiverTarget> direct;
@@ -380,8 +401,8 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
   std::vector<ReceiverTarget> inverted;
   for (int o : s.hands[receiver]) {
     // A card already called to play is one of the plays we just simulated, so
-    // it is not waiting on anything: never retargeted (§1c).
-    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+    // it is not waiting on anything: never retargeted (§1c). Nor is a sure play.
+    if (walked_as_called(game, pre, o)) continue;
     auto id = s.deck[o].id();
     if (!id) continue;  // our own hand; the receiver decodes at reaction time
     const int away = after.playable_away(*id);
@@ -409,7 +430,7 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
     std::vector<ReceiverTarget> called_direct;
     std::vector<ReceiverTarget> called_one_away;
     for (int o : s.hands[receiver]) {
-      if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      if (!walked_as_called(game, pre, o)) continue;
       auto id = s.deck[o].id();
       if (!id) continue;
       if (s.variant->suits[id->suit_index].suit_type.inverted) continue;
@@ -428,8 +449,9 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
 
 std::optional<int> receiver_target(const Game& game, int receiver,
                                    bool receiver_acts_first,
-                                   const std::vector<int>* base) {
-  const auto targets = receiver_targets(game, receiver, receiver_acts_first, base);
+                                   const std::vector<int>* base,
+                                   const Game* before) {
+  const auto targets = receiver_targets(game, receiver, receiver_acts_first, base, before);
   if (targets.empty()) return std::nullopt;
   return targets.front().order;
 }
@@ -515,7 +537,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   if (!receiver_acts_first) {
     wc.receiver_frame = state.common_play_stacks;
     for (int o : state.hands[receiver]) {
-      if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) wc.receiver_called.push_back(o);
+      if (walked_as_called(game, prev, o)) wc.receiver_called.push_back(o);
       if (o < static_cast<int>(prev.state.deck.size()) && prev.state.deck[o].clued) {
         wc.receiver_clued.push_back(o);  // known before this clue (v20.21.0)
       }
@@ -739,7 +761,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
     return AscrOutcome::READ;
   };
   for (const ReceiverTarget& target :
-       receiver_targets(game, receiver, receiver_acts_first, &pair_view)) {
+       receiver_targets(game, receiver, receiver_acts_first, &pair_view, &prev)) {
     int target_slot = 0;
     for (size_t i = 0; i < state.hands[receiver].size(); ++i) {
       if (state.hands[receiver][i] == target.order) {

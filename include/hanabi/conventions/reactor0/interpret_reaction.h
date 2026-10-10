@@ -65,7 +65,7 @@ bool is_lock_target(const ReactorWC& wc, int target_slot);
 // Is `hypo`'s waiting connection the one THIS candidate clue just installed?
 //
 // `Game::interpret_clue` clears `waiting` only when the new clue's giver was the
-// pending reacter (`decide.cpp:52-54`), so a stale connection from an earlier
+// pending reacter (`decide.cpp:53-55`), so a stale connection from an earlier
 // turn otherwise survives into the hypo of an unrelated candidate and every
 // clue-time predictor reads it as its own.
 //

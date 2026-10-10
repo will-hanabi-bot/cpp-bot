@@ -34,6 +34,7 @@
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/positional_discard.h"
 #include "hanabi/conventions/reactor0/state_eval.h"
+#include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/variants/inverted.h"
 #include "hanabi/endgame/fraction.h"
 #include "hanabi/endgame/forced_endgame.h"
@@ -181,6 +182,12 @@ void Game::fire_reaction_elim(const Game& prev, int player_index, int order,
       // inference.
       const CardStatus st = meta[o].status;
       if (st == CardStatus::CALLED_TO_PLAY || st == CardStatus::CALLED_TO_DISCARD) {
+        continue;
+      }
+      // ...and so is a SURE play under Throw It in a Hole (v23.20.0): the walk passed
+      // it over as already called, not as unplayable (tiiah CONVENTION.md §1d).
+      if (state.variant->throw_it_in_a_hole &&
+          hanabi::reactor::variants::is_standing_play(prev, o)) {
         continue;
       }
       if (sets[i].is_empty()) continue;

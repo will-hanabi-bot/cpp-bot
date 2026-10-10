@@ -306,7 +306,7 @@ Two things outrank the phases below, and one thing sits between them:
     Alice's known play and the endgame search, from `take_action_ladder` just before
     the endgame fork (v23.14.0; tiiah/CONVENTION.md §2o). And where priority 3.3
     would reveal only trash at one token, a stable play clue comes first (§2p).
-    `Game::take_action` (`decide.cpp:1112-1125`) asks it before
+    `Game::take_action` (`decide.cpp:1119-1132`) asks it before
     anything else, and runs everything below as `take_action_ladder`. It applies
     in the final round: the deck is empty, Bob (the next seat) still acts, Alice
     owes no reaction, and Alice holds no **certain** play as the team reads her
@@ -363,7 +363,7 @@ Two things outrank the phases below, and one thing sits between them:
     knew, instead of her own required play).
 
 0.  Endgame.  The forced-endgame rules and the exact solver run first
-    (`decide.cpp:1344`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
+    (`decide.cpp:1351`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
     additionally needs `pace() <= num_players` (`:1544`); the forced rules do
     not.  They are unchanged by this spec, with one guard on top: a CERTAIN
     play outranks a speculative one — see below.  The endgame decides
@@ -498,7 +498,7 @@ Two things outrank the phases below, and one thing sits between them:
 num_suits + 1` counts the points still missing, not how close the deck is to
 empty, so on a 6-suit variant it opens around the halfway mark and stays open;
 303 turns in the log corpus sat inside it with 8–16 cards left. The second gate
-is `pace() <= num_players` (`decide.cpp:1565`), which scales with the seat count
+is `pace() <= num_players` (`decide.cpp:1572`), which scales with the seat count
 because pace already does — at 3 seats it is exactly `pace() <= 3`. The
 forced-endgame rules sit ABOVE it and keep running on the points condition
 alone; a closed gate falls through to the phases below.
@@ -1775,8 +1775,8 @@ button the receiver was promised.
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
-| chop | `Game::chop` | `src/basics/decide.cpp:765-797` |
-| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:1033-1053` |
+| chop | `Game::chop` | `src/basics/decide.cpp:772-804` |
+| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:1040-1060` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:116-133` |
 
 ## Not yet implemented

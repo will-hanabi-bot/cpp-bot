@@ -217,7 +217,7 @@ right — but the branch has no test either way. Decide and pin it.
 ---
 
 *(Chop selecting the most recent CTD by `signal_turn` shipped in v1.11.0 —
-`Game::chop`, `src/basics/decide.cpp:474-501`, pinned by
+`Game::chop`, `src/basics/decide.cpp:481-508`, pinned by
 `tests/test_basics/test_chop.cpp`.)*
 
 ---
@@ -270,7 +270,7 @@ the versions that fixed them:
   direction), `player_known_plays`' consumer and `winnable_simpler`'s discard
   fallback.
 - v6.2.0 — the top-level discard candidate: `Game::find_all_discards`
-  (`src/basics/decide.cpp:1238-1283`) returned an unconditional
+  (`src/basics/decide.cpp:1245-1290`) returned an unconditional
   `PerformDiscard`, which on an orange is a chuck, and it is the solver's ONLY
   discard candidate. bug_report_5_0_0.txt. Plus two siblings found with it:
   `two_critical_play_action`'s unconditional `PerformPlay` (which pitched a
@@ -296,7 +296,7 @@ See [PLAN.md](PLAN.md) §11.
 
 ## 12. `[engine]` An unpinned playable orange is still pitched
 
-`src/basics/decide.cpp:984-1003` routes a playable orange to `PerformDiscard`
+`src/basics/decide.cpp:991-1010` routes a playable orange to `PerformDiscard`
 only when `thoughts[o].id(infer=true)` resolves to a **single** identity. A
 card that is empathy-*playable* but ambiguous between an inverted and a
 non-inverted suit (say `{o1, r1}` at zero stacks) falls through to
@@ -306,7 +306,7 @@ stamps and the §1c orange-only rank stamp sidestep this by narrowing
 inverted variant does not.
 
 **Scope, after v7.1.0: reactor only.** Reactor0 no longer reaches
-`decide.cpp:970-989` — `choose_action` picks its play or discard first. Its
+`decide.cpp:977-996` — `choose_action` picks its play or discard first. Its
 phase-2 pitch list excludes any card whose `possible` contains an inverted
 identity, so the ambiguous `{o1, r1}` case is chucked or left alone rather than
 pitched (`reactor0/calls.cpp`, and the regression test
@@ -362,7 +362,7 @@ candidate pipeline:
   filter returns early in any inverted variant
   (`reactor0/state_eval.cpp:547`), which is exactly where a chuck can strike.
 - `find_all_clues`'s `reacter_critical_discard` guard
-  (`src/basics/decide.cpp:624-638`) tests `is_critical`, not "would strike",
+  (`src/basics/decide.cpp:631-645`) tests `is_critical`, not "would strike",
   and is unreachable from `take_action`, which builds its own pool at
   `:851-864`.
 
@@ -384,7 +384,7 @@ deleted scorer.
 `:437`, `:446`, `:451`), which sets `failed = inverted && !playable`. That is
 right for a CTD (a real chuck) but wrong for an ordinary discard: `take_action`
 routes a *known* orange through `PerformPlay` (a pitch,
-`src/basics/decide.cpp:1136-1154`) and drops candidates that could still be
+`src/basics/decide.cpp:1143-1161`) and drops candidates that could still be
 orange (`discard_button_is_safe`, `:938-958`). So the lookahead invents misplay
 strikes for discards the bot would never physically make, and mis-scores every
 inverted-variant line that reaches a discard.
@@ -465,7 +465,7 @@ do not.
 ## 19. `[engine]` An all-orange discard candidate is dropped where it could be pitched
 
 §2.3's chuck-safety filter (`discard_button_is_safe`,
-`src/basics/decide.cpp:1033-1053`) rejects any candidate whose `possible` contains
+`src/basics/decide.cpp:1040-1060`) rejects any candidate whose `possible` contains
 an inverted identity. That is exactly right for a set that *straddles* an
 inverted and a plain suit — neither button is safe there, so there is nothing to
 re-route to. But when **every** possibility is inverted, `PerformPlay` is a pitch
@@ -477,7 +477,7 @@ filter drops those too, which is safe but leaves a free pitch on the table.
 left on the table there. Fixing the shared predicate should fix both.
 
 The precedent for the tighter test already exists: `Game::find_all_discards`
-(`decide.cpp:1272-1278`) uses `poss.forall(inverted)` over a
+(`decide.cpp:1279-1285`) uses `poss.forall(inverted)` over a
 `common ∩ per-player` intersection, and `variants::can_pitch_for_free`
 (`src/conventions/variants/inverted.cpp:104-110`) is the stricter all-inverted
 **and** all-basic-trash form used by the urgent-CTP exemption.
@@ -499,7 +499,7 @@ its own discards at v7.1.0.
 
 ## 20. `[engine]` The `locked_discard` fallback presses Discard with no inverted re-route
 
-`src/basics/decide.cpp:1238` — when `all_discards`, `all_clues` and `all_plays`
+`src/basics/decide.cpp:1245` — when `all_discards`, `all_clues` and `all_plays`
 are all empty, `take_action` returns a bare
 `PerformDiscard{m.locked_discard(...)}`. No pitch/chuck routing, unlike both the
 ordinary emission loop (`:1026-1044`) and `find_all_discards` (`:1176-1182`). On
@@ -515,7 +515,7 @@ bot must discard something — so the fix is to route the button, not to refuse.
 
 ## 21. `[engine]` `discard_button_is_safe` clause 2 trusts `inferred`, not `possible`
 
-`src/basics/decide.cpp:1050` exempts a candidate when
+`src/basics/decide.cpp:1057` exempts a candidate when
 `m.thoughts[o].id(/*infer=*/true)` resolves. `Thought::id`
 (`src/basics/card.cpp:29-47`) resolves on `possible.length() == 1` (sound) **or**
 `inferred.length() == 1` (not sound — an inference is a convention deduction that
@@ -806,9 +806,9 @@ player who drew them is not expected to throw them, and the promise is that the
 locked card is safe to lose.
 
 The lock itself is implemented. `Game::zcs_turn` records the turn the team ran
-dry (`decide.cpp:452`), `chop`'s second pass skips any card drawn after it
-(`decide.cpp:878-884`), and `reset_zcs` fires only on an action taken from a
-state that still had a clue (`decide.cpp:451`, `:608`, `:670`) — so a discard
+dry (`decide.cpp:459`), `chop`'s second pass skips any card drawn after it
+(`decide.cpp:885-891`), and `reset_zcs` fires only on an action taken from a
+state that still had a clue (`decide.cpp:458`, `:608`, `:670`) — so a discard
 that buys the token back does not clear it, which is the "until the player
 before Alice has at least one clue" part.
 
@@ -1151,7 +1151,7 @@ and yagami's `p2`/`p3`/`p4` sets are far too wide for that. Verified:
 
 CONVENTION.md §1d. `tiiah::narrow_receiver_call` — the receiver's half of the
 bucket relation — is called from one place, `Game::interpret_play`
-(`src/basics/decide.cpp:707-728`). So it is skipped whenever the reacter's action
+(`src/basics/decide.cpp:714-735`). So it is skipped whenever the reacter's action
 reaches a seat as a **discard**, even though the reaction machinery below it gets
 the button right: `reacter_button_pressed`
 (`src/conventions/reactor0/interpret_reaction.cpp:591-601`) already knows that a
@@ -1174,21 +1174,21 @@ the wire button, not the resolved action type, is what a reaction is about.
 The alternative worth weighing first is moving the hook into
 `reactor0::resolve_reaction`, which already has the button in hand — one site that
 cannot drift, at the cost of shared code depending on tiiah for the buckets, which
-the comment at the seam (`decide.cpp:688-692`) deliberately avoided.
+the comment at the seam (`decide.cpp:695-699`) deliberately avoided.
 
 ---
 
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:386`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:407`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
 what the called card may be (`reactor0/interpret_reaction.cpp:426-451`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
 REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:763-777`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:438`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:460`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has

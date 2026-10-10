@@ -47,9 +47,14 @@ struct ReceiverTarget {
 // `base` is the stack vector the walk is judged against; omitting it takes the
 // SHARED view. A reader deciding what a clue between two named seats means
 // passes what those two share instead (§1.3).
+//
+// `before` is the game before the clue, on which a SURE play is judged (v23.20.0):
+// a card the clue itself makes a sure play is what the clue is about, not a play
+// it was already going to get. Omitted, `game` is used.
 std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
                                              bool receiver_acts_first = true,
-                                             const std::vector<int>* base = nullptr);
+                                             const std::vector<int>* base = nullptr,
+                                             const Game* before = nullptr);
 
 // The receiver's target: the next playable in their hand under STACK
 // SIMULATION, where every known play in that hand is assumed already played
@@ -61,7 +66,8 @@ std::vector<ReceiverTarget> receiver_targets(const Game& game, int receiver,
 // so it is no longer waiting to be played.
 std::optional<int> receiver_target(const Game& game, int receiver,
                                    bool receiver_acts_first = true,
-                                   const std::vector<int>* base = nullptr);
+                                   const std::vector<int>* base = nullptr,
+                                   const Game* before = nullptr);
 
 // Read a reverse-reactive clue. Installs the waiting connection, stamps the
 // reacter's blind play, and leaves the receiver's own call for reaction time,
