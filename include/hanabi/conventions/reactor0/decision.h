@@ -333,6 +333,14 @@ bool priority_4_applies(const Game& game, const std::vector<ClueCandidate>& cand
 std::optional<PerformAction> choose_very_high_clue(
     const Game& game, const std::vector<ClueCandidate>& cands);
 
+// THE URGENT ENDGAME REACTIVE (Throw It in a Hole, v23.14.0, the user's ruling): at
+// pace <= 1, while Bob holds two or more critical good cards, the best reactive play
+// clue that calls two critical cards, or two cards one of which is a 1 or a 2 that
+// Alice is not known to be playing herself. Given ahead of Alice's known play and the
+// endgame search. `std::nullopt` when there is none.
+std::optional<PerformAction> choose_urgent_endgame_reactive(
+    const Game& game, const std::vector<ClueCandidate>& cands);
+
 // Precedence step 3 — walk the General Clue Evaluation List and return the clue
 // reactor0 wants to give, or nullopt to fall through to the play/discard phase.
 //

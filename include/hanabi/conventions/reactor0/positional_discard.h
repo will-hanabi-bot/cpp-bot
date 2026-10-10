@@ -32,6 +32,7 @@
 namespace hanabi {
 class Game;
 struct DiscardAction;
+struct State;
 }  // namespace hanabi
 
 namespace hanabi::reactor0 {
@@ -74,6 +75,13 @@ void read_positional_discard(const Game& prev, Game& game, const DiscardAction& 
 // copy is in his hand, so both copies of one count once. Human diagnostic 2025488
 // T50: green held its called u2 and Bob only the two y4s, and it clued instead.
 std::optional<PerformAction> called_play_in_thin_endgame(const Game& game);
+
+// A CRITICAL GOOD CARD of `player`'s, as we see their hand: a still-needed identity
+// of which every copy not yet discarded is in that hand (both copies of one count
+// once). `critical_good_cards` counts the distinct ones; `is_critical_good_in` asks it
+// of one identity.
+int critical_good_cards(const Game& game, int player);
+bool is_critical_good_in(const State& s, int player, Identity id);
 
 // THE POSITIONAL DOUBLE DISCARD (Throw It in a Hole, v23.13.0, the user's ruling;
 // TODO: reactor0 and every variant). With 0 or 1 cards in the deck, Bob and Cathy

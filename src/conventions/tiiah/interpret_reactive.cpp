@@ -174,10 +174,48 @@ BucketReading bucket_over_worlds(const Game& game, const State& base, int holder
 // lets Alice give a pairing which is neither a finesse nor a bucket relation
 // (§1d). Judged from THEIR views: it is their own empathy that has to settle it,
 // not hers.
-bool both_know_their_own(const Game& game, int react_order, int target_order) {
+//
+// "Know" is "can name the card they will PLAY" (v23.14.0, the user's ruling): on
+// `faced`, the reacter's card has one playable reading, and the target one playable
+// reading once that card has landed -- not one possibility each. Self-play Dark Null
+// seed 2 T45 (human_vs_bot_diagnostics/9000002.md): Blue to sim-bob pairs sim-alice's
+// `{r5,b5}` (only the r5 plays) with sim-bob's o44, the only playable blue; both name
+// their card, though the bucket names neither, and it gets two plays to Red's one.
+bool both_know_their_own(const Game& game, int react_order, int target_order,
+                         const State* faced = nullptr, bool true_readings = false) {
   const auto& react_live = game.common.thoughts[react_order].possibilities();
   const auto& target_live = game.common.thoughts[target_order].possibilities();
-  return react_live.length() == 1 && target_live.length() == 1;
+  if (react_live.length() == 1 && target_live.length() == 1) return true;
+  if (!faced) return false;
+  // On EMPATHY, never on inferences: an inference can be wrong, and a player only
+  // knows what it can rule out for certain (the user's ruling). Self-play Black
+  // seed 2 T9 (debug_both_know/black_9000002_licence.json): sim-alice's o3, the r2,
+  // was inferred `{r3..,k3,k4,k5}`, so on r1 y1 k2 the one playable inference was the
+  // k3 -- but her empathy still held the r2 and the y2 as well, three playables, and
+  // she played her r2 as the k3.
+  const IdentitySet& react_empathy = game.common.thoughts[react_order].possible;
+  const IdentitySet& target_empathy = game.common.thoughts[target_order].possible;
+  const IdentitySet react_plays =
+      react_empathy.filter([faced](Identity i) { return faced->is_playable(i); });
+  if (react_plays.length() != 1) return false;
+  const State landed = faced->with_play(react_plays.head());
+  const IdentitySet target_plays =
+      target_empathy.filter([&landed](Identity i) { return landed.is_playable(i); });
+  if (target_plays.length() != 1) return false;
+  // ...and, for the GIVER, the card each will name must be the card it IS. The frame
+  // can be wrong where the giver knows more than the pair: self-play Black seed 118
+  // T7 (debug_both_know/black_9000118_licence.json), sim-alice knew red was on 1
+  // privately, the frame she shared with sim-bob had red on 0, and there sim-bob's
+  // r2 read as the y2 and sim-cathy's r3 as the y3. The giver can see both cards.
+  if (true_readings) {
+    const auto react_id = game.state.deck[react_order].id();
+    const auto target_id = game.state.deck[target_order].id();
+    if (!react_id || !target_id || *react_id != react_plays.head() ||
+        *target_id != target_plays.head()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // THE BUCKET RULE AS A LEGALITY LAYER (§1d, v22.4.0, the user's ruling). Would the
@@ -423,7 +461,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // `wc.turn`, never from the turn they are reading on.
   const int clue_turn = wc.turn;
   // The frame the giver chose the target in, and the one `stamp_receiver_call`
-  // builds the receiver's reading in (`reactor0/interpret_reaction.cpp:400-425`).
+  // builds the receiver's reading in (`reactor0/interpret_reaction.cpp:419-444`).
   // A deferral resolves later, against stacks that have moved, and under TIIAH
   // they may also have moved differently for different seats — so the reading has
   // to bind to a view that does not move with our own.
@@ -437,7 +475,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // reading -- so the receiver never played the `b2` it had been handed.
   //
   // One frame, two questions: the deferral's Rule 3
-  // (`reactor0/interpret_reaction.cpp:730-744`) reads the same field to ask
+  // (`reactor0/interpret_reaction.cpp:749-763`) reads the same field to ask
   // whether the REACTER's card was playable at clue time, which wants the giver's
   // and the reacter's pair instead. Recorded in TODO.md rather than fixed here.
   //
@@ -658,7 +696,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
       if (action.giver == state.our_player_index && state.pace() > 1 &&
           !bucket_relation_holds(*state.variant, action.clue.kind, clue_turn, *actual,
                                  target.id) &&
-          !both_know_their_own(game, react_order, target.order)) {
+          !both_know_their_own(game, react_order, target.order, &after, true)) {
         return AscrOutcome::REJECT;
       }
     }
@@ -764,9 +802,15 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
           react_live.filter([&faced](Identity i) { return faced.is_playable(i); }),
           game.common.thoughts[target.order].possibilities());
     };
+    // ...unless both players can name the card they will play, on both frames
+    // (v23.14.0, the user's ruling; `both_know_their_own`): then the pairing is legal
+    // whatever the bucket says, and every seat reads it so.
+    const State common_faced =
+        reacter_faces(game, receiver, receiver_acts_first, &state.common_play_stacks);
     if (!connector && !double_chuck && state.pace() > 1 && known_violation(after) &&
-        known_violation(reacter_faces(game, receiver, receiver_acts_first,
-                                      &state.common_play_stacks))) {
+        known_violation(common_faced) &&
+        !(both_know_their_own(game, react_order, target.order, &after) &&
+          both_know_their_own(game, react_order, target.order, &common_faced))) {
       const AscrOutcome r = ascr_pairing(target, react_order);
       if (r == AscrOutcome::READ) return ClueInterp::REACTIVE;
       if (r == AscrOutcome::REJECT) return std::nullopt;
@@ -814,7 +858,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
           !endgame &&
           !bucket_relation_holds(*state.variant, action.clue.kind, clue_turn, *actual,
                                  target.id) &&
-          !both_know_their_own(game, react_order, target.order)) {
+          !both_know_their_own(game, react_order, target.order, &after, true)) {
         // A globally known violation (below, the walk) is one readers understand,
         // but the giver does not give one (v22.4.0): taking the exception here cost
         // 0.3 points and 9 strikeouts per 300 games of 6 Suits in self-play.

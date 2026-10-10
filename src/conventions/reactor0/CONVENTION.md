@@ -950,7 +950,7 @@ Six rules govern it:
    cannot see that. So the reading is vetted a second time against the LIVE
    stacks, and a call with no surviving identity that is playable *now* is
    forgotten rather than bombed on. Applied to a DEFERRED reaction only
-   (`deferred`, `reactor0/interpret_reaction.cpp:456`, v16.28.0). Under reactor0
+   (`deferred`, `reactor0/interpret_reaction.cpp:475`, v16.28.0). Under reactor0
    that changes nothing -- when the reacter answers immediately no other seat has
    moved, so the two frames coincide -- but Throw It in a Hole reads the frame
    off the view the giver and receiver SHARE while the live stacks are our own

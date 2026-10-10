@@ -33,6 +33,11 @@ elsewhere.
 | [2025422](2025422.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah | yagami_black | T28-T33 (a call whose team reading lands elsewhere stays called as any playable) | fixed (v23.12.0) |
 | [2025452](2025452.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah | yagami_black | T38 (black's playable r1; T18-T20 a bucket impossible for the card reads any playable over the worlds) | fixed (v23.12.0) |
 | [2025488](2025488.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah | yagami_black | T50 (the called play in a thin endgame), T55 (o42 reads {g5,y5}), T60 (the positional double discard) | T50 fixed (v23.13.0), T55 open (live/replay divergence), T60 fixed (v23.13.0) |
+| [9000002](9000002.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T45 (a reactive both seats can name) | fixed (v23.14.0) |
+| [9000009](9000009.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T10 (general: unlock a locked Bob with a play clue), T29 (a reactive both can name) | fixed (v23.14.0) |
+| [9000022](9000022.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T19 (special-suit preference), T39 (play clue over trash reveal), T58 (reacter plays the y5) | fixed (v23.14.0) |
+| [9000046](9000046.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T57 (special-suit preference) | fixed (v23.14.0) |
+| [9000085](9000085.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T52 (urgent endgame reactive) | fixed (v23.14.0) |
 
 ## Template
 

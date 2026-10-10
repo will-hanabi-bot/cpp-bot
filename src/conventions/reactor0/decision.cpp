@@ -2,8 +2,10 @@
 #include "hanabi/conventions/reactor0/reactive_assignment.h"
 
 #include <algorithm>
+#include <array>
 #include <initializer_list>
 #include <functional>
+#include <tuple>
 #include <utility>
 #include <variant>
 
@@ -14,6 +16,7 @@
 #include "hanabi/basics/state.h"
 #include "hanabi/basics/variant.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
+#include "hanabi/conventions/reactor0/positional_discard.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
 #include "hanabi/conventions/tiiah/superposition.h"
@@ -957,6 +960,110 @@ bool cathy_chop_is_safe_to_lose(const Game& game) {
   return chop_is_duplicated(game, cathy, *chop, *id);
 }
 
+namespace {
+
+// THE SPECIAL SUITS (Throw It in a Hole, v23.14.0, the user's list): a reactive play
+// that gets one of them played is preferred over the other admissible reactives, and
+// one that gets a DARK one or a Null card played is VERY HIGH. Self-play Dark Null
+// seeds 22 T19 and 46 T57 (human_vs_bot_diagnostics/9000022.md, 9000046.md).
+bool is_special_suit(const Suit& suit) {
+  static const std::array<const char*, 10> kSpecial{
+      "White", "Gray", "Brown", "Dark Brown", "Muddy Rainbow", "Cocoa Rainbow",
+      "Prism", "Dark Prism", "Null", "Dark Null"};
+  return std::any_of(kSpecial.begin(), kSpecial.end(),
+                     [&suit](const char* n) { return suit.name == n; });
+}
+
+// How many cards of a special suit a REACTIVE PLAY clue gets played -- the reacter's
+// and the receiver's, as the giver sees them. `very_high` counts only the dark
+// special suits and Null. 0 outside the variant and for any other shape.
+int special_suit_plays(const Game& g, const ClueCandidate& c, bool very_high) {
+  const State& s = g.state;
+  if (!s.variant->throw_it_in_a_hole) return 0;
+  if (c.reading.shape != ClueShape::REACTIVE_PLAY) return 0;
+  int n = 0;
+  for (int o : {c.reading.reacter_side.order, c.reading.receiver_side.order}) {
+    if (o < 0 || o >= static_cast<int>(s.deck.size())) continue;
+    const auto id = s.deck[o].id();
+    if (!id) continue;
+    const Suit& suit = s.variant->suits[id->suit_index];
+    if (!is_special_suit(suit)) continue;
+    if (very_high && !suit.suit_type.dark && suit.name != "Null") continue;
+    ++n;
+  }
+  return n;
+}
+
+// THE URGENT ENDGAME REACTIVE (Throw It in a Hole, v23.14.0, the user's ruling;
+// TODO: reactor0 and every variant). At pace <= 1, while Bob holds two or more
+// critical good cards, a reactive play clue is urgent when it calls to play either
+// two critical cards, or two cards one of which is a 1 or a 2 -- and Alice is not
+// known to be playing that same copy herself. Self-play Dark Null seed 85 T52
+// (human_vs_bot_diagnostics/9000085.md): sim-bob held the y5 and the d4; the
+// reactive calling his y5 and sim-cathy's d3 came before sim-alice's known play.
+bool urgent_endgame_reactive(const Game& g, const ClueCandidate& c) {
+  const State& s = g.state;
+  if (!s.variant->throw_it_in_a_hole || s.num_players != 3) return false;
+  if (s.pace() > 1) return false;
+  if (c.reading.shape != ClueShape::REACTIVE_PLAY) return false;
+  if (c.reading.reacter_side.outcome != Outcome::PLAY ||
+      c.reading.receiver_side.outcome != Outcome::PLAY) {
+    return false;
+  }
+  if (critical_good_cards(g, s.next_player_index(s.our_player_index)) < 2) return false;
+  const Designation sides[2] = {c.reading.reacter_side, c.reading.receiver_side};
+  std::optional<Identity> ids[2];
+  for (int k = 0; k < 2; ++k) {
+    const int o = sides[k].order;
+    if (o < 0 || o >= static_cast<int>(s.deck.size())) return false;
+    ids[k] = s.deck[o].id();
+    if (!ids[k]) return false;
+  }
+  if (is_critical_good_in(s, sides[0].holder, *ids[0]) &&
+      is_critical_good_in(s, sides[1].holder, *ids[1])) {
+    return true;
+  }
+  for (int k = 0; k < 2; ++k) {
+    if (ids[k]->rank > 2) continue;
+    // ...not a copy Alice is known to be playing herself.
+    bool ours = false;
+    for (int o : s.our_hand()) {
+      const Thought& t = g.me().thoughts[o];
+      const IdentitySet& set = t.inferred.non_empty() ? t.inferred : t.possible;
+      if (g.meta[o].status == CardStatus::CALLED_TO_PLAY && set.length() == 1 &&
+          set.head() == *ids[k]) {
+        ours = true;
+      }
+    }
+    if (!ours) return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+std::optional<PerformAction> choose_urgent_endgame_reactive(
+    const Game& game, const std::vector<ClueCandidate>& cands) {
+  const ClueCandidate* best = nullptr;
+  auto key = [&game](const ClueCandidate& c) {
+    const int n = c.receiver_reading_size > 0 ? c.receiver_reading_size : 1000;
+    return std::make_tuple(-special_suit_plays(game, c, /*very_high=*/false), n,
+                           -c.default_score);
+  };
+  for (const ClueCandidate& c : cands) {
+    if (!urgent_endgame_reactive(game, c)) continue;
+    if (!best || key(c) < key(*best)) best = &c;
+  }
+  if (!best) return std::nullopt;
+  hanabi::logging::log_branch("tiiah.urgent_endgame_reactive",
+                              {{"target", best->action.target},
+                               {"kind", best->action.clue.kind == ClueKind::COLOUR
+                                            ? "colour"
+                                            : "rank"},
+                               {"value", best->action.clue.value}});
+  return best->perform;
+}
+
 std::vector<ClueCandidate> analyse_clues(
     const Game& game,
     const std::vector<std::pair<PerformAction, Action>>& all_clues,
@@ -1043,6 +1150,16 @@ std::vector<ClueCandidate> analyse_clues(
     // same hypo the tier already walked.
     c.new_plays = new_play_facts(game, hypo).count;
 
+    // A reactive play getting a dark special-suit card or a Null card played is
+    // VERY HIGH (v23.14.0, the user's ruling, Throw It in a Hole only).
+    if (c.tier != ClueTier::VERY_HIGH && special_suit_plays(game, c, /*very_high=*/true) > 0) {
+      c.tier = ClueTier::VERY_HIGH;
+    }
+    // ...and an urgent endgame reactive is HIGH (v23.14.0, the user's ruling).
+    if (c.tier < ClueTier::HIGH && urgent_endgame_reactive(game, c)) {
+      c.tier = ClueTier::HIGH;
+    }
+
     // Rung 4b's third conjunct: does this clue get BOB playing immediately?
     //
     // The same stamp transition `new_play_facts` walks -- no call before, a call
@@ -1074,10 +1191,12 @@ std::vector<ClueCandidate> analyse_clues(
         }
       }
       // H5 / §2c (v20.19.0): Bob locked before the clue and not after it, and
-      // Alice not OCCUPIED -- a call she can action comes first.
-      c.unlocks_bob = !requires_high_tier(game) &&
-                      game.common.thinks_locked(game, bob_seat) &&
-                      !hypo.common.thinks_locked(hypo, bob_seat);
+      // Alice not OCCUPIED -- a call she can action comes first -- unless the clue
+      // gives Bob a play (v23.14.0, the user's ruling; 9000009 T10).
+      c.unlocks_bob = game.common.thinks_locked(game, bob_seat) &&
+                      !hypo.common.thinks_locked(hypo, bob_seat) &&
+                      (!requires_high_tier(game) ||
+                       !hypo.common.obvious_playables(hypo, bob_seat).empty());
     }
 
     // Can the receiver read this call back to ONE identity? Only Throw It in a
@@ -1403,7 +1522,16 @@ const ClueCandidate* rung_1(const Game& g, const std::vector<ClueCandidate>& cs)
     const int n = c->receiver_reading_size;
     if (n > 0 && (least == 0 || n < least)) least = n;
   }
+  // ...and ahead of that, the one getting the most special-suit cards played
+  // (v23.14.0, the user's ruling; 0 outside the variant, so inert there).
+  int most_special = 0;
+  for (const ClueCandidate* c : p) {
+    most_special = std::max(most_special, special_suit_plays(g, *c, /*very_high=*/false));
+  }
   std::vector<Term> chain;
+  chain.push_back([&g, most_special](const ClueCandidate& c) {
+    return most_special > 0 && special_suit_plays(g, c, /*very_high=*/false) == most_special;
+  });
   chain.push_back([least](const ClueCandidate& c) {
     return least > 0 && c.receiver_reading_size == least;
   });
@@ -1861,7 +1989,18 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
   // already have a safe discard. Telling him about a second dead card buys
   // nothing if he can already throw one away.
   if (!has_safe_discard(g, bob_of(g))) {
-    if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;
+    if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) {
+      // Throw It in a Hole: a play clue before a clue that only reveals trash, at
+      // one token too (v23.14.0, the user's ruling). Only where 3.3 would reveal
+      // trash: 3.1 needs two tokens, and a play gets a stuck Bob moving where the
+      // reveal only lets him wait. Self-play Dark Null seed 22 T39
+      // (human_vs_bot_diagnostics/9000022.md): Blue to sim-alice over the rank 1
+      // that showed her only trash.
+      if (g.state.variant->throw_it_in_a_hole && c->reading.shape == ClueShape::TRASH_REVEAL) {
+        if (auto* p = settle_stable_play(g, pool_stable_play(g, cs))) return p;
+      }
+      return c;
+    }
   }
   // 3.4 -- the same double discard as 3.2, now unconditional on Cathy's chop.
   // Same low-pace gate, for the same reason.
@@ -2369,6 +2508,23 @@ std::optional<PerformAction> choose_very_high_clue(
     rung = "default_tiebreak";
   }
   if (!pick) return std::nullopt;
+  // A SPECIAL-SUIT reactive outranks a VERY HIGH clue that gets fewer special-suit
+  // cards played (v23.14.0, the user's ruling; Throw It in a Hole only): VERY HIGH
+  // stands down, and priority 1, whose chain leads with the same count, takes it.
+  // Self-play Dark Null seed 22 T19: the 4 to sim-cathy (p2 + u2) over a VERY HIGH
+  // Red.
+  {
+    const int vh_special = special_suit_plays(game, *pick, /*very_high=*/false);
+    for (const ClueCandidate& c : cands) {
+      if (c.tier == ClueTier::VERY_HIGH || !clue_is_admissible(game, c)) continue;
+      if (special_suit_plays(game, c, /*very_high=*/false) > vh_special) {
+        hanabi::logging::log_branch("tiiah.special_suit_over_very_high",
+                                    {{"target", c.action.target},
+                                     {"value", c.action.clue.value}});
+        return std::nullopt;
+      }
+    }
+  }
   // A VERY HIGH clue OUTRANKS a pending reaction (DECISION_MAKING.md Precedence
   // step 1), so when this fires it is the reason the urgent path never ran.
   // Record enough to tell that from a trace without a debugger.

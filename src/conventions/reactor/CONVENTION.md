@@ -908,7 +908,7 @@ worse play.
 
 ## 2.1 The `take_action` ladder
 
-`Game::take_action` (`src/basics/decide.cpp:1112-2098`). Each stage that
+`Game::take_action` (`src/basics/decide.cpp:1112-2112`). Each stage that
 returns short-circuits the rest. It scores actions through the convention seam
 `eval_for`, which is `reactor::eval_action` for every convention as of v7.0.0:
 reactor0 no longer scores clues at all — its `choose_clue` picks one by rule

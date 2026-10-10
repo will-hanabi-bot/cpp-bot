@@ -1154,7 +1154,7 @@ bucket relation — is called from one place, `Game::interpret_play`
 (`src/basics/decide.cpp:707-728`). So it is skipped whenever the reacter's action
 reaches a seat as a **discard**, even though the reaction machinery below it gets
 the button right: `reacter_button_pressed`
-(`src/conventions/reactor0/interpret_reaction.cpp:572-582`) already knows that a
+(`src/conventions/reactor0/interpret_reaction.cpp:591-601`) already knows that a
 plain card can only reach a strike via the Play button, and stamps the receiver
 `CALLED_TO_PLAY` accordingly. Only the narrowing is missing, so the receiver keeps
 the generic "every playable the stacks allow" reading.
@@ -1181,14 +1181,14 @@ the comment at the seam (`decide.cpp:688-692`) deliberately avoided.
 ## 46. `[tiiah]` `ReactorWC::clue_play_stacks` serves two frames, and can only be one
 
 CONVENTION.md §1.3, §1d. As of v16.18.0 the field carries the stacks the GIVER and
-the RECEIVER share (`tiiah/interpret_reactive.cpp:347`), because its main consumer
+the RECEIVER share (`tiiah/interpret_reactive.cpp:385`), because its main consumer
 is the receiver's promise: `reactor0::stamp_receiver_call` rewinds onto it to decide
-what the called card may be (`reactor0/interpret_reaction.cpp:407-432`).
+what the called card may be (`reactor0/interpret_reaction.cpp:426-451`).
 
 The deferral's Rule 3 reads the same field to ask a different question — was the
-REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:744-758`) —
+REACTER's card playable at clue time (`reactor0/interpret_reaction.cpp:763-777`) —
 and that one wants the giver-and-reacter pair, the view the target walk already
-uses (`tiiah/interpret_reactive.cpp:399`). One field cannot be both, and today the
+uses (`tiiah/interpret_reactive.cpp:437`). One field cannot be both, and today the
 deferral rule reads the receiver's frame.
 
 It has not been seen to cost anything: the two rows differ only once a seat has
@@ -1537,3 +1537,16 @@ variant:
 **What is missing.** The `throw_it_in_a_hole` gates (`tiiah_three_seats`). Outside the
 variant, stacks and strikes are public, so the readers' conditions can be judged on
 the common stacks rather than each seat's own.
+
+## 63. `[reactor0]` The urgent endgame reactive and the special-suit preference
+
+**Convention** (the user's rulings, self-play diagnostics 9000085 T52, 9000022 T19 and
+9000046 T57). Scoped to Throw It in a Hole for now (tiiah/CONVENTION.md §2b, §2o):
+- at pace <= 1, while Bob holds 2+ critical good cards, a reactive calling two
+  critical cards, or two cards one a 1 or a 2, is given ahead of Alice's known play
+  and the endgame search;
+- among reactive play clues, the one getting the most special-suit cards played comes
+  first; a dark special suit or Null makes it VERY HIGH.
+
+**What is missing.** The `throw_it_in_a_hole` gates in `urgent_endgame_reactive` and
+`special_suit_plays` (`src/conventions/reactor0/decision.cpp`).

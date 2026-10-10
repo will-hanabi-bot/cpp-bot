@@ -1326,6 +1326,20 @@ PerformAction Game::take_action_ladder() const {
     return out;
   };
 
+  // Throw It in a Hole: the urgent endgame reactive (v23.14.0, the user's ruling;
+  // tiiah/CONVENTION.md §2o) comes before Alice's known play and the endgame search.
+  if (s.variant->throw_it_in_a_hole && uses_reactor0_decisions(convention) &&
+      s.pace() <= 1) {
+    auto all_clues = enumerate_clue_candidates();
+    if (!all_clues.empty()) {
+      auto cands = hanabi::reactor0::analyse_clues(*this, all_clues,
+                                                   candidate_annotator(convention));
+      if (auto u = hanabi::reactor0::choose_urgent_endgame_reactive(*this, cands)) {
+        return *u;
+      }
+    }
+  }
+
   // --- Endgame solver fork ---
   if (s.rem_score() <= static_cast<int>(s.variant->suits.size()) + 1) {
     // A CERTAIN play outranks a speculative one.

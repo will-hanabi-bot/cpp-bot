@@ -341,6 +341,27 @@ bool reader_reads_double(const State& s, int alice, int other) {
 
 }  // namespace
 
+bool is_critical_good_in(const State& s, int player, Identity id) {
+  if (!s.is_useful(id)) return false;
+  int held = 0;
+  for (int o : s.hands[player]) {
+    if (const auto seen = s.deck[o].id(); seen && *seen == id) ++held;
+  }
+  const int left = s.card_count[id.to_ord()] -
+                   static_cast<int>(s.discard_stacks[id.suit_index][id.rank - 1].size());
+  return held >= left;
+}
+
+int critical_good_cards(const Game& game, int player) {
+  const State& s = game.state;
+  int critical = 0;
+  for (const auto& [id, slot] : useful_cards(s, player)) {
+    (void)slot;
+    if (is_critical_good_in(s, player, id)) ++critical;
+  }
+  return critical;
+}
+
 std::optional<PerformAction> called_play_in_thin_endgame(const Game& game) {
   const State& s = game.state;
   const int us = s.our_player_index;
@@ -353,20 +374,7 @@ std::optional<PerformAction> called_play_in_thin_endgame(const Game& game) {
       !call_is_actionable(game, us, called)) {
     return std::nullopt;
   }
-  // Bob's critical good cards: a still-needed identity of which every copy not yet
-  // discarded is in his hand. Both copies of one count once.
-  const int bob = s.next_player_index(us);
-  int critical = 0;
-  for (const auto& [id, slot] : useful_cards(s, bob)) {
-    (void)slot;
-    int held = 0;
-    for (int o : s.hands[bob]) {
-      if (const auto seen = s.deck[o].id(); seen && *seen == id) ++held;
-    }
-    const int left = s.card_count[id.to_ord()] -
-                     static_cast<int>(s.discard_stacks[id.suit_index][id.rank - 1].size());
-    if (held >= left) ++critical;
-  }
+  const int critical = critical_good_cards(game, s.next_player_index(us));
   if (critical >= 2) return std::nullopt;
   hanabi::logging::log_branch("tiiah.thin_endgame_called_play",
                               {{"order", called}, {"bob_critical", critical}});

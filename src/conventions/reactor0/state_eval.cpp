@@ -661,8 +661,14 @@ ClueTier clue_tier(const Game& game, const Game& hypo,
   // Not when Alice is OCCUPIED (the user's ruling): a call she can action comes
   // first, so the clue stays at whatever tier the other criteria give it. Replays
   // 1966696 T8 and 1966119 T5 hold their plays.
-  if (!requires_high_tier(game) && game.common.thinks_locked(game, bob) &&
-      !hypo.common.thinks_locked(hypo, bob)) {
+  //
+  // ...unless the clue gives him a PLAY (v23.14.0, the user's ruling, every
+  // convention): then it is HIGH even for an occupied Alice. Self-play Dark Null seed
+  // 9 T10 (human_vs_bot_diagnostics/9000009.md): sim-bob was locked and Purple would
+  // have called his p3; sim-alice played her called b1 and every clue read below the
+  // occupied bar.
+  if (game.common.thinks_locked(game, bob) && !hypo.common.thinks_locked(hypo, bob) &&
+      (!requires_high_tier(game) || !hypo.common.obvious_playables(hypo, bob).empty())) {
     return ClueTier::HIGH;
   }
 

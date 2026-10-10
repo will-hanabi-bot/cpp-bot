@@ -307,7 +307,7 @@ their chop is expendable, or they already hold a known play, a
 clue from its candidate set when a stable clue to Bob would instead get a card
 played. The dedicated filter this named was removed in v7.0.0; the rule now
 lives in the General Clue Evaluation List's priority 2 admissibility condition,
-`discard_is_affordable` (`src/conventions/reactor0/decision.cpp:373-379`).
+`discard_is_affordable` (`src/conventions/reactor0/decision.cpp:376-382`).
 Reactive locks are exempt. Named from replay 1942181 T41.
 
 ### call invariants
@@ -670,7 +670,7 @@ As a clue SHAPE (`ClueShape::TRASH_REVEAL`, what DECISION_MAKING.md 3.3 / 4.2
 select), it is wider: any stable clue after which a card in Bob's hand is known
 trash to the team that was not before — including a colour or rank clue that
 narrows an already-clued card to trash, which interpretation reads as FIX, REVEAL
-or STALL (v16.23.0; `read_stable`, `decision.cpp:174-203`; replay 2011327 T22).
+or STALL (v16.23.0; `read_stable`, `decision.cpp:177-206`; replay 2011327 T22).
 
 ### Absent by design
 Concepts reactor has that reactor0 deliberately lacks: **reactive focus**
@@ -693,7 +693,7 @@ A clue after which a LOCKED Bob is no longer locked: it gives him a play or a
 discard to make. HIGH by H5, and given ahead of §3 by the General Clue
 Evaluation List's priority 2c, but neither while Alice is *occupied*.
 `ClueCandidate::unlocks_bob` (`include/hanabi/conventions/reactor0/decision.h`);
-`src/conventions/reactor0/state_eval.cpp:656-667`. Added in v20.19.0 after
+`src/conventions/reactor0/state_eval.cpp:656-673`. Added in v20.19.0 after
 replay 2019562 T31.
 
 ### touched-card rank classification

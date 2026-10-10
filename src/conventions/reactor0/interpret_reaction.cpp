@@ -237,7 +237,26 @@ SlotElims slot_elims(const Game& prev, const ReactorWC& wc, int slot,
   // lost the b2 because green knew blue was on 1 (black's unnamed b1); on the
   // shared view blue was on 0, the b2 one away, and the walk could not have paired
   // it. At T31 green then read o25 as the g5 alone.
-  const State& playable_on = hole ? shared : s;
+  //
+  // ...and on the frame of the CLUE, not of the reaction (v23.14.0): the walk chose
+  // its target before the reacter's card landed, so an identity that only plays
+  // because of it -- or because of anything played since -- was one away then, and
+  // passing it over says nothing about it. Each stack is the shared view's, but never
+  // ahead of the clue-time stacks (`ReactorWC::clue_play_stacks`). Self-play Dark
+  // Null seed 2 T17-T19 (human_vs_bot_diagnostics/9000002.md): blue's 2 named
+  // sim-alice's r2 through sim-cathy's p2; sim-alice's passed-over o16, the p3, lost
+  // the p3 once the p2 was down, and at T45 no reactive could call it.
+  State clue_frame = shared;
+  if (hole && wc.clue_play_stacks.size() == shared.play_stacks.size()) {
+    std::vector<int> st = shared.play_stacks;
+    for (std::size_t k = 0; k < st.size(); ++k) {
+      const bool reversed = s.variant->suits[k].suit_type.reversed;
+      st[k] = reversed ? std::max(st[k], wc.clue_play_stacks[k])
+                       : std::min(st[k], wc.clue_play_stacks[k]);
+    }
+    clue_frame = shared.with_stacks(st);
+  }
+  const State& playable_on = hole ? clue_frame : s;
   out.direct = IdentitySet::create(
       [&](Identity i) {
         if (!playable_on.is_playable(i)) return false;
