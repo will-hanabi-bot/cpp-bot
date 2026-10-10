@@ -386,6 +386,7 @@ add_executable(hanabi_decision_tests
   tests/test_reactor/test_decision_making/test_high_value_clue.cpp
   tests/test_reactor/test_decision_making/test_replay_1916933_clue_forces_discard_of_queued_playable.cpp
   tests/test_reactor0/test_decision_making/test_clue_tier.cpp
+  tests/test_reactor0/test_decision_making/test_forced_clue_good_card_product.cpp
   tests/test_reactor0/test_decision_making/test_clue_shape.cpp
   tests/test_reactor0/test_decision_making/test_reading_holders.cpp
   tests/test_tiiah/test_decision_making/test_clue_reading.cpp
@@ -420,6 +421,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2024676_finesse_duping_a_call_is_not_very_high.cpp
   tests/test_tiiah/test_decision_making/test_replay_2025193_no_five_ahead_of_a_lower_playable.cpp
   tests/test_tiiah/test_decision_making/test_replay_2025193_stuck_bobs_critical_chop_is_saved.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2026350_forced_clue_prefers_the_informative_five.cpp
   tests/test_tiiah/test_decision_making/test_replay_2025289_owed_reaction_loads_bob.cpp
   tests/test_tiiah/test_decision_making/test_replay_2025310_bob_handles_cathys_playable_chop.cpp
   tests/test_tiiah/test_decision_making/test_replay_2025488_thin_endgame_called_play.cpp

@@ -1302,6 +1302,19 @@ std::vector<ClueCandidate> analyse_clues(
       }
     }
 
+    // The good-card product (v23.19.0), for §4's pooled rung: Bob's candidate
+    // counts over his good cards once this clue has landed, as he will see them.
+    if (is_stable_to_bob(game, c)) {
+      const int bob = ca.target;
+      const auto& seen = hypo.players[bob].thoughts;
+      c.bob_good_product = 1.0;
+      for (int o : hypo.state.hands[bob]) {
+        auto id = s.deck[o].id();
+        if (!id || s.is_basic_trash(*id)) continue;
+        c.bob_good_product *= static_cast<double>(std::max(1, seen[o].possibilities().length()));
+      }
+    }
+
     c.refuses_dead_target = clue_refuses_dead_target(game, c.action);
     c.fixes_dead_call = clue_fixes_dead_call(game, hypo, c.action);
     // Touching the chop saves it -- unless the clue calls it to be thrown.
@@ -2167,8 +2180,24 @@ const ClueCandidate* rung_3(const Game& g, const std::vector<ClueCandidate>& cs)
 // the lowest stack rank. The last two both prefer a card the team is CLOSE to
 // playing, which is the opposite of rungs 3.8 / 4.8, where the tiebreak wants
 // the card least likely ever to matter.
-const ClueCandidate* rung_fill_in(const Game& g,
-                                  const std::vector<ClueCandidate>& cs) {
+// The fill-in candidates: stable to Bob, narrowing at least one clued card.
+Pool pool_fill_in(const Game& g, const Pool& cs) {
+  Pool out;
+  for (const ClueCandidate* c : cs) {
+    if (predicts_a_strike(c->reading)) continue;
+    if (!is_stable_to_bob(g, *c) || c->fill_ins.empty()) continue;
+    // A clue that locks is not a fill-in, however much it also narrows. The
+    // whole reason 4.4 sits above the lock is to prefer spending the forced
+    // token WITHOUT committing Bob's hand; letting a lock in here would defeat
+    // that, and if the only fill-in available also locks then 4.6 takes it
+    // anyway.
+    if (c->reading.shape == ClueShape::STABLE_LOCK) continue;
+    out.push_back(c);
+  }
+  return out;
+}
+
+const ClueCandidate* rung_fill_in(const Game& g, const Pool& cs) {
   const int bob = bob_of(g);
   // The key for one filled-in card. Lower sorts better on every component.
   struct Key {
@@ -2193,19 +2222,11 @@ const ClueCandidate* rung_fill_in(const Game& g,
 
   const ClueCandidate* best = nullptr;
   Key best_key;
-  for (const ClueCandidate& c : cs) {
-    if (predicts_a_strike(c.reading)) continue;
-    if (!is_stable_to_bob(g, c) || c.fill_ins.empty()) continue;
-    // A clue that locks is not a fill-in, however much it also narrows. The
-    // whole reason 4.4 sits above the lock is to prefer spending the forced
-    // token WITHOUT committing Bob's hand; letting a lock in here would defeat
-    // that, and if the only fill-in available also locks then 4.6 takes it
-    // anyway.
-    if (c.reading.shape == ClueShape::STABLE_LOCK) continue;
-    for (int o : c.fill_ins) {
+  for (const ClueCandidate* c : pool_fill_in(g, cs)) {
+    for (int o : c->fill_ins) {
       const Key k = key_of(o);
       if (!best || k < best_key) {
-        best = &c;
+        best = c;
         best_key = k;
       }
     }
@@ -2224,14 +2245,12 @@ const ClueCandidate* rung_fill_in(const Game& g,
 //
 // Locks are excluded even though they designate no single card: a lock is a
 // real instruction, and it has its own rung just below at 4.6.
-const ClueCandidate* rung_safe_stall(const Game& g,
-                                     const std::vector<ClueCandidate>& cs) {
-  Pool p = select(cs, [](const ClueCandidate& c) {
+Pool pool_safe_stall(const std::vector<ClueCandidate>& cs) {
+  return select(cs, [](const ClueCandidate& c) {
     if (c.reading.shape != ClueShape::OTHER) return false;
     return c.reading.reacter_side.order < 0 &&
            c.reading.receiver_side.order < 0 && c.reading.stable_subject < 0;
   });
-  return settle(g, std::move(p), {});
 }
 
 // --- priority 4: Alice is at 8 clues and must clue or pitch ---------------
@@ -2352,29 +2371,86 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // is decided by what she knows, which is also what the play phase below will
   // read.
   if (!priority_4_applies(g, cs)) return nullptr;
+  // Which sub-rung gave the clue: `choose_clue` logs only "4.locked_eight_clues_or_
+  // low_pace", which does not say why one forced clue beat another.
+  auto fired = [](const char* sub, const ClueCandidate* c) {
+    hanabi::logging::log_branch(
+        "reactor0.rung_4", {{"sub", sub}, {"target", c->action.target},
+                            {"value", c->action.clue.value},
+                            {"shape", shape_name(c->reading.shape)}});
+    return c;
+  };
 
   // 4.1 is "same as 3.1", which carries 3.1's own clue-count condition. Its pool
   // also takes Throw It in a Hole's stable play clue to Cathy (v18.15.0).
   if (clues_at_least(g, 2)) {
     // 4.1
     if (auto* c = settle_stable_play(g, pool_stable_play_any_partner(g, cs))) {
-      return c;
+      return fired("4.1", c);
     }
   }
-  // 4.2 is "same as 3.3", and carries 3.3's safe-discard condition with it.
-  if (!has_safe_discard(g, bob_of(g))) {
-    if (auto* c = first_of(g, pool_stable_ditch_trash(g, cs))) return c;  // 4.2
+  // 4.2-4.5 -- ONE POOL, ranked by the GOOD-CARD PRODUCT (v23.19.0, the user's
+  // ruling; reactor0 and Throw It in a Hole). The non-committing stable clues to
+  // Bob: a stable discard or trash reveal of a card nobody wants (4.2), of a
+  // duplicated card (4.3), a fill-in (4.4), a safe stall (4.5). The clue that
+  // leaves the smallest product of Bob's candidate counts over his good cards
+  // wins; ties keep the old order, with 4.2 last when Bob already holds a safe
+  // discard (3.3's condition, which used to drop it outright). Replay 2026350
+  // T52: at pace 1, a 1 filling in will-bot69's trash g1 (4.4) beat a 5 that
+  // leaves his unclued b5 at `{b5,d5}`; 4.2 never saw the 5, because his known
+  // `{r3,r4}` was a safe discard.
+  //
+  // All four sit ABOVE the lock deliberately. A lock commits Bob's whole hand, so
+  // at a forced clue it is worth less than information or than a harmless stall.
+  // It is also the only order in which they can ever run: at 8 tokens a re-clue
+  // of already-clued cards reads as a LOCK, so a lock candidate is available in
+  // essentially every position, and a lock above them would swallow them all.
+  {
+    Pool everyone;
+    for (const ClueCandidate& c : cs) everyone.push_back(&c);
+    const bool bob_safe = has_safe_discard(g, bob_of(g));
+    // Each member's place in the old sequence: 0 = 4.2, 1 = 4.3, 2 = 4.4,
+    // 3 = 4.5, 4 = 4.2 behind a safe discard.
+    std::vector<std::pair<const ClueCandidate*, int>> pool;
+    auto add = [&pool](const Pool& p, int order) {
+      for (const ClueCandidate* c : p) {
+        auto it = std::find_if(pool.begin(), pool.end(),
+                               [c](const auto& m) { return m.first == c; });
+        if (it == pool.end()) {
+          pool.emplace_back(c, order);
+        } else {
+          it->second = std::min(it->second, order);
+        }
+      }
+    };
+    add(pool_stable_ditch_trash(g, cs), bob_safe ? 4 : 0);
+    add(pool_stable_ditch_dupe(g, cs), 1);
+    add(pool_fill_in(g, everyone), 2);
+    add(pool_safe_stall(cs), 3);
+    if (!pool.empty()) {
+      double best_product = pool.front().first->bob_good_product;
+      for (const auto& [c, order] : pool) best_product = std::min(best_product, c->bob_good_product);
+      int best_order = 5;
+      for (const auto& [c, order] : pool) {
+        if (c->bob_good_product == best_product) best_order = std::min(best_order, order);
+      }
+      Pool tied;
+      for (const auto& [c, order] : pool) {
+        if (c->bob_good_product == best_product && order == best_order) tied.push_back(c);
+      }
+      static const char* const kSub[] = {"4.2", "4.3", "4.4", "4.5", "4.2_behind_safe_discard"};
+      const ClueCandidate* pick =
+          best_order == 2 ? rung_fill_in(g, tied) : settle(g, std::move(tied), {});
+      if (pick) {
+        hanabi::logging::log_branch("reactor0.rung_4_pool",
+                                    {{"product", best_product},
+                                     {"members", static_cast<int>(pool.size())},
+                                     {"tie_order", kSub[best_order]}});
+        return fired(kSub[best_order], pick);
+      }
+    }
   }
-  if (auto* c = first_of(g, pool_stable_ditch_dupe(g, cs))) return c;   // 4.3
-  // 4.4 and 4.5 sit ABOVE the lock deliberately. A lock commits Bob's whole
-  // hand, so at a forced clue it is worth less than information or than a
-  // harmless stall. It is also the only order in which either can ever run: at
-  // 8 tokens a re-clue of already-clued cards reads as a LOCK, so a lock
-  // candidate is available in essentially every position, and a lock above
-  // these two would swallow them both.
-  if (auto* c = rung_fill_in(g, cs)) return c;                          // 4.4
-  if (auto* c = rung_safe_stall(g, cs)) return c;                       // 4.5
-  if (auto* c = first_of(g, pool_lock(g, cs))) return c;                // 4.6
+  if (auto* c = first_of(g, pool_lock(g, cs))) return fired("4.6", c);
   // 4.7 -- below 2 strikes, a stable clue that makes Bob throw away a trash or
   // duplicated card, explicitly allowing a strike. This is the ONE rung that
   // tolerates a predicted misplay, so it does not go through `select`.
@@ -2395,14 +2471,14 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
           dupe_visible_elsewhere(g, c.action.target, o, *id);
       if (unwanted) p.push_back(&c);
     }
-    if (auto* c = first_of(g, std::move(p))) return c;
+    if (auto* c = first_of(g, std::move(p))) return fired("4.7", c);
   }
   // 4.8 -- wider than 3.8 on both arms: the CTD arm also takes a double
   // discard, and the CTP arm also takes a reactive discard.
   if (auto* c = rung_reactive_ditch(
           g, cs, {ClueShape::REACTIVE_DISCARD, ClueShape::DOUBLE_DISCARD},
           {ClueShape::REACTIVE_PLAY, ClueShape::REACTIVE_DISCARD})) {
-    return c;
+    return fired("4.8", c);
   }
   // The floor. At 8 tokens a discard is illegal, so section 4 must return
   // something: the default tiebreak, IGNORING tier. Without this an empty clue
@@ -2447,7 +2523,8 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
     }
     all.push_back(&c);
   }
-  return first_of(g, std::move(all));
+  const ClueCandidate* floor = first_of(g, std::move(all));
+  return floor ? fired("floor", floor) : nullptr;
 }
 
 }  // namespace

@@ -696,6 +696,15 @@ Evaluation List's priority 2c, but neither while Alice is *occupied*.
 `src/conventions/reactor0/state_eval.cpp:656-673`. Added in v20.19.0 after
 replay 2019562 T31.
 
+### good-card product
+The product of Bob's candidate counts after a clue, read from his own view in the
+hypo, over every card of his that Alice sees is not basic trash. Smaller means the
+clue told him more about the cards that matter. `ClueCandidate::bob_good_product`,
+filled in `analyse_clues` for every clue stable to Bob. It ranks §4's pooled rung
+4.2-4.5 first, ahead of the old rung order (DECISION_MAKING.md §4, v23.19.0;
+replay 2026350 T52). It is the stable play hierarchy's third key
+(`others_product`) without a called card to leave out.
+
 ### touched-card rank classification
 How reactor0 decides whether a rank clue is a direct play clue (§1c priority
 1): over the identities the **cards this clue actually touched** can hold —

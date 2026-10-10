@@ -234,6 +234,14 @@ struct ClueCandidate {
   double ancillary_score = 0.0;
   double others_product = 0.0;
   bool colour_ok = false;
+  // The GOOD-CARD PRODUCT (v23.19.0, the user's ruling): the product of Bob's
+  // candidate counts, after this clue and from his own view in the hypo, over
+  // every card of his that Alice sees is not basic trash. Smaller means the clue
+  // told him more about the cards that matter. Filled for every clue stable to
+  // Bob, in both conventions; §4's pooled rung (4.2-4.5) ranks by it first.
+  // Replay 2026350 T52: a 5 leaving his b5 at `{b5,d5}` over a 1 that filled in a
+  // trash g1.
+  double bob_good_product = 0.0;
   // Throw It in a Hole only: is this clue a REFUSAL — us, as the reacter of a
   // standing reactive, telling its giver that the card they named is already
   // played (tiiah/CONVENTION.md §1c, v16.14.0)?
