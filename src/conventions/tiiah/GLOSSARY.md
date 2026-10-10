@@ -167,7 +167,7 @@ unbooked, since which card was which is exactly what is unknown.
 The stacks a reactive's target is walked in: the **minimum**, suit by suit, across
 every world the reacter can live in, from the giver's perspective (v16.24.0). For the
 pair it is their row; for an outside seat, the shared view floored over every seat's
-worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:266-280`.
+worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:285-299`.
 CONVENTION.md §1e. It replaced "assume none of the superposed cards were played".
 
 ### feasible world
@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1905-1956`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1978-2029`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -274,10 +274,21 @@ walking seat goes past it (v22.4.0), judged on the common view and on the pair's
 alike. A violation both players see through -- the receiver's bucket reading finds
 nothing, and the reacter's empathy offers no playable of the bucket the target names,
 so each falls back to its playable -- is **globally known** and stands. Readers
-understand it; the giver does not yet give one (v22.4.0). After a known violation
-the receiver's target is the finesse from the reacter's card if it can be (a *proven
-finesse*), and only otherwise any other stack playable (replay 2022852 T33). `reacter_can_legally_answer`, `tiiah/interpret_reactive.cpp`.
+understand it; the giver gives one only in the *late game* (v23.23.0; before that,
+not since v22.4.0). After a known violation the receiver's target is the finesse from
+the reacter's card if it can be (a *proven finesse*), and only otherwise any other
+stack playable (replay 2022852 T33); in the late game it is any playable, the finesse
+no longer first. `reacter_can_legally_answer`, `tiiah/interpret_reactive.cpp`.
 CONVENTION.md §1d, replay 2022760 T22.
+
+### late game
+The stretch of a TIIAH game in which the plays made before a clue's turn are at
+least 2/3 of the maximum score (20 in six suits), counted off the public action list,
+a miss included (v23.23.0). The score is hidden in TIIAH, so it is never the measure.
+In the late game the giver may give a globally known bucket violation, and a reader
+whose bucket offers nothing the target could be reads any playable, taken per
+candidate of the reacter's card, rather than the finesse first. `late_game`,
+`src/conventions/tiiah/buckets.cpp:124-133`. CONVENTION.md §1d, replay 2026455 T49.
 
 ### displaced reaction
 A pending reaction a newer reactive to the same receiver overwrote in
@@ -292,12 +303,12 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:1382-1417`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:1450-1485`. CONVENTION.md §1d.
 
 Since v22.0.0 it is also the **only finesse that may be given**, and it decides the
 receiver's own reading. A proven finesse reads as the card after the reacter's. Any
 other pairing reads as the bucket half alone (`keep_convention_half`,
-`interpret_reactive.cpp:1309-1345`), never the union of the two halves.
+`interpret_reactive.cpp:1363-1413`), never the union of the two halves.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -437,7 +448,7 @@ clue (`ReactorWC::receiver_standing`, v20.3.0). A play of any other card, includ
 one the reverse clue itself newly made playable, or a discard, withdraws it
 (v18.11.0; the reviewer's rule; replay 2018428 T17). This is how a Cathy who cannot tell a fix from a
 reverse reactive learns which it was. `tiiah::confirm_reverse_reactive`,
-`src/conventions/tiiah/interpret_reactive.cpp:299-369`. CONVENTION.md §1c.
+`src/conventions/tiiah/interpret_reactive.cpp:318-388`. CONVENTION.md §1c.
 
 ### role inversion
 The clue-to-Cathy half of the *reverse-reactive position*: Bob holds a *standing
@@ -451,7 +462,7 @@ reactive's target walk passes over it, since a new reactive has to get something
 new. When every playable and finesse target in
 the receiver's hand is gotten, the walk takes the leftmost gotten one instead
 (v18.5.0; human diagnostic 2013726 T38). `receiver_targets` and `walked_as_called`,
-`src/conventions/tiiah/interpret_reactive.cpp:373-448`. CONVENTION.md §1c; replay
+`src/conventions/tiiah/interpret_reactive.cpp:392-467`. CONVENTION.md §1c; replay
 2026374 T41 for the sure play.
 
 ### reverse reactive

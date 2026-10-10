@@ -248,6 +248,25 @@ bool reacter_can_legally_answer(const State& faced, ClueKind kind, int clue_turn
   });
 }
 
+// THE GIVER MAY GIVE A GLOBALLY KNOWN VIOLATION LATE IN THE GAME (v23.23.0, the
+// user's call; replay 2026455 T49). Once `late_game`, the giver may pair `react` with
+// `target_id` against the bucket relation, provided neither player can misread it on
+// `faced`: the receiver's bucket reading from `react` finds nothing, and the reacter's
+// empathy `react_live` holds no playable of the bucket the target names. Both then
+// fall back to their playables (the v22.4.0 exception).
+bool violation_known_on(const State& faced, ClueKind kind, int clue_turn,
+                        Identity react, Identity target_id,
+                        const IdentitySet& react_live, const IdentitySet& target_poss) {
+  if (!receiver_bucket_empty(faced, kind, clue_turn, react, target_poss)) return false;
+  const auto want = bucket_of(*faced.variant, target_id.suit_index);
+  if (!want) return false;
+  const int from = reacter_bucket_for(*faced.variant, kind, clue_turn, *want);
+  return !react_live.exists([&](Identity i) {
+    const auto b = bucket_of(*faced.variant, i.suit_index);
+    return b && *b == from && faced.is_playable(i);
+  });
+}
+
 }  // namespace
 
 // THE FRAME A REACTIVE'S TARGET IS WALKED IN (§1e, v16.24.0): the MINIMUM, suit
@@ -885,7 +904,20 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         // A globally known violation (below, the walk) is one readers understand,
         // but the giver does not give one (v22.4.0): taking the exception here cost
         // 0.3 points and 9 strikeouts per 300 games of 6 Suits in self-play.
-        return std::nullopt;
+        // ...except LATE (v23.23.0, `late_game`), and only when neither player can
+        // misread it, on both frames (`violation_known_on`). Replay 2026455 T49:
+        // Purple to yagami_black pairs will-bot69's u2 with yagami's r4; purple and
+        // yellow, the two buckets it names, are complete.
+        const IdentitySet target_poss = game.common.thoughts[target.order].possibilities();
+        const bool late_break =
+            late_game(state, clue_turn) &&
+            violation_known_on(after, action.clue.kind, clue_turn, *actual, target.id,
+                               react_live, target_poss) &&
+            violation_known_on(common_faced, action.clue.kind, clue_turn, *actual,
+                               target.id, react_live, target_poss);
+        if (!late_break) return std::nullopt;
+        hanabi::logging::log_branch("tiiah.late_bucket_break",
+                                    {{"target", target.order}, {"react_order", react_order}});
       }
       // A FINESSE IS GIVEABLE ONLY WHEN THE RECEIVER CAN PROVE IT (v22.0.0, the
       // user's ruling): its target, as the clue leaves it, cannot be any card of
@@ -1243,7 +1275,8 @@ struct ReceiverReading {
 
 ReceiverReading receiver_reading(const Variant& variant,
                                  const std::vector<OpenWorld>& worlds, ClueKind kind,
-                                 int clue_turn, const IdentitySet& react_live) {
+                                 int clue_turn, const IdentitySet& react_live,
+                                 bool late = false) {
   ReceiverReading out;
   IdentitySet& allowed = out.allowed;
   auto& support = out.support;
@@ -1281,13 +1314,34 @@ ReceiverReading receiver_reading(const Variant& variant,
       }
     }
     // Any playable of the world, for an empty named bucket (v23.5.0).
-    for (Identity i : worlds[w].state.playable_set) {
-      if (variant.suits[i.suit_index].suit_type.inverted || react_live.contains(i)) continue;
+    auto offer_any = [&](Identity i) {
       out.any = out.any.add(i);
       auto it = std::find_if(out.any_support.begin(), out.any_support.end(),
                              [i](const auto& pr) { return pr.first == i; });
       if (it == out.any_support.end()) out.any_support.emplace_back(i, 1ULL << w);
       else it->second |= (1ULL << w);
+    };
+    if (late) {
+      // LATE (v23.23.0, `late_game`): per candidate of the reacter's card -- the
+      // playables once THAT card has landed, but that card. Excluding every
+      // candidate at once loses the cards the other candidates leave playable
+      // (self-play Black seed 20 T47: Cathy's `{r2,k2}` against Alice's k2).
+      for (Identity c : react_live) {
+        const auto& st = variant.suits[c.suit_index].suit_type;
+        for (Identity i : worlds[w].state.playable_set) {
+          if (variant.suits[i.suit_index].suit_type.inverted || i == c) continue;
+          offer_any(i);
+        }
+        if (!st.inverted && worlds[w].state.is_playable(c)) {
+          const auto nxt = st.reversed ? c.prev() : c.next();
+          if (nxt) offer_any(*nxt);
+        }
+      }
+    } else {
+      for (Identity i : worlds[w].state.playable_set) {
+        if (variant.suits[i.suit_index].suit_type.inverted || react_live.contains(i)) continue;
+        offer_any(i);
+      }
     }
     // The finesse half: the card that follows what the reacter played. Reversed
     // suits run 5 -> 1, so the successor is `prev()` there -- `Identity::next()`
@@ -1311,7 +1365,21 @@ ReceiverReading receiver_reading(const Variant& variant,
 // else the bucket half alone. Until v22.0.0 the receiver read the union of the two.
 // E.g. 5 to Cathy answered by Bob's g1 reads her target `{p1,t1}`, not
 // `{p1,t1,g2}`; the giver may not give a finesse the receiver cannot prove (the walk).
-void keep_convention_half(ReceiverReading& rr, bool proven, const IdentitySet& could) {
+void keep_convention_half(ReceiverReading& rr, bool proven, const IdentitySet& could,
+                          bool late = false) {
+  // LATE (v23.23.0, the user's call, `late_game`): the bucket where it offers
+  // something the card could be, else ANY playable -- the finesse is no longer first.
+  // Self-play Black seed 20 T47: Bob's Yellow paired Cathy's r2 with Alice's k2, both
+  // buckets empty; Cathy, unable to name her own card, read Alice's as the finesse
+  // `{r3,k3}` while Alice read `{r3,k2}`.
+  if (late) {
+    if (rr.named_bucket_empty || rr.bucket.intersect(could).is_empty()) {
+      rr.allowed = rr.any;
+      rr.support = rr.any_support;
+      return;
+    }
+    proven = false;
+  }
   // THE EMPTY BUCKET (v23.5.0, the user's ruling): when the bucket the reacter's
   // card names has no playable in any world, the receiver reads ANY playable, the
   // finesse included -- not the finesse alone. Replay 2024288 T45-T47: the u2
@@ -1521,14 +1589,15 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   // reading every world allows is no evidence about the hole, and the stamp failed
   // for some other reason -- its clue-time frame, say -- which this is not here to
   // second-guess (replay 2011885 T10).
+  const bool late = late_game(s, wc.turn);
   ReceiverReading rr =
-      receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live);
+      receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live, late);
   {  // the bucket first (v22.0.0, `keep_convention_half`)
     keep_convention_half(
         rr,
         !bucket_only && finesse_from_the_card(game, wc.clue.kind, wc.turn, could,
                                               react_live, react_order),
-        could);
+        could, late);
   }
   std::vector<IdentitySet> tiers{could.intersect(rr.allowed)};
   if (!bucket_only) {
@@ -1681,8 +1750,9 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
                   : std::vector<int>{wc.receiver, wc.giver};
   const auto worlds = open_worlds(game, base, holders);
 
+  const bool late = late_game(s, wc.turn);
   ReceiverReading rr =
-      receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live);
+      receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live, late);
   // The baseline comes from `prev` rather than from `old_inferred`: unlike
   // `target_play`, `stamp_receiver_call` writes through `narrow_thought` and so
   // leaves no `old_inferred` to roll back to. `prev` is the game before the
@@ -1695,7 +1765,7 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
     keep_convention_half(
         rr, finesse_from_the_card(game, wc.clue.kind, wc.turn, could, react_live,
                                   react_order),
-        could);
+        could, late);
   }
   const IdentitySet& allowed = rr.allowed;
   const auto& support = rr.support;
@@ -1847,8 +1917,9 @@ void annotate_candidate(const Game& game, const Game& hypo,
   const auto worlds = open_worlds(hypo, base, std::vector<int>{receiver, giver});
   // The turn the candidate clue would be given on: this one.
   const int clue_turn = s.turn_count;
+  const bool late = late_game(s, clue_turn);
   ReceiverReading rr = receiver_reading(*s.variant, worlds, c.action.clue.kind,
-                                        clue_turn, react_live);
+                                        clue_turn, react_live, late);
   {  // the bucket first (v22.0.0, `keep_convention_half`)
     // What the receiver's card could be once the clue lands: its reading before the
     // clue, cut by the clue's touch (the stamp has not been read by the receiver).
@@ -1864,10 +1935,12 @@ void annotate_candidate(const Game& game, const Game& hypo,
     // it through the bucket and booked the wrong card: self-play Black seed 191 T47,
     // Cathy's r3 paired with Alice's g5 read as the p4. Measured: Black 30/30 7 -> 6,
     // 588 cards read wrongly against 560, where this leaves 573 and fewer movers.
+    // ...but LATE (v23.23.0) as the readers read it, with `could`: any playable is
+    // the reading there, not a misread.
     keep_convention_half(rr,
                          finesse_from_the_card(hypo, c.action.clue.kind, clue_turn,
                                                could, react_live, react_order),
-                         IdentitySet::empty());
+                         late ? could : IdentitySet::empty(), late);
   }
   c.receiver_reading_size =
       rr.allowed.intersect(hypo.common.thoughts[target].possible).length();

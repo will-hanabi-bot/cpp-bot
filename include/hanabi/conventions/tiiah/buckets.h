@@ -24,6 +24,7 @@
 
 namespace hanabi {
 struct Variant;
+struct State;
 }
 
 namespace hanabi::tiiah {
@@ -76,5 +77,13 @@ int named_bucket(const Variant& variant, ClueKind kind, int clue_turn, int from)
 // The inverse: the bucket the reacter's card must sit in, given the target's.
 int reacter_bucket_for(const Variant& variant, ClueKind kind, int clue_turn,
                        int target_bucket);
+
+// THE LATE GAME (v23.23.0, the user's call; replay 2026455 T49): the plays made
+// before `clue_turn` are at least 2/3 of the maximum score, 5 per suit. Counted off
+// the action list, which every seat holds alike -- a miss included, since in TIIAH a
+// miss looks like a play -- and never off the score, which is hidden. Late, the giver
+// may give a globally known bucket violation, and a reader whose bucket offers nothing
+// the card could be reads any playable, not the finesse first (CONVENTION.md §1d).
+bool late_game(const State& state, int clue_turn);
 
 }  // namespace hanabi::tiiah
