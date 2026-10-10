@@ -439,6 +439,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_selfplay_9000126_reactive_read_after_own_called_play.cpp
   tests/test_tiiah/test_decision_making/test_selfplay_9000126_reverse_reactive_receiver_plays_y2.cpp
   tests/test_tiiah/test_decision_making/test_selfplay_9000174_reverse_reactive_frame_counts_own_call.cpp
+  tests/test_tiiah/test_decision_making/test_selfplay_9000096_self_colour_bluff_null_one.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp
   tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp
@@ -602,6 +603,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_bucket_first.cpp
   tests/test_tiiah/test_colour_reveal_through_worlds.cpp
   tests/test_tiiah/test_retouch_rank_call.cpp
+  tests/test_tiiah/test_self_colour_bluff.cpp
   tests/test_tiiah/test_known_bucket_violation.cpp
   tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp
   tests/test_tiiah/test_named_card_feasibility.cpp

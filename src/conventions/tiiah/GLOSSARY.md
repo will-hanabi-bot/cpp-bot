@@ -602,6 +602,16 @@ diagnostic 2014561 T50. It ranks only the clues that survive
 before the hierarchy sees it (CONVENTION.md §1f, v18.19.0). A rainbow card it
 merely touches is allowed (v18.20.0).
 
+### self colour bluff / special suit
+A **self colour bluff** is a colour clue from an Alice who is neither locked nor at 8
+clues, to Bob, that re-touches only clued cards. None of those cards may play in any
+world, and the clue may be no play or trash reveal. It calls Bob's leftmost card that
+could be the **special suit**'s next card, read as exactly that card. The special
+suit is the variant's last suit: its one non-plain suit, or the rightmost plain suit.
+Not under the rainbowish suits, and only where the clue is read stable
+(`self_colour_bluff`, `tiiah/interpret_clue.cpp`; CONVENTION.md §1b, v23.16.0,
+experimental; self-play Dark Null 9000096 T13).
+
 ### blind read
 The giver's second reading of its own stable clue, made with the receiver's hand
 hidden, the way the receiver reads it. A seat that sees the receiver's cards can

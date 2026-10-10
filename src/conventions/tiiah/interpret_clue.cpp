@@ -13,6 +13,7 @@
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
+#include "hanabi/conventions/variants/predicates.h"
 #include "hanabi/instrumentation/timer.h"
 #include "hanabi/logging/decide_trace.h"
 
@@ -356,6 +357,89 @@ void pin_special_rank(const Game& prev, Game& game, const ClueAction& action) {
   if (shared.is_basic_trash(pin)) return;
   if (!game.common.thoughts[slot1].possibilities().contains(pin)) return;
   game.narrow_thought(slot1, IdentitySet::single(pin));
+}
+
+// Every identity that plays in some strike-free world of the SHARED view -- each
+// seat's hole cards as the team reads them -- so every seat computes it alike. The
+// flat fallback is `pitch_candidates_in_shared_worlds`'s (v20.18.0).
+IdentitySet playable_in_shared_worlds(const Game& game) {
+  const State& s = game.state;
+  std::vector<int> everyone;
+  for (int p = 0; p < s.num_players; ++p) everyone.push_back(p);
+  const State base = s.common_evidence.empty()
+                         ? s.shared_view()
+                         : s.shared_view().with_band(s.common_evidence);
+  const auto worlds = open_worlds(game, base, everyone, 64, -1, /*shared=*/true);
+  IdentitySet out = IdentitySet::empty();
+  for (const auto* w : strike_free(worlds)) out = out.union_with(w->state.playable_set);
+  if (worlds.size() <= 1) {
+    for (int p : everyone) {
+      const auto own = open_worlds(game, base, std::vector<int>{p}, 64, -1, /*shared=*/true);
+      for (const auto* w : strike_free(own)) out = out.union_with(w->state.playable_set);
+    }
+  }
+  return out;
+}
+
+// THE SELF COLOUR BLUFF (v23.16.0, experimental; the user's convention). Alice,
+// neither locked nor at 8 tokens, gives Bob a COLOUR clue that re-touches only
+// cards already clued, none of which could play in any world, and that the ladder
+// read as a plain stall -- no play reveal, no trash reveal. It calls Bob's leftmost
+// card that could be the SPECIAL suit's next card to play. The special suit is the
+// variant's last: its one non-plain suit, or the rightmost plain suit. Not under the
+// rainbowish suits, whose colour clues touch the special suit itself. Self-play
+// Dark Null seed 96 T13 (debug_dark_null_29_v23.15/darknull_9000096.json): Blue to
+// sim-bob re-touches only his known b5, and calls his slot 1, the n1.
+//
+// Read only from what every seat shares: clue-touch empathy (`possible`) and the
+// shared worlds. Built on a copy and committed only when the call stands.
+bool self_colour_bluff(const Game& prev, Game& game, const ClueAction& action) {
+  const State& state = game.state;
+  const Variant& variant = *state.variant;
+  if (!variant.throw_it_in_a_hole) return false;
+  if (action.clue.kind != ClueKind::COLOUR) return false;
+  if (action.target != state.next_player_index(action.giver)) return false;
+  if (reactor::variants::includes_rainbowish(state)) return false;
+  if (prev.state.clue_tokens == 8) return false;
+  if (prev.common.obvious_locked(prev, action.giver)) return false;
+  if (action.list_.empty()) return false;
+  for (int o : action.list_) {
+    if (o >= static_cast<int>(prev.state.deck.size()) || !prev.state.deck[o].clued) return false;
+  }
+  const IdentitySet live = playable_in_shared_worlds(game);
+  for (int o : action.list_) {
+    if (game.common.thoughts[o].possible.intersect(live).non_empty()) return false;
+  }
+  const int special = static_cast<int>(variant.suits.size()) - 1;
+  if (special < 0) return false;
+  const auto& suit_type = variant.suits[special].suit_type;
+  if (suit_type.inverted) return false;
+  const State shared = state.shared_view();
+  const int rank = shared.play_stacks[special] + (suit_type.reversed ? -1 : 1);
+  if (rank < 1 || rank > 5) return false;
+  const Identity next(special, rank);
+  if (shared.is_basic_trash(next)) return false;
+  for (int o : state.hands[action.target]) {
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+    if (!game.common.thoughts[o].possible.contains(next)) continue;
+    if (!game.common.thoughts[o].possibilities().contains(next)) continue;
+    Game g = game;
+    const int turn = g.state.turn_count;
+    const int giver = action.giver;
+    g.with_meta(o, [turn, giver](ConvData& m) {
+      m.focused = true;
+      m.status = CardStatus::CALLED_TO_PLAY;
+      m.by = giver;
+      m = m.reason(turn).signal(turn);
+    });
+    if (!g.narrow_thought(o, IdentitySet::single(next))) return false;
+    if (g.meta[o].status != CardStatus::CALLED_TO_PLAY) return false;
+    game = std::move(g);
+    hanabi::logging::log_branch("tiiah.self_colour_bluff",
+                                {{"order", o}, {"suit", next.suit_index}, {"rank", next.rank}});
+    return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -911,6 +995,12 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
                                      {"worlds", static_cast<int>(calling.size())}});
       }
     }
+  }
+  // A colour re-touch of Bob's that is still a plain stall is the self colour
+  // bluff (v23.16.0, experimental): his special-suit card is called.
+  if (interp && *interp == ClueInterp::STALL && !called_something(game) &&
+      self_colour_bluff(prev, game, action)) {
+    interp = ClueInterp::PLAY;
   }
   // ...and the reading is the union over those worlds, whichever frame made the
   // call: the singleton `{b2}` told every seat o9 was the p2.
