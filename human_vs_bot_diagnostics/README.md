@@ -42,6 +42,7 @@ elsewhere.
 | [9000118](9000118.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T7-T8 (the giver does not model the reacter's ASCR) | fixed (v23.15.0) |
 | [9000126](9000126.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T14-T16 (reverse reactive ignored), T28 (a 4 to play the g1 ignored) | fixed (v23.15.0) |
 | [9000174](9000174.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T14 (known r2 after reverse reactives ignored) | fixed (v23.15.0) |
+| [9000080](9000080.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T44–T51 (an endgame reactive has the reacter misname its b2 as the y4) | fixed (v23.17.0) |
 
 ## Template
 

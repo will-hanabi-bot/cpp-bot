@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1851-1902`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1872-1923`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -611,6 +611,14 @@ suit is the variant's last suit: its one non-plain suit, or the rightmost plain 
 Not under the rainbowish suits, and only where the clue is read stable
 (`self_colour_bluff`, `tiiah/interpret_clue.cpp`; CONVENTION.md §1b, v23.16.0,
 experimental; self-play Dark Null 9000096 T13).
+
+### misnaming a card
+A player **misnames** its card when the reading a clue leaves it holds no longer
+contains what the card is: a reacter that books its b2 as the y4, or a receiver whose
+predicted reading leaves out its target. The giver never gives a reactive that has the
+reacter (read at its own seat) or the receiver (predicted, the both-know licence
+honoured) misname its card, at any pace (`ClueCandidate::misnames_a_card`;
+CONVENTION.md §1d, v23.17.0; self-play Dark Null 9000080 T44).
 
 ### blind read
 The giver's second reading of its own stable clue, made with the receiver's hand

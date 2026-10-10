@@ -1845,6 +1845,27 @@ void annotate_candidate(const Game& game, const Game& hypo,
   // to green the narrower `{n3}` -- for a card that was the g1.
   if (const auto truth = s.deck[target].id(); truth && !rr.allowed.contains(*truth)) {
     c.receiver_reading_size = kMisreadReadingSize;
+    // ...a misname too, unless the pairing stands on the both-know licence, where
+    // the receiver names its card by its one playable reading, the card it is
+    // (v23.14.0; human_vs_bot_diagnostics/9000009.md T29).
+    const State frame = hs.with_stacks(hs.stacks_known_to_both(giver, receiver));
+    if (!both_know_their_own(hypo, react_order, target, &frame, /*true_readings=*/true)) {
+      c.misnames_a_card = true;
+    }
+  }
+  // ...and so is one that has the REACTER misname its card (v23.17.0, the user's
+  // ruling): it books the identity the clue gave it, not the one it played. Self-play
+  // Dark Null seed 80 (debug_self_colour_bluff_misread_9000080.json): at T44, pace
+  // <= 1, sim-bob's 5 to sim-alice broke the bucket so that sim-cathy read her o40,
+  // the b2, as the y4; she kept yellow on 4 from T45, and at T51 meant a Yellow as a
+  // play reveal that the other seats read as a self colour bluff, and struck.
+  // Read at the REACTER's own seat, which sees cards the team's reading does not
+  // (v18.9.0: human_vs_bot_diagnostics/2013726.md T27, black sees both n3s and reads
+  // its own card as the r4).
+  const int reacter = c.reading.reacter_side.holder;
+  if (seen && reacter >= 0 && reacter < static_cast<int>(hypo.players.size()) &&
+      !hypo.players[reacter].thoughts[react_order].possibilities().contains(*seen)) {
+    c.misnames_a_card = true;
   }
 }
 

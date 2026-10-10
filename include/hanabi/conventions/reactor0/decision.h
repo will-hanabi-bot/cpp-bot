@@ -275,6 +275,12 @@ struct ClueCandidate {
   // (tiiah/CONVENTION.md §2, v16.28.0). Filled in by the annotator the engine
   // hands `analyse_clues`, because the reading is the tiiah convention's own.
   int receiver_reading_size = 0;
+  // Throw It in a Hole only: a REACTIVE_PLAY whose reacter or receiver would read
+  // its own card as something it is not -- the reacter's reading once the clue
+  // lands, or the receiver's predicted reading, leaves out the card's true
+  // identity. Never given (v23.17.0, the user's ruling; self-play Dark Null seed
+  // 80 T44). Filled in by the annotator, like `receiver_reading_size`.
+  bool misnames_a_card = false;
 };
 
 // A per-candidate hook `analyse_clues` calls with the hypo it has just built, so
