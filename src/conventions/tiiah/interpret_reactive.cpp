@@ -248,12 +248,55 @@ bool reacter_can_legally_answer(const State& faced, ClueKind kind, int clue_turn
   });
 }
 
+// A card of OUR OWN hand that we can NAME: its empathy is one identity, or it is
+// called to play and one identity of its empathy plays -- the card we will play, the
+// v23.14.0 standard of "can name" (`both_know_their_own`). On empathy and the call,
+// never on an inference alone (the user's ruling there): an inferred name can be
+// wrong, and a partner who sees the card reads it for what it is. 9000069 T56: o50
+// is called, and of its empathy `{r5,y2,y3,b4}` only the r5 plays.
+std::optional<Identity> named_own_card(const Game& game, int order) {
+  const IdentitySet& possible = game.me().thoughts[order].possible;
+  if (possible.length() == 1) return possible.head();
+  if (game.meta[order].status != CardStatus::CALLED_TO_PLAY) return std::nullopt;
+  const IdentitySet plays =
+      possible.filter([&game](Identity i) { return game.state.is_playable(i); });
+  if (plays.length() == 1) return plays.head();
+  return std::nullopt;
+}
+
+// WHAT `holder` CAN SEE (v23.25.0, the user's ruling; self-play Dark Null 9000069 T56,
+// human_vs_bot_diagnostics/9000069_23_22.md). `set`, the candidates of one of
+// `holder`'s cards, without every identity whose remaining copies all sit where
+// `holder` can see them: `effective_possible_for`'s count of the other hands, by
+// sight, plus each card of OUR OWN hand that we can name (`named_own_card`).
+// `holder` sees that card, and so cannot hold it. At the holder's own seat it is
+// exactly its sight. Elsewhere it can only be wider: it misses our unnamed cards.
+// 9000069 T56: sim-bob, the giver, names his called o50 as the r5 (its empathy's one
+// playable), so sim-cathy, who sees it, cannot read her own card as the r5 the red
+// bucket would name.
+IdentitySet seen_by_holder(const Game& game, int holder, const IdentitySet& set) {
+  const State& s = game.state;
+  return set.filter([&](Identity id) {
+    int seen = s.base_count[id.to_ord()];
+    for (int p = 0; p < s.num_players; ++p) {
+      if (p == holder) continue;
+      for (int o : s.hands[p]) {
+        auto did = s.deck[o].id();
+        if (!did && p == s.our_player_index) did = named_own_card(game, o);
+        if (did && *did == id) ++seen;
+      }
+    }
+    return seen < s.card_count[id.to_ord()];
+  });
+}
+
 // THE GIVER MAY GIVE A GLOBALLY KNOWN VIOLATION LATE IN THE GAME (v23.23.0, the
 // user's call; replay 2026455 T49). Once `late_game`, the giver may pair `react` with
 // `target_id` against the bucket relation, provided neither player can misread it on
 // `faced`: the receiver's bucket reading from `react` finds nothing, and the reacter's
 // empathy `react_live` holds no playable of the bucket the target names. Both then
-// fall back to their playables (the v22.4.0 exception).
+// fall back to their playables (the v22.4.0 exception). The giver passes the
+// reacter's empathy as the reacter sees it (`seen_by_holder`, v23.25.0).
 bool violation_known_on(const State& faced, ClueKind kind, int clue_turn,
                         Identity react, Identity target_id,
                         const IdentitySet& react_live, const IdentitySet& target_poss) {
@@ -908,13 +951,16 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         // misread it, on both frames (`violation_known_on`). Replay 2026455 T49:
         // Purple to yagami_black pairs will-bot69's u2 with yagami's r4; purple and
         // yellow, the two buckets it names, are complete.
+        // The reacter's empathy as the reacter sees it, our named cards out of it
+        // (v23.25.0, `seen_by_holder`).
         const IdentitySet target_poss = game.common.thoughts[target.order].possibilities();
+        const IdentitySet react_sees = seen_by_holder(game, reacter, react_live);
         const bool late_break =
             late_game(state, clue_turn) &&
             violation_known_on(after, action.clue.kind, clue_turn, *actual, target.id,
-                               react_live, target_poss) &&
+                               react_sees, target_poss) &&
             violation_known_on(common_faced, action.clue.kind, clue_turn, *actual,
-                               target.id, react_live, target_poss);
+                               target.id, react_sees, target_poss);
         if (!late_break) return std::nullopt;
         hanabi::logging::log_branch("tiiah.late_bucket_break",
                                     {{"target", target.order}, {"react_order", react_order}});
@@ -1967,11 +2013,26 @@ void annotate_candidate(const Game& game, const Game& hypo,
   // play reveal that the other seats read as a self colour bluff, and struck.
   // Read at the REACTER's own seat, which sees cards the team's reading does not
   // (v18.9.0: human_vs_bot_diagnostics/2013726.md T27, black sees both n3s and reads
-  // its own card as the r4).
+  // its own card as the r4). That seat sees OUR hand too, which our model of it
+  // cannot (v23.25.0, the user's ruling, `seen_by_holder`): a card of ours we can
+  // name is out of its reading, and an emptied reading falls back to its empathy,
+  // as `Game::elim` makes it for a partner. Self-play Dark Null 9000069 T56
+  // (human_vs_bot_diagnostics/9000069_23_22.md): 3 to sim-alice reads sim-cathy's
+  // o38, the p5, through red as the r5 -- sim-bob's own named o50, which she sees.
   const int reacter = c.reading.reacter_side.holder;
-  if (seen && reacter >= 0 && reacter < static_cast<int>(hypo.players.size()) &&
-      !hypo.players[reacter].thoughts[react_order].possibilities().contains(*seen)) {
-    c.misnames_a_card = true;
+  if (seen && reacter >= 0 && reacter < static_cast<int>(hypo.players.size())) {
+    const Thought& rt = hypo.players[reacter].thoughts[react_order];
+    const IdentitySet team = rt.possibilities();
+    bool misnamed = !team.contains(*seen);
+    // Only a reading alive on our model's empathy that the cards of ours the reacter
+    // sees then empty falls back. One already off that empathy stays a misname, as
+    // before (self-play Black seed 153 T41, v23.25.0's first build: `{k5}` against
+    // an empathy of `{r5}`).
+    if (misnamed && team.intersect(rt.possible).non_empty()) {
+      const IdentitySet sees = seen_by_holder(hypo, reacter, rt.possible);
+      if (team.intersect(sees).is_empty() && sees.contains(*seen)) misnamed = false;
+    }
+    if (misnamed) c.misnames_a_card = true;
   }
 }
 

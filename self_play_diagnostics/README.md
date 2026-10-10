@@ -171,6 +171,22 @@ default is TIIAH & Black (6 Suits) since v22.9.0 (the user's call, for the hard 
 variants); from v20.24.0 to v22.8.0 it was TIIAH (6 Suits), and reports up to v20.23.0
 are 5 Suits.
 
+To hand a run's near misses to a human reviewer, export them as hanab.live replay
+JSONs:
+
+```bash
+scripts/export_selfplay_games.py <out_dir> v23.22=<base>/games.jsonl,<base_logs> \
+    v23.24=<cand>/games.jsonl,<cand_logs> [--score 29]
+```
+
+It takes the games that scored `--score` with no 5 discarded and names each
+`<variant>_<major>_<minor>_<game id>.json`, e.g. `darknull_23_22_9000002.json`. The
+version is in the name (from v23.25.0, the user's rule) because every build numbers
+its games `9000000 + seed`. It comes from the arm's name, so name each arm after its
+version: a candidate is usually run before its bump. A game identical in every arm
+gets one file, under the first arm's version. Keep the reviewed games' logs under
+`logs/diag/<dir>/`, out of the way of the next run, which overwrites `logs/`.
+
 ## Tests
 
 `tests/test_selfplay/` is part of `hanabi_tests`:

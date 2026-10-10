@@ -167,7 +167,7 @@ unbooked, since which card was which is exactly what is unknown.
 The stacks a reactive's target is walked in: the **minimum**, suit by suit, across
 every world the reacter can live in, from the giver's perspective (v16.24.0). For the
 pair it is their row; for an outside seat, the shared view floored over every seat's
-worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:285-299`.
+worlds. `reacter_frame`, `src/conventions/tiiah/interpret_reactive.cpp:328-342`.
 CONVENTION.md §1e. It replaced "assume none of the superposed cards were played".
 
 ### feasible world
@@ -263,7 +263,7 @@ to reconstruct at reaction time (a proven finesse's connector, or the reacter's 
 on the shared frame), within the card's reading before the clue. The giver and the
 reacter know the card exactly; unless the team reading is that one card, they keep it
 privately and the shared view carries the team's set (v17.2.0).
-`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:1978-2029`.
+`reaction_team_reading`, `src/conventions/tiiah/interpret_reactive.cpp:2039-2090`.
 CONVENTION.md §1d.
 
 ### known bucket violation
@@ -303,12 +303,12 @@ A reactive pairing the RECEIVER can show was a finesse without seeing its own ca
 called card could be the card after the one the reacter played, and could not be any
 card of the bucket half in any of its worlds. The reacter's card is then named, for the
 whole team, as the connector it was (v17.1.0). `proven_finesse`,
-`src/conventions/tiiah/interpret_reactive.cpp:1450-1485`. CONVENTION.md §1d.
+`src/conventions/tiiah/interpret_reactive.cpp:1496-1531`. CONVENTION.md §1d.
 
 Since v22.0.0 it is also the **only finesse that may be given**, and it decides the
 receiver's own reading. A proven finesse reads as the card after the reacter's. Any
 other pairing reads as the bucket half alone (`keep_convention_half`,
-`interpret_reactive.cpp:1363-1413`), never the union of the two halves.
+`interpret_reactive.cpp:1409-1459`), never the union of the two halves.
 
 ### shared view
 `State::shared_view()` (`src/basics/state.cpp:279-297`): this state with the
@@ -448,7 +448,7 @@ clue (`ReactorWC::receiver_standing`, v20.3.0). A play of any other card, includ
 one the reverse clue itself newly made playable, or a discard, withdraws it
 (v18.11.0; the reviewer's rule; replay 2018428 T17). This is how a Cathy who cannot tell a fix from a
 reverse reactive learns which it was. `tiiah::confirm_reverse_reactive`,
-`src/conventions/tiiah/interpret_reactive.cpp:318-388`. CONVENTION.md §1c.
+`src/conventions/tiiah/interpret_reactive.cpp:361-431`. CONVENTION.md §1c.
 
 ### role inversion
 The clue-to-Cathy half of the *reverse-reactive position*: Bob holds a *standing
@@ -462,7 +462,7 @@ reactive's target walk passes over it, since a new reactive has to get something
 new. When every playable and finesse target in
 the receiver's hand is gotten, the walk takes the leftmost gotten one instead
 (v18.5.0; human diagnostic 2013726 T38). `receiver_targets` and `walked_as_called`,
-`src/conventions/tiiah/interpret_reactive.cpp:392-467`. CONVENTION.md §1c; replay
+`src/conventions/tiiah/interpret_reactive.cpp:435-510`. CONVENTION.md §1c; replay
 2026374 T41 for the sure play.
 
 ### reverse reactive
@@ -639,7 +639,19 @@ contains what the card is: a reacter that books its b2 as the y4, or a receiver 
 predicted reading leaves out its target. The giver never gives a reactive that has the
 reacter (read at its own seat) or the receiver (predicted, the both-know licence
 honoured) misname its card, at any pace (`ClueCandidate::misnames_a_card`;
-CONVENTION.md §1d, v23.17.0; self-play Dark Null 9000080 T44).
+CONVENTION.md §1d, v23.17.0; self-play Dark Null 9000080 T44). The reacter's reading
+is taken on its empathy *as it sees it* (below).
+
+### as the holder sees it
+A card's candidates without every identity whose remaining copies all sit where its
+holder can see them: in the other hands, by sight, and among our own cards that we
+can name, which the holder sees though our model of it does not. We name a card of
+our own only on empathy: its empathy is one identity, or it is called to play and
+one identity of its empathy plays (`named_own_card`). At the holder's own seat it is exactly its sight. Elsewhere it is wider, missing
+our unnamed cards. The giver judges the reacter this way in the misname check and in
+the late bucket break (v23.25.0, the user's ruling; self-play Dark Null 9000069 T56: the
+red bucket's r5 was the giver's own named card). `seen_by_holder`,
+`src/conventions/tiiah/interpret_reactive.cpp:251-291`. CONVENTION.md §1d.
 
 ### blind read
 The giver's second reading of its own stable clue, made with the receiver's hand
