@@ -1011,7 +1011,9 @@ is judged from Alice's own inference, not common knowledge.
        And it drops a reactive that would have the reacter or the receiver
        misname its own card, at any pace (`misnames_a_card`,
        `reactor0/decision.cpp:1357`, v23.17.0; self-play 9000080 T44).
-       tiiah/CONVENTION.md §1d.
+       tiiah/CONVENTION.md §1d. And a stable 1 play clue whose called card is
+       not the one identity a stable 1 may name (`illegal_stable_one`, same
+       line, v23.18.0). tiiah/CONVENTION.md §1b.
     2. If pace is >= 3 and Cathy's chop is not a trash card or a same-hand-dupe, give a double discard clue
        that stamps CTD on two trash cards or same-hand-dupes, or CTP to a trash or same-hand-dupe
        in an inverted suit.

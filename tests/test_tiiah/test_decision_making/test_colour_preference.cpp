@@ -111,11 +111,9 @@ TEST(TiiahColourPreference, OnlyTheColourCandidatesNameTheirCard) {
   Game g = setup(std::move(opts));
 
   const auto cs = analysed(g);
-  const ClueCandidate* rank1 = find_clue(cs, 1, ClueKind::RANK, 1);
-  ASSERT_NE(rank1, nullptr);
-  EXPECT_EQ(rank1->reading.shape, ClueShape::STABLE_PLAY)
-      << "it is a play clue — that is why it was chosen before";
-  EXPECT_FALSE(rank1->names_its_card) << "{r1,y1,g1,b1,p1}";
+  // A stable 1 may call only the 1 of the rightmost stack at 0 -- here the p1 -- so
+  // the 1 that calls the r1 is not a candidate at all (v23.18.0, the user's rule).
+  EXPECT_EQ(find_clue(cs, 1, ClueKind::RANK, 1), nullptr);
 
   for (int colour : {0, 1, 2}) {  // red, yellow, green
     const ClueCandidate* c = find_clue(cs, 1, ClueKind::COLOUR, colour);

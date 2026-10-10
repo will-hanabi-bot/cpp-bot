@@ -12,6 +12,7 @@
 #include "hanabi/conventions/reactor0/colour_value.h"
 #include "hanabi/conventions/tiiah/buckets.h"
 #include "hanabi/conventions/tiiah/dupes.h"
+#include "hanabi/conventions/tiiah/interpret_clue.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/decision.h"
 #include "hanabi/conventions/reactor0/interpret_reaction.h"
@@ -1792,6 +1793,16 @@ void annotate_candidate(const Game& game, const Game& hypo,
   const State& s = game.state;
   if (!s.variant->throw_it_in_a_hole) return;
   credit_partner_with_our_hole(game, hypo, c);
+  // THE STABLE 1 (v23.18.0, the user's rule): a stable 1 play clue may call only
+  // the one identity `stable_one_identity` names.
+  if (c.reading.shape == reactor0::ClueShape::STABLE_PLAY &&
+      c.action.clue.kind == ClueKind::RANK && c.action.clue.value == 1 &&
+      c.reading.stable_subject >= 0 &&
+      c.reading.stable_subject < static_cast<int>(s.deck.size())) {
+    const auto one = stable_one_identity(s);
+    const auto id = s.deck[c.reading.stable_subject].id();
+    if (!one || !id || *id != *one) c.illegal_stable_one = true;
+  }
   if (c.reading.shape != reactor0::ClueShape::REACTIVE_PLAY) return;
   const int react_order = c.reading.reacter_side.order;
   const int target = c.reading.receiver_side.order;

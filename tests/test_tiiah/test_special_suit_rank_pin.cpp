@@ -39,10 +39,6 @@ SetupOptions opts_for(const std::string& variant, const std::string& slot1) {
   return opts;
 }
 
-int bob_slot_reading_size(const Game& g, int slot) {
-  return g.common.thoughts[order_at(g, TestPlayer::BOB, slot)].inferred.length();
-}
-
 }  // namespace
 
 TEST(TiiahSpecialRankPin, WhiteOneOnANewSlotOneCard) {
@@ -73,31 +69,33 @@ TEST(TiiahSpecialRankPin, GrayPinkOneOnANewSlotOneCard) {
   expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/1, {"i1"});
 }
 
-// Controls. White is already on 1, so its next card is no 1: the 1 is a playable 1
-// of no particular suit.
-TEST(TiiahSpecialRankPin, NotPinnedWhenTheSpecialSuitsNextCardIsAnotherRank) {
+// White is already on 1, so its next card is no 1: the stable 1 names the 1 of the
+// rightmost stack at 0, blue (v23.18.0, the user's rule).
+TEST(TiiahSpecialRankPin, TheOneFallsToTheRightmostStackAtZero) {
   SetupOptions opts = opts_for("Throw It in a Hole & White (5 Suits)", "r1");
   opts.play_stacks = std::vector<int>{0, 0, 0, 0, 1};
   Game g = setup(std::move(opts));
   g = take_turn(std::move(g), "Alice clues 1 to Bob");
   ASSERT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
-  EXPECT_GT(bob_slot_reading_size(g, 1), 1);
+  expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/1, {"b1"});
 }
 
-// ...the 1 calls Bob's slot 2, not his slot 1.
+// ...the 1 calls Bob's slot 2, not his slot 1: the stable 1 names whichever card it
+// calls (v23.18.0).
 TEST(TiiahSpecialRankPin, NotPinnedOffSlotOne) {
   SetupOptions opts = opts_for("Throw It in a Hole & White (5 Suits)", "y4");
   opts.hands[1] = {"y4", "w1", "g4", "b4", "r4"};
   Game g = setup(std::move(opts));
   g = take_turn(std::move(g), "Alice clues 1 to Bob");
   ASSERT_EQ(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY);
-  EXPECT_GT(bob_slot_reading_size(g, 2), 1);
+  expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/2, {"w1"});
 }
 
-// ...and Null, which no rank touches, is not a special suit for this rule.
-TEST(TiiahSpecialRankPin, NullIsNotPinned) {
+// ...and Null, which no rank touches, is skipped: the 1 names the rightmost plain
+// stack at 0, blue (v23.18.0, rule 3).
+TEST(TiiahSpecialRankPin, NullOneFallsToTheRightmostPlainStack) {
   Game g = setup(opts_for("Throw It in a Hole & Null (5 Suits)", "r1"));
   g = take_turn(std::move(g), "Alice clues 1 to Bob");
   ASSERT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
-  EXPECT_GT(bob_slot_reading_size(g, 1), 1);
+  expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/1, {"b1"});
 }

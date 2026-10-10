@@ -1332,8 +1332,12 @@ TEST(TiiahReplay2014538, ColorStablePlayOverRankStall) {
   auto rec = nlohmann::json::parse(kSnapshotJson);
   hanabi::Game game = hanabi::logging::apply_snapshot(rec);
   hanabi::PerformAction action = game.take_action();
+  // Since v23.18.0 the recorded early 1s read as the stable 1 names them, and the
+  // reactive 2 is gone: the Green to black the diagnostic asked for is given.
   const auto* rank = std::get_if<hanabi::PerformRank>(&action);
-  ASSERT_TRUE(rank) << "the reactive 2 to green (v22.0.0)";
-  EXPECT_EQ(rank->target, 2) << "to green";
-  EXPECT_EQ(rank->value, 2) << "not the rank 3 stall";
+  EXPECT_FALSE(rank && rank->value == 3) << "not the rank 3 stall";
+  const auto* colour = std::get_if<hanabi::PerformColour>(&action);
+  ASSERT_TRUE(colour) << "the Green to black";
+  EXPECT_EQ(colour->target, 0) << "to black";
+  EXPECT_EQ(colour->value, 2) << "Green";
 }

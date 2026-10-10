@@ -857,8 +857,6 @@ TEST(TiiahSelfPlay9000004, StableCallJudgedBlind) {
                std::get<hanabi::PerformColour>(action).target == 2 &&
                std::get<hanabi::PerformColour>(action).value == 0)
       << "not the Red that calls the r5 as the r2";
-  ASSERT_TRUE(std::holds_alternative<hanabi::PerformRank>(action));
-  EXPECT_EQ(std::get<hanabi::PerformRank>(action).target, 2);
-  const int value = std::get<hanabi::PerformRank>(action).value;
-  EXPECT_TRUE(value == 5 || value == 2) << "rank 5 or 2, got " << value;
+  // (v23.15.0 gave the 5. Since v23.18.0 the recorded T5 1 reads as the stable 1
+  // names it, and the position moves; only the Red is pinned.)
 }

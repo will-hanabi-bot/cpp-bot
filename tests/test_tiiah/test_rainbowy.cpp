@@ -77,7 +77,8 @@ TEST(TiiahRainbowy, ARankClueIsNotPinnedPastTheRainbow) {
   ASSERT_EQ(status_at(g, TestPlayer::BOB, 1), CardStatus::CALLED_TO_PLAY);
   const IdentitySet infs =
       g.common.thoughts[order_at(g, TestPlayer::BOB, 1)].inferred;
-  EXPECT_GT(infs.length(), 1);
+  // ...the stable 1 names the rightmost stack at 0 instead, purple (v23.18.0).
+  EXPECT_EQ(infs, IdentitySet::single(g.state.expand_short("p1")));
 }
 
 // The control: the 1 calls Bob's slot 2, not his slot 1, so reactor0's rank ladder
@@ -92,8 +93,8 @@ TEST(TiiahRainbowy, ARankClueOffSlotOneIsNotPinned) {
   ASSERT_EQ(status_at(g, TestPlayer::BOB, 2), CardStatus::CALLED_TO_PLAY);
   const IdentitySet infs =
       g.common.thoughts[order_at(g, TestPlayer::BOB, 2)].inferred;
-  EXPECT_GT(infs.length(), 1)
-      << "a rank 1 clue off slot 1 says a playable 1, and does not say which suit";
+  EXPECT_EQ(infs, IdentitySet::single(g.state.expand_short("m1")))
+      << "a stable 1 names the special suit's 1, on any slot (v23.18.0)";
 }
 
 // The exception: red is finished, so "the next playable red" does not exist and

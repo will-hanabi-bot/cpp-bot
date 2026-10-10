@@ -359,6 +359,24 @@ void pin_special_rank(const Game& prev, Game& game, const ClueAction& action) {
   game.narrow_thought(slot1, IdentitySet::single(pin));
 }
 
+// The stable 1 is read as the one identity it may call (v23.18.0, the user's
+// rule; `stable_one_identity`): its newly called card, if the card can be it.
+void pin_stable_one(const Game& prev, Game& game, const ClueAction& action) {
+  const auto one = stable_one_identity(game.state);
+  if (!one) return;
+  for (int o : game.state.hands[action.target]) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (o < static_cast<int>(prev.meta.size()) &&
+        prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+      continue;  // an older call
+    }
+    if (game.common.thoughts[o].possibilities().contains(*one)) {
+      game.narrow_thought(o, IdentitySet::single(*one));
+    }
+    return;  // the first newly called card only
+  }
+}
+
 // Every identity that plays in some strike-free world of the SHARED view -- each
 // seat's hole cards as the team reads them -- so every seat computes it alike. The
 // flat fallback is `pitch_candidates_in_shared_worlds`'s (v20.18.0).
@@ -673,7 +691,12 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
       out = reactor0::stable_rank(p, g, action, stall_ctx,
                                   &state.common_play_stacks);
       // §1f for a rank clue: a new slot-1 call is the special suit's playable.
-      pin_special_rank(p, g, action);
+      // ...except a 1, which names the stable 1's identity (v23.18.0).
+      if (action.clue.value == 1) {
+        pin_stable_one(p, g, action);
+      } else {
+        pin_special_rank(p, g, action);
+      }
     } else {
       // A colour play reveal outranks the leftmost newly touched card when it is
       // one on the stacks the giver and the receiver share (v22.5.0, the user's
@@ -1007,6 +1030,34 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
   read_stable_over_worlds(prev, game, action, view);
   repin_own_call(prev, game, action.giver);
   return interp;
+}
+
+std::optional<Identity> stable_one_identity(const State& state) {
+  const auto& suits = state.variant->suits;
+  const int n = static_cast<int>(suits.size());
+  if (n == 0) return std::nullopt;
+  const std::vector<int>& stacks = state.common_play_stacks.size() == suits.size()
+                                       ? state.common_play_stacks
+                                       : state.play_stacks;
+  auto named = [](const std::string& name, std::initializer_list<const char*> set) {
+    return std::any_of(set.begin(), set.end(), [&name](const char* s) { return name == s; });
+  };
+  const std::string& last = suits[n - 1].name;
+  const bool has_special =
+      !named(last, {"Red", "Yellow", "Green", "Blue", "Purple", "Teal"});
+  const bool special_untouched =
+      has_special && named(last, {"Brown", "Dark Brown", "Muddy Rainbow", "Cocoa Rainbow",
+                                  "Null", "Dark Null"});
+  auto ones_play = [&](int s) {
+    const auto& t = suits[s].suit_type;
+    return !t.reversed && !t.inverted && stacks[s] == 0;
+  };
+  if (has_special && !special_untouched && ones_play(n - 1)) return Identity(n - 1, 1);
+  for (int s = n - 1; s >= 0; --s) {
+    if (special_untouched && s == n - 1) continue;
+    if (ones_play(s)) return Identity(s, 1);
+  }
+  return std::nullopt;
 }
 
 }  // namespace hanabi::tiiah

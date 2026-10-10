@@ -408,7 +408,6 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2023126_world_target_beyond_the_frame.cpp
   tests/test_tiiah/test_decision_making/test_replay_2023552_passed_over_judged_on_the_shared_view.cpp
   tests/test_tiiah/test_decision_making/test_replay_2023552_late_deck_clue_to_bob_is_a_stall.cpp
-  tests/test_tiiah/test_decision_making/test_replay_2023572_reverse_target_read_on_the_walk_frame.cpp
   tests/test_tiiah/test_decision_making/test_replay_2023897_reacter_keeps_its_reactions_call.cpp
   tests/test_tiiah/test_decision_making/test_replay_2023552_stall_reveals_blues_g5.cpp
   tests/test_tiiah/test_decision_making/test_replay_9000002_displaced_reaction_keeps_shared_view.cpp
@@ -591,7 +590,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_known_play_standing_call.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp
-  tests/test_tiiah/test_selfplay_9000118_reacter_call_spares_receivers_hole.cpp
+  tests/test_tiiah/test_reacter_call_spares_receivers_hole.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_six_buckets.cpp

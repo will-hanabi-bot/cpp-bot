@@ -6,10 +6,12 @@
 #include <optional>
 
 #include "hanabi/basics/action.h"
+#include "hanabi/basics/identity.h"
 #include "hanabi/basics/interp.h"
 
 namespace hanabi {
 class Game;
+struct State;
 }
 
 namespace hanabi::tiiah {
@@ -32,5 +34,13 @@ namespace hanabi::tiiah {
 // §0's status table is the current account of what is implemented.
 std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
                                          const ClueAction& action);
+
+// THE STABLE 1 (v23.18.0, the user's rule; CONVENTION.md §1b). The one identity a stable 1 play
+// clue may call, judged on the globally known stacks: the special suit's 1 while
+// its stack is at 0 (the special suit is the variant's last suit, when not plain);
+// otherwise the 1 of the rightmost suit at 0 -- never a Brown, Dark Brown, Muddy
+// Rainbow, Cocoa Rainbow, Null or Dark Null special suit. Nullopt when no 1 is
+// left to call, and then no stable 1 play clue may be given.
+std::optional<Identity> stable_one_identity(const State& state);
 
 }  // namespace hanabi::tiiah

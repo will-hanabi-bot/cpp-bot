@@ -12,6 +12,7 @@
 #include "hanabi/basics/convention.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/interp.h"
+#include "hanabi/conventions/tiiah/interpret_clue.h"
 #include "test_harness.h"
 #include "test_reactor0/test_reactor0_helpers.h"
 #include "test_tiiah/test_tiiah_helpers.h"
@@ -97,12 +98,21 @@ TEST(TiiahStableClues, ReadExactlyAsReactorZeroReadsThem) {
   ASSERT_TRUE(interp_of(r0).has_value());
   EXPECT_EQ(interp_of(th), interp_of(r0))
       << "the same clue must read the same way";
+  // ...except that a stable 1 names its called card (v23.18.0, the user's rule): that
+  // one card's reading is the stable 1's identity, and every other reading agrees.
+  const auto one = hanabi::tiiah::stable_one_identity(th.state);
+  ASSERT_TRUE(one.has_value());
+  int pinned = 0;
   for (size_t i = 0; i < r0.meta.size(); ++i) {
     EXPECT_EQ(th.meta[i].status, r0.meta[i].status) << "order " << i;
     EXPECT_EQ(th.meta[i].urgent, r0.meta[i].urgent) << "order " << i;
-    EXPECT_EQ(th.common.thoughts[i].inferred, r0.common.thoughts[i].inferred)
-        << "order " << i;
+    if (th.common.thoughts[i].inferred != r0.common.thoughts[i].inferred) {
+      EXPECT_EQ(th.meta[i].status, CardStatus::CALLED_TO_PLAY) << "order " << i;
+      EXPECT_EQ(th.common.thoughts[i].inferred, IdentitySet::single(*one)) << "order " << i;
+      ++pinned;
+    }
   }
+  EXPECT_LE(pinned, 1) << "only the card the 1 calls";
 }
 
 // A reverse-reactive clue whose target walk finds nothing is not guessed at.

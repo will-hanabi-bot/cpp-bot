@@ -1354,7 +1354,7 @@ std::vector<ClueCandidate> analyse_clues(
     if (annotate && *annotate) (*annotate)(game, hypo, c);
     // Throw It in a Hole: a reactive that has the reacter or the receiver misname
     // its own card is never given (v23.17.0, the user's ruling).
-    if (c.misnames_a_card) continue;
+    if (c.misnames_a_card || c.illegal_stable_one) continue;
     out.push_back(std::move(c));
   }
   return out;

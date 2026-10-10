@@ -281,6 +281,9 @@ struct ClueCandidate {
   // identity. Never given (v23.17.0, the user's ruling; self-play Dark Null seed
   // 80 T44). Filled in by the annotator, like `receiver_reading_size`.
   bool misnames_a_card = false;
+  // Throw It in a Hole (v23.18.0): a stable 1 play clue whose called card is not
+  // the one identity a stable 1 may call (`tiiah::stable_one_identity`). Never given.
+  bool illegal_stable_one = false;
 };
 
 // A per-candidate hook `analyse_clues` calls with the hypo it has just built, so
