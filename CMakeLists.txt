@@ -557,6 +557,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_replay_2025422_team_reading_ruled_out_reads_any_playable.cpp
   tests/test_tiiah/test_replay_2025452_receiver_reads_any_playable_when_bucket_impossible.cpp
   tests/test_tiiah/test_replay_2026374_walk_skips_a_sure_play.cpp
+  tests/test_tiiah/test_replay_2026422_own_hole_card_below_stack_landed.cpp
   tests/test_tiiah/test_replay_2018874_standing_call_survives_a_new_call_right.cpp
   tests/test_tiiah/test_standing_call_survives_and_plays.cpp
   tests/test_tiiah/test_dupe_ones_flip_the_position.cpp

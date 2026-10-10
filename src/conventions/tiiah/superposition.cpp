@@ -7,6 +7,7 @@
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/state.h"
 #include "hanabi/conventions/tiiah/interpret_reactive.h"
+#include "hanabi/logging/decide_trace.h"
 
 namespace hanabi::tiiah {
 
@@ -315,6 +316,30 @@ void settle_above_the_shared_view(Game& game, int order, Identity id) {
   known_play_lands_in_common(game, id, order, /*presume_unexplained=*/false);
 }
 
+// Is OUR settled card the very copy our stack already rests on (v23.22.0)? The stack
+// has passed the identity, and every other copy is in the discard pile or visible in
+// a hand, so no other copy can have put it there. Then the card landed, and the floor
+// that raised the stack (a landing we watched above it) already counted it: it is not
+// a strike. Replay 2026422 T30-T33: will-bot69's own o11 `{r2,b2}` was named the b2
+// once yagami's r2 landed. Blue was already on 3 for will-bot69, floored by a b3 it
+// watched land; with the other b2 (o15) thrown, the b2 was booked as a STRIKE,
+// blue's max rank fell to 1, and at T33 will-bot69 threw its clued b5 as trash.
+bool stack_rests_on_this_copy(const State& s, int order, Identity id) {
+  const int stack = s.play_stacks[id.suit_index];
+  const bool reversed = s.variant->suits[id.suit_index].suit_type.reversed;
+  const bool passed = reversed ? id.rank >= stack : id.rank <= stack;
+  if (!passed) return false;
+  int elsewhere = static_cast<int>(s.discard_stacks[id.suit_index][id.rank - 1].size());
+  for (const auto& hand : s.hands) {
+    for (int o : hand) {
+      if (o == order) continue;
+      const auto seen = s.deck[o].id();
+      if (seen && *seen == id) ++elsewhere;
+    }
+  }
+  return s.card_count[id.to_ord()] - elsewhere == 1;
+}
+
 void settle(Game& game, int order, Identity id, bool shared) {
   const State& s = game.state;
   const bool ours = s.holder_of(order) == s.our_player_index;
@@ -332,7 +357,10 @@ void settle(Game& game, int order, Identity id, bool shared) {
     // is just as well, since the card left its hand when it was played.
     advance_pairwise(game, id, /*player=*/-1, /*self_knew=*/true);
   }
-  if (ours) {
+  if (ours && !s.is_playable(id) && stack_rests_on_this_copy(s, order, id)) {
+    hanabi::logging::log_branch("tiiah.settle_landed_below_stack",
+                                {{"order", order}, {"suit", id.suit_index}, {"rank", id.rank}});
+  } else if (ours) {
     const bool playable = s.is_playable(id);
     game.with_state([&](State& st) {
       // A card that did not land is gone all the same: `with_discard` is what
