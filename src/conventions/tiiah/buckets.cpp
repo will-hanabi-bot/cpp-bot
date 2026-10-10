@@ -121,7 +121,7 @@ int reacter_bucket_for(const Variant& variant, ClueKind kind, int clue_turn,
               bucket_count(variant));
 }
 
-bool late_game(const State& state, int clue_turn) {
+bool high_score_phase(const State& state, int clue_turn) {
   int plays = 0;
   const int turns = std::min(clue_turn, static_cast<int>(state.action_list.size()));
   for (int t = 0; t < turns; ++t) {

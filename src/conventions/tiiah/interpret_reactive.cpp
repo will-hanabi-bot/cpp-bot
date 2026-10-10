@@ -291,7 +291,7 @@ IdentitySet seen_by_holder(const Game& game, int holder, const IdentitySet& set)
 }
 
 // THE GIVER MAY GIVE A GLOBALLY KNOWN VIOLATION LATE IN THE GAME (v23.23.0, the
-// user's call; replay 2026455 T49). Once `late_game`, the giver may pair `react` with
+// user's call; replay 2026455 T49). Once `high_score_phase`, the giver may pair `react` with
 // `target_id` against the bucket relation, provided neither player can misread it on
 // `faced`: the receiver's bucket reading from `react` finds nothing, and the reacter's
 // empathy `react_live` holds no playable of the bucket the target names. Both then
@@ -947,7 +947,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         // A globally known violation (below, the walk) is one readers understand,
         // but the giver does not give one (v22.4.0): taking the exception here cost
         // 0.3 points and 9 strikeouts per 300 games of 6 Suits in self-play.
-        // ...except LATE (v23.23.0, `late_game`), and only when neither player can
+        // ...except LATE (v23.23.0, `high_score_phase`), and only when neither player can
         // misread it, on both frames (`violation_known_on`). Replay 2026455 T49:
         // Purple to yagami_black pairs will-bot69's u2 with yagami's r4; purple and
         // yellow, the two buckets it names, are complete.
@@ -956,7 +956,7 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
         const IdentitySet target_poss = game.common.thoughts[target.order].possibilities();
         const IdentitySet react_sees = seen_by_holder(game, reacter, react_live);
         const bool late_break =
-            late_game(state, clue_turn) &&
+            high_score_phase(state, clue_turn) &&
             violation_known_on(after, action.clue.kind, clue_turn, *actual, target.id,
                                react_sees, target_poss) &&
             violation_known_on(common_faced, action.clue.kind, clue_turn, *actual,
@@ -1368,7 +1368,7 @@ ReceiverReading receiver_reading(const Variant& variant,
       else it->second |= (1ULL << w);
     };
     if (late) {
-      // LATE (v23.23.0, `late_game`): per candidate of the reacter's card -- the
+      // LATE (v23.23.0, `high_score_phase`): per candidate of the reacter's card -- the
       // playables once THAT card has landed, but that card. Excluding every
       // candidate at once loses the cards the other candidates leave playable
       // (self-play Black seed 20 T47: Cathy's `{r2,k2}` against Alice's k2).
@@ -1413,7 +1413,7 @@ ReceiverReading receiver_reading(const Variant& variant,
 // `{p1,t1,g2}`; the giver may not give a finesse the receiver cannot prove (the walk).
 void keep_convention_half(ReceiverReading& rr, bool proven, const IdentitySet& could,
                           bool late = false) {
-  // LATE (v23.23.0, the user's call, `late_game`): the bucket where it offers
+  // LATE (v23.23.0, the user's call, `high_score_phase`): the bucket where it offers
   // something the card could be, else ANY playable -- the finesse is no longer first.
   // Self-play Black seed 20 T47: Bob's Yellow paired Cathy's r2 with Alice's k2, both
   // buckets empty; Cathy, unable to name her own card, read Alice's as the finesse
@@ -1635,7 +1635,7 @@ void receiver_world_fallback(const Game& prev, Game& game, const ReactorWC& wc,
   // reading every world allows is no evidence about the hole, and the stamp failed
   // for some other reason -- its clue-time frame, say -- which this is not here to
   // second-guess (replay 2011885 T10).
-  const bool late = late_game(s, wc.turn);
+  const bool late = high_score_phase(s, wc.turn);
   ReceiverReading rr =
       receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live, late);
   {  // the bucket first (v22.0.0, `keep_convention_half`)
@@ -1796,7 +1796,7 @@ void narrow_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
                   : std::vector<int>{wc.receiver, wc.giver};
   const auto worlds = open_worlds(game, base, holders);
 
-  const bool late = late_game(s, wc.turn);
+  const bool late = high_score_phase(s, wc.turn);
   ReceiverReading rr =
       receiver_reading(*s.variant, worlds, wc.clue.kind, wc.turn, react_live, late);
   // The baseline comes from `prev` rather than from `old_inferred`: unlike
@@ -1963,7 +1963,7 @@ void annotate_candidate(const Game& game, const Game& hypo,
   const auto worlds = open_worlds(hypo, base, std::vector<int>{receiver, giver});
   // The turn the candidate clue would be given on: this one.
   const int clue_turn = s.turn_count;
-  const bool late = late_game(s, clue_turn);
+  const bool late = high_score_phase(s, clue_turn);
   ReceiverReading rr = receiver_reading(*s.variant, worlds, c.action.clue.kind,
                                         clue_turn, react_live, late);
   {  // the bucket first (v22.0.0, `keep_convention_half`)

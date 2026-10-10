@@ -78,12 +78,15 @@ int named_bucket(const Variant& variant, ClueKind kind, int clue_turn, int from)
 int reacter_bucket_for(const Variant& variant, ClueKind kind, int clue_turn,
                        int target_bucket);
 
-// THE LATE GAME (v23.23.0, the user's call; replay 2026455 T49): the plays made
+// THE HIGH SCORE PHASE (v23.23.0 as "the late game", named by the user in v23.26.0;
+// replay 2026455 T49): the plays made
 // before `clue_turn` are at least 2/3 of the maximum score, 5 per suit. Counted off
 // the action list, which every seat holds alike -- a miss included, since in TIIAH a
 // miss looks like a play -- and never off the score, which is hidden. Late, the giver
 // may give a globally known bucket violation, and a reader whose bucket offers nothing
-// the card could be reads any playable, not the finesse first (CONVENTION.md §1d).
-bool late_game(const State& state, int clue_turn);
+// the card could be reads any playable, not the finesse first (CONVENTION.md §1d);
+// and a play clue that reveals a card leading into the other hands is HIGH
+// (reactor0 `high_score_lead_in`, tiiah/CONVENTION.md §2s, v23.26.0).
+bool high_score_phase(const State& state, int clue_turn);
 
 }  // namespace hanabi::tiiah

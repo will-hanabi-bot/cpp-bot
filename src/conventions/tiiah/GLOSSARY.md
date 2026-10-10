@@ -274,21 +274,33 @@ walking seat goes past it (v22.4.0), judged on the common view and on the pair's
 alike. A violation both players see through -- the receiver's bucket reading finds
 nothing, and the reacter's empathy offers no playable of the bucket the target names,
 so each falls back to its playable -- is **globally known** and stands. Readers
-understand it; the giver gives one only in the *late game* (v23.23.0; before that,
+understand it; the giver gives one only in the *High Score Phase* (v23.23.0; before that,
 not since v22.4.0). After a known violation the receiver's target is the finesse from
 the reacter's card if it can be (a *proven finesse*), and only otherwise any other
-stack playable (replay 2022852 T33); in the late game it is any playable, the finesse
+stack playable (replay 2022852 T33); in the High Score Phase it is any playable, the finesse
 no longer first. `reacter_can_legally_answer`, `tiiah/interpret_reactive.cpp`.
 CONVENTION.md §1d, replay 2022760 T22.
 
-### late game
+### High Score Phase (the late game)
 The stretch of a TIIAH game in which the plays made before a clue's turn are at
 least 2/3 of the maximum score (20 in six suits), counted off the public action list,
-a miss included (v23.23.0). The score is hidden in TIIAH, so it is never the measure.
-In the late game the giver may give a globally known bucket violation, and a reader
-whose bucket offers nothing the target could be reads any playable, taken per
-candidate of the reacter's card, rather than the finesse first. `late_game`,
-`src/conventions/tiiah/buckets.cpp:124-133`. CONVENTION.md §1d, replay 2026455 T49.
+a miss included (v23.23.0, as "the late game"; named by the user in v23.26.0). The
+score is hidden in TIIAH, so it is never the measure. In it the giver may give a
+globally known bucket violation, and a reader whose bucket offers nothing the target
+could be reads any playable, taken per candidate of the reacter's card, rather than
+the finesse first (CONVENTION.md §1d, replay 2026455 T49). And a play clue revealing a
+card that *leads into* the other hands is HIGH (§2s, v23.26.0). `high_score_phase`,
+`src/conventions/tiiah/buckets.cpp:124-133`.
+
+### leads into (lead-in)
+A playable card **leads into** the contiguous run of its successors that can be found
+in Bob's and Cathy's hands by sight, or in Alice's own where she names the card: a
+b3 leads into a b4 and a b5, but not into a b5 with no b4 in sight. In the High Score
+Phase, a play clue revealing an unknown playable of Bob's (of Cathy's, when Bob is
+loaded) that leads into two or more cards, or whose very next card is critical, is a
+**lead-in** and is HIGH, given at priority 1b (`high_score_lead_in`,
+`src/conventions/reactor0/decision.cpp:1076-1145`; CONVENTION.md §2s, v23.26.0;
+self-play Dark Null 9000007 T48).
 
 ### displaced reaction
 A pending reaction a newer reactive to the same receiver overwrote in

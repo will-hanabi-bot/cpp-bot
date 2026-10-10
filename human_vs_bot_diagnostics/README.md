@@ -43,9 +43,9 @@ elsewhere.
 | [9000126](9000126.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T14-T16 (reverse reactive ignored), T28 (a 4 to play the g1 ignored) | fixed (v23.15.0) |
 | [9000174](9000174.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T14 (known r2 after reverse reactives ignored) | fixed (v23.15.0) |
 | [9000080](9000080.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T44–T51 (an endgame reactive has the reacter misname its b2 as the y4) | fixed (v23.17.0) |
-| [9000007 (v23.22)](9000007_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T48 (High Score Phase: a play clue leading into other hands) | open |
+| [9000007 (v23.22)](9000007_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T48 (High Score Phase: a play clue leading into other hands) | fixed (v23.26.0) |
 | [9000069 (v23.22)](9000069_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T56 (a late bucket break made safe by the giver's own named card) | fixed (v23.25.0) |
-| [9000081 (v23.22)](9000081_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T51 (1 to sim-bob, both know their cards; at least Blue, a lead-in) | the 1 fixed (v23.23.0, pinned v23.25.0); Blue open |
+| [9000081 (v23.22)](9000081_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T51 (1 to sim-bob, both know their cards; at least Blue, a lead-in) | the 1 fixed (v23.23.0, pinned v23.25.0); Blue a HIGH lead-in (v23.26.0) |
 | [9000096 (v23.22)](9000096_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T59 (forced endgame: discard so the seat after next gets two turns) | open |
 
 ## Template

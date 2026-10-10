@@ -292,6 +292,16 @@ struct ClueCandidate {
   // Throw It in a Hole (v23.18.0): a stable 1 play clue whose called card is not
   // the one identity a stable 1 may call (`tiiah::stable_one_identity`). Never given.
   bool illegal_stable_one = false;
+  // Throw It in a Hole only: the HIGH SCORE PHASE LEAD-IN (v23.26.0, the user's
+  // ruling; human_vs_bot_diagnostics/9000007_23_22.md T48). Once plays reach 2/3 of
+  // the maximum, the playables this clue reveals to Bob -- or to Cathy, when Bob is
+  // loaded -- that lead into the other hands: `lead_in_cards` of them, the longest
+  // run of successors they lead into (`lead_in_chain`), and whether one's very next
+  // card is critical (`lead_in_critical`). Such a clue is HIGH, and priority 1b
+  // gives it (`high_score_lead_in`, `rung_high_score_lead_in`).
+  int lead_in_cards = 0;
+  int lead_in_chain = 0;
+  bool lead_in_critical = false;
 };
 
 // A per-candidate hook `analyse_clues` calls with the hypo it has just built, so

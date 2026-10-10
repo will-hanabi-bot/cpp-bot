@@ -19,6 +19,7 @@
 #include "hanabi/conventions/reactor0/positional_discard.h"
 #include "hanabi/conventions/reactor0/interpret_reactive.h"
 #include "hanabi/conventions/variants/hole.h"
+#include "hanabi/conventions/tiiah/buckets.h"
 #include "hanabi/conventions/tiiah/superposition.h"
 #include "hanabi/conventions/reactor0/facts.h"
 #include "hanabi/conventions/variants/inverted.h"
@@ -1072,6 +1073,77 @@ bool urgent_endgame_reactive(const Game& g, const ClueCandidate& c) {
   return false;
 }
 
+// THE HIGH SCORE PHASE LEAD-IN (Throw It in a Hole, v23.26.0, the user's ruling;
+// human_vs_bot_diagnostics/9000007_23_22.md T48, 9000081_23_22.md T51). Once plays
+// reach 2/3 of the maximum (`tiiah::high_score_phase`), a play clue that reveals an
+// unknown playable of Bob's -- or of Cathy's, when Bob is loaded -- is HIGH when that
+// card leads into at least two cards, or straight into a critical one. "Leads into"
+// is a contiguous run of its successors, each seen in Bob's or Cathy's hand or named
+// in Alice's own; "straight into a critical card" is a very next card so found, and
+// critical. "Revealed": no call and no known play before the clue, one after it.
+// "Loaded" is TIIAH's: a standing play, or a reaction still owed. 9000007 T48:
+// sim-alice holds her called d5, so sim-bob's b3 counts, and it leads into sim-alice's
+// critical b4 and b5.
+struct LeadIn {
+  int cards = 0;
+  int chain = 0;
+  bool critical = false;
+};
+
+LeadIn high_score_lead_in(const Game& game, const Game& hypo) {
+  LeadIn out;
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole || !has_cathy(game)) return out;
+  if (!hanabi::tiiah::high_score_phase(s, s.turn_count)) return out;
+  const int alice = s.our_player_index;
+  const int bob = s.next_player_index(alice);
+  const int cathy = s.next_player_index(bob);
+  const bool bob_loaded =
+      variants::has_standing_play(game, bob) || variants::owes_a_reaction(game, bob);
+  const int p = bob_loaded ? cathy : bob;
+  auto present = [&](Identity id, int except) {
+    for (int seat : {bob, cathy}) {
+      for (int o : s.hands[seat]) {
+        if (o == except) continue;
+        const auto seen = s.deck[o].id();
+        if (seen && *seen == id) return true;
+      }
+    }
+    for (int o : s.hands[alice]) {
+      const IdentitySet mine = game.me().thoughts[o].possibilities();
+      if (mine.length() == 1 && mine.head() == id) return true;
+    }
+    return false;
+  };
+  auto has = [](const std::vector<int>& v, int o) {
+    return std::find(v.begin(), v.end(), o) != v.end();
+  };
+  const std::vector<int> knew = game.players[p].thinks_playables(game, p);
+  const std::vector<int> knows = hypo.players[p].thinks_playables(hypo, p);
+  for (int o : s.hands[p]) {
+    const auto id = s.deck[o].id();
+    if (!id || !s.is_playable(*id) || variants::is_inverted_id(s, *id)) continue;
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY || has(knew, o)) continue;
+    if (hypo.meta[o].status != CardStatus::CALLED_TO_PLAY && !has(knows, o)) continue;
+    int chain = 0;
+    bool critical = false;
+    for (Identity at = *id;;) {
+      const bool reversed = s.variant->suits[at.suit_index].suit_type.reversed;
+      const std::optional<Identity> next = reversed ? at.prev() : at.next();
+      if (!next || !present(*next, o)) break;
+      if (chain == 0) critical = s.is_critical(*next);
+      ++chain;
+      at = *next;
+    }
+    if (chain >= 2 || (chain >= 1 && critical)) {
+      ++out.cards;
+      out.chain = std::max(out.chain, chain);
+      out.critical = out.critical || critical;
+    }
+  }
+  return out;
+}
+
 }  // namespace
 
 std::optional<PerformAction> choose_urgent_endgame_reactive(
@@ -1193,6 +1265,14 @@ std::vector<ClueCandidate> analyse_clues(
     // ...and an urgent endgame reactive is HIGH (v23.14.0, the user's ruling).
     if (c.tier < ClueTier::HIGH && urgent_endgame_reactive(game, c)) {
       c.tier = ClueTier::HIGH;
+    }
+    // ...and so is a High Score Phase lead-in (v23.26.0, the user's ruling).
+    {
+      const LeadIn lead = high_score_lead_in(game, hypo);
+      c.lead_in_cards = lead.cards;
+      c.lead_in_chain = lead.chain;
+      c.lead_in_critical = lead.critical;
+      if (lead.cards > 0 && c.tier < ClueTier::HIGH) c.tier = ClueTier::HIGH;
     }
 
     // Rung 4b's third conjunct: does this clue get BOB playing immediately?
@@ -1627,6 +1707,28 @@ const ClueCandidate* rung_1(const Game& g, const std::vector<ClueCandidate>& cs)
   for (Term& t : bob_card_chain(g, /*require_bob_plays=*/false)) {
     chain.push_back(std::move(t));
   }
+  return settle(g, std::move(p), chain);
+}
+
+// --- priority 1b: a High Score Phase lead-in (Throw It in a Hole) -----------
+// v23.26.0, the user's ruling: after a reactive play clue, before a reactive
+// discard. `lead_in_cards` is 0 outside the variant, so the rung is inert there.
+// Tiebreak: the most lead-in cards revealed (9000007 T48's 3, revealing the b3 and
+// the r3, over a Blue revealing the b3 alone), the longest run, a critical next
+// card, then the default.
+const ClueCandidate* rung_high_score_lead_in(const Game& g,
+                                             const std::vector<ClueCandidate>& cs) {
+  Pool p = select(cs, [](const ClueCandidate& c) { return c.lead_in_cards > 0; });
+  if (p.empty()) return nullptr;
+  int most = 0, longest = 0;
+  for (const ClueCandidate* c : p) {
+    most = std::max(most, c->lead_in_cards);
+    longest = std::max(longest, c->lead_in_chain);
+  }
+  std::vector<Term> chain;
+  chain.push_back([most](const ClueCandidate& c) { return c.lead_in_cards == most; });
+  chain.push_back([longest](const ClueCandidate& c) { return c.lead_in_chain == longest; });
+  chain.push_back([](const ClueCandidate& c) { return c.lead_in_critical; });
   return settle(g, std::move(p), chain);
 }
 
@@ -2868,6 +2970,8 @@ std::optional<PerformAction> choose_clue(
   const char* rung = "";
   if ((pick = rung_1(game, ok))) {
     rung = "1.reactive_play";
+  } else if ((pick = rung_high_score_lead_in(game, ok))) {
+    rung = "1b.high_score_lead_in";
   } else if ((pick = rung_2(game, ok))) {
     rung = "2.reactive_discard";
   } else if ((pick = rung_unlock_bob(game, ok))) {
