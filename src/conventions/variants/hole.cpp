@@ -39,12 +39,19 @@ State stacks_after_queued_plays(const Game& game,
       // same.
       for (int o : game.state.hands[p]) {
         if (except_order && o == *except_order) continue;
+        const IdentitySet live = game.common.thoughts[o].possibilities();
         auto id = game.state.deck[o].id();
+        // A card this seat cannot see -- its own -- goes in as the one identity
+        // the team reads it as (v23.15.0). Skipped, the receiver of a reverse
+        // reactive froze the frame before its own standing call: replay 9000174
+        // T7-T9, sim-bob's o7 was the called r1, his frame read red 0, the call on
+        // o9 came out `{r1}`, and Rule 5 dropped it as stale where every other
+        // seat read `{r2}` -- at T14 he discarded instead of playing the r2.
+        if (!id && live.length() == 1) id = live.head();
         if (!id || !hypo.is_playable(*id)) continue;
         // Queued means the team is already committed to it: a standing call, or
         // a card its holder can name from empathy alone.
         const bool called = game.meta[o].status == CardStatus::CALLED_TO_PLAY;
-        const IdentitySet live = game.common.thoughts[o].possibilities();
         const bool empathy_playable =
             live.non_empty() &&
             live.forall([&hypo](Identity i) { return hypo.is_playable(i); });

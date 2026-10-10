@@ -38,6 +38,10 @@ elsewhere.
 | [9000022](9000022.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T19 (special-suit preference), T39 (play clue over trash reveal), T58 (reacter plays the y5) | fixed (v23.14.0) |
 | [9000046](9000046.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T57 (special-suit preference) | fixed (v23.14.0) |
 | [9000085](9000085.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T52 (urgent endgame reactive) | fixed (v23.14.0) |
+| [9000004](9000004.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T11 (illegal stable Red calls an r5 as an r2) | fixed (v23.15.0) |
+| [9000118](9000118.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T7-T8 (the giver does not model the reacter's ASCR) | fixed (v23.15.0) |
+| [9000126](9000126.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T14-T16 (reverse reactive ignored), T28 (a 4 to play the g1 ignored) | fixed (v23.15.0) |
+| [9000174](9000174.md) | Throw It in a Hole & Black (6 Suits), tiiah (self-play) | — | T14 (known r2 after reverse reactives ignored) | fixed (v23.15.0) |
 
 ## Template
 

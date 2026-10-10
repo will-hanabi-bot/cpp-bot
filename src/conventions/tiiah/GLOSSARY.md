@@ -153,7 +153,7 @@ when an assignment is not playable on the stacks the world has reached. §1e rul
 refutes a striking world whenever a strike-free one is available, and stands them
 all up again when every world has a strike in it: then the strike is not an
 assumption anybody made. `strike_free`
-(`src/conventions/tiiah/superposition.cpp:749-759`), read by
+(`src/conventions/tiiah/superposition.cpp:768-778`), read by
 `presume_own_plays_land` for our own belief and by `advance_rows_from_own_worlds`
 for a partner's row. v16.18.0.
 
@@ -176,7 +176,7 @@ resolves is kept as a `ReactionRecord`; a world in which two or more of the
 receiver's cards from that clue sit, and one of them would have out-ranked the card
 the reacter called in the target walk (a direct playable before a finesse, each
 leftmost first), is not the world we are in. `world_feasible`,
-`src/conventions/tiiah/superposition.cpp:814-914`; `open_worlds` drops such worlds
+`src/conventions/tiiah/superposition.cpp:833-933`; `open_worlds` drops such worlds
 and `prune_infeasible_worlds` settles on the rest, shared. Replay 2011397 T6.
 Since v20.21.0 the settle also counts a receiver's card the team has **named in the
 hole** (not conditional, not already clued when the reactive was given --
@@ -253,7 +253,7 @@ world agrees on are unconditional and are not recorded. Replay 2009367 T4.
 Reading our own hidden plays off a clue between two other seats. They called a
 card we can SEE, and a call says it is playable, so they hold that suit one below
 it; anything their stack has above ours can only be what we threw in the hole.
-`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:458-513`. Rule 4
+`back_solve_own_plays`, `src/conventions/tiiah/superposition.cpp:477-532`. Rule 4
 of §1e's collapse, and the only one that tells a seat about its OWN past. What it
 learns is private: it moves our belief and no pairwise row (v17.3.0).
 
@@ -349,7 +349,7 @@ A card whose clue-touch empathy (`possible` in `common`) allows only identities
 playable on the **shared view** (v18.0.0). Inferences and a seat's own stacks do
 not count, because every seat must reach the same answer. Not enough for a
 *standing play* since v20.3.0: that needs a *sure play*.
-`has_known_play`, `src/conventions/variants/hole.cpp:61-81`. CONVENTION.md §1c.
+`has_known_play`, `src/conventions/variants/hole.cpp:68-88`. CONVENTION.md §1c.
 
 ### known play in every world
 A call on our own card that plays whichever world of our own hole cards we are in:
@@ -369,7 +369,7 @@ user's ruling). There is no good touch on an ancillary touched card, and the sha
 view is the minimum across the hole's worlds, so a touched-but-uncalled card may
 be a dupe. It need not be called, nor a singleton: a yellow card filled in as a 1
 is one. `possibly_in_the_hole` / `is_standing_play`,
-`src/conventions/variants/hole.cpp:101-146`. CONVENTION.md §1c, replay 2018428.
+`src/conventions/variants/hole.cpp:108-153`. CONVENTION.md §1c, replay 2018428.
 
 ### standing play
 A *sure play*, or a card called to play, whatever its inference and touches, whose
@@ -377,7 +377,7 @@ call every seat stamps alike: a **clued** call (v18.3.0), which a stable colour 
 stamps by its nature, or a **settled** one, which is no longer urgent (v18.10.0; a
 receiver's call once its reaction is played). A pending reaction call is left out.
 It decides the *reverse-reactive position* (v18.3.0).
-`has_standing_play`, `src/conventions/variants/hole.cpp:83-99`. CONVENTION.md §1c.
+`has_standing_play`, `src/conventions/variants/hole.cpp:90-106`. CONVENTION.md §1c.
 
 ### ASCR (Actionable Superposition Collapse Rule)
 The user's broad rule (v20.6.0; human diagnostic 2018541): a player who seems to be
@@ -443,7 +443,7 @@ reverse reactive learns which it was. `tiiah::confirm_reverse_reactive`,
 The clue-to-Cathy half of the *reverse-reactive position*: Bob holds a *standing
 play* and Cathy does not, so a clue to Cathy is STABLE rather than reactor0's
 ordinary reactive (v18.2.0). `inverted_stable`,
-`src/conventions/variants/hole.cpp:148-156`; replay 2013645 T11. CONVENTION.md §1c.
+`src/conventions/variants/hole.cpp:155-163`; replay 2013645 T11. CONVENTION.md §1c.
 
 ### gotten
 A card already called to play: a reactive's target walk passes over it, since a
@@ -464,7 +464,7 @@ T53). Its receiver's target is read on the giver's and the reacter's frame, the 
 the walk named it in (v22.8.0; replay 2023572 T8). Not the same as reactor's rule, where a clue to Bob makes
 Bob both reacter and receiver, a degenerate reading reactor scores as a MISTAKE.
 `reverse_reactive_position` / `reverse_reactive`
-(`src/conventions/variants/hole.cpp:173-202`), read by `tiiah::interpret_clue` and
+(`src/conventions/variants/hole.cpp:180-209`), read by `tiiah::interpret_clue` and
 by the decision layer's `dispatch_is_reactive`. CONVENTION.md §1c.
 
 ### double pitch
@@ -601,6 +601,21 @@ diagnostic 2014561 T50. It ranks only the clues that survive
 `misreads_its_called_card`: a colour clue that calls a rainbow card is dropped
 before the hierarchy sees it (CONVENTION.md §1f, v18.19.0). A rainbow card it
 merely touches is allowed (v18.20.0).
+
+### blind read
+The giver's second reading of its own stable clue, made with the receiver's hand
+hidden, the way the receiver reads it. A seat that sees the receiver's cards can
+refuse a call that the receiver, unable to see them, makes in some world of its hole
+cards. A clue whose blind read newly calls a card that does not play is dropped
+(`misreads_blind`, `reactor0/decision.cpp`; CONVENTION.md §2q, v23.15.0; self-play
+9000004 T11).
+
+### reacter call (as superposition evidence)
+The call a reactive clue stamps on the REACTER's card at clue time. Only the giver
+and the reacter stamp it then; the receiver decodes it once the reacter acts. So it
+is evidence for §1e rule 2 about every seat's hole cards except the receiver's
+(`evidence_from`'s `reacter_ids`, `superposition.cpp`; CONVENTION.md §1e, v23.15.0;
+self-play 9000118 T6-T8).
 
 ### named call / watched dupe
 A **named call** is a stable play call whose holder can read it back to exactly one

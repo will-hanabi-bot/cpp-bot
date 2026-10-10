@@ -854,6 +854,38 @@ bool misreads_its_called_card(const Game& game, const Game& hypo,
   return action.clue.kind == ClueKind::COLOUR && rainbowy && read.length() != 1;
 }
 
+// ...and as the RECEIVER will read it (v23.15.0, Throw It in a Hole): blind. A seat
+// that can see the receiver's cards judges a stable call against them, so in a
+// world where the call names a card that is not the one it sees, the giver's own
+// reading refuses the call -- while the receiver, who cannot see it, makes it.
+// So the giver reads the clue once more with the receiver's hand hidden, and drops
+// it when that reading calls a card that does not play. Self-play Black seed 4 T11
+// (human_vs_bot_diagnostics/9000004.md): sim-cathy's hole card o11
+// `{r1,y1,g1,b1,k1}` was the r1; in that world sim-bob's Red names the r2, and
+// sim-cathy read her o13, the r5, as the r2 -- while sim-bob, seeing the r5, read no
+// call at all.
+bool misreads_blind(const Game& game, const ClueAction& action) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  if (action.target == s.our_player_index) return false;
+  if (dispatch_is_reactive(game, action)) return false;
+  Game blind = game;
+  for (int o : blind.state.hands[action.target]) {
+    blind.state.deck[o].suit_index = -1;
+    blind.state.deck[o].rank = -1;
+  }
+  const Game hb = blind.simulate(Action{action});
+  for (int o : s.hands[action.target]) {
+    if (o >= static_cast<int>(hb.meta.size()) || o >= static_cast<int>(game.meta.size())) continue;
+    if (hb.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;  // not this clue's call
+    const auto id = s.deck[o].id();
+    if (!id || variants::is_inverted_id(s, *id)) continue;
+    if (!s.is_playable(*id)) return true;
+  }
+  return false;
+}
+
 // THROW IT IN A HOLE: would this clue be a REFUSAL (tiiah/CONVENTION.md §1c)?
 //
 // We are the reacter of a standing ordinary reactive, and we can see that the
@@ -1116,6 +1148,7 @@ std::vector<ClueCandidate> analyse_clues(
     ClueCandidate c{perform, ca, read_clue(game, hypo, ca),
                     clue_tier(game, hypo, ca), 0.0};
     if (misreads_its_called_card(game, hypo, ca, c.reading)) continue;
+    if (misreads_blind(game, ca)) continue;
     // An undecodable REACTIVE is not a stall -- drop it, as a MISTAKE is dropped,
     // and for the same reason: no rung can reason about it.
     //

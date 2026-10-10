@@ -149,6 +149,10 @@ bool all_copies_visible(const Game& game, int order, Identity id) {
 struct Evidence {
   std::vector<Identity> ids;
   int from = -1;  // the seat that produced it; its own cards are not narrowed
+  // A reactive clue's reacter calls, which the receiver cannot read yet: they
+  // narrow every seat's hole cards but the receiver's (`receiver`).
+  std::vector<Identity> reacter_ids;
+  int receiver = -1;
 };
 
 Evidence evidence_from(const Game& prev, const Game& game, const Action& action) {
@@ -169,6 +173,7 @@ Evidence evidence_from(const Game& prev, const Game& game, const Action& action)
   }
   if (const auto* clue = std::get_if<ClueAction>(&action)) {
     ev.from = clue->giver;
+    ev.receiver = clue->target;
     // The identities some hole card could still be.
     IdentitySet in_the_hole = IdentitySet::empty();
     for (const ConvData& m : game.meta) in_the_hole = in_the_hole.union_with(m.superposition);
@@ -177,6 +182,20 @@ Evidence evidence_from(const Game& prev, const Game& game, const Action& action)
     for (size_t o = 0; o < game.meta.size() && o < prev.meta.size(); ++o) {
       if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
       if (prev.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+      // A card called OUTSIDE the target's hand is a reactive clue's REACTER,
+      // stamped at clue time by the giver and the reacter alone. The receiver
+      // decodes that call only once the reacter acts (§1d), so it is no evidence
+      // about the RECEIVER's own hole cards (v23.15.0): narrowing them on it
+      // splits the giver's model of the receiver from the receiver himself. The
+      // giver's and the reacter's hole cards still take it -- both can read it.
+      // Self-play 9000118 T6-T8: sim-alice's o3, the reacter's card, was called
+      // `{b1}`, which struck b1 from sim-bob's hole card `{r1,g1,b1,p1,k1}` at
+      // every seat but his. At T7 his ASCR read the b1 he still allowed, and
+      // sim-alice's 2 to sim-cathy, judged without that world, got the wrong slot.
+      const auto& target_hand = prev.state.hands[clue->target];
+      const bool reacter_call =
+          std::find(target_hand.begin(), target_hand.end(), static_cast<int>(o)) ==
+          target_hand.end();
       if (auto id = only_one(game.common.thoughts[o].possibilities())) {
         // Except a COLOUR clue re-touching a card that was already clued, whose
         // identity a hole card could still be (v18.12.0, the reviewer's rule):
@@ -191,7 +210,7 @@ Evidence evidence_from(const Game& prev, const Game& game, const Action& action)
             in_the_hole.contains(*id)) {
           continue;
         }
-        ev.ids.push_back(*id);
+        (reacter_call ? ev.reacter_ids : ev.ids).push_back(*id);
       }
     }
   }
@@ -1954,6 +1973,9 @@ void collapse_superpositions(Game& game, const Game& prev, const Action& action)
     IdentitySet shared = game.meta[o].superposition;
     if (owner != ev.from) {
       for (Identity id : ev.ids) shared = shared.difference(id);
+      if (owner != ev.receiver) {
+        for (Identity id : ev.reacter_ids) shared = shared.difference(id);
+      }
     }
     if (shared.is_empty()) {
       // Every candidate refuted. The set is a reading, not a fact, so keep the

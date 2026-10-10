@@ -435,6 +435,10 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_selfplay_9000022_reacter_plays_the_y5.cpp
   tests/test_tiiah/test_decision_making/test_selfplay_9000046_special_suit_yellow_to_bob.cpp
   tests/test_tiiah/test_decision_making/test_selfplay_9000085_urgent_endgame_reactive.cpp
+  tests/test_tiiah/test_decision_making/test_selfplay_9000004_stable_call_judged_blind.cpp
+  tests/test_tiiah/test_decision_making/test_selfplay_9000126_reactive_read_after_own_called_play.cpp
+  tests/test_tiiah/test_decision_making/test_selfplay_9000126_reverse_reactive_receiver_plays_y2.cpp
+  tests/test_tiiah/test_decision_making/test_selfplay_9000174_reverse_reactive_frame_counts_own_call.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014538_stable_play_over_lock_at_one_clue.cpp
   tests/test_tiiah/test_decision_making/test_replay_2014561_stable_play_hierarchy_prefers_purple.cpp
   tests/test_tiiah/test_decision_making/test_stable_play_hierarchy.cpp
@@ -585,6 +589,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_known_play_standing_call.cpp
   tests/test_tiiah/test_replay_2011885_named_card_not_absorbed.cpp
   tests/test_tiiah/test_world_replay_band.cpp
+  tests/test_tiiah/test_selfplay_9000118_reacter_call_spares_receivers_hole.cpp
   tests/test_tiiah/test_shared_rule_six.cpp
   tests/test_tiiah/test_bucket_encoding.cpp
   tests/test_tiiah/test_six_buckets.cpp
