@@ -341,11 +341,11 @@ Two things outrank the phases below, and one thing sits between them:
       Among several, one whose successor a later seat of the round holds, else
       the leftmost; only slots we have can name the reader's.
     - **As Alice, when the reader is Bob and he holds no play**, the remaining
-      play is ours: Rule 0b's required play, else its selection over every
-      playable identity -- the leftmost clued card that could be one, else the
-      leftmost -- on the Play button only, since a chuck would read as positional
-      (`positional_gamble`, `:180-203`; `endgame::gamble_on`,
-      `forced_endgame.cpp:552-613`).
+      play is ours: Rule 0b's required play (with its rightmost-unclued Null
+      guess), else its selection over every playable identity -- the leftmost
+      clued card that could be one, else the leftmost -- on the Play button only,
+      since a chuck would read as positional (`positional_gamble`, `:180-203`;
+      `endgame::gamble_on`, `forced_endgame.cpp:568-641`).
     - Otherwise the ladder decides, and while somebody reads our discard one it
       chooses that is not a signal is replaced (`positional_guard`, `:205-240`):
       by a stall clue (to a seat other than the reader where there is one), else
@@ -533,6 +533,24 @@ to spend, so only our laying the r4 let the r5 score. Our slot 4 was clued and
 read `{r2,r4,o1,o2,o3,o4}` — it was the r4. The bot chucked trash and the game
 ended 13/15. Note the clued-first priority did the work: slots 1 and 2 could
 also have been the r4 and sit further left, and slot 1 was an Omni 1.
+
+**Null and Dark Null: the rightmost unclued card** (v23.24.0, the user's ruling).
+When
+every required identity is a Null or Dark Null card, and laying it makes the max
+score reachable (`score() + 1 + best_reachable_plays(...) >= max_score()`), the
+guess goes on the **rightmost UNCLUED** candidate instead; only when there is
+none does the leftmost-clued order above apply (`required_play_action`,
+`forced_endgame.cpp:543-565`; `gamble_on`, `:610-620`). It keys on the suit
+names, so a Null-Ones or Null-Fives variant, whose suits are ordinary, is not
+affected. Rule 0c below never takes it: its candidates are all clued. Replay
+[2026495](https://hanab.live/shared-replay/2026495#61) T61 (TIIAH & Dark Null):
+stacks `[5,5,5,4,5,4]`, the deck empty, Cathy holding the known b5, so only the
+Dark Null 5 stood between the team and 30. All five of will-bot67's unclued
+slots could have been it; the bot played slot 1, a b1, while the u5 sat in
+slot 5. It now plays slot 5. Measured against v23.22.0, TIIAH & Dark Null
+(6 Suits) seeds 1-200: mean 25.175 -> 25.18, strikeouts 12 -> 12, 30/30 7 -> 7.
+The rule fired in six games: the rightmost card hit where the leftmost missed in
+two (seeds 57 and 112), the reverse in two (80 and 104), neither in two.
 
 It deliberately carries **no strike guard** — it fires even when a miss would
 be the game-ending third strike. On these turns the alternative is nearly
@@ -1597,7 +1615,7 @@ list by priority:
    the lowest rank. Replay [2025193](https://hanab.live/shared-replay/2025193#49)
    T49: will-bot69 played its known b5 here ahead of its called p2. Endgame rule 0
    holds the same line with the deck empty: in TIIAH a certain 5 is set aside while
-   another certain play exists (`forced_endgame.cpp:645-666`).
+   another certain play exists (`forced_endgame.cpp:673-694`).
 8. Alice pitches the leftmost card of the lowest stack rank (1 = reversed 5,
    2 = reversed 4, etc.)
 9. Alice chucks a known inverted suit in the chuck list.

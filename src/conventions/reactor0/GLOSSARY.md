@@ -879,6 +879,9 @@ Forced-endgame **rule 0b** gambles on it when we hold no *certain play*: among
 our cards whose reading contains a required identity, the **leftmost clued**
 one, else the leftmost of any, on the button the card's suit calls for. Replay
 1970943 T24. Confined to `cards_left == 0`, and it carries no strike guard.
+When every required identity is a Null or Dark Null card and laying it makes
+the max score reachable, the **rightmost unclued** candidate goes first instead
+(the user's ruling; replay 2026495 T61).
 
 Distinct from a certain play in exactly the way the names suggest: a certain
 play scores on every reading, a required play merely *might* be the card — the

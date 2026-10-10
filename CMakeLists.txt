@@ -463,6 +463,7 @@ add_executable(hanabi_decision_tests
   tests/test_tiiah/test_decision_making/test_replay_2019676_settled_hole_card_frees_known_p5.cpp
   tests/test_tiiah/test_decision_making/test_replay_9000259_fixed_reaction_card_is_thrown.cpp
   tests/test_tiiah/test_decision_making/test_replay_2011327_stall_drawn_card_not_blind_played.cpp
+  tests/test_tiiah/test_decision_making/test_replay_2026495_dark_null_guess_rightmost_unclued.cpp
   tests/test_reactor0/test_decision_making/test_trash_reveal_of_a_clued_card.cpp
   tests/test_reactor0/test_decision_making/test_stall_drawn_card.cpp
   tests/test_reactor0/test_decision_making/test_locked_hand_throw.cpp

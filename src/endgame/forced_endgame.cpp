@@ -501,7 +501,8 @@ std::optional<PerformAction> any_legal_clue(const Game& game) {
 // SELECTION is the reported convention: among our cards that could be a
 // required identity, the leftmost CLUED one, else the leftmost of any. Clued
 // first is load-bearing -- at T24 the leftmost candidate overall was slot 1, an
-// omni 1, and only the clued slot 4 was the r4.
+// omni 1, and only the clued slot 4 was the r4. A Null or Dark Null guess for
+// the max score is the exception: the rightmost unclued card (see below).
 //
 // The BUTTON is part of the answer. On an inverted (Orange / Dark Orange) suit
 // the action that advances the stack is the chuck (PerformDiscard); pressing
@@ -540,17 +541,32 @@ std::optional<PerformAction> required_play_action(const Game& game, bool narrow)
   }
 
   const int base = best_reachable_plays(s, s.play_stacks, rest);
-  IdentitySet required = s.playable_set.filter([&](Identity id) {
+  auto reachable_after = [&](Identity id) {
     std::vector<int> stacks = s.play_stacks;
     stacks[id.suit_index] = id.rank;
-    return 1 + best_reachable_plays(s, stacks, rest) > base;
-  });
+    return 1 + best_reachable_plays(s, stacks, rest);
+  };
+  IdentitySet required =
+      s.playable_set.filter([&](Identity id) { return reachable_after(id) > base; });
   if (required.is_empty()) return std::nullopt;
-  return gamble_on(game, required, narrow);
+
+  // NULL AND DARK NULL (v23.24.0, the user's ruling; replay 2026495 T61): when
+  // every required identity is a Null or Dark Null card, and laying it makes the
+  // max score reachable, the guess goes on the RIGHTMOST unclued candidate
+  // instead. At T61 the Dark Null 5 was the one card still missing from 30, every
+  // slot of will-bot67's could have been it, and the bot played slot 1 (a b1)
+  // while the u5 sat in slot 5. Rule 0c's candidates are all clued, so it never
+  // applies there.
+  const bool null_for_max = !narrow && required.forall([&](Identity id) {
+    const std::string& suit = s.variant->suits[id.suit_index].name;
+    if (suit != "Null" && suit != "Dark Null") return false;
+    return s.score() + reachable_after(id) >= s.max_score();
+  });
+  return gamble_on(game, required, narrow, null_for_max);
 }
 
 std::optional<PerformAction> gamble_on(const Game& game, IdentitySet required,
-                                       bool narrow) {
+                                       bool narrow, bool rightmost_unclued) {
   const State& s = game.state;
   if (required.is_empty()) return std::nullopt;
 
@@ -589,7 +605,19 @@ std::optional<PerformAction> gamble_on(const Game& game, IdentitySet required,
     return PerformAction{PerformPlay{order}};
   };
 
-  // `our_hand()` runs newest-first, so the front IS slot 1 -- the leftmost.
+  // `our_hand()` runs newest-first, so the front IS slot 1 -- the leftmost, and
+  // the back the rightmost.
+  if (rightmost_unclued) {
+    const auto& hand = s.our_hand();
+    for (auto it = hand.rbegin(); it != hand.rend(); ++it) {
+      if (s.deck[*it].clued) continue;
+      auto act = attempt(*it);
+      if (!act) continue;
+      hanabi::logging::log_branch("endgame.required_play",
+                                  {{"order", *it}, {"clued", false}, {"rightmost", true}});
+      return act;
+    }
+  }
   std::optional<PerformAction> leftmost, leftmost_clued;
   int chosen = -1;
   for (int order : s.our_hand()) {

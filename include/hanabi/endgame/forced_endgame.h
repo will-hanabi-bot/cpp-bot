@@ -60,9 +60,12 @@ std::optional<PerformAction> required_play_action(const Game& game, bool narrow)
 
 // Rule 0b's SELECTION, for a given set of identities to bet on: among our cards
 // that could be one of `required`, the leftmost CLUED one, else the leftmost of
-// any, on the button that advances it. The positional discard's gamble uses it
-// with every playable identity (reactor0/positional_discard.h).
+// any, on the button that advances it. With `rightmost_unclued` (Rule 0b's Null
+// and Dark Null guess for the max score) the rightmost UNCLUED one comes first.
+// The positional discard's gamble uses it with every playable identity
+// (reactor0/positional_discard.h).
 std::optional<PerformAction> gamble_on(const Game& game, IdentitySet required,
-                                       bool narrow = false);
+                                       bool narrow = false,
+                                       bool rightmost_unclued = false);
 
 }  // namespace hanabi::endgame
