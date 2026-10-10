@@ -1184,8 +1184,10 @@ std::vector<ClueCandidate> analyse_clues(
     c.new_plays = new_play_facts(game, hypo).count;
 
     // A reactive play getting a dark special-suit card or a Null card played is
-    // VERY HIGH (v23.14.0, the user's ruling, Throw It in a Hole only).
-    if (c.tier != ClueTier::VERY_HIGH && special_suit_plays(game, c, /*very_high=*/true) > 0) {
+    // VERY HIGH (v23.14.0, the user's ruling, Throw It in a Hole only) -- except
+    // one whose plays were coming anyway (v23.21.0, `special_play_already_coming`).
+    if (c.tier != ClueTier::VERY_HIGH && special_suit_plays(game, c, /*very_high=*/true) > 0 &&
+        !special_play_already_coming(game, c)) {
       c.tier = ClueTier::VERY_HIGH;
     }
     // ...and an urgent endgame reactive is HIGH (v23.14.0, the user's ruling).
@@ -1371,6 +1373,44 @@ std::vector<ClueCandidate> analyse_clues(
     out.push_back(std::move(c));
   }
   return out;
+}
+
+bool special_play_already_coming(const Game& game, const ClueCandidate& c) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  if (c.reading.shape != ClueShape::REACTIVE_PLAY) return false;
+  const int reacter_card = c.reading.reacter_side.order;
+  const int receiver_card = c.reading.receiver_side.order;
+  const int n = static_cast<int>(game.meta.size());
+  // 1. The cards a pending reaction will call once its reacter acts: the receiver
+  //    target of a standing waiting connection, of an owed (deferred) one, and the
+  //    target a reacter's own call records.
+  std::vector<int> coming;
+  for (const ReactorWC& wc : game.waiting) {
+    if (wc.receiver_target_order >= 0) coming.push_back(wc.receiver_target_order);
+  }
+  for (const auto& p : game.pending_reactions) {
+    if (p && p->receiver_target_order >= 0) coming.push_back(p->receiver_target_order);
+  }
+  for (const auto& hand : s.hands) {
+    for (int o : hand) {
+      const ConvData& m = game.meta[o];
+      if (m.react_target_order < 0) continue;
+      if (m.status != CardStatus::CALLED_TO_PLAY &&
+          m.status != CardStatus::CALLED_TO_DISCARD) {
+        continue;
+      }
+      coming.push_back(m.react_target_order);
+    }
+  }
+  auto is_coming = [&coming](int o) {
+    return o >= 0 && std::find(coming.begin(), coming.end(), o) != coming.end();
+  };
+  if (!is_coming(reacter_card) && !is_coming(receiver_card)) return false;
+  // 2. The receiver's card is already called to play, or a play it knows.
+  if (receiver_card < 0 || receiver_card >= n) return false;
+  return game.meta[receiver_card].status == CardStatus::CALLED_TO_PLAY ||
+         hanabi::reactor::variants::is_standing_play(game, receiver_card);
 }
 
 bool clue_is_admissible(const Game& game, const ClueCandidate& c) {
