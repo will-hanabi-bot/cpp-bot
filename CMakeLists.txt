@@ -615,6 +615,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_bucket_first.cpp
   tests/test_tiiah/test_colour_reveal_through_worlds.cpp
   tests/test_tiiah/test_retouch_rank_call.cpp
+  tests/test_tiiah/test_replay_2026697_retouch_two_names_the_gray_two.cpp
   tests/test_tiiah/test_self_colour_bluff.cpp
   tests/test_tiiah/test_known_bucket_violation.cpp
   tests/test_tiiah/test_replay_2019598_named_card_refutes_finesse_world.cpp

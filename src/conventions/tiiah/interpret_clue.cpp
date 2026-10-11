@@ -359,6 +359,40 @@ void pin_special_rank(const Game& prev, Game& game, const ClueAction& action) {
   game.narrow_thought(slot1, IdentitySet::single(pin));
 }
 
+// A RE-TOUCH rank call names WHITE or GRAY (v23.28.0, the user's ruling). A stable
+// rank clue to Bob that touches no new card and calls one -- the direct play's
+// leftmost candidate, or the re-touch call's rightmost (§1b) -- names the special
+// suit's card of the clue's rank, when the special suit is White or Gray and the
+// card's reading holds it: no colour touches those suits, so a rank re-touch is how
+// their cards are named. Replay 2026697 T27: yagami_black's 2 re-touched only
+// will-bot67's slot-4 `{g2,b2,p2,gr2}`, with gray on 1; it calls the gr2.
+void pin_retouch_whitish(const Game& prev, Game& game, const ClueAction& action) {
+  const State& state = game.state;
+  if (action.clue.kind != ClueKind::RANK) return;
+  if (action.target != state.next_player_index(action.giver)) return;  // Bob only
+  for (int o : action.list_) {
+    if (!prev.state.deck[o].clued) return;  // a new card: not a re-touch
+  }
+  std::optional<int> special;
+  for (int s = 0; s < static_cast<int>(state.variant->suits.size()); ++s) {
+    const SuitType& t = state.variant->suits[s].suit_type;
+    if (t.whitish && !t.brownish && !t.pinkish && !t.rainbowish) special = s;
+  }
+  if (!special) return;
+  const Identity pin(*special, action.clue.value);
+  for (int o : state.hands[action.target]) {
+    if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+    if (o < static_cast<int>(prev.meta.size()) &&
+        prev.meta[o].status == CardStatus::CALLED_TO_PLAY) {
+      continue;  // an older call
+    }
+    if (game.common.thoughts[o].possibilities().contains(pin)) {
+      game.narrow_thought(o, IdentitySet::single(pin));
+    }
+    return;  // the one card the clue calls
+  }
+}
+
 // The stable 1 is read as the one identity it may call (v23.18.0, the user's
 // rule; `stable_one_identity`): its newly called card, if the card can be it.
 void pin_stable_one(const Game& prev, Game& game, const ClueAction& action) {
@@ -696,6 +730,8 @@ std::optional<ClueInterp> interpret_clue(const Game& prev, Game& game,
         pin_stable_one(p, g, action);
       } else {
         pin_special_rank(p, g, action);
+        // ...and a re-touch names White or Gray (v23.28.0).
+        pin_retouch_whitish(p, g, action);
       }
     } else {
       // A colour play reveal outranks the leftmost newly touched card when it is

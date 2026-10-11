@@ -596,7 +596,9 @@ not locked and not at 8 clues, in a variant with no pinkish suit, calls the
 **rightmost** touched card that could be playable, read as its playable identities
 (v22.2.0). A card already called is passed over; with nothing playable it stays a
 stall. `reactor0/interpret_clue.cpp`, step 7 of `stable_rank`. CONVENTION.md §1b,
-replay 2021455 T61.
+replay 2021455 T61. With **White or Gray** the special suit, any re-touch rank call
+names that suit's card of the clue's rank when the card can be it, including the
+direct play's leftmost call (v23.28.0, `pin_retouch_whitish`; replay 2026697 T27).
 
 ### safe-to-lose chop / occupied save
 Cathy's chop is **safe to lose** when it is not critical, and it is not playable
