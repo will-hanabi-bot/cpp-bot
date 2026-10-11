@@ -117,7 +117,7 @@ void target_i_discard(const Game& prev, Game& game, const ReactorWC& wc,
       out.inferred = new_inferred;
       if (chuck) {
         // Pin it, as `stamp_orange_chuck` does. This is what lets
-        // `decide.cpp:977-987` resolve the card to a single playable inverted
+        // `decide.cpp:994-1004` resolve the card to a single playable inverted
         // identity and dispatch the chuck as a `PerformDiscard`.
         out.info_lock = std::optional<IdentitySet>{new_inferred};
       }

@@ -339,7 +339,7 @@ Two things outrank the phases below, and one thing sits between them:
     Alice's known play and the endgame search, from `take_action_ladder` just before
     the endgame fork (v23.14.0; tiiah/CONVENTION.md §2o). And where priority 3.3
     would reveal only trash at one token, a stable play clue comes first (§2p).
-    `Game::take_action` (`decide.cpp:1119-1132`) asks it before
+    `Game::take_action` (`decide.cpp:1136-1149`) asks it before
     anything else, and runs everything below as `take_action_ladder`. It applies
     in the final round: the deck is empty, Bob (the next seat) still acts, Alice
     owes no reaction, and Alice holds no **certain** play as the team reads her
@@ -365,7 +365,7 @@ Two things outrank the phases below, and one thing sits between them:
       guess), else its selection over every playable identity -- the leftmost
       clued card that could be one, else the leftmost -- on the Play button only,
       since a chuck would read as positional (`positional_gamble`, `:180-203`;
-      `endgame::gamble_on`, `forced_endgame.cpp:568-641`).
+      `endgame::gamble_on`, `forced_endgame.cpp:684-757`).
     - Otherwise the ladder decides, and while somebody reads our discard one it
       chooses that is not a signal is replaced (`positional_guard`, `:205-240`):
       by a stall clue (to a seat other than the reader where there is one), else
@@ -396,7 +396,7 @@ Two things outrank the phases below, and one thing sits between them:
     knew, instead of her own required play).
 
 0.  Endgame.  The forced-endgame rules and the exact solver run first
-    (`decide.cpp:1351`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
+    (`decide.cpp:1368`, the `rem_score() <= num_suits + 1` fork).  The SOLVER
     additionally needs `pace() <= num_players` (`:1544`); the forced rules do
     not.  They are unchanged by this spec, with one guard on top: a CERTAIN
     play outranks a speculative one — see below.  The endgame decides
@@ -531,7 +531,7 @@ Two things outrank the phases below, and one thing sits between them:
 num_suits + 1` counts the points still missing, not how close the deck is to
 empty, so on a 6-suit variant it opens around the halfway mark and stays open;
 303 turns in the log corpus sat inside it with 8–16 cards left. The second gate
-is `pace() <= num_players` (`decide.cpp:1572`), which scales with the seat count
+is `pace() <= num_players` (`decide.cpp:1589`), which scales with the seat count
 because pace already does — at 3 seats it is exactly `pace() <= 3`. The
 forced-endgame rules sit ABOVE it and keep running on the points condition
 alone; a closed gate falls through to the phases below.
@@ -560,7 +560,7 @@ every required identity is a Null or Dark Null card, and laying it makes the max
 score reachable (`score() + 1 + best_reachable_plays(...) >= max_score()`), the
 guess goes on the **rightmost UNCLUED** candidate instead; only when there is
 none does the leftmost-clued order above apply (`required_play_action`,
-`forced_endgame.cpp:543-565`; `gamble_on`, `:610-620`). It keys on the suit
+`forced_endgame.cpp:659-681`; `gamble_on`, `:610-620`). It keys on the suit
 names, so a Null-Ones or Null-Fives variant, whose suits are ordinary, is not
 affected. Rule 0c below never takes it: its candidates are all clued. Replay
 [2026495](https://hanab.live/shared-replay/2026495#61) T61 (TIIAH & Dark Null):
@@ -615,7 +615,11 @@ takes precedence over any conventional interpretation, and that ordering is
 older than it looks: replay 1974119 T53 was read as an inversion of it, but the
 forced layer had simply declined, no rule covering "one card left and the NEXT
 seat holds two criticals it needs two turns to cash". That gap is **Rule 5**
-(v11.0.0, `forced_endgame.cpp`), which forces a stall there; the precedence
+(v11.0.0, `forced_endgame.cpp`), which forces a stall there. Under Throw It in a
+Hole, **Rule 6** (v23.27.0, `forced_endgame.cpp:361-470`) covers the shape one
+card earlier: with two cards left and no token, the seat after next needs two turns,
+so CP discards to win back the token Bob stalls with, even over its own urgent call
+(self-play 9000096 T59; reactor/CONVENTION.md §2.9). The precedence
 itself never moved — and the rule **stands
 down whenever we hold a card that certainly scores**, because a guaranteed point
 is worth more than the signal and sequencing it is what the search is for
@@ -1649,7 +1653,7 @@ list by priority:
    the lowest rank. Replay [2025193](https://hanab.live/shared-replay/2025193#49)
    T49: will-bot69 played its known b5 here ahead of its called p2. Endgame rule 0
    holds the same line with the deck empty: in TIIAH a certain 5 is set aside while
-   another certain play exists (`forced_endgame.cpp:673-694`).
+   another certain play exists (`forced_endgame.cpp:789-810`).
 8. Alice pitches the leftmost card of the lowest stack rank (1 = reversed 5,
    2 = reversed 4, etc.)
 9. Alice chucks a known inverted suit in the chuck list.
@@ -1841,8 +1845,8 @@ button the receiver was promised.
 | stable-colour target, without simulating | `leftmost_could_be_playable` | `interpret_clue.cpp:211-231` |
 | candidate clue enumeration | `State::all_valid_clues` | `src/basics/state.cpp:350-395` |
 | colour-only subset | `State::all_colour_clues` | `src/basics/state.cpp:339-348` |
-| chop | `Game::chop` | `src/basics/decide.cpp:772-804` |
-| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:1040-1060` |
+| chop | `Game::chop` | `src/basics/decide.cpp:789-821` |
+| safe discard button on inverted suits | `discard_button_is_safe` | `src/basics/decide.cpp:1057-1077` |
 | Bob's safe action (H1a) | `thinks_trash` / `Player::order_trash` | `src/basics/player_game.cpp:116-133` |
 
 ## Not yet implemented

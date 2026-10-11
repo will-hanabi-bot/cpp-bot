@@ -593,11 +593,28 @@ void Game::interpret_discard(const Game& prev, const DiscardAction& action) {
                     !(prev.common.thinks_locked(prev, action.player_index_v) &&
                       prev.state.clue_tokens == 0);
 
+  // Throw It in a Hole: the FORCED-ENDGAME STALL DISCARD (v23.27.0, the user's
+  // ruling; human_vs_bot_diagnostics/9000096_23_22.md T59). A reacter that owes a
+  // reaction and discards because forced-endgame Rule 6 says it must
+  // (`endgame::stall_for_the_seat_after_next`, asked of `prev` from our own sight)
+  // has not reacted. The reaction stays owed, as after a clue, and its next play
+  // or discard resolves it. Read as the reaction, the discard called the receiver
+  // to throw a card of its own.
+  const bool stall_discard =
+      state.variant->throw_it_in_a_hole && !failed && !waiting.empty() &&
+      waiting.front().reacter == action.player_index_v &&
+      hanabi::endgame::stall_for_the_seat_after_next(prev, action.player_index_v);
+  if (stall_discard) {
+    waiting.clear();
+    hanabi::logging::log_branch("tiiah.stall_discard_not_the_reaction",
+                                {{"player", action.player_index_v}, {"order", action.order}});
+  }
+
   // v12.0.0: a reaction the reacter DEFERRED lives in `pending_reactions`,
   // because `waiting` was cleared the moment they clued instead. The live path
   // just below owns the undeferred case -- when it covers this actor, retire the
   // durable copy so the same reaction cannot fire twice.
-  if (is_reactor0_family(convention)) {
+  if (is_reactor0_family(convention) && !stall_discard) {
     if (!waiting.empty() && waiting.front().reacter == action.player_index_v) {
       hanabi::reactor0::retire_pending_reaction(*this, action.player_index_v);
     } else {
@@ -2151,7 +2168,7 @@ std::vector<PerformAction> Game::find_all_discards(int player_index) const {
   // a first strike is not by itself fatal — had nothing better to compare it
   // against. bug_report_5_0_0.txt, replay 1957953 T30.
   // `common ∩ per-player` is the tight set both views agree on, the same
-  // idiom `own_known_identity` uses (src/endgame/forced_endgame.cpp:27-33):
+  // idiom `own_known_identity` uses (src/endgame/forced_endgame.cpp:32-38):
   // common alone can retain identities the holder has privately ruled out,
   // and the per-player view alone can be the wider of the two in fixtures
   // that seed common without syncing it.

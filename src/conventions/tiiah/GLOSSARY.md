@@ -302,6 +302,16 @@ loaded) that leads into two or more cards, or whose very next card is critical, 
 `src/conventions/reactor0/decision.cpp:1076-1145`; CONVENTION.md §2s, v23.26.0;
 self-play Dark Null 9000007 T48).
 
+### stall discard (forced endgame)
+A discard Alice makes because forced-endgame Rule 6 requires it: three players, two
+cards left, no clue token, and the max score needing two plays from the seat after
+next that only a stall gives time for. The token lets Bob stall with a clue, and
+Cathy gets a second turn. When Alice owes a reaction it is **not** the reaction:
+every seat asks the same test of the discarder, and the reaction stays owed, as after
+a clue (v23.27.0, the user's ruling; self-play Dark Null 9000096 T59).
+`endgame::stall_for_the_seat_after_next`, `src/endgame/forced_endgame.cpp:896-907`.
+CONVENTION.md §2t, §1d.
+
 ### displaced reaction
 A pending reaction a newer reactive to the same receiver overwrote in
 `Game::pending_reactions`, which holds one entry per receiver. The reverse reactive

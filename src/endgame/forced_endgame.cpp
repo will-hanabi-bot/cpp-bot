@@ -1,5 +1,10 @@
 #include "hanabi/endgame/forced_endgame.h"
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <vector>
+
 #include "hanabi/basics/clue.h"
 #include "hanabi/basics/game.h"
 #include "hanabi/basics/identity.h"
@@ -351,6 +356,117 @@ std::optional<PerformAction> partner_needs_two_turns_action(const Game& game) {
   auto clues = game.find_all_clues(cp);
   if (clues.empty()) return std::nullopt;
   return clues.front();
+}
+
+// Rule 6 — "the seat after next needs two turns" (Throw It in a Hole, v23.27.0, the
+// user's ruling; human_vs_bot_diagnostics/9000096_23_22.md T59).
+//
+// Precondition: three players, `cards_left == 2`, NO clue token. Count the plays the
+// max score still needs, seat by seat: each card it needs that we can see in a hand
+// is that seat's to play, and each we cannot see is ours (our own called card, or
+// the card a reaction owes us). Then CP (Alice) must DISCARD rather than act:
+//
+//   Everyone acts -> Alice, Bob (draws the last card), then the final round Cathy,
+//                    Alice, Bob: Cathy gets ONE turn.
+//   Alice discards -> the token lets Bob stall with a clue, Cathy draws the last
+//                    card, and the final round is Alice, Bob, Cathy: Cathy gets TWO,
+//                    Alice and Bob one each.
+//
+// The rule fires only when the first schedule cannot lay every needed card and the
+// second can, each card after the one below it. 9000096 T59: stacks r5 y4 g3 b5 p5 u4;
+// sim-bob (Alice) owes his called y5, sim-cathy the g4, and sim-alice holds the g5 and
+// the u5 -- two plays, one turn, unless sim-bob discards. His discard is not his
+// reaction: every seat asks this same test of the discarder and keeps the reaction
+// owed (`Game::interpret_discard`).
+namespace {
+
+// The needed identities, each assigned to the seat that holds it as far as we can
+// see; nullopt when one we cannot see is not covered by a called card of ours while
+// we are the seat acting (we cannot tell where it is, so the count is not ours).
+std::optional<std::array<std::vector<Identity>, 3>> needed_by_seat(const Game& game,
+                                                                    int cp) {
+  const State& s = game.state;
+  std::array<std::vector<Identity>, 3> out;
+  std::vector<Identity> unseen;
+  for (Identity id : s.all_ids) {
+    if (s.is_basic_trash(id)) continue;
+    std::optional<int> holder;
+    for (int k = 0; k < 3 && !holder; ++k) {
+      const int p = (cp + k) % 3;
+      for (int o : s.hands[p]) {
+        const auto seen = s.deck[o].id();
+        if (seen && *seen == id) {
+          holder = p;
+          break;
+        }
+      }
+    }
+    if (holder) {
+      out[*holder].push_back(id);
+    } else {
+      unseen.push_back(id);
+    }
+  }
+  const int us = s.our_player_index;
+  if (us == cp) {
+    // Our own cards must account for every unseen identity: a called card of ours
+    // that could be it, one per card.
+    int called = 0;
+    for (int o : s.our_hand()) {
+      if (game.meta[o].status != CardStatus::CALLED_TO_PLAY) continue;
+      const IdentitySet live = game.me().thoughts[o].possibilities();
+      if (std::any_of(unseen.begin(), unseen.end(),
+                      [&live](Identity i) { return live.contains(i); })) {
+        ++called;
+      }
+    }
+    if (called < static_cast<int>(unseen.size())) return std::nullopt;
+  }
+  for (Identity id : unseen) out[us].push_back(id);
+  return out;
+}
+
+// Can the plays `turns` gives each seat lay every needed card, each after the one
+// below it? A small exhaustive search: at most a handful of cards and turns.
+bool schedule_lays_all(const State& base, std::array<std::vector<Identity>, 3> needs,
+                       const std::vector<int>& turns, std::size_t at) {
+  if (needs[0].empty() && needs[1].empty() && needs[2].empty()) return true;
+  if (at == turns.size()) return false;
+  const int seat = turns[at];
+  for (std::size_t k = 0; k < needs[seat].size(); ++k) {
+    const Identity id = needs[seat][k];
+    if (!base.is_playable(id)) continue;
+    auto rest = needs;
+    rest[seat].erase(rest[seat].begin() + static_cast<std::ptrdiff_t>(k));
+    if (schedule_lays_all(base.with_play(id), rest, turns, at + 1)) return true;
+  }
+  return schedule_lays_all(base, needs, turns, at + 1);  // nothing to play this turn
+}
+
+}  // namespace
+
+std::optional<PerformAction> seat_after_next_needs_two_turns_action(const Game& game) {
+  const State& s = game.state;
+  const int cp = s.current_player_index;
+  if (cp != s.our_player_index) return std::nullopt;
+  if (!stall_for_the_seat_after_next(game, cp)) return std::nullopt;
+  // Every card the max score needs is accounted for, so nothing else of ours is
+  // needed. Throw known trash if there is any; otherwise the leftmost card that is
+  // not called, which leaves a called card to its right in its slot.
+  const auto& hand = s.our_hand();
+  for (int o : hand) {
+    if (game.meta[o].status == CardStatus::CALLED_TO_PLAY) continue;
+    const IdentitySet live = game.me().thoughts[o].possible;
+    if (live.non_empty() && live.forall([&s](Identity i) { return s.is_basic_trash(i); })) {
+      return PerformAction{PerformDiscard{o}};
+    }
+  }
+  for (int o : hand) {
+    const CardStatus st = game.meta[o].status;
+    if (st == CardStatus::CALLED_TO_PLAY || st == CardStatus::CALLED_TO_DISCARD) continue;
+    return PerformAction{PerformDiscard{o}};
+  }
+  return std::nullopt;
 }
 
 // Rule 3 — "sole holder of a blocking card".
@@ -735,6 +851,12 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
   // rule that fires at 2 -- the same reason Rules 0/0b/0c sit above it.
   if (auto a = two_criticals_dead_partner_action(game)) return a;
 
+  // Rule 6 (Throw It in a Hole): discard now, so the seat after next gets two turns.
+  if (auto a = seat_after_next_needs_two_turns_action(game)) {
+    hanabi::logging::log_branch("endgame.stall_discard_for_the_seat_after_next", {});
+    return a;
+  }
+
   if (s.cards_left != 1) return std::nullopt;
 
   // Rule 2 takes precedence over Rule 1: when both fire (e.g., CP holds the
@@ -769,6 +891,19 @@ std::optional<PerformAction> forced_endgame_action(const Game& game) {
   auto clues = game.find_all_clues(s.current_player_index);
   if (!clues.empty()) return clues.front();
   return any_legal_clue(game);
+}
+
+bool stall_for_the_seat_after_next(const Game& game, int cp) {
+  const State& s = game.state;
+  if (!s.variant->throw_it_in_a_hole) return false;
+  if (s.num_players != 3 || s.cards_left != 2 || s.clue_tokens != 0) return false;
+  const auto needs = needed_by_seat(game, cp);
+  if (!needs) return false;
+  const int bob = (cp + 1) % 3;
+  const int cathy = (cp + 2) % 3;
+  const bool everyone_acts = schedule_lays_all(s, *needs, {cp, bob, cathy, cp, bob}, 0);
+  if (everyone_acts) return false;
+  return schedule_lays_all(s, *needs, {cathy, cp, bob, cathy}, 0);
 }
 
 }  // namespace hanabi::endgame

@@ -27,16 +27,24 @@
 //     now and one if they stall, and the partner cannot play whatever he is
 //     told, so no stall buys the skipped turn back. Replay 1974303 T44. Note
 //     the test is "every reading", not Rule 2's pinned identity.
+//   * 6. The seat after next needs two turns (Throw It in a Hole, v23.27.0) —
+//     three players, `cards_left == 2`, no clue token, and counting the cards the
+//     max score needs seat by seat, Cathy needs two plays that only a schedule in
+//     which CP discards (and Bob stalls with the token) gives her. CP discards
+//     known trash, else its leftmost uncalled card. Self-play 9000096 T59.
 //   * 2. Two-critical play — CP knows they hold two critical cards, one
 //     playable, at `cards_left == 1` and `clue_tokens < n`.
 //   * 3. Sole holder — CP pins a playable identity no other seat holds, whose
 //     successor is still obtainable.
+//   * 5. The partner needs two turns — `cards_left == 1`, a clue token, and
+//     the NEXT seat holding two cards CP sees are critical and playable: stall
+//     with a clue so it gets two turns. Replay 1974119 T53.
 //   * 1. 5-lockout — clue to delay deck-empty when the 5-holder would
 //     otherwise be locked out of their post-4 final turn.
 //
 // Rules 0c and 1-3 are `cards_left == 1` only; 0 and 0b are `cards_left == 0`
-// only; Rule 4 is `cards_left == 2` only and is therefore the sole rule that
-// fires at that deck size. 0c is asked ABOVE 1-3 because it is a play that must
+// only; Rules 4 and 6 are `cards_left == 2` only and are therefore the only rules
+// that fire at that deck size. 0c is asked ABOVE 1-3 because it is a play that must
 // happen now and those rules can answer with a stall clue.
 // See `src/endgame/forced_endgame.cpp` for the predicates.
 #pragma once
@@ -53,6 +61,12 @@ class Game;
 namespace hanabi::endgame {
 
 std::optional<PerformAction> forced_endgame_action(const Game& game);
+
+// Rule 6's test (Throw It in a Hole): at three players, two cards left and no clue
+// token, must `cp` discard so that the seat after next gets two turns? Asked by the
+// seat acting, and by every seat watching a discard by a reacter that owes a
+// reaction: a discard this test explains is that stall, not the reaction.
+bool stall_for_the_seat_after_next(const Game& game, int cp);
 
 // Rule 0b on its own: the required play when nothing in hand is certain, or
 // nullopt. `narrow` is Rule 0c's stronger candidate test.

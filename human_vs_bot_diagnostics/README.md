@@ -46,7 +46,7 @@ elsewhere.
 | [9000007 (v23.22)](9000007_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T48 (High Score Phase: a play clue leading into other hands) | fixed (v23.26.0) |
 | [9000069 (v23.22)](9000069_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T56 (a late bucket break made safe by the giver's own named card) | fixed (v23.25.0) |
 | [9000081 (v23.22)](9000081_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T51 (1 to sim-bob, both know their cards; at least Blue, a lead-in) | the 1 fixed (v23.23.0, pinned v23.25.0); Blue a HIGH lead-in (v23.26.0) |
-| [9000096 (v23.22)](9000096_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T59 (forced endgame: discard so the seat after next gets two turns) | open |
+| [9000096 (v23.22)](9000096_23_22.md) | Throw It in a Hole & Dark Null (6 Suits), tiiah (self-play) | — | T59 (forced endgame: discard so the seat after next gets two turns) | fixed (v23.27.0) |
 
 ## Template
 
