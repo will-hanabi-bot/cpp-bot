@@ -282,6 +282,14 @@ struct ClueCandidate {
   // critical and not playable; the clue goes to her, is read as stable, touches it,
   // and does not call it to discard. Lifts the clue to HIGH, and rung 2d gives it.
   bool saves_cathys_critical_chop = false;
+  // Throw It in a Hole only: in that same position, is this clue a STABLE PLAY to
+  // Cathy, given with 2 or more tokens, on no copy of a called card or of a standing
+  // play (v23.40.0, the user's ruling)? Her chop is
+  // her newest unclued card, so the card she draws after playing takes it over: the
+  // play saves the chop as surely as a touch does, and costs nothing. Lifts the clue
+  // to HIGH, and rung 2d gives it ahead of any touch-save, by the stable play
+  // hierarchy. Replay 2028742 T13.
+  bool cathy_play_saves_chop = false;
   // Throw It in a Hole only: for a REACTIVE_PLAY, how many identities the
   // RECEIVER will read its called card as, as the giver predicts it (0 when not
   // computed). Priority 1's first tiebreak there: of two reactives calling the

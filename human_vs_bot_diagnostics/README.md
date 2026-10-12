@@ -62,6 +62,7 @@ elsewhere.
 | [2027811](2027811.md) | Throw It in a Hole & Gray Pink (6 Suits), tiiah | yagami_black | T39-T40 (a known bucket violation the team's named y5 makes safe) | fixed (v23.37.0) |
 | [2027922](2027922.md) | Throw It in a Hole & Dark Brown (6 Suits), tiiah | yagami_black | T22 (no VERY HIGH for a dark card the pending reaction already gets), T27 (a player beginning a turn with a token clears every other player's zero-clue marker) | fixed (v23.38.0) |
 | [2028737](2028737.md) | Throw It in a Hole & Dark Orange (6 Suits), tiiah | yagami_black | T46 (an endgame play clue that leads into the other hands) | fixed (v23.39.0) |
+| [2028742](2028742.md) | Throw It in a Hole & Dark Orange (6 Suits), tiiah | yagami_black | T13 (with Bob loaded, a stable play clue to Cathy saves her critical chop) | fixed (v23.40.0) |
 
 ## Template
 

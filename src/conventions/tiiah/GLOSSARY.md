@@ -665,6 +665,19 @@ Alice holding a call of her own still gives it (v18.13.0,
 `cathy_chop_is_safe_to_lose` in `reactor0/decision.cpp`). CONVENTION.md §2e, human
 diagnostic 2014076 T18.
 
+### Cathy's chop save (priority 2d)
+The position: Bob holds a standing play, so a clue to Cathy is stable. Cathy has no
+safe action and no standing play, and her chop is critical and unplayable. Alice
+saves the chop with a HIGH clue to Cathy, given at reactor0's priority 2d, in one of
+two ways:
+- **A stable play clue** (`cathy_play_saves_chop`, v23.40.0), given with 2 or more
+  tokens, that calls no copy of a called card or of a standing play. She plays, and
+  the card she draws becomes her chop. It comes first.
+- **A touch-save** (`saves_cathys_critical_chop`, v23.32.0): a stable clue that
+  touches the chop and does not call it to discard.
+
+CONVENTION.md §2v; replays 2026882 T25 and 2028742 T13.
+
 ### idle stall
 A clue that gets no card played and saves nothing. Alice gives none while Bob has no
 playable card and holds a critical card; she plays or discards instead. Critical here

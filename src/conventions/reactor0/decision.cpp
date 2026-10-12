@@ -1379,6 +1379,43 @@ std::vector<ClueCandidate> analyse_clues(
         std::find(ca.list_.begin(), ca.list_.end(), cathy_chop) != ca.list_.end() &&
         hypo.meta[cathy_chop].status != CardStatus::CALLED_TO_DISCARD;
     if (c.saves_cathys_critical_chop && c.tier < ClueTier::HIGH) c.tier = ClueTier::HIGH;
+    // ...and so is a stable PLAY clue to her there, with 3.1's two tokens (v23.40.0,
+    // the user's ruling): her chop is her newest unclued card, so the card she draws
+    // after playing takes it over. Rung 2d gives it ahead of a touch-save. Replay
+    // 2028742 T13 (human_vs_bot_diagnostics/2028742.md): Green on will-bot67's g1 over
+    // a 4 that saved the d4 and threw the r2.
+    //
+    // Not a call on a copy of a card already on its way to the stacks, which she
+    // would play into a strike or throw: a called card the cap below catches, or a
+    // standing play, a loaded Bob's play by touch included, by sight. In the first
+    // A/B, self-play Black 9000070 T4 called a y1 beside Bob's called y1, and
+    // 9000179 T39 a y4 beside Bob's clued y4.
+    auto copies_a_standing_play = [&] {
+      const auto id = id_of(s, c.reading.stable_subject);
+      if (!id) return false;
+      for (const auto& hand : s.hands) {
+        for (int o : hand) {
+          if (o == c.reading.stable_subject ||
+              !hanabi::reactor::variants::is_standing_play(game, o)) {
+            continue;
+          }
+          std::optional<Identity> other = s.deck[o].id();
+          if (!other) {
+            const IdentitySet live = game.common.thoughts[o].possibilities();
+            if (live.length() == 1) other = live.head();
+          }
+          if (other == id) return true;
+        }
+      }
+      return false;
+    };
+    c.cathy_play_saves_chop = cathy_chop >= 0 && ca.target == cathy_of(game) &&
+                              !read_reactive &&
+                              c.reading.shape == ClueShape::STABLE_PLAY &&
+                              clues_at_least(game, 2) &&
+                              !gets_a_called_duplicate(game, hypo, c) &&
+                              !copies_a_standing_play();
+    if (c.cathy_play_saves_chop && c.tier < ClueTier::HIGH) c.tier = ClueTier::HIGH;
     // ...but a clue that gets played a copy of a card already called to play is at
     // most MEDIUM (Throw It in a Hole, v23.29.0, the user's ruling): below the bar an
     // occupied seat needs, so a seat holding a call plays it instead. Applied after
@@ -2256,8 +2293,19 @@ const ClueCandidate* rung_unlock_bob(const Game& g, const std::vector<ClueCandid
 // (tiiah/CONVENTION.md §2v, v23.32.0, the user's ruling and placement): after §2c,
 // ahead of §3, since a loaded Bob's own chop is not at risk this round. The best
 // such clue by the General Clue Evaluation score. Replay 2026882 T25.
+//
+// A stable play clue to Cathy comes first (v23.40.0, the user's ruling), by the
+// stable play hierarchy, as 3.1's play comes before the discards and locks that keep
+// Bob's chop: she plays, and the card she draws is her chop. Replay 2028742 T13.
 const ClueCandidate* rung_save_cathy_chop(const Game& g,
                                           const std::vector<ClueCandidate>& cs) {
+  if (const ClueCandidate* c = settle_stable_play(
+          g, select(cs, [](const ClueCandidate& c) { return c.cathy_play_saves_chop; }))) {
+    hanabi::logging::log_branch("reactor0.rung_2d_stable_play_to_cathy",
+                                {{"target", c->action.target},
+                                 {"subject", c->reading.stable_subject}});
+    return c;
+  }
   return first_of(g, select(cs, [](const ClueCandidate& c) {
                     return c.saves_cathys_critical_chop;
                   }));
