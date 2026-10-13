@@ -432,6 +432,69 @@ TEST(Reactor0CluePriority, ChosenClueNeverPredictsAStrikeBelowEightTokens) {
   }
 }
 
+// The section-4 floor must reject a predicted strike on either reactive side,
+// even at eight clues when discarding is illegal.
+TEST(Reactor0CluePriority, SectionFourFloorRejectsPredictedStrikes) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r3", "y3", "g3", "b3", "p3"},
+      {"r1", "y2", "g2", "b2", "p2"},
+  };
+  opts.clue_tokens = 8;
+  opts.strikes = 2;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+  using hanabi::reactor0::Outcome;
+  ClueCandidate c{PerformRank{2, 1},
+      ClueAction{0, 2, {order_of(g, TestPlayer::CATHY, 1)},
+                 BaseClue{ClueKind::RANK, 1}}};
+  c.tier = ClueTier::HIGH;
+  c.reading.shape = ClueShape::REACTIVE_DISCARD;
+  c.reading.reacter_side = {order_of(g, TestPlayer::BOB, 1), 1,
+                           CardStatus::CALLED_TO_PLAY, Outcome::STRIKE};
+  c.reading.receiver_side = {order_of(g, TestPlayer::CATHY, 1), 2,
+                            CardStatus::CALLED_TO_PLAY, Outcome::PLAY};
+  ASSERT_TRUE(hanabi::reactor0::priority_4_applies(g, {c}));
+  EXPECT_FALSE(hanabi::reactor0::choose_clue(g, {c}).has_value());
+  c.reading.reacter_side.outcome = Outcome::PLAY;
+  c.reading.receiver_side.outcome = Outcome::STRIKE;
+  EXPECT_FALSE(hanabi::reactor0::choose_clue(g, {c}).has_value());
+  c.reading.reacter_side.outcome = Outcome::DISCARD;
+  EXPECT_FALSE(hanabi::reactor0::choose_clue(g, {c}).has_value());
+}
+
+// Intentional trash/duplicate strikes remain the explicit 4.7 exception.
+// Once two strikes are spent, the floor must not resurrect that same clue.
+TEST(Reactor0CluePriority, IntentionalStableStrikeRequiresSurvivableStrike) {
+  SetupOptions opts;
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"r1", "y3", "g3", "b3", "p3"},
+      {"r3", "y2", "g2", "b2", "p2"},
+  };
+  opts.play_stacks = {2, 0, 0, 0, 0};
+  opts.clue_tokens = 8;
+  use_reactor0(opts);
+  Game g = setup(std::move(opts));
+  ClueCandidate c{PerformRank{1, 1},
+      ClueAction{0, 1, {order_of(g, TestPlayer::BOB, 1)},
+                 BaseClue{ClueKind::RANK, 1}}};
+  c.tier = ClueTier::HIGH;
+  c.reading.shape = ClueShape::STABLE_DISCARD;
+  c.reading.stable_subject = order_of(g, TestPlayer::BOB, 1);
+  c.reading.stable_button = CardStatus::CALLED_TO_PLAY;
+  c.reading.stable_outcome = hanabi::reactor0::Outcome::STRIKE;
+  ASSERT_TRUE(hanabi::reactor0::priority_4_applies(g, {c}));
+  for(int strikes : {0, 1}) {
+    g.state.strikes = strikes;
+    EXPECT_EQ(hanabi::reactor0::choose_clue(g, {c}),
+              std::optional<PerformAction>{c.perform});
+  }
+  g.state.strikes = 2;
+  EXPECT_FALSE(hanabi::reactor0::choose_clue(g, {c}).has_value());
+}
+
 // --- VERY HIGH and Precedence ---------------------------------------------
 
 // `choose_very_high_clue` is Precedence step 1, and it must NOT apply section

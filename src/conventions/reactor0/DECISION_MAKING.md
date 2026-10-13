@@ -1427,11 +1427,11 @@ is judged from Alice's own inference, not common knowledge.
        neither a clue count nor 3.8's critical-chop gate, because §4 must
        return a clue.
 
-   **The floor.** If every rung above declines, §4 returns the best candidate by
-   the default tiebreak **ignoring tier**. At 8 clues with no known play a discard
-   is illegal and nothing else is left, so §4 has to hand back something; without the floor an empty result falls into
-   the last-resort branch and blind-plays slot 1, which is worse than any
-   decodable clue.
+   **The floor.** If every rung above declines, §4 returns the best remaining
+   candidate **without a predicted strike**, by the default tiebreak **ignoring
+   tier**. If none remains, it declines and the ordinary play/discard decision
+   runs. Only §4.7 above may deliberately spend a strike. The strike filter
+   applies both before ranking Bob's ditch targets and before the final choice.
 
    The default tiebreak counts how many useful cards a clue newly **touches**,
    which says nothing about what it makes Bob **throw**. So before it runs

@@ -2769,10 +2769,10 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
           {ClueShape::REACTIVE_PLAY, ClueShape::REACTIVE_DISCARD})) {
     return fired("4.8", c);
   }
-  // The floor. At 8 tokens a discard is illegal, so section 4 must return
-  // something: the default tiebreak, IGNORING tier. Without this an empty clue
-  // set walks into take_action's last-resort branch and blind-plays slot 1,
-  // which is strictly worse than any decodable clue.
+  // The floor ranks the remaining non-striking clues by the default tiebreak,
+  // IGNORING tier. A predicted strike is not a safe fallback: only rung 4.7
+  // above may deliberately spend one. If no safe clue remains, decline and
+  // let the ordinary play/discard decision run.
   //
   // But the default tiebreak is `default_score` -- how many useful cards the clue
   // newly TOUCHES -- which knows nothing about what it makes Bob THROW. So before
@@ -2785,6 +2785,7 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   // Outcome-keyed, so a pitch counts and a chuck does not -- see `best_ditch`.
   Pool ditches;
   for (const ClueCandidate& c : cs) {
+    if (predicts_a_strike(c.reading)) continue;
     if (c.reading.reacter_side.outcome != Outcome::DISCARD) continue;
     if (c.reading.reacter_side.order < 0) continue;
     ditches.push_back(&c);
@@ -2806,6 +2807,7 @@ const ClueCandidate* rung_4(const Game& g, const std::vector<ClueCandidate>& cs)
   }
   Pool all;
   for (const ClueCandidate& c : cs) {
+    if (predicts_a_strike(c.reading)) continue;
     if (c.reading.reacter_side.outcome == Outcome::DISCARD &&
         c.reading.reacter_side.order >= 0 && &c != best_ditcher) {
       continue;  // superseded by the best ditch of the same kind
