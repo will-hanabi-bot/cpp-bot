@@ -50,10 +50,10 @@ SetupOptions gotten_opts(const char* cathy_slot_5) {
   return opts;
 }
 
-// The same position in four suits (buckets {r,y} {g} {b}: the three-bucket rule),
-// for the listed fallback test. Nothing is played. Cathy's only card that is
-// playable or one away is the g1 on her slot 4; Bob's slot 4 is the y1 the sum rule
-// pairs with it under a 3 (a rank clue names green, bucket 1, from yellow, bucket 0).
+// The same position in four suits (one bucket each since v24.0.0), for the listed
+// fallback test. Nothing is played. Cathy's only card that is playable or one away
+// is the g1 on her slot 4; Bob's slot 4 is the y1 the sum rule pairs with it under a
+// 3 (a rank clue names green, bucket 2, from yellow, bucket 1).
 SetupOptions gotten_opts_4_suits(const char* cathy_slot_5) {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";

@@ -6,17 +6,20 @@
 // a rank clue the receiver's target sits `bucket_shift` buckets higher, under a
 // colour clue as many lower, wrapping.
 //
-// SINGLE-SUIT BUCKETS (v23.0.0, the user's ruling): a TIIAH variant with five or
-// six NON-INVERTED suits gives every one of them its own bucket, numbered by its
-// position among the non-inverted suits (an inverted suit is in no bucket, as
-// before), and the shift depends on the clue's EPOCH, ceil(turn / 3): +-1 on an
-// odd epoch, +-2 on an even one. +1, -1, +2, -2 are distinct and non-zero mod 5
-// and mod 6, so the clue kind is never ambiguous and a target never sits in the
-// reacter's own suit. A TIIAH variant with three or four non-inverted suits keeps
-// three buckets and +-1, which is what makes +-1 unambiguous there.
+// ONE BUCKET PER SUIT: every non-inverted suit is a bucket of its own, numbered
+// by its position among the non-inverted suits (an inverted suit is in no
+// bucket). Five or six non-inverted suits since v23.0.0, three or four since
+// v24.0.0 (the user's rulings); until v24.0.0 three or four kept three buckets,
+// 4 suits grouped {[0,1],[2],[3]}.
+//
+// THE EPOCH SHIFT (v23.0.0) applies at five or six non-inverted suits only: the
+// shift is +-1 when the clue's EPOCH, ceil(turn / 3), is odd and +-2 when it is
+// even. +1, -1, +2, -2 are distinct and non-zero mod 5 and mod 6, so the clue kind
+// is never ambiguous and a target never sits in the reacter's own suit. At three
+// or four the shift is +-1 in every epoch: +-2 would collide there (2 == -2 mod 4,
+// 2 == -1 mod 3).
 #pragma once
 
-#include <array>
 #include <optional>
 #include <vector>
 
@@ -29,46 +32,25 @@ struct State;
 
 namespace hanabi::tiiah {
 
-// Five or six non-inverted suits under Throw It in a Hole: one bucket per
-// non-inverted suit, and the epoch-dependent shift (v23.0.0).
-bool single_suit_buckets(const Variant& variant);
+// Five or six non-inverted suits under Throw It in a Hole: the shift follows the
+// epoch (v23.0.0). Three or four: +-1 always (v24.0.0).
+bool epoch_shift(const Variant& variant);
 
-// How many buckets the variant has: its non-inverted suit count under
-// `single_suit_buckets`, else 3.
+// How many buckets the variant has: its non-inverted suit count.
 int bucket_count(const Variant& variant);
 
-// The THREE-bucket table, each bucket holding the ORIGINAL suit indices it
-// covers, in ascending order. Under `single_suit_buckets` the variant does not use
-// it (`variant_buckets` is what it uses).
-//
-// Inverted (Orange / Dark Orange) suits are removed first and belong to no
-// bucket: they are never a reactive target in the first place (§1c), and the
-// remaining suits are re-indexed from 0 before the table below is applied. The
-// table is keyed on how many suits REMAIN, so `& Orange (4 Suits)` — Red, Green,
-// Blue — uses the three-suit one. The five- and six-suit rows are for a variant
-// outside Throw It in a Hole only; a TIIAH one uses single-suit buckets:
-//
-//   3 -> {0:[0],   1:[1],   2:[2]}
-//   4 -> {0:[0,1], 1:[2],   2:[3]}
-//   5 -> {0:[0,1], 1:[2,3], 2:[4]}
-//   6 -> {0:[0,1], 1:[2,3], 2:[4,5]}
-//
-// Any other count (no TIIAH variant has one) returns three empty buckets, which
-// reads as "no suit has a bucket" and so proposes nothing.
-std::array<std::vector<int>, 3> suit_buckets(const Variant& variant);
-
-// The buckets the variant actually uses: under `single_suit_buckets`, one per
-// non-inverted suit in suit-index order (`& Orange (6 Suits)`: R, Y, G, B, P,
-// with orange in none); else `suit_buckets`.
+// The buckets, one per non-inverted suit in suit-index order, each holding that
+// suit's ORIGINAL index (`& Orange (6 Suits)`: R, Y, G, B, P, with orange in none).
 std::vector<std::vector<int>> variant_buckets(const Variant& variant);
 
-// Which bucket `suit_index` sits in, or nullopt for an inverted suit.
+// Which bucket `suit_index` sits in -- its position among the non-inverted suits --
+// or nullopt for an inverted suit.
 std::optional<int> bucket_of(const Variant& variant, int suit_index);
 
 // How many buckets UP a reactive clue given on `clue_turn` (1-based, the turn
 // the clue itself was given) moves from the reacter's card to the target:
-// positive for a rank clue, negative for a colour clue. Three buckets: +-1.
-// Single-suit buckets: +-1 when ceil(clue_turn / 3) is odd, +-2 when it is even.
+// positive for a rank clue, negative for a colour clue. +-1, except under
+// `epoch_shift`, where it is +-2 when ceil(clue_turn / 3) is even.
 int bucket_shift(const Variant& variant, ClueKind kind, int clue_turn);
 
 // The bucket the receiver's target must sit in, given the reacter's bucket.

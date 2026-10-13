@@ -24,7 +24,7 @@ Two orientation facts that most entries depend on:
 ### /allplays
 Chat toggle that promotes **colour** reactive clues to play+play, matching
 rank clues, so both players end up called to play. Default off.
-`include/hanabi/basics/game.h:98-102`; `src/net/commands.cpp:1057-1106`.
+`include/hanabi/basics/game.h:98-102`; `src/net/commands.cpp:1056-1105`.
 
 ### /settings
 Chat command that prints the variant's active reactive tables — the

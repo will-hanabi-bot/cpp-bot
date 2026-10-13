@@ -1039,9 +1039,8 @@ void BotClient::chat_settings(const std::string& room) {
   // Reactor0 has no reactive value table — its anchors are clue values —
   // so it gets its own line. Reactor's output is left byte-identical
   // (tests/test_reactor/test_reactive_table.cpp pins it verbatim). TIIAH gets a
-  // third: it shares reactor0's anchors but not its even/odd split, and the two
-  // things a reader needs here — the buckets and the reverse-reactive dispatch
-  // — appear in neither of the others.
+  // third, the user's own text (v24.0.0): the suit numbering, the shift and the
+  // dispatch, which appear in neither of the others.
   std::string msg =
       conv == Convention::TIIAH
           ? hanabi::tiiah::format_settings(*variant)

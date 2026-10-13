@@ -35,15 +35,16 @@ std::optional<ClueInterp> interp_of(const Game& g) {
   return std::nullopt;
 }
 
-// Replay 2008177 T3's shape, moved to four suits (buckets {R,Y}, {G}, {B}: the
-// three-bucket rule). Nothing is played; Cathy's only playable is the g1 on her
-// slot 4, and Bob's slot 3 is the r1 the sum rule will name.
+// Replay 2008177 T3's shape, moved to four suits, one bucket each (v24.0.0).
+// Nothing is played; Cathy's only playable is the g1 on her slot 4, and Bob's slot
+// 3 is the y1 the sum rule will name (the r1 until v24.0.0, when red and yellow
+// shared bucket 0).
 SetupOptions replay_opts() {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"b4", "b5", "r1", "y1", "b3"},
+      {"b4", "b5", "y1", "r1", "b3"},
       {"y4", "b3", "y5", "g1", "y2"},
   };
   opts.starting = TestPlayer::ALICE;
@@ -73,8 +74,8 @@ TEST(TiiahOrdinaryReactive, AClueToCathyIsReactiveWithBobReacting) {
 
 // The sum rule names the slot and the bucket names the card, exactly as they do
 // on a reverse reactive: anchor 2, target slot 4, so react_slot + 4 = 2 (mod 5)
-// = slot 3. Green is bucket 1 and this is a RANK clue, so the reacter sits one
-// bucket lower — bucket 0, red and yellow.
+// = slot 3. Green is bucket 2 and this is a RANK clue, so the reacter sits one
+// bucket lower — bucket 1, yellow.
 TEST(TiiahOrdinaryReactive, TheSumRuleAndTheBucketNameTheReactersCard) {
   Game g = setup(replay_opts());
 
@@ -84,7 +85,7 @@ TEST(TiiahOrdinaryReactive, TheSumRuleAndTheBucketNameTheReactersCard) {
   EXPECT_EQ(g.waiting.front().react_order, order_at(g, TestPlayer::BOB, 3));
   EXPECT_EQ(status_at(g, TestPlayer::BOB, 3), CardStatus::CALLED_TO_PLAY);
   EXPECT_TRUE(g.meta[order_at(g, TestPlayer::BOB, 3)].urgent);
-  expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/3, {"r1", "y1"});
+  expect_infs(g, std::nullopt, TestPlayer::BOB, /*slot=*/3, {"y1"});
 }
 
 // ...and the play that follows from it, end to end.

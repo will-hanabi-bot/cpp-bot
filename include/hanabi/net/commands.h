@@ -31,6 +31,13 @@
 
 namespace hanabi::net {
 
+// The most characters one chat message may carry (v24.0.0, the user's rule): the
+// longest a message hanab.live renders as one, measured as the length of the TIIAH
+// five/six-suit `/settings` line the user wrote. Anything the bot types into chat
+// -- table, lobby or PM -- stays within it; a longer text is split into several
+// messages, as `/help` is.
+inline constexpr std::size_t kMaxChatLength = 299;
+
 // `/help`'s output, one line per send: a chat message is a single line, so
 // twelve commands cannot be one message. Grouped by purpose and prefixed with
 // `username` because several bots answer at once and the lines have to stay

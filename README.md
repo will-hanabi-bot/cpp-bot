@@ -462,7 +462,7 @@ missing from it.
 | Command | Where | Effect |
 |---|---|---|
 | `/help` | anywhere | List the commands, four grouped lines. Username-prefixed, like `/getversion`, so several bots answering at once stay attributable |
-| `/settings` | anywhere | Print the active convention's reactive tables (reactor: slot tables; reactor0: the two parity buckets + rlocks) |
+| `/settings` | anywhere | Print the active convention's reactive tables (reactor: slot tables; reactor0: the two parity buckets + rlocks; tiiah: the user's one-line summary of the suit numbering and shift, one line for five or six non-inverted suits and one for three or four) |
 | `/setall reactor\|reactor0` | anywhere | Switch which convention **new** games use, for every bot in the room. Running games keep theirs. Unrecognised values are ignored silently — other bot families answer `/setall` too |
 | `/set <clue> odd\|even <value>` | anywhere | reactor0: move one clue into the odd or even reactive bucket with the given reactive value, e.g. `/set Yellow even 4`. `<clue>` is a colour name or a rank (`Odd`/`Even` under Odds and Evens), matched case-insensitively. Retro-applies to running games; reactions already in flight keep the meaning they were given with |
 | `/rlocks [on\|off]` | anywhere | reactor0: enable/disable reactive locks, overriding the per-variant default. Retro-applies to running games. With no argument, reports the current setting |
@@ -506,7 +506,8 @@ Purple=5}, at pace <= 1 a clue to Bob is STABLE, rlocks: off
 Synesthesia has no rank clues, so once a clue to Bob is stable again it reads off
 a fixed colour table, which the line appends. It is **abbreviated** — `fN` is a
 pitch, `dN` a chuck — because spelling out `pitchN`/`chuckN` pushed the line past
-hanab.live's chat limit and truncated the tail, `rlocks` included:
+hanab.live's chat limit (299 characters, `net::kMaxChatLength`; CLAUDE.md *Chat
+messages*) and truncated the tail, `rlocks` included:
 
 ```
 reactor0 — no stable clues above pace 1: to Bob = odd, to Cathy = even,

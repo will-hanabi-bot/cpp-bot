@@ -2,8 +2,8 @@
 // DECISION_MAKING.md Precedence step 2, v9.3.0; restored for Throw It in a Hole in
 // v20.7.0; human diagnostic 2018759 T34).
 //
-// Four suits, so the buckets are {R,Y}, {G}, {B}. Alice's 3 to Cathy calls Bob's b1
-// for Cathy's y1. Bob defers, cluing instead. When Cathy then plays the y1, the
+// Four suits, one bucket each (v24.0.0). Alice's 3 to Cathy calls Bob's r1 for
+// Cathy's y1 (until v24.0.0 a b1, when blue's bucket was below red/yellow's). Bob defers, cluing instead. When Cathy then plays the y1, the
 // target Bob's slot was paired with is gone: his call stands, but it is no longer
 // urgent, so it no longer outranks every clue. The TIIAH walk did not record the
 // pairing until v20.7.0, so the call stayed urgent.
@@ -24,14 +24,14 @@ namespace {
 
 // Green on 1. Bob throws his r1 onto the discard pile and draws a clued r2; Cathy
 // throws her r4 and draws a y4, leaving the g2 in her slot 2 and the y1 in her slot
-// 3. Alice's 3 to Cathy then pairs the y1 with Bob's slot 5, the b1 (the g2's
+// 3. Alice's 3 to Cathy then pairs the y1 with Bob's slot 5, his other r1 (the g2's
 // pairing, Bob's `{r2}`, plays in no world). Bob defers with a clue to Alice.
 Game deferred() {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"g4", "b4", "y3", "b1", "r1"},
+      {"g4", "b4", "y3", "r1", "r1"},
       {"g2", "y1", "g3", "b4", "r4"},
   };
   opts.play_stacks = std::vector<int>{0, 0, 1, 0};
@@ -52,29 +52,29 @@ Game deferred() {
 
 TEST(TiiahSpentReaction, TheTargetPlayedRelegatesTheReaction) {
   Game g = deferred();
-  const int bobs_b1 = order_at(g, TestPlayer::BOB, 5);
-  ASSERT_EQ(g.meta[bobs_b1].status, CardStatus::CALLED_TO_PLAY);
-  ASSERT_TRUE(g.meta[bobs_b1].urgent) << "guard: a pending reaction";
-  ASSERT_EQ(g.meta[bobs_b1].react_target_order, order_at(g, TestPlayer::CATHY, 3))
+  const int bobs_r1 = order_at(g, TestPlayer::BOB, 5);
+  ASSERT_EQ(g.meta[bobs_r1].status, CardStatus::CALLED_TO_PLAY);
+  ASSERT_TRUE(g.meta[bobs_r1].urgent) << "guard: a pending reaction";
+  ASSERT_EQ(g.meta[bobs_r1].react_target_order, order_at(g, TestPlayer::CATHY, 3))
       << "guard: paired with Cathy's y1";
 
   // Cathy plays the y1 her call was for.
   g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/3,
                     /*reached_the_hole=*/true, "g4");
 
-  EXPECT_EQ(g.meta[bobs_b1].status, CardStatus::CALLED_TO_PLAY) << "the call stands";
-  EXPECT_FALSE(g.meta[bobs_b1].urgent) << "its target has left Cathy's hand";
+  EXPECT_EQ(g.meta[bobs_r1].status, CardStatus::CALLED_TO_PLAY) << "the call stands";
+  EXPECT_FALSE(g.meta[bobs_r1].urgent) << "its target has left Cathy's hand";
 }
 
 // The control: Cathy throws some other card, the target is still there, and the
 // reaction stays urgent.
 TEST(TiiahSpentReaction, WhileTheTargetStaysTheReactionStaysUrgent) {
   Game g = deferred();
-  const int bobs_b1 = order_at(g, TestPlayer::BOB, 5);
-  ASSERT_TRUE(g.meta[bobs_b1].urgent) << "guard: a pending reaction";
+  const int bobs_r1 = order_at(g, TestPlayer::BOB, 5);
+  ASSERT_TRUE(g.meta[bobs_r1].urgent) << "guard: a pending reaction";
 
   g = hidden_action(std::move(g), TestPlayer::CATHY, /*slot=*/5,
                     /*reached_the_hole=*/false, "g4");
 
-  EXPECT_TRUE(g.meta[bobs_b1].urgent);
+  EXPECT_TRUE(g.meta[bobs_r1].urgent);
 }

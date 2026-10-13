@@ -1,4 +1,5 @@
-// The three suit buckets (CONVENTION.md §1a).
+// The suit buckets (CONVENTION.md §1a): one per non-inverted suit, in every TIIAH
+// variant (five or six suits since v23.0.0, three or four since v24.0.0).
 #include <gtest/gtest.h>
 
 #include <vector>
@@ -8,55 +9,44 @@
 
 using namespace hanabi;
 using hanabi::tiiah::bucket_of;
-using hanabi::tiiah::suit_buckets;
+using hanabi::tiiah::variant_buckets;
 
-namespace {
+using Rows = std::vector<std::vector<int>>;
 
-std::vector<std::vector<int>> as_rows(const std::array<std::vector<int>, 3>& b) {
-  return {b[0], b[1], b[2]};
-}
-
-}  // namespace
-
+// Red Yellow Green Blue. Until v24.0.0 red and yellow shared bucket 0.
 TEST(TiiahBuckets, FourSuits) {
-  // Red Yellow Green Blue.
-  EXPECT_EQ(as_rows(suit_buckets(get_variant("Throw It in a Hole (4 Suits)"))),
-            (std::vector<std::vector<int>>{{0, 1}, {2}, {3}}));
+  EXPECT_EQ(variant_buckets(get_variant("Throw It in a Hole (4 Suits)")),
+            (Rows{{0}, {1}, {2}, {3}}));
 }
 
 TEST(TiiahBuckets, FiveSuits) {
-  EXPECT_EQ(as_rows(suit_buckets(get_variant("Throw It in a Hole (5 Suits)"))),
-            (std::vector<std::vector<int>>{{0, 1}, {2, 3}, {4}}));
+  EXPECT_EQ(variant_buckets(get_variant("Throw It in a Hole (5 Suits)")),
+            (Rows{{0}, {1}, {2}, {3}, {4}}));
 }
 
 TEST(TiiahBuckets, SixSuits) {
-  EXPECT_EQ(as_rows(suit_buckets(get_variant("Throw It in a Hole (6 Suits)"))),
-            (std::vector<std::vector<int>>{{0, 1}, {2, 3}, {4, 5}}));
+  EXPECT_EQ(variant_buckets(get_variant("Throw It in a Hole (6 Suits)")),
+            (Rows{{0}, {1}, {2}, {3}, {4}, {5}}));
 }
 
-// The inverted suit is removed BEFORE the count is taken, and the rest are
-// re-indexed — so a 6-suit variant with an Orange in it uses the FIVE-suit row.
-// The returned indices are the original ones, which is what a caller holding a
-// card's `suit_index` needs.
+// The inverted suit is in no bucket, and the rest are numbered by their position
+// among the non-inverted suits. The returned indices are the original ones, which
+// is what a caller holding a card's `suit_index` needs.
 TEST(TiiahBuckets, InvertedSuitsAreDroppedBeforeCounting) {
   const Variant& six = get_variant("Throw It in a Hole & Orange (6 Suits)");
   ASSERT_TRUE(six.suits[5].suit_type.inverted) << "guard: Orange is last";
-  EXPECT_EQ(as_rows(suit_buckets(six)),
-            (std::vector<std::vector<int>>{{0, 1}, {2, 3}, {4}}));
+  EXPECT_EQ(variant_buckets(six), (Rows{{0}, {1}, {2}, {3}, {4}}));
 
   const Variant& five = get_variant("Throw It in a Hole & Orange (5 Suits)");
-  EXPECT_EQ(as_rows(suit_buckets(five)),
-            (std::vector<std::vector<int>>{{0, 1}, {2}, {3}}));
+  EXPECT_EQ(variant_buckets(five), (Rows{{0}, {1}, {2}, {3}}));
 }
 
-// Red, Green, Blue and an Orange: only three suits are left, which is a row of
-// its own — one suit per bucket, so ±1 still tells the three apart.
+// Red, Green, Blue and an Orange: three suits are left, one bucket each.
 TEST(TiiahBuckets, ThreeRemainingSuitsTakeOneEach) {
   const Variant& v = get_variant("Throw It in a Hole & Orange (4 Suits)");
   ASSERT_EQ(v.suits.size(), 4u);
   ASSERT_TRUE(v.suits[3].suit_type.inverted);
-  EXPECT_EQ(as_rows(suit_buckets(v)),
-            (std::vector<std::vector<int>>{{0}, {1}, {2}}));
+  EXPECT_EQ(variant_buckets(v), (Rows{{0}, {1}, {2}}));
 }
 
 // Six non-inverted suits: one bucket per suit, by suit index (v23.0.0).

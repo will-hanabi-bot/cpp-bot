@@ -30,10 +30,10 @@ using namespace hanabi;
 using namespace hanabi::test;
 using namespace hanabi::test::tiiah;
 
-// Four suits, so the buckets are {R,Y}, {G}, {B}. Our belief has green on 1; the
-// pair (Bob, us) and the team have nothing. Bob clues Blue to us and Cathy reacts
-// with her b1 -- bucket 2, a colour clue -- so our called card is in bucket 1: on
-// OUR stacks the g2, or the b2 the b1 continues into. Our untouched cards could
+// Four suits, one bucket each (v24.0.0). Our belief has green on 1; the pair (Bob,
+// us) and the team have nothing. Bob clues Blue to us and Cathy reacts with her b1
+// -- bucket 3, a colour clue -- so our called card is in bucket 2, green: on OUR
+// stacks the g2, or the b2 the b1 continues into. Our untouched cards could
 // only be the r1, the y1 or the g2, so the stamp's pair-frame reading is {r1,y1}
 // and ours is {g2}. Blue anchors on 4 and Cathy reacts on slot 1, so the call is
 // our slot 3.

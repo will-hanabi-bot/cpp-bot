@@ -31,14 +31,14 @@ std::optional<ClueInterp> interp_of(const Game& g) {
 
 }  // namespace
 
-// The worked example from the spec, in four suits, so the buckets are {R,Y},
-// {G}, {B}. Red is on 2 and Bob knows his r3, so a clue to him reverses.
-// Once that r3 is assumed played his leftmost want is the g1 — a bucket 1
-// target — and rank 5 anchors the reaction on Cathy's slot 4.
+// The worked example from the spec, in four suits, one bucket each (v24.0.0; the
+// spec's three buckets {R,Y}, {G}, {B} read `{r4, y1}` here). Red is on 2 and Bob
+// knows his r3, so a clue to him reverses. Once that r3 is assumed played his
+// leftmost want is the g1 — bucket 2 — and rank 5 anchors the reaction on
+// Cathy's slot 4.
 //
-// Bucket 1 under a RANK clue means the reacter sits in bucket 0, and the
-// playables of bucket 0 after the queued r3 are r4 and y1. Cathy cannot tell
-// which she holds, and does not need to: both are plays.
+// Bucket 2 under a RANK clue means the reacter sits in bucket 1, yellow, whose
+// only playable is the y1.
 TEST(TiiahBucketEncoding, ARankClueNamesTheBucketBelowTheTarget) {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";
@@ -46,7 +46,7 @@ TEST(TiiahBucketEncoding, ARankClueNamesTheBucketBelowTheTarget) {
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
       {"g1", "r3", "y5", "g5", "b5"},   // the known r3, and a g1 in front of it
-      {"b4", "b3", "y4", "r4", "g4"},   // slot 4 is the reaction
+      {"b4", "b3", "y4", "y1", "g4"},   // slot 4 is the reaction
   };
   opts.starting = TestPlayer::ALICE;
   use_tiiah(opts);
@@ -57,12 +57,12 @@ TEST(TiiahBucketEncoding, ARankClueNamesTheBucketBelowTheTarget) {
 
   ASSERT_EQ(interp_of(g), ClueInterp::REACTIVE);
   EXPECT_EQ(status_at(g, TestPlayer::CATHY, 4), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/4, {"r4", "y1"});
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/4, {"y1"});
 }
 
 // The other direction. A COLOUR clue puts the target one bucket lower, so the
-// reacter reads one bucket higher: a bucket 1 target (green) names bucket 2,
-// which in a four-suit game is blue alone.
+// reacter reads one bucket higher: a bucket 2 target (green) names bucket 3,
+// blue.
 TEST(TiiahBucketEncoding, AColourClueNamesTheBucketAboveTheTarget) {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";
@@ -117,7 +117,7 @@ TEST(TiiahBucketEncoding, APairingThatBreaksTheBucketRelationIsNotRead) {
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
       {"r1", "g1", "y4", "b4", "r4"},
-      {"y3", "y1", "g3", "b3", "r3"},  // y1 plays, but yellow is bucket 0
+      {"y3", "y1", "g3", "b3", "r3"},  // y1 plays, but yellow is bucket 1
   };
   opts.starting = TestPlayer::ALICE;
   use_tiiah(opts);

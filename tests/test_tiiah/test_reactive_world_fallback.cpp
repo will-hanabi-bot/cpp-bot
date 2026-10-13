@@ -1,14 +1,15 @@
 // An unreadable reactive falls back to the worlds (tiiah/CONVENTION.md §1d, the
 // user's ruling; v19.3.0).
 //
-// Four suits, so the buckets are {R,Y}, {G}, {B}. Bob throws his g1 into the hole
-// without knowing it, so the stacks Alice and Bob share still have green on 0 --
-// the play was Bob's own, and he cannot name it. Alice's 4 to Cathy pairs Bob's
-// slot 2 (an r1, clued red) with Cathy's slot 2 (a g2). On the shared frame the g2
-// is one away, and a finesse would need Bob's card to be the g1, which a red card
-// cannot be: no pairing reads. In the world where Bob's hole card was the g1, the
-// g2 plays outright, Bob's card is the playable of the bucket below (`{r1}`), and
-// the worlds collapse to that one.
+// Four suits, one bucket each (v24.0.0). Bob throws his g1 into the hole without
+// knowing it, so the stacks Alice and Bob share still have green on 0 -- the play
+// was Bob's own, and he cannot name it. Alice's 4 to Cathy pairs Bob's slot 2 (a
+// y1, clued yellow) with Cathy's slot 2 (a g2). On the shared frame the g2 is one
+// away, and a finesse would need Bob's card to be the g1, which a yellow card cannot
+// be: no pairing reads. In the world where Bob's hole card was the g1, the g2 plays
+// outright, Bob's card is the playable of the bucket below (`{y1}`), and the worlds
+// collapse to that one. (Until v24.0.0 red shared yellow's bucket, and Bob's card
+// was an r1.)
 //
 // The control below still runs on the five-suit fixture.
 #include <gtest/gtest.h>
@@ -37,14 +38,14 @@ SetupOptions fallback_opts() {
   return opts;
 }
 
-// The same position in four suits (the three-bucket rule): Bob's hole card is a
-// g1, and Cathy's slot 2 the g2 it would make playable.
+// The same position in four suits: Bob's hole card is a g1, and Cathy's slot 2 the
+// g2 it would make playable.
 SetupOptions fallback_opts_4_suits() {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"r1", "y3", "b4", "g4", "g1"},
+      {"y1", "y3", "b4", "g4", "g1"},
       {"g2", "b3", "y4", "r4", "r3"},
   };
   opts.clue_tokens = 5;
@@ -57,8 +58,8 @@ SetupOptions fallback_opts_4_suits() {
 
 TEST(TiiahReactiveWorldFallback, AOneAwayTargetPlayableInAWorldReadsThere) {
   Game g = setup(fallback_opts_4_suits());
-  g = pre_clue(std::move(g), TestPlayer::BOB, 1, {"red"});
-  const int bobs_r1 = order_at(g, TestPlayer::BOB, 1);
+  g = pre_clue(std::move(g), TestPlayer::BOB, 1, {"yellow"});
+  const int bobs_y1 = order_at(g, TestPlayer::BOB, 1);
 
   // Bob's g1 goes in unnamed; Cathy throws her r3.
   g = hidden_action(std::move(g), TestPlayer::BOB, /*slot=*/5,
@@ -70,9 +71,9 @@ TEST(TiiahReactiveWorldFallback, AOneAwayTargetPlayableInAWorldReadsThere) {
 
   g = take_turn(std::move(g), "Alice clues 4 to Cathy");
 
-  EXPECT_EQ(g.meta[bobs_r1].status, CardStatus::CALLED_TO_PLAY);
-  EXPECT_EQ(g.common.thoughts[bobs_r1].possibilities(),
-            IdentitySet::single(g.state.expand_short("r1")));
+  EXPECT_EQ(g.meta[bobs_y1].status, CardStatus::CALLED_TO_PLAY);
+  EXPECT_EQ(g.common.thoughts[bobs_y1].possibilities(),
+            IdentitySet::single(g.state.expand_short("y1")));
   EXPECT_EQ(g.state.common_play_stacks[2], 1)
       << "the clue says which world we are in: Bob's hole card was the g1";
 }

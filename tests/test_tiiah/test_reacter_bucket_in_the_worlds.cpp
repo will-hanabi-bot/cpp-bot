@@ -1,13 +1,14 @@
 // The reacter's own card reads the bucket the relation names first, in the worlds
 // of its own hole cards (tiiah/CONVENTION.md §1d, §1e; v20.10.0; replay 2018857).
 //
-// Four suits, so the buckets are {R,Y}, {G}, {B}. Green and blue are on 1. We
-// (Alice) throw an unclued card into the hole, so to us red and yellow could each be
-// on 1. Our slot-2 card is clued 2. Cathy's 4 to Bob is a reactive with us reacting:
-// Bob's g2 (bucket 1) pairs with our 2, so a rank clue names bucket 0 for it -- the
-// r2 or the y2, each playable only where our hole card was the r1 or the y1. On the
-// frame only the g2 and b2 play, and those are what the stamp writes; the bucket
-// reading must replace them, not be tested against them.
+// Four suits, one bucket each (v24.0.0). Green and blue are on 1. We (Alice) throw
+// an unclued card into the hole, so to us red and yellow could each be on 1. Our
+// slot-2 card is clued 2. Cathy's 4 to Bob is a reactive with us reacting: Bob's g2
+// (bucket 2) pairs with our 2, so a rank clue names bucket 1 for it -- the y2,
+// playable only where our hole card was the y1. On the frame only the g2 and b2 play,
+// and those are what the stamp writes; the bucket reading must replace them, not be
+// tested against them. (Until v24.0.0 bucket 0 was red and yellow, and the reading
+// `{r2,y2}`.)
 //
 // The control below still runs on the five-suit fixture.
 #include <gtest/gtest.h>
@@ -48,7 +49,7 @@ Game play_out(bool into_the_hole) {
   return take_turn(std::move(g), "Cathy clues 4 to Bob");
 }
 
-// The same position in four suits (the three-bucket rule).
+// The same position in four suits.
 Game play_out_4_suits(bool into_the_hole) {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";
@@ -82,8 +83,8 @@ TEST(TiiahReacterBucketInTheWorlds, TheBucketReadingInTheWorldsReplacesTheFrames
   const int ours = order_at(g, TestPlayer::ALICE, 2);
 
   ASSERT_EQ(g.meta[ours].status, CardStatus::CALLED_TO_PLAY) << "guard: we react";
-  EXPECT_EQ(g.common.thoughts[ours].inferred, set_of(g, {"r2", "y2"}))
-      << "bucket 0 in the worlds of our hole card, not the frame's g2/b2";
+  EXPECT_EQ(g.common.thoughts[ours].inferred, set_of(g, {"y2"}))
+      << "bucket 1 in the worlds of our hole card, not the frame's g2/b2";
 }
 
 // The control: no hole card, so no world plays a bucket-0 2. Our 2 could answer

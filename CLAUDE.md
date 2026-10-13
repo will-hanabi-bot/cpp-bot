@@ -43,6 +43,17 @@ closes one of its entries, delete the entry and update the `CONVENTION.md` /
 `GLOSSARY.md` / `DECISION_MAKING.md` wording that pointed at it in the same
 commit.
 
+## Chat messages
+
+**Whenever the bot types a message into the chat — table, lobby or PM — the message
+is at most 299 characters** (v24.0.0, the user's rule). That is the most hanab.live
+renders as a single message. The user measured it as the length of the TIIAH
+five/six-suit `/settings` line (`tiiah::format_settings`,
+`src/conventions/tiiah/settings.cpp`). The limit is `net::kMaxChatLength`
+(`include/hanabi/net/commands.h`). A longer text is split into several messages, as
+`/help` is (`help_lines`), and a new or changed chat line gets a test that it fits
+(`tests/test_net/test_tiiah_commands.cpp`, `EverySettingsLineFitsTheChatLimit`).
+
 ## Convention documentation
 
 Each convention owns its docs. `src/conventions/<name>/CONVENTION.md` is the
@@ -94,10 +105,10 @@ each and makes the full suite take ~7 minutes instead of ~40 seconds.
 ```bash
 cmake --build build -j --target hanabi_reactor0_tests   # build what you need
 build/hanabi_reactor0_tests.exe   # reactor0 only         361 tests,  7 s
-build/hanabi_tests.exe            # convention-neutral    412 tests,  1.4 s
+build/hanabi_tests.exe            # convention-neutral    413 tests,  1.4 s
 build/hanabi_reactor_tests.exe    # reactor + replays     125 tests,  7 s
 build/hanabi_decision_tests.exe   # decision quality      294 tests, 22 s
-build/hanabi_tiiah_tests.exe      # Throw It in a Hole    286 tests,  1.2 s
+build/hanabi_tiiah_tests.exe      # Throw It in a Hole    283 tests,  1.2 s
 ```
 
 Most of the decision suite's time is three late-game tests (2026455 ×2, 2024288)

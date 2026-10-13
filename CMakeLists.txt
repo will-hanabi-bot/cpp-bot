@@ -549,7 +549,6 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_deferred_collapse.cpp
   tests/test_tiiah/test_named_call_on_a_watched_dupe.cpp
   tests/test_tiiah/test_reverse_reactive_confirmation.cpp
-  tests/test_tiiah/test_replay_2013726_reacter_rules_out_the_n3.cpp
   tests/test_tiiah/test_ordinary_reactive.cpp
   tests/test_tiiah/test_receiver_bucket.cpp
   tests/test_tiiah/test_replay_2008177_ordinary_reactive_not_read.cpp
@@ -588,6 +587,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_call_in_every_world_is_a_play.cpp
   tests/test_tiiah/test_replay_2018857_reacter_reads_bucket_in_the_worlds.cpp
   tests/test_tiiah/test_reacter_bucket_in_the_worlds.cpp
+  tests/test_tiiah/test_reacter_own_card_by_elimination.cpp
   tests/test_tiiah/test_replay_2025422_team_reading_ruled_out_reads_any_playable.cpp
   tests/test_tiiah/test_replay_2025452_receiver_reads_any_playable_when_bucket_impossible.cpp
   tests/test_tiiah/test_replay_2026374_walk_skips_a_sure_play.cpp
@@ -616,9 +616,7 @@ add_executable(hanabi_tiiah_tests
   tests/test_tiiah/test_receiver_reading_beats_the_stamp.cpp
   tests/test_tiiah/test_replay_2011854_refusal_and_the_dupe_strike.cpp
   tests/test_tiiah/test_refusal_and_dupe_strike.cpp
-  tests/test_tiiah/test_replay_2011887_undeferred_call_not_dropped.cpp
   tests/test_tiiah/test_replay_2012424_reaction_call_live_in_a_world.cpp
-  tests/test_tiiah/test_replay_2013616_reacts_after_the_pair_settles.cpp
   tests/test_tiiah/test_replay_2013645_role_inversion_keeps_the_clue_stable.cpp
   tests/test_tiiah/test_replay_2013645_stable_four_under_role_inversion.cpp
   tests/test_tiiah/test_replay_2013726_endgame_pairing_may_break_the_bucket.cpp

@@ -308,7 +308,7 @@ could be reads any playable, taken per candidate of the reacter's card, rather t
 the finesse first (CONVENTION.md §1d, replay 2026455 T49). And a play clue revealing a
 card that *leads into* the other hands is HIGH (§2s, v23.26.0), as it also is at pace
 ≤ 1 (v23.39.0). `high_score_phase`,
-`src/conventions/tiiah/buckets.cpp:124-133`.
+`src/conventions/tiiah/buckets.cpp:85-94`.
 
 ### leads into (lead-in)
 A playable card **leads into** the contiguous run of its successors that can be found
@@ -359,13 +359,13 @@ seat's worlds (`advance_common_from_worlds`, §1e), not "assuming none of the
 superposed cards were played". Returns the state unchanged outside TIIAH.
 
 ### bucket
-One of the groups of suits, used by the reactive clues to say what a card IS
-when the stacks cannot show it. Inverted suits are in none. Five or six
-non-inverted suits: one bucket per non-inverted suit (v23.0.0, below). Three or
-four: three buckets, the inverted suits dropped first, the rest re-indexed from 0
-and mapped on how many remain — 3 → one suit each, 4 → `{[0,1],[2],[3]}`.
-`suit_buckets` / `bucket_of`, `src/conventions/tiiah/buckets.cpp`.
-CONVENTION.md §1a.
+One non-inverted suit, numbered by its position among the non-inverted suits, used
+by the reactive clues to say what a card IS when the stacks cannot show it (red 0,
+yellow 1, ... in suit order). Inverted suits are in none. Every TIIAH variant has one
+bucket per non-inverted suit: five or six suits since v23.0.0, three or four since
+v24.0.0. Before that, the remaining suits shared three buckets, four of them grouped
+`{[0,1],[2],[3]}`. `variant_buckets` / `bucket_of`,
+`src/conventions/tiiah/buckets.cpp`. CONVENTION.md §1a.
 
 The **relation** between two buckets — the receiver's target one higher than the
 reacter's card for a rank clue, one lower for a colour one — does two jobs, and
@@ -377,23 +377,24 @@ reacter cannot see — steering the walk with it made the giver and the reacter
 name different slots (replay 2010246 T2). For readers it is purely the
 **inference**: what the two called cards are. CONVENTION.md §1d.
 
-**Single-suit buckets (v23.0.0):** a TIIAH variant with five or six non-inverted
-suits has one bucket per non-inverted suit, numbered by position among them
-(`variant_buckets`; orange in none), and the relation moves by the [bucket shift](#bucket-shift) of the clue's
-[epoch](#epoch). CONVENTION.md §1a.
+**The epoch shift (v23.0.0):** with five or six non-inverted suits the relation
+moves by the [bucket shift](#bucket-shift) of the clue's [epoch](#epoch); with three or
+four it moves by one on every turn (v24.0.0). `epoch_shift`. CONVENTION.md §1a.
 
 ### epoch
 `ceil(T / 3)` for the 1-based turn T a
 reactive clue was given on: turns 1-3 are epoch 1, turns 4-6 epoch 2, and so on.
-It picks the [bucket shift](#bucket-shift) under single-suit buckets. A reaction is read in
+It picks the [bucket shift](#bucket-shift) with five or six non-inverted suits; with three
+or four it plays no part (v24.0.0). A reaction is read in
 its CLUE's epoch (`wc.turn`), not its own. `bucket_shift`,
 `src/conventions/tiiah/buckets.cpp`. CONVENTION.md §1d.
 
 ### bucket shift
 How many buckets a reactive clue's relation moves from the reacter's card to the
 receiver's target: `+k` for a rank clue, `−k` for a colour clue, wrapping mod the
-bucket count. `k` is 1 with three buckets; with single-suit buckets (v23.0.0) it is 1 on an
-odd [epoch](#epoch) and 2 on an even one. `bucket_shift` / `named_bucket` /
+bucket count. With five or six non-inverted suits (v23.0.0) `k` is 1 on an odd
+[epoch](#epoch) and 2 on an even one; with three or four it is 1 on every turn (v24.0.0),
+since 2 would be ambiguous mod 3 and mod 4. `bucket_shift` / `named_bucket` /
 `reacter_bucket_for`, `src/conventions/tiiah/buckets.cpp`. CONVENTION.md §1d.
 
 ### known play

@@ -52,8 +52,9 @@ Game clue_and_react(SetupOptions opts, const std::string& clue) {
                        /*reached_the_hole=*/true, "t5");
 }
 
-// Four suits: red, yellow (bucket 0), green (1), blue (2) -- the three-bucket
-// rule. Nothing played. Bob's slot 4 is the card the clue names for him.
+// Four suits: red 0, yellow 1, green 2, blue 3 -- one bucket each (v24.0.0; until
+// then red and yellow shared bucket 0). Nothing played. Bob's slot 4 is the card
+// the clue names for him.
 SetupOptions four_suits(const std::string& bob_slot4,
                         std::vector<std::string> cathy) {
   SetupOptions opts;
@@ -80,15 +81,15 @@ Game clue_and_react_4_suits(SetupOptions opts, const std::string& clue) {
 }  // namespace
 
 // The user's example, in four suits. Alice's 5 to Cathy (anchor 5) pairs Bob's
-// slot 4 with Cathy's slot 1. Bob plays the b1, bucket 2; a rank clue names the
-// bucket above, wrapping to red and yellow. Cathy's slot 1 was not touched, so it
-// could also be the b2 the b1 continues into -- not provably a finesse, so the
-// bucket alone: `{r1,y1}`.
+// slot 4 with Cathy's slot 1. Bob plays the b1, bucket 3; a rank clue names the
+// bucket above, wrapping to red. Cathy's slot 1 was not touched, so it could also
+// be the b2 the b1 continues into -- not provably a finesse, so the bucket alone:
+// `{r1}` (`{r1,y1}` under the three buckets before v24.0.0).
 TEST(TiiahBucketFirst, AnUnprovableFinesseReadsTheBucketAlone) {
   Game g = clue_and_react_4_suits(four_suits("b1", {"r1", "b2", "r5", "g5", "y5"}),
                                   "Alice clues 5 to Cathy");
   ASSERT_EQ(status_at(g, TestPlayer::CATHY, 1), CardStatus::CALLED_TO_PLAY);
-  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/1, {"r1", "y1"});
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/1, {"r1"});
 }
 
 // Alice's Yellow to Cathy (anchor 2) pairs Bob's slot 4 with Cathy's slot 3. Bob

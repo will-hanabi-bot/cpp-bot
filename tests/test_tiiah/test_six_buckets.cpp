@@ -1,14 +1,15 @@
 // Single-suit buckets with an epoch shift (v23.0.0).
 //
-// A TIIAH variant with five or six non-inverted suits gives every one of them its
-// own bucket, numbered by position among the non-inverted suits (red 0 ... black
-// 5 in & Black (6 Suits); orange in none). The clue's EPOCH is ceil(turn / 3),
-// turn 1-based: on an odd epoch a rank clue puts the receiver's target one bucket
-// UP from the reacter's card and a colour clue one DOWN; on an even epoch two.
-// A TIIAH variant with fewer non-inverted suits keeps three buckets and +-1
-// (`buckets.h`).
+// A TIIAH variant gives every non-inverted suit its own bucket, numbered by
+// position among the non-inverted suits (red 0 ... black 5 in & Black (6 Suits);
+// orange in none). With five or six of them the clue's EPOCH, ceil(turn / 3), turn
+// 1-based, sets the shift: on an odd epoch a rank clue puts the receiver's target
+// one bucket UP from the reacter's card and a colour clue one DOWN; on an even
+// epoch two. With three or four the shift is +-1 in every epoch (v24.0.0; until
+// then they kept three buckets) (`buckets.h`).
 #include <gtest/gtest.h>
 
+#include <utility>
 #include <variant>
 
 #include "hanabi/basics/action.h"
@@ -26,9 +27,9 @@ using namespace hanabi::test::tiiah;
 using hanabi::tiiah::bucket_count;
 using hanabi::tiiah::bucket_of;
 using hanabi::tiiah::bucket_shift;
+using hanabi::tiiah::epoch_shift;
 using hanabi::tiiah::named_bucket;
 using hanabi::tiiah::reacter_bucket_for;
-using hanabi::tiiah::single_suit_buckets;
 using hanabi::tiiah::variant_buckets;
 
 namespace {
@@ -56,7 +57,7 @@ void use_tiiah_at_turn(SetupOptions& opts, int turn) {
 
 TEST(TiiahSixBuckets, BlackSixSuitsHasOneBucketPerSuit) {
   const Variant& v = get_variant(kBlack);
-  ASSERT_TRUE(single_suit_buckets(v));
+  ASSERT_TRUE(epoch_shift(v));
   EXPECT_EQ(bucket_count(v), 6);
   EXPECT_EQ(variant_buckets(v),
             (std::vector<std::vector<int>>{{0}, {1}, {2}, {3}, {4}, {5}}));
@@ -67,7 +68,7 @@ TEST(TiiahSixBuckets, BlackSixSuitsHasOneBucketPerSuit) {
 // 0-4 while orange is in none.
 TEST(TiiahSixBuckets, FiveNonInvertedSuitsHaveOneBucketEach) {
   const Variant& five = get_variant("Throw It in a Hole (5 Suits)");
-  ASSERT_TRUE(single_suit_buckets(five));
+  ASSERT_TRUE(epoch_shift(five));
   EXPECT_EQ(bucket_count(five), 5);
   for (int s = 0; s < 5; ++s) EXPECT_EQ(bucket_of(five, s), s);
   // Wraps mod 5: rank from purple (4) on an odd epoch is red; colour from red on
@@ -76,7 +77,7 @@ TEST(TiiahSixBuckets, FiveNonInvertedSuitsHaveOneBucketEach) {
   EXPECT_EQ(named_bucket(five, ClueKind::COLOUR, 4, 0), 3);
 
   const Variant& orange = get_variant("Throw It in a Hole & Orange (6 Suits)");
-  ASSERT_TRUE(single_suit_buckets(orange));
+  ASSERT_TRUE(epoch_shift(orange));
   EXPECT_EQ(bucket_count(orange), 5);
   int position = 0;
   for (int s = 0; s < static_cast<int>(orange.suits.size()); ++s) {
@@ -90,13 +91,20 @@ TEST(TiiahSixBuckets, FiveNonInvertedSuitsHaveOneBucketEach) {
   EXPECT_EQ(variant_buckets(orange).size(), 5u);
 }
 
-TEST(TiiahSixBuckets, FourSuitTiiahVariantsKeepThreeBuckets) {
-  for (const char* name : {"Throw It in a Hole (4 Suits)",
-                           "Throw It in a Hole & Orange (5 Suits)"}) {
+// Three or four non-inverted suits: one bucket per suit too, and +-1 whatever the
+// epoch (v24.0.0, the user's ruling) -- +-2 would collide mod 3 and mod 4.
+TEST(TiiahSixBuckets, FourSuitTiiahVariantsHaveOneBucketPerSuitAndNoEpochShift) {
+  const std::pair<const char*, int> cases[] = {
+      {"Throw It in a Hole (4 Suits)", 4},
+      {"Throw It in a Hole & Orange (5 Suits)", 4},
+      {"Throw It in a Hole & Orange (4 Suits)", 3},
+  };
+  for (const auto& [name, n] : cases) {
     const Variant& v = get_variant(name);
-    EXPECT_FALSE(single_suit_buckets(v)) << name;
-    EXPECT_EQ(bucket_count(v), 3) << name;
-    EXPECT_EQ(variant_buckets(v).size(), 3u) << name;
+    EXPECT_FALSE(epoch_shift(v)) << name;
+    EXPECT_EQ(bucket_count(v), n) << name;
+    EXPECT_EQ(variant_buckets(v).size(), static_cast<size_t>(n)) << name;
+    for (int b = 0; b < n; ++b) EXPECT_EQ(variant_buckets(v)[b].size(), 1u) << name;
     // +-1 on every turn, whatever the epoch.
     for (int t : {1, 4, 7}) {
       EXPECT_EQ(bucket_shift(v, ClueKind::RANK, t), 1) << name;
@@ -104,7 +112,7 @@ TEST(TiiahSixBuckets, FourSuitTiiahVariantsKeepThreeBuckets) {
     }
   }
   // A six-suit variant OUTSIDE Throw It in a Hole is not a TIIAH variant at all.
-  EXPECT_FALSE(single_suit_buckets(get_variant("Black (6 Suits)")));
+  EXPECT_FALSE(epoch_shift(get_variant("Black (6 Suits)")));
 }
 
 TEST(TiiahSixBuckets, TheShiftFollowsTheEpoch) {
@@ -205,6 +213,30 @@ TEST(TiiahSixBuckets, TheOddEpochPairingIsIllegalInAnEvenEpoch) {
   g = take_turn(std::move(g), "Alice clues 5 to Bob");
 
   EXPECT_NE(status_at(g, TestPlayer::CATHY, 4), CardStatus::CALLED_TO_PLAY);
+}
+
+// Four suits have no epoch shift (v24.0.0): the same clue on turn 4 still names
+// ONE bucket below green, yellow, so the y1 is the reaction. Under +-2 it would be
+// red, and the y1 would break the relation.
+TEST(TiiahSixBuckets, FourSuitsNameOneBucketBelowInAnEvenEpochToo) {
+  SetupOptions opts;
+  opts.variant_name = "Throw It in a Hole (4 Suits)";
+  opts.play_stacks = std::vector<int>{2, 0, 0, 0};
+  opts.hands = {
+      {"xx", "xx", "xx", "xx", "xx"},
+      {"g1", "r3", "y5", "g5", "b5"},
+      {"b4", "y4", "b3", "y1", "g3"},
+  };
+  opts.starting = TestPlayer::ALICE;
+  use_tiiah_at_turn(opts, 4);
+  Game g = setup(std::move(opts));
+  g = fully_known(std::move(g), TestPlayer::BOB, /*slot=*/2, "r3");
+
+  g = take_turn(std::move(g), "Alice clues 5 to Bob");
+
+  ASSERT_EQ(interp_of(g), ClueInterp::REACTIVE);
+  EXPECT_EQ(status_at(g, TestPlayer::CATHY, 4), CardStatus::CALLED_TO_PLAY);
+  expect_infs(g, std::nullopt, TestPlayer::CATHY, /*slot=*/4, {"y1"});
 }
 
 // Colour: Bob knows his r1 and the clue is for the g1 behind it (bucket 2).

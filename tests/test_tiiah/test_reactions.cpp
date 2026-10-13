@@ -106,10 +106,10 @@ TEST(TiiahReactions, TheReceiverIsCalledToTheButtonTheReacterPressed) {
 }
 
 // The ordinary case of the same wiring: a double PITCH, where the reacter
-// presses Play and the receiver is called to play in turn. Four suits, so the
-// buckets are {R,Y}, {G}, {B}: Bob's g1 is bucket 1, a colour clue names the
-// bucket above for the reacter, and Cathy's b1 (Blue anchors on 4, target slot 2,
-// so slot 2) is the pitch.
+// presses Play and the receiver is called to play in turn. Four suits, one bucket
+// each (v24.0.0): Bob's g1 is bucket 2, a colour clue names the bucket above for the
+// reacter, blue, and Cathy's b1 (Blue anchors on 4, target slot 2, so slot 2) is the
+// pitch.
 TEST(TiiahReactions, ADoublePitchCallsTheReceiverToPlay) {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";

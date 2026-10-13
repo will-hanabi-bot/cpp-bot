@@ -36,15 +36,15 @@ hanabi::reactor0::ClueReading read(const Game& g, const Action& clue) {
   return hanabi::reactor0::read_clue(g, hypo, std::get<ClueAction>(clue));
 }
 
-// Replay 2008177 T3's shape, moved to four suits (buckets {R,Y}, {G}, {B}: the
-// three-bucket rule). Nothing played; Cathy's only playable is the g1 on slot 4,
-// and Bob's slot 3 is the r1 the sum rule names.
+// Replay 2008177 T3's shape, moved to four suits, one bucket each (v24.0.0).
+// Nothing played; Cathy's only playable is the g1 on slot 4, and Bob's slot 3 is
+// the y1 the sum rule names (the r1 until v24.0.0).
 SetupOptions replay_opts() {
   SetupOptions opts;
   opts.variant_name = "Throw It in a Hole (4 Suits)";
   opts.hands = {
       {"xx", "xx", "xx", "xx", "xx"},
-      {"b4", "b5", "r1", "y1", "b3"},
+      {"b4", "b5", "y1", "r1", "b3"},
       {"y4", "b3", "y5", "g1", "y2"},
   };
   opts.starting = TestPlayer::ALICE;
@@ -65,7 +65,7 @@ TEST(TiiahOrdinaryReading, AClueToCathyReadsAsAReactivePlay) {
   ASSERT_NE(r.shape, ClueShape::OTHER)
       << "the reading fell through, which is what a stable classification of a "
          "reactive clue looks like from here";
-  EXPECT_EQ(r.reacter_side.outcome, Outcome::PLAY) << "Bob's r1";
+  EXPECT_EQ(r.reacter_side.outcome, Outcome::PLAY) << "Bob's y1";
   EXPECT_EQ(r.receiver_side.outcome, Outcome::PLAY) << "Cathy's g1, after it";
   EXPECT_EQ(r.shape, ClueShape::REACTIVE_PLAY)
       << "got " << hanabi::reactor0::shape_name(r.shape);

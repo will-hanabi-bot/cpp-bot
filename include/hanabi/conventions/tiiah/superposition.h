@@ -271,8 +271,9 @@ bool advance_rows_from_own_worlds(Game& game);
 // would both play it). `possible` when that leaves nothing, or when the card is
 // not our own called card, or outside the variant. `Game::elim` asks it where our
 // view of a card would otherwise fall back to everything. Human diagnostic
-// 2013726 T27 (human_vs_bot_diagnostics/2013726.md): black's reaction card
-// read `{n3}` by the bucket, black sees both n3s, and so knows it holds the r4.
+// 2013726 T27 (human_vs_bot_diagnostics/2013726.md), under the three-bucket rule
+// in force until v24.0.0: black's reaction card read `{n3}` by the bucket, black
+// sees both n3s, and so knows it holds the r4.
 IdentitySet own_called_fallback(const Game& game, int order, const IdentitySet& possible);
 
 // What OUR OWN card is named as when we throw it into the hole, at every view we
