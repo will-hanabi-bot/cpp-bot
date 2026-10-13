@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "hanabi/basics/action.h"
@@ -129,6 +130,11 @@ struct ReactorWC {
   // about the walk; one it already knew may have been passed over as a play in
   // hand, by a human or an older build (replay 2011327 T28's r4).
   std::vector<int> receiver_clued;
+
+  // Reactor0 inverted suits: shared readings before the reactive call narrows the reacter.
+  // A receiver must distinguish a possible finesse bluff from an ordinary pitch
+  // without using the inference created by that same clue.
+  std::vector<std::pair<int, IdentitySet>> reacter_before;
 
   bool operator==(const ReactorWC&) const = default;
 };

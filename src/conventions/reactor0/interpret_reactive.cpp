@@ -137,10 +137,10 @@ struct DcTarget {
 // oldest slot is also lock=true under rlocks — the receiver cannot tell
 // trash-on-slot-5 apart from the lock signal and must take the conservative
 // reading, so the giver must account for it too.
-// `all_trash_targets` (colour mode 2 only, §1d): collect EVERY trash/dupe
-// card slot-ascending instead of stopping at the leftmost, so mode 2 can walk
-// on to the next one when a pairing is dead by shared knowledge. Rank Phase C
-// leaves it false and keeps the strict leftmost rule.
+// `all_trash_targets` (rank Phase C and colour mode 2, §1d):
+// collect EVERY trash/dupe card slot-ascending instead of stopping at the leftmost,
+// so mode 2 can walk on to the next one when a pairing is dead by shared knowledge.
+// Rank Phase C uses the same walk.
 std::vector<DcTarget> dc_candidates(const Game& prev, const Game& game,
                                     int receiver, bool rlocks,
                                     bool all_trash_targets) {
@@ -1135,6 +1135,14 @@ std::optional<ClueInterp> interpret_reactive(const Game& prev, Game& game,
   // later, against stacks that have moved, and the receiver must still read the
   // target as it was meant (§1e).
   wc.clue_play_stacks = state.play_stacks;
+  for (int si = 0; si < static_cast<int>(state.variant->suits.size()); ++si) {
+    if (!variants::is_inverted_id(state, Identity(si, 1))) continue;
+    for (int order : state.hands[reacter]) {
+      const auto& thought = game.common.thoughts[order];
+      wc.reacter_before.emplace_back(order, thought.possible.intersect(thought.possibilities()));
+    }
+    break;
+  }
   game.waiting.clear();
   game.waiting.push_back(wc);
 

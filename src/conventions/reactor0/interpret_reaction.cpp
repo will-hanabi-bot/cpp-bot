@@ -361,6 +361,79 @@ IdentitySet one_away_plain(const State& s) {
   }, n);
 }
 
+// Can an earlier duplicate's paired Play be ruled out in some receiver hand?
+// To exclude every plain playable from the reacter's shared reading,
+// the other hands would have to hold all remaining copies.
+// If those copies cannot fit outside the two duplicate slots, this pairing cannot be retargeted.
+// Use shared clue possibilities, so the proof does not depend on our seat.
+bool earlier_pitch_cannot_be_skipped(const Game& game, const ReactorWC& wc,
+                                     const State& old_s, int earlier, int target) {
+  const auto it = std::find(wc.receiver_hand.begin(), wc.receiver_hand.end(), earlier);
+  const int slot = hanabi::reactor::calc_slot(wc.focus_slot,
+      static_cast<int>(it - wc.receiver_hand.begin()) + 1, kHandSize[old_s.num_players]);
+  if (slot < 1 || slot > static_cast<int>(wc.reacter_before.size())) return false;
+  const auto playable = wc.reacter_before[slot - 1].second.filter([&](Identity id) {
+    return !variants::is_inverted_id(old_s, id) && old_s.is_playable(id);
+  });
+  int required_copies = 0;
+  for (Identity id : playable) {
+    required_copies += std::max(0, old_s.card_count[id.to_ord()] -
+                                     old_s.base_count[id.to_ord()]);
+  }
+  int available_slots = 0;
+  for (int player = 0; player < old_s.num_players; ++player) {
+    if (player == wc.reacter) continue;
+    const auto& hand = player == wc.receiver ? wc.receiver_hand : old_s.hands[player];
+    for (int order : hand) {
+      if (order != earlier && order != target &&
+          game.common.thoughts[order].possible.intersect(playable).non_empty()) ++available_slots;
+    }
+  }
+  return required_copies > available_slots;
+}
+
+// An unplayable, non-trash inverted target can only be a same-hand duplicate.
+// An earlier duplicate is admissible only when its pairing could be skipped.
+// These are necessary conditions, not a reconstruction of every possible hand.
+IdentitySet receiver_pitch_readings(const Game& game, const ReactorWC& wc,
+                                    const State& old_s, int order, IdentitySet allowed) {
+  const bool even = wc.even_parity.value_or(
+      variants::uses_even_parity(*old_s.variant, wc.clue.kind));
+  return allowed.filter([&](Identity id) {
+    if (!variants::is_inverted_id(old_s, id) || old_s.is_basic_trash(id)) return true;
+    bool after_target = false;
+    for (int other : wc.receiver_hand) {
+      if (other == order) {
+        after_target = true;
+        continue;
+      }
+      if (game.common.thoughts[other].possible.contains(id) &&
+          (!even || after_target ||
+           !earlier_pitch_cannot_be_skipped(game, wc, old_s, other, order)))
+        return true;
+    }
+    return false;
+  });
+}
+
+IdentitySet bluff_readings(const State& old_s, const ReactorWC& wc, int react_order) {
+  IdentitySet oneaway = one_away_plain(old_s);
+  for (const auto& [order, before] : wc.reacter_before) {
+    if (order != react_order) continue;
+    return oneaway.filter([&](Identity id) {
+      const auto connector = variants::connector_of(old_s, id);
+      return connector && before.contains(*connector);
+    });
+  }
+  return oneaway;
+}
+
+bool pitched_inverted_trash(const Game& prev, const Game& game, int order) {
+  const auto id = game.state.deck[order].id();
+  return id && variants::is_inverted_id(prev.state, *id) &&
+         prev.state.is_basic_trash(*id) && game.state.strikes == prev.state.strikes;
+}
+
 // Withdraw the signal but keep the inference. Rule 1: a call is a signal that
 // can come and go, an inference is permanent. `NoteMark::RESET` is what makes
 // this visible -- notes.cpp's `[reset]` fires off a CTP/CTD -> NONE status
@@ -457,9 +530,12 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   }
   const State& old_s = rewound_old;
   const State& new_s = rewound_new;
-  const IdentitySet allowed = button == CardStatus::CALLED_TO_DISCARD
+  IdentitySet allowed = button == CardStatus::CALLED_TO_DISCARD
                                   ? receiver_ctd_set(old_s, new_s)
                                   : receiver_ctp_set(old_s, new_s);
+  const bool inverted_reading = !wc.reacter_before.empty();
+  if (inverted_reading && button == CardStatus::CALLED_TO_PLAY)
+    allowed = receiver_pitch_readings(game, wc, old_s, order, allowed);
 
   // RULE 5 (v12.0.0). THE FRAME MEETS THE PRESENT. Rule 4 reads the PROMISE in
   // the frame the giver chose it in, which is what makes 1975464's "slot 2
@@ -503,6 +579,22 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
   // on the card (Rule 1) and runs the escalation ladder if that empties.
   const IdentitySet narrowed =
       game.common.thoughts[order].possible.intersect(allowed);
+  const bool plain_advance = advanced_plain_stack(old_s, new_s);
+  const bool bluff_reaction = plain_advance ||
+      (inverted_reading && pitched_inverted_trash(prev, game, react_order));
+  const IdentitySet oneaway = bluff_readings(old_s, wc, react_order);
+  // A possible ordinary Orange pitch must not erase a possible plain finesse bluff.
+  // In particular, the receiver cannot assume the reacter could see an Orange connector:
+  // unseen copies in the receiver's own hand can exclude it.
+  // Keep both accounts and withdraw the compulsory button until they resolve.
+  if (inverted_reading && button == CardStatus::CALLED_TO_PLAY && bluff_reaction &&
+      narrowed.non_empty() &&
+      narrowed.filter([&](Identity id) { return !variants::is_inverted_id(old_s, id); }).is_empty() &&
+      game.common.thoughts[order].possible.intersect(oneaway).non_empty()) {
+    game.narrow_thought(order, allowed | oneaway);
+    drop_call(game, order);
+    return;
+  }
   if (narrowed.non_empty()) {
     // Rule 5: the clue-time reading survives, but nothing in it is still
     // actionable. Forget the reaction rather than bomb on it.
@@ -516,15 +608,13 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
     return;
   }
 
-  // Nothing the card could be is advanced by the button it was handed. If the
-  // reaction stacked a plain card, the reacter did not play what the pairing
-  // predicted -- a BLUFF. Plays only: an empty discard set is just a mistake.
-  if (button == CardStatus::CALLED_TO_PLAY &&
-      advanced_plain_stack(old_s, new_s)) {
+  // Nothing the card could be is advanced by the button it was handed.
+  // A successful plain play or free Orange pitch can be a finesse bluff.
+  // An empty discard reading is still a mistake, not a bluff.
+  if (button == CardStatus::CALLED_TO_PLAY && bluff_reaction) {
     // Unwind to the stacks as they were and look one rank further out. The
     // receiver's card is not playable yet; it becomes playable when the card
     // ahead of it lands, so the call is DROPPED and only the inference kept.
-    const IdentitySet oneaway = one_away_plain(old_s);
     if (game.common.thoughts[order].possible.intersect(oneaway).non_empty()) {
       game.narrow_thought(order, oneaway);
       drop_call(game, order);
@@ -538,7 +628,7 @@ void stamp_receiver_call(const Game& prev, Game& game, const ReactorWC& wc,
     // engine hook -- not `wc.react_order`, which is -1 from the receiver's own
     // seat (§1d: the receiver never runs target selection, so it never recorded
     // one). This is the seat that has to read the dupe bluff.
-    if (auto played = new_s.deck[react_order].id()) {
+    if (auto played = new_s.deck[react_order].id(); plain_advance && played) {
       game.narrow_thought(order, IdentitySet::single(*played));
       drop_call(game, order);
       return;

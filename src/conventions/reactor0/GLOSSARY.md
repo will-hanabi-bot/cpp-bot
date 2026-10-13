@@ -833,10 +833,13 @@ pitching a useful orange still loses a copy and is still rejected.
 ### bluff
 A reaction in which the reacter plays a card the pairing did not predict, so the
 receiver's call set comes out empty and the reaction advanced a **non-inverted**
-stack. Read by unwinding to the stacks as they were before the reaction and
-taking the identities exactly one away from playable on a non-inverted suit.
+stack, or safely pitched already-trash Orange. Read by unwinding to the stacks
+as they were before the reaction and taking the identities exactly one away
+from playable on a non-inverted suit.
 The card is not playable yet, so the CALL IS DROPPED and only the inference is
-kept. `CONVENTION.md` §1d.1.
+kept. With Orange, preserve uncertainty when a duplicate pitch also explains
+the signal; shared pre-call knowledge can exclude a finesse connector.
+`CONVENTION.md` §1d.1.
 
 ### dupe bluff
 The rarer half of the same branch: not even a one-away reading survives, so the

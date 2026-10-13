@@ -276,6 +276,7 @@ add_executable(hanabi_reactor0_tests
   tests/test_reactor0/test_reaction_negative_keeps_inference.cpp
   tests/test_reactor0/test_withdrawn_target_disarms_negative.cpp
   tests/test_reactor0/test_reactive_bluff.cpp
+  tests/test_reactor0/test_orange_reactive_bluff.cpp
   tests/test_reactor0/test_misc/test_replay_1983205_synesthesia_rank_map_wraps.cpp
   tests/test_reactor0/test_misc/test_replay_1969696_reversed_orange_clue_is_a_chuck.cpp
   tests/test_reactor0/test_misc/test_replay_1967558_dropped_call_keeps_its_inference.cpp

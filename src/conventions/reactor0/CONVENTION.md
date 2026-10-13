@@ -961,7 +961,7 @@ Six rules govern it:
    piles: a card discarded since really is gone. Under Throw It in a Hole's
    ORDINARY reactive, the receiver's already gotten known plays are laid on both
    frames as well, the target excepted, since that is where its target was walked
-   (`reactor0/interpret_reaction.cpp:448-457`, v23.29.0; tiiah/CONVENTION.md §1c,
+   (`reactor0/interpret_reaction.cpp:526`, v23.29.0; tiiah/CONVENTION.md §1c,
    replay 2026727 T9).
 5. **A reading nothing can still satisfy is DROPPED, not stamped.** Rule 4 reads
    the *promise* in the giver's frame, which is what makes "slot 2 then, slot 3
@@ -970,7 +970,7 @@ Six rules govern it:
    cannot see that. So the reading is vetted a second time against the LIVE
    stacks, and a call with no surviving identity that is playable *now* is
    forgotten rather than bombed on. Applied to a DEFERRED reaction only
-   (`deferred`, `reactor0/interpret_reaction.cpp:486`, v16.28.0). Under reactor0
+   (`deferred`, `reactor0/interpret_reaction.cpp:562`, v16.28.0). Under reactor0
    that changes nothing -- when the reacter answers immediately no other seat has
    moved, so the two frames coincide -- but Throw It in a Hole reads the frame
    off the view the giver and receiver SHARE while the live stacks are our own
@@ -1128,7 +1128,9 @@ reads the order the engine hook was given, not `wc.react_order`.
 
 If the receiver-CTP set comes out **empty** and the reaction advanced a
 **non-inverted** stack, the reacter did not play what the pairing predicted.
-Two accounts remain, in order:
+A successful physical Play disposing of already-trash Orange can also carry
+the finesse bluff below. Disposing of useful Orange or taking a strike does
+not supply that evidence. Two accounts remain, in order:
 
 - **Bluff.** Unwind to the OLD stacks and take every identity exactly one away
   from playable on a non-inverted suit, intersected with the card's empathy.
@@ -1137,10 +1139,35 @@ Two accounts remain, in order:
   2. No 3 is playable after the `b1`, so unwinding gives one-aways
   `{r3,y2,g2,b2,p2}`, and only the `r3` is a 3.
 - **Dupe bluff.** If not even that survives, the receiver holds the other copy
-  of the card the reacter just played. Example (stacks `1 1 1 3 1`): Alice clues
+  of the card the reacter just added to a non-inverted stack. An Orange trash
+  pitch alone does not establish a dupe bluff. Example (stacks `1 1 1 3 1`): Alice clues
   4 to Cathy naming a lone 4 on slot 3 and Bob blind-plays `b4`. No 4 is
   playable, and the old one-aways `{r3,y3,g3,b5,p3}` contain no 4 — so the card
   is the other `b4`.
+
+With inverted suits, an ordinary pitch reading must be basic trash or have a
+possible duplicate in the receiver's clue-time hand. Under even parity the
+discard walk tries the leftmost copy first, but may skip an unusable pairing.
+An earlier duplicate rules out a later target only when its paired reaction
+cannot be excluded by shared knowledge. The check proves this when the
+remaining copies of the paired slot's possible plain playables cannot all fit
+in the other hands outside the two duplicate slots. Otherwise the duplicate
+reading remains possible. These are necessary conditions, not an exhaustive
+reconstruction of hands; they use shared clue possibilities, never the
+receiver's hidden identities (`interpret_reaction.cpp:368`,
+`earlier_pitch_cannot_be_skipped`; `interpret_reaction.cpp:398`,
+`receiver_pitch_readings`).
+
+The reacter's shared possibilities are recorded before the clue narrows them
+(`ReactorWC::reacter_before`). A plain one-away bluff reading requires its
+connector in that pre-call set (`interpret_reaction.cpp:419`, `bluff_readings`).
+If both that bluff and an ordinary Orange pitch remain possible, keep both
+readings and drop the compulsory call. Do not infer that an Orange connector
+must have been available to the reacter merely because it is in the shared
+set: copies in the receiver's unknown hand may have excluded it from the
+reacter's view. A known non-connector, on the other hand, can rule the bluff
+out and leave a legitimate duplicate pitch called. Regression tests are in
+`tests/test_reactor0/test_orange_reactive_bluff.cpp`.
 
 In **both** the CALL IS DROPPED and only the inference is kept: neither card is
 playable now, so pressing the button would strike or throw a card away. The
